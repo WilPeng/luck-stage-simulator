@@ -1,0 +1,23 @@
+Connected to MongoDB: luck-stage
+Existing data found, skipping initialization
+Server running on port 3000
+WebSocket (Socket.IO) enabled
+Database persistence enabled: mongodb://localhost:27017/luck-stage
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"roundId":"round-1"} total: 0 returned: 0
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"roundId":"round-1"} total: 109 returned: 109
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"roundId":"round-1"} total: 0 returned: 0
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"roundId":"round-1"} total: 108 returned: 108
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"$or":[{"roundId":"b0545e2e-3126-44ce-9389-7184d1c0ef27"},{"roundId":"round-1"}]} total: 108 returned: 108
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"roundId":"round-1"} total: 0 returned: 0
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"roundId":"round-1"} total: 111 returned: 111
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"roundId":"round-1"} total: 0 returned: 0
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"roundId":"round-1"} total: 124 returned: 124
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"$or":[{"roundId":"e691bab9-634a-40ab-a5d6-d38fae881c3b"},{"roundId":"round-1"}]} total: 124 returned: 124
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"$or":[{"roundId":"e691bab9-634a-40ab-a5d6-d38fae881c3b"},{"roundId":"round-1"}]} total: 124 returned: 124
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"$or":[{"roundId":"e691bab9-634a-40ab-a5d6-d38fae881c3b"},{"roundId":"round-1"}]} total: 124 returned: 124
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"$or":[{"roundId":"e691bab9-634a-40ab-a5d6-d38fae881c3b"},{"roundId":"round-1"}]} total: 124 returned: 124
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"$or":[{"roundId":"e691bab9-634a-40ab-a5d6-d38fae881c3b"},{"roundId":"round-1"}]} total: 124 returned: 124
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"$or":[{"roundId":"e691bab9-634a-40ab-a5d6-d38fae881c3b"},{"roundId":"round-1"}]} total: 124 returned: 124
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"$or":[{"roundId":"e691bab9-634a-40ab-a5d6-d38fae881c3b"},{"roundId":"round-1"}]} total: 124 returned: 124
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"roundId":"round-1"} total: 0 returned: 0
+[GET /api/training/records] query: {"roundId":"round-1","pageSize":"1000"} filter: {"roundId":"round-1"} total: 119 returned: 119

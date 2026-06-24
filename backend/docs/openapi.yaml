@@ -1,0 +1,2450 @@
+openapi: 3.0.3
+info:
+  title: 乘风2026模拟系统 API
+  description: |
+    ## 产品规范说明
+
+    本文档是前后端开发的唯一真源（Single Source of Truth）。
+    所有开发必须严格遵循本文档，不得自行发明/修改接口路径、参数名、枚举值。
+
+    ### 阶段枚举（Stage）
+    以下枚举值在前后端必须完全一致，禁止使用其他字符串：
+
+    | 值 | 中文 | 索引 |
+    |---|---|---|
+    | PREPARATION | 预先准备 | 0 |
+    | CAPTAIN_VOTE | 队长选举 | 1 |
+    | TEAMING | 组队 | 2 |
+    | SONG_SELECT | 选歌 | 3 |
+    | TRAINING | 训练 | 4 |
+    | REHEARSAL | 彩排 | 5 |
+    | PERFORMANCE | 公演 | 6 |
+    | ELIMINATION | 淘汰 | 7 |
+
+    ### 状态枚举（StageStatus）
+    所有状态由后端根据 currentRound + currentStage 统一计算返回，前端禁止自行计算。
+
+    | 值 | 含义 | 前端行为 |
+    |---|---|---|
+    | completed | 已完成 | 可点击，只读 |
+    | current | 当前进行 | 可点击，可操作 |
+    | future | 未开始 | 禁用，不可点击 |
+
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000/api
+    description: 本地开发服务器
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Stage:
+      type: string
+      enum:
+        - PREPARATION
+        - CAPTAIN_VOTE
+        - TEAMING
+        - SONG_SELECT
+        - TRAINING
+        - REHEARSAL
+        - PERFORMANCE
+        - ELIMINATION
+      description: 阶段枚举，顺序固定
+
+    StageStatus:
+      type: string
+      enum:
+        - completed
+        - current
+        - future
+      description: 阶段状态，由后端根据 currentRound + currentStage 统一计算
+
+    PlayerStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - ELIMINATED
+
+    # ===== 核心响应包装 =====
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        error:
+          type: string
+          description: 错误信息（仅 success=false 时返回）
+        code:
+          type: string
+          description: 错误码（仅 success=false 时返回）
+
+    # ===== 赛季状态 =====
+    ProgressState:
+      type: object
+      properties:
+        currentRound:
+          type: integer
+          description: 当前第几公演（1=一公）
+          example: 2
+        currentStage:
+          $ref: '#/components/schemas/Stage'
+        currentStageName:
+          type: string
+          example: 组队
+        totalRounds:
+          type: integer
+          example: 3
+
+    # ===== 矩阵条目 =====
+    MatrixEntry:
+      type: object
+      properties:
+        round:
+          type: integer
+          description: 轮次（1=一公）
+          example: 1
+        stage:
+          $ref: '#/components/schemas/Stage'
+        stageName:
+          type: string
+          example: 队长选举
+        status:
+          $ref: '#/components/schemas/StageStatus'
+
+    # ===== 矩阵响应 =====
+    MatrixResponse:
+      type: object
+      properties:
+        currentRound:
+          type: integer
+        currentStage:
+          $ref: '#/components/schemas/Stage'
+        currentStageName:
+          type: string
+        totalRounds:
+          type: integer
+        matrix:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatrixEntry'
+
+    # ===== 设置进度请求 =====
+    SetProgressRequest:
+      type: object
+      required:
+        - round
+        - stage
+      properties:
+        round:
+          type: integer
+          minimum: 1
+          description: 目标轮次（1=一公）
+          example: 2
+        stage:
+          $ref: '#/components/schemas/Stage'
+
+    # ===== 设置进度响应 =====
+    SetProgressResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            currentRound:
+              type: integer
+            currentStage:
+              $ref: '#/components/schemas/Stage'
+            currentStageName:
+              type: string
+
+    # ===== 自动推进响应 =====
+    NextProgressResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            currentRound:
+              type: integer
+            currentStage:
+              $ref: '#/components/schemas/Stage'
+            currentStageName:
+              type: string
+
+    # ===== 选手 =====
+    Player:
+      type: object
+      properties:
+        id:
+          type: string
+          example: u001
+        name:
+          type: string
+          example: 星野
+        avatar:
+          type: string
+          nullable: true
+          example: /uploads/avatars/xxx.jpg
+        attributes:
+          type: object
+          properties:
+            vocal:
+              type: integer
+            dance:
+              type: integer
+            charm:
+              type: integer
+        status:
+          $ref: '#/components/schemas/PlayerStatus'
+        role:
+          type: string
+          enum: [admin, captain, player]
+          example: player
+
+    PlayerPublic:
+      type: object
+      description: 选手公开信息（不含属性，用于队伍展示等场景）
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        avatar:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/PlayerStatus'
+        role:
+          type: string
+          enum: [admin, captain, player]
+
+    # ===== 轮次队伍 =====
+    RoundTeam:
+      type: object
+      properties:
+        id:
+          type: string
+        roundId:
+          type: string
+        roundIndex:
+          type: integer
+        name:
+          type: string
+          example: 第1组
+        captainId:
+          type: string
+          nullable: true
+        maxMembers:
+          type: integer
+          example: 6
+        members:
+          type: array
+          description: 队员列表（脱敏版，不含属性）
+          items:
+            $ref: '#/components/schemas/PlayerPublic'
+
+    # ===== 歌曲 =====
+    Song:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          example: 逆风盛放
+        difficulty:
+          type: integer
+          description: 难度 1-5
+        vocalWeight:
+          type: integer
+        danceWeight:
+          type: integer
+        charmWeight:
+          type: integer
+        style:
+          type: string
+          example: 抒情
+
+    RoundSong:
+      type: object
+      properties:
+        id:
+          type: string
+        roundId:
+          type: string
+        songId:
+          type: string
+        songType:
+          type: string
+          enum: [team_show, team_collab, captain_show, pk_show]
+          default: team_show
+        released:
+          type: boolean
+          description: 是否已释放到选歌阶段
+
+    # ===== 歌曲归属 =====
+    TeamSong:
+      type: object
+      properties:
+        id:
+          type: string
+        roundId:
+          type: string
+        teamId:
+          type: string
+        songId:
+          type: string
+        assignedBy:
+          type: string
+          description: 分配方式 auto|manual|grab
+
+    # ===== 训练记录 =====
+    TrainingRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        roundId:
+          type: string
+        playerId:
+          type: string
+        playerName:
+          type: string
+        cardId:
+          type: string
+        cardName:
+          type: string
+        cardType:
+          type: string
+        effect:
+          type: object
+        attributeChanges:
+          type: object
+          description: 属性变化 { vocal: +3, dance: 0, charm: -2 }
+        createdAt:
+          type: string
+          format: date-time
+
+    # ===== 彩排结果 =====
+    RehearsalResult:
+      type: object
+      properties:
+        id:
+          type: string
+        roundId:
+          type: string
+        teamId:
+          type: string
+        teamName:
+          type: string
+        eventId:
+          type: string
+          nullable: true
+        eventName:
+          type: string
+          nullable: true
+        bonus:
+          type: object
+          properties:
+            team:
+              type: number
+              description: 团队彩排加分
+            each:
+              type: number
+              description: 个人彩排加分
+        finalScore:
+          type: number
+          description: 彩排总分
+        createdAt:
+          type: string
+          format: date-time
+
+    # ===== 团队公演结果 =====
+    TeamPerformance:
+      type: object
+      properties:
+        id:
+          type: string
+        roundId:
+          type: string
+        roundIndex:
+          type: integer
+        teamId:
+          type: string
+        teamName:
+          type: string
+        songId:
+          type: string
+          nullable: true
+        songName:
+          type: string
+          nullable: true
+        attrScore:
+          type: number
+          description: 属性得分
+        randomScore:
+          type: number
+          description: 随机分
+        rehearsalBonus:
+          type: number
+          description: 彩排加分
+        finalScore:
+          type: number
+          description: 最终总分
+        rank:
+          type: integer
+          description: 排名（1=最高分）
+        createdAt:
+          type: string
+          format: date-time
+
+    # ===== 选手公演结果 =====
+    PlayerPerformance:
+      type: object
+      properties:
+        id:
+          type: string
+        roundId:
+          type: string
+        roundIndex:
+          type: integer
+        playerId:
+          type: string
+        playerName:
+          type: string
+        teamId:
+          type: string
+          nullable: true
+        teamName:
+          type: string
+          nullable: true
+        songId:
+          type: string
+          nullable: true
+        songName:
+          type: string
+          nullable: true
+        attrScore:
+          type: number
+        randomScore:
+          type: number
+        teamScoreShare:
+          type: number
+          description: 团队排名加成
+        rehearsalBonus:
+          type: number
+        finalScore:
+          type: number
+        rank:
+          type: integer
+          description: 个人排名
+        createdAt:
+          type: string
+          format: date-time
+
+    # ===== 淘汰记录 =====
+    Elimination:
+      type: object
+      properties:
+        id:
+          type: string
+        roundId:
+          type: string
+        roundIndex:
+          type: integer
+        playerId:
+          type: string
+        userName:
+          type: string
+        teamId:
+          type: string
+          nullable: true
+        teamName:
+          type: string
+          nullable: true
+        finalScore:
+          type: number
+          nullable: true
+        rank:
+          type: integer
+          nullable: true
+        reason:
+          type: string
+        eliminated:
+          type: boolean
+          default: true
+        eliminatedAt:
+          type: string
+          format: date-time
+        restoredAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    # ===== 队长投票 =====
+    CaptainVote:
+      type: object
+      properties:
+        id:
+          type: string
+        roundId:
+          type: string
+        voterId:
+          type: string
+        voterName:
+          type: string
+        candidateId:
+          type: string
+        candidateName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    # ===== 预先准备配置 =====
+    PreparationConfig:
+      type: object
+      properties:
+        teamStructures:
+          type: array
+          items:
+            type: integer
+          description: 每队人数数组，如 [6,6,4,4,4] 表示5支队伍
+          example: [6, 6, 4, 4, 4]
+        songPool:
+          type: array
+          description: 歌曲池（RoundSong id 列表）
+          items:
+            type: string
+
+    # ===== 聊天消息 =====
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        senderId:
+          type: string
+        senderName:
+          type: string
+        senderRole:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    # ===== 统一列表响应 =====
+    ListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items: {}
+
+    # ===== 统一分页响应 =====
+    PaginatedResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items: {}
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ==============================================================
+  # 阶段控制
+  # ==============================================================
+
+  /admin/progress/set:
+    post:
+      tags: [阶段控制]
+      summary: 设置赛程状态（管理员）
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetProgressRequest'
+            example:
+              round: 2
+              stage: TRAINING
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetProgressResponse'
+              example:
+                success: true
+                currentRound: 2
+                currentStage: TRAINING
+                currentStageName: 训练
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /admin/progress/next:
+    post:
+      tags: [阶段控制]
+      summary: 自动推进到下一阶段（管理员）
+      description: |
+        规则：
+        - 当前阶段 → STAGE_ORDER 中下一个
+        - 如果当前是 ELIMINATION → currentRound + 1，currentStage → PREPARATION
+        - 如果已是最后一轮 + 最后一个阶段 → 返回错误
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NextProgressResponse'
+              example:
+                success: true
+                currentRound: 2
+                currentStage: PREPARATION
+                currentStageName: 预先准备
+        '400':
+          description: 已是最后一轮，无法推进
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: 未授权
+
+  /admin/progress:
+    get:
+      tags: [阶段控制]
+      summary: 获取当前赛程状态（管理员）
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressState'
+              example:
+                currentRound: 1
+                currentStage: TEAMING
+                currentStageName: 组队
+                totalRounds: 3
+        '401':
+          description: 未授权
+
+  /season/progress/matrix:
+    get:
+      tags: [阶段控制]
+      summary: 获取赛程矩阵（所有轮次 × 所有阶段的状态）
+      description: 状态由后端根据 currentRound + currentStage 统一计算，前端禁止自行计算。
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatrixResponse'
+              example:
+                currentRound: 2
+                currentStage: TRAINING
+                currentStageName: 训练
+                totalRounds: 3
+                matrix:
+                  - round: 1
+                    stage: PREPARATION
+                    stageName: 预先准备
+                    status: completed
+                  - round: 2
+                    stage: TRAINING
+                    stageName: 训练
+                    status: current
+                  - round: 2
+                    stage: REHEARSAL
+                    stageName: 彩排
+                    status: future
+        '401':
+          description: 未授权
+
+  /season/progress:
+    get:
+      tags: [阶段控制]
+      summary: 获取赛程矩阵（含 data 包装，与 /season/progress/matrix 等价）
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/MatrixResponse'
+        '401':
+          description: 未授权
+
+  /season/stages:
+    get:
+      tags: [阶段控制]
+      summary: 获取阶段枚举列表
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key:
+                          $ref: '#/components/schemas/Stage'
+                        index:
+                          type: integer
+                        name:
+                          type: string
+              example:
+                success: true
+                data:
+                  - key: PREPARATION
+                    index: 0
+                    name: 预先准备
+                  - key: CAPTAIN_VOTE
+                    index: 1
+                    name: 队长选举
+                  - key: TEAMING
+                    index: 2
+                    name: 组队
+                  - key: SONG_SELECT
+                    index: 3
+                    name: 选歌
+                  - key: TRAINING
+                    index: 4
+                    name: 训练
+                  - key: REHEARSAL
+                    index: 5
+                    name: 彩排
+                  - key: PERFORMANCE
+                    index: 6
+                    name: 公演
+                  - key: ELIMINATION
+                    index: 7
+                    name: 淘汰
+
+  # ==============================================================
+  # 预先准备
+  # ==============================================================
+
+  /admin/round/{round}/preparation:
+    get:
+      tags: [预先准备]
+      summary: 获取某轮预先准备配置
+      parameters:
+        - name: round
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 轮次（1=一公）
+          example: 1
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/PreparationConfig'
+        '401':
+          description: 未授权
+    post:
+      tags: [预先准备]
+      summary: 保存某轮预先准备配置
+      parameters:
+        - name: round
+          in: path
+          required: true
+          schema:
+            type: integer
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreparationConfig'
+            example:
+              teamStructures: [6, 6, 4, 4, 4]
+              songPool: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  # ==============================================================
+  # 队长选举
+  # ==============================================================
+
+  /admin/round/{round}/captains:
+    get:
+      tags: [队长选举]
+      summary: 获取某轮队长信息
+      parameters:
+        - name: round
+          in: path
+          required: true
+          schema:
+            type: integer
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        playerId:
+                          type: string
+                        playerName:
+                          type: string
+                        teamId:
+                          type: string
+                          nullable: true
+                        assignedBy:
+                          type: string
+                          enum: [vote, admin]
+      '401':
+        description: 未授权
+    post:
+      tags: [队长选举]
+      summary: 管理员指定/覆盖某轮队长
+      parameters:
+        - name: round
+          in: path
+          required: true
+          schema:
+            type: integer
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - playerId
+              properties:
+                playerId:
+                  type: string
+                  description: 选手ID
+                teamId:
+                  type: string
+                  description: 队伍ID（可选，不传则自动分配）
+            example:
+              playerId: u001
+              teamId: team-xxx
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /player/captain-vote:
+    post:
+      tags: [队长选举]
+      summary: 选手投票给队长
+      description: 每位选手只能投一票
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - candidateId
+              properties:
+                candidateId:
+                  type: string
+                  description: 被投票的选手ID
+            example:
+              candidateId: u002
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          description: 已投过票 / 参数错误
+        '401':
+          description: 未授权
+
+  /captain/votes:
+    get:
+      tags: [队长选举]
+      summary: 获取当前轮队长投票结果
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CaptainVote'
+
+  # ==============================================================
+  # 组队
+  # ==============================================================
+
+  /admin/team/assign:
+    post:
+      tags: [组队]
+      summary: 管理员手动分配队员到队伍
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - roundId
+                - assignments
+              properties:
+                roundId:
+                  type: string
+                  description: 轮次ID
+                assignments:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      teamId:
+                        type: string
+                      playerIds:
+                        type: array
+                        items:
+                          type: string
+                        description: 队员ID列表
+            example:
+              roundId: round-1
+              assignments:
+                - teamId: team-1
+                  playerIds: [u001, u002, u003]
+                - teamId: team-2
+                  playerIds: [u004, u005, u006]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /admin/team/random:
+    post:
+      tags: [组队]
+      summary: 管理员随机分配未入队选手到有空位的队伍
+      description: 已有队长的队伍，队长不变；其余选手随机分配
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - roundId
+              properties:
+                roundId:
+                  type: string
+            example:
+              roundId: round-1
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      assignedCount:
+                        type: integer
+                        description: 本次分配人数
+                      teams:
+                        type: array
+                        description: 更新后的队伍列表
+                        items:
+                          $ref: '#/components/schemas/RoundTeam'
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /teams:
+    get:
+      tags: [组队]
+      summary: 获取某轮的队伍列表（含队员）
+      parameters:
+        - name: roundId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: roundIndex
+          in: query
+          required: false
+          schema:
+            type: integer
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RoundTeam'
+        '401':
+          description: 未授权
+
+  /teams/unassigned/{roundId}:
+    get:
+      tags: [组队]
+      summary: 获取某轮未分配到队伍的选手列表
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlayerPublic'
+        '401':
+          description: 未授权
+
+  /player/team/apply:
+    post:
+      tags: [组队]
+      summary: 选手申请加入队伍
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - teamId
+              properties:
+                teamId:
+                  type: string
+      responses:
+        '200':
+          description: 成功
+        '401':
+          description: 未授权
+
+  /player/team/invite:
+    post:
+      tags: [组队]
+      summary: 队长邀请选手加入队伍
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - playerId
+                - teamId
+              properties:
+                playerId:
+                  type: string
+                teamId:
+                  type: string
+      responses:
+        '200':
+          description: 成功
+        '401':
+          description: 未授权
+
+  # ==============================================================
+  # 选歌
+  # ==============================================================
+
+  /songs:
+    get:
+      tags: [选歌]
+      summary: 获取歌曲库（所有歌曲）
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Song'
+
+  /admin/song/release:
+    post:
+      tags: [选歌]
+      summary: 管理员将歌曲释放到某轮的歌曲池
+      description: 将歌曲库中的歌曲加入 RoundSong（RoundSong.released=true）
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - roundId
+                - songIds
+              properties:
+                roundId:
+                  type: string
+                songIds:
+                  type: array
+                  items:
+                    type: string
+                  description: 歌曲ID列表
+                songType:
+                  type: string
+                  enum: [team_show, team_collab, captain_show, pk_show]
+                  default: team_show
+            example:
+              roundId: round-1
+              songIds: [s001, s002, s003, s004, s005]
+              songType: team_show
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /admin/song/assign:
+    post:
+      tags: [选歌]
+      summary: 管理员直接将歌曲分配给某队
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - roundId
+                - assignments
+              properties:
+                roundId:
+                  type: string
+                assignments:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      teamId:
+                        type: string
+                      songId:
+                        type: string
+            example:
+              roundId: round-1
+              assignments:
+                - teamId: team-1
+                  songId: s001
+                - teamId: team-2
+                  songId: s002
+      responses:
+        '200':
+          description: 成功
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /songs/round/{roundId}:
+    get:
+      tags: [选歌]
+      summary: 获取某轮的歌曲池和已分配信息
+      parameters:
+        - name: roundId
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      roundSongs:
+                        description: 本轮歌曲池（RoundSong 列表）
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RoundSong'
+                      teamSongs:
+                        description: 已分配到队伍的歌曲（TeamSong 列表）
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TeamSong'
+        '401':
+          description: 未授权
+
+  /player/song/grab:
+    post:
+      tags: [选歌]
+      summary: 选手抢歌曲（需事务锁，保证最快点击成功）
+      description: |
+        事务逻辑：
+        1. 锁定该轮该歌曲
+        2. 检查是否已被抢
+        3. 已分配则返回失败
+        4. 未分配则写入 TeamSong
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - teamId
+                - songId
+              properties:
+                teamId:
+                  type: string
+                  description: 队伍ID
+                songId:
+                  type: string
+                  description: 歌曲ID
+            example:
+              teamId: team-1
+              songId: s001
+      responses:
+        '200':
+          description: 抢歌成功
+        '400':
+          description: 歌曲已被抢走
+        '401':
+          description: 未授权
+
+  # ==============================================================
+  # 训练
+  # ==============================================================
+
+  /training/cards:
+    get:
+      tags: [训练]
+      summary: 获取训练卡池
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        type:
+                          type: string
+                          enum: [vocal, dance, charm, mixed, event]
+                        description:
+                          type: string
+                        effect:
+                          type: object
+                        weight:
+                          type: integer
+                        enabled:
+                          type: boolean
+
+  /admin/training/statistics:
+    get:
+      tags: [训练]
+      summary: 获取某轮训练统计
+      parameters:
+        - name: roundId
+          in: query
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      totalDraws:
+                        type: integer
+                      playerStats:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            playerId:
+                              type: string
+                            playerName:
+                              type: string
+                            drawCount:
+                              type: integer
+                            remainingDraws:
+                              type: integer
+                            totalRecords:
+                              type: integer
+        '401':
+          description: 未授权
+
+  /player/training/draw:
+    post:
+      tags: [训练]
+      summary: 选手抽训练卡
+      description: |
+        规则：
+        - 每位选手每轮有固定训练次数（Season.trainingDrawsPerPlayer）
+        - 抽卡后随机选中一张卡，更新选手属性
+        - 写入 TrainingRecord
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - roundId
+              properties:
+                roundId:
+                  type: string
+            example:
+              roundId: round-1
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      card:
+                        $ref: '#/components/schemas/TrainingRecord'
+                      remainingDraws:
+                        type: integer
+                      attributeChanges:
+                        type: object
+        '400':
+          description: 训练次数已用完
+        '401':
+          description: 未授权
+
+  /training/records:
+    get:
+      tags: [训练]
+      summary: 获取某轮训练记录列表
+      parameters:
+        - name: roundId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: playerId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 可选，筛选特定选手
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TrainingRecord'
+        '401':
+          description: 未授权
+
+  # ==============================================================
+  # 彩排
+  # ==============================================================
+
+  /admin/rehearsal/generate:
+    post:
+      tags: [彩排]
+      summary: 管理员生成彩排结果（随机事件）
+      description: |
+        为指定队伍生成彩排结果，包含随机事件和 bonus 加分
+        可指定 teamId 单队生成，或 all=true 为所有队生成
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - roundId
+              properties:
+                roundId:
+                  type: string
+                teamId:
+                  type: string
+                  nullable: true
+                  description: 可选，指定队伍ID
+                all:
+                  type: boolean
+                  default: false
+                  description: 是否为所有队伍生成
+            example:
+              roundId: round-1
+              all: true
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RehearsalResult'
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /rehearsal/results:
+    get:
+      tags: [彩排]
+      summary: 获取某轮彩排结果
+      parameters:
+        - name: roundId
+          in: query
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RehearsalResult'
+        '401':
+          description: 未授权
+
+  # ==============================================================
+  # 公演
+  # ==============================================================
+
+  /admin/performance/calculate:
+    post:
+      tags: [公演]
+      summary: 执行公演结算（一次性计算所有队伍和选手的分数）
+      description: |
+        计算规则：
+        1. 删除该轮旧的 TeamPerformance 和 PlayerPerformance
+        2. 计算每个 team 的 finalScore = baseScore + 属性加权平均 + 随机分 + 彩排加分
+        3. 计算每个 player 的 finalScore = baseScore + 属性加权 + 随机分 + 团队名次加成 + 彩排加分
+        4. 按分数排序，写入 rank
+        5. 返回新的结果
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - roundId
+              properties:
+                roundId:
+                  type: string
+            example:
+              roundId: round-1
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      teamPerformances:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TeamPerformance'
+                      playerPerformances:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PlayerPerformance'
+        '400':
+          description: 该轮没有队伍，无法结算
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /performance/teams:
+    get:
+      tags: [公演]
+      summary: 获取某轮团队公演结果列表
+      parameters:
+        - name: roundId
+          in: query
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TeamPerformance'
+        '401':
+          description: 未授权
+
+  /performance/players:
+    get:
+      tags: [公演]
+      summary: 获取某轮选手公演结果列表
+      parameters:
+        - name: roundId
+          in: query
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlayerPerformance'
+        '401':
+          description: 未授权
+
+  # ==============================================================
+  # 淘汰
+  # ==============================================================
+
+  /admin/elimination/confirm:
+    post:
+      tags: [淘汰]
+      summary: 管理员确认淘汰结果
+      description: |
+        批量淘汰选手：
+        1. 将选手 User.status 设为 ELIMINATED
+        2. 写入 Elimination 记录
+        3. 保留历史记录
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - roundId
+                - playerIds
+              properties:
+                roundId:
+                  type: string
+                playerIds:
+                  type: array
+                  items:
+                    type: string
+                  description: 被淘汰的选手ID列表
+                reason:
+                  type: string
+                  default: 公演淘汰
+            example:
+              roundId: round-1
+              playerIds: [u005, u006]
+              reason: 公演淘汰
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      eliminatedCount:
+                        type: integer
+                      eliminatedList:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Elimination'
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /elimination/candidates:
+    get:
+      tags: [淘汰]
+      summary: 获取淘汰候选名单（未被淘汰的选手，含公演分）
+      parameters:
+        - name: roundId
+          in: query
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    description: 按 personalScore 升序排列（分数低的在前面，方便选择淘汰）
+                    items:
+                      type: object
+                      properties:
+                        playerId:
+                          type: string
+                        name:
+                          type: string
+                        avatar:
+                          type: string
+                          nullable: true
+                        teamId:
+                          type: string
+                          nullable: true
+                        teamName:
+                          type: string
+                          nullable: true
+                        personalScore:
+                          type: number
+                          description: 个人公演最终分
+                        personalRank:
+                          type: integer
+                          nullable: true
+                        teamScore:
+                          type: number
+                          description: 团队公演最终分（用于团秀得分排序）
+                        teamRank:
+                          type: integer
+                          nullable: true
+        '401':
+          description: 未授权
+
+  /elimination:
+    get:
+      tags: [淘汰]
+      summary: 获取某轮淘汰记录列表
+      parameters:
+        - name: roundId
+          in: query
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Elimination'
+        '401':
+          description: 未授权
+
+  /admin/elimination/restore/{playerId}:
+    post:
+      tags: [淘汰]
+      summary: 恢复被淘汰的选手（复活）
+      parameters:
+        - name: playerId
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  # ==============================================================
+  # 用户
+  # ==============================================================
+
+  /users:
+    get:
+      tags: [用户]
+      summary: 获取用户列表（管理员）
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ACTIVE, ELIMINATED]
+          description: 按状态筛选
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlayerPublic'
+        '401':
+          description: 未授权
+
+  /users/me:
+    get:
+      tags: [用户]
+      summary: 获取当前登录用户信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Player'
+        '401':
+          description: 未授权
+
+  /users/{id}:
+    put:
+      tags: [用户]
+      summary: 更新用户信息（头像/属性）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  description: 头像URL
+                attributes:
+                  type: object
+                  properties:
+                    vocal:
+                      type: integer
+                    dance:
+                      type: integer
+                    charm:
+                      type: integer
+      responses:
+        '200':
+          description: 成功
+        '401':
+          description: 未授权
+        '403':
+          description: 无权修改
+
+  # ==============================================================
+  # 聊天
+  # ==============================================================
+
+  /chat/messages:
+    get:
+      tags: [聊天]
+      summary: 获取聊天记录（分页）
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatMessage'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+        '401':
+          description: 未授权
+
+  /chat/messages:
+    post:
+      tags: [聊天]
+      summary: 发送聊天消息
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  maxLength: 500
+            example:
+              content: 大家好！
+      responses:
+        '200':
+          description: 成功
+        '400':
+          description: 聊天已关闭
+        '401':
+          description: 未授权
+
+  /admin/chat/config:
+    get:
+      tags: [聊天]
+      summary: 获取聊天配置
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        description: 聊天是否开启
+        '401':
+          description: 未授权
+    put:
+      tags: [聊天]
+      summary: 更新聊天配置（管理员）
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - enabled
+              properties:
+                enabled:
+                  type: boolean
+                  description: 是否开启聊天
+            example:
+              enabled: false
+      responses:
+        '200':
+          description: 成功
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /admin/chat/clear:
+    post:
+      tags: [聊天]
+      summary: 清空聊天记录（管理员）
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  # ==============================================================
+  # 赛季管理
+  # ==============================================================
+
+  /season:
+    get:
+      tags: [赛季]
+      summary: 获取赛季配置（含所有业务参数）
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      currentRound:
+                        type: integer
+                      currentStage:
+                        $ref: '#/components/schemas/Stage'
+                      totalRounds:
+                        type: integer
+                      trainingDrawsPerPlayer:
+                        type: integer
+                      baseScore:
+                        type: number
+                      scoreMultiplier:
+                        type: number
+                      teamRankBonusBase:
+                        type: number
+                      teamRankBonusMultiplier:
+                        type: number
+        '401':
+          description: 未授权
+
+  /season/config:
+    put:
+      tags: [赛季]
+      summary: 更新赛季配置（管理员）
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                totalRounds:
+                  type: integer
+                trainingDrawsPerPlayer:
+                  type: integer
+                baseScore:
+                  type: number
+                scoreMultiplier:
+                  type: number
+                randomMin:
+                  type: number
+                randomMax:
+                  type: number
+                teamRankBonusBase:
+                  type: number
+                teamRankBonusMultiplier:
+                  type: number
+                teamRandomMin:
+                  type: number
+                teamRandomMax:
+                  type: number
+      responses:
+        '200':
+          description: 成功
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /season/restart:
+    post:
+      tags: [赛季]
+      summary: 一键重新开始（保留历史公演和淘汰）
+      description: |
+        行为：
+        - 清空当前轮的队伍/成员/训练/彩排
+        - 所有选手 status=ACTIVE，role=player
+        - 保留历史公演结果和淘汰记录
+        - currentRound=1，currentStage=PREPARATION
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /season/reset:
+    post:
+      tags: [赛季]
+      summary: 完全重置（清空所有数据）
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  /season/history:
+    get:
+      tags: [赛季]
+      summary: 获取某轮历史数据（综合）
+      parameters:
+        - name: roundIndex
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 轮次（不传则返回所有历史）
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      teams:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RoundTeam'
+                      members:
+                        type: array
+                        items:
+                          type: object
+                      teamPerformances:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TeamPerformance'
+                      playerPerformances:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PlayerPerformance'
+                      eliminations:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Elimination'
+        '401':
+          description: 未授权
+
+  # ==============================================================
+  # 日志
+  # ==============================================================
+
+  /logs:
+    get:
+      tags: [日志]
+      summary: 获取操作日志（管理员）
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: actionType
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 按操作类型筛选
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        userId:
+                          type: string
+                        userName:
+                          type: string
+                        role:
+                          type: string
+                        actionType:
+                          type: string
+                        targetType:
+                          type: string
+                        targetId:
+                          type: string
+                        detail:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                  total:
+                    type: integer
+        '401':
+          description: 未授权
+        '403':
+          description: 仅管理员可用
+
+  # ==============================================================
+  # 认证
+  # ==============================================================
+
+  /auth/login:
+    post:
+      tags: [认证]
+      summary: 登录（使用登录码）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+              properties:
+                code:
+                  type: string
+                  description: 登录码（管理员：ADMIN2026，选手：CF2026-A001 等）
+            example:
+              code: ADMIN2026
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      role:
+                        type: string
+                      avatar:
+                        type: string
+                        nullable: true
+                  token:
+                    type: string
+                    description: JWT token
+        '404':
+          description: 登录码不存在

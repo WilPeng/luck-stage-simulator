@@ -1,0 +1,874 @@
+# Luck Stage 后端 API 接口文档
+
+> 基础路径：`http://localhost:3000/api`
+>
+> 认证方式：所有接口（除登录外）需在 Header 中携带 `Authorization: Bearer <token>`
+>
+> 权限分级：`auth` = 登录即可 | `admin` = 需管理员权限
+
+---
+
+## 目录
+
+1. [赛季管理 (Season)](#1-赛季管理-season)
+2. [轮次与进度 (Round/Progress)](#2-轮次与进度-roundprogress)
+3. [用户管理 (User)](#3-用户管理-user)
+4. [队伍管理 (Team)](#4-队伍管理-team)
+5. [队长管理 (Captain)](#5-队长管理-captain)
+6. [歌曲库管理 (Song Library)](#6-歌曲库管理-song-library)
+7. [轮次歌曲管理 (Round Song)](#7-轮次歌曲管理-round-song)
+8. [训练卡牌管理 (Training Card)](#8-训练卡牌管理-training-card)
+9. [训练操作 (Training)](#9-训练操作-training)
+10. [彩排管理 (Rehearsal)](#10-彩排管理-rehearsal)
+11. [公演管理 (Performance)](#11-公演管理-performance)
+12. [公演结算与得分规则](#12-公演结算与得分规则)
+13. [大众评审投票 (Audience Vote)](#13-大众评审投票-audience-vote)
+14. [淘汰管理 (Elimination)](#14-淘汰管理-elimination)
+15. [聊天室 (Chat)](#15-聊天室-chat)
+16. [操作日志 (Logs)](#16-操作日志-logs)
+17. [认证 (Auth)](#17-认证-auth)
+18. [选手端 (Player)](#18-选手端-player)
+19. [管理员后台 (Admin)](#19-管理员后台-admin)
+20. [轮次隔离说明](#20-轮次隔离说明)
+
+---
+
+## 1. 赛季管理 (Season)
+
+**文件**：`/api/season`
+
+### GET /api/season
+- **权限**：auth
+- **功能**：获取当前赛季信息
+
+### GET /api/season/rounds
+- **权限**：auth
+- **功能**：获取该赛季的轮次列表
+
+### GET /api/season/stages
+- **权限**：auth
+- **功能**：获取阶段列表
+
+### POST /api/season/set
+- **权限**：admin
+- **功能**：管理员手动设置进度（轮次 + 阶段）
+- **请求体**：
+  ```json
+  { "round": 1, "stage": "preparation" }
+  ```
+- **注意**：轮次变化时会**自动清理上一轮的业务数据**（队伍/成员/队长/选歌等）
+
+### POST /api/season/next
+- **权限**：admin
+- **功能**：自动推进到下一阶段。若当前为 `ELIMINATION` 阶段则进入下一轮
+- **注意**：进入新轮次时会**自动清理上一轮的业务数据**
+
+### GET /api/season/progress/matrix
+- **权限**：auth
+- **功能**：获取赛程矩阵
+
+### GET /api/season/progress
+- **权限**：auth
+- **功能**：获取赛程进度（含矩阵 + 阶段映射）
+
+### GET /api/season/menu
+- **权限**：auth
+- **功能**：获取菜单权限列表
+
+### PUT /api/season/round
+- **权限**：admin
+- **功能**：设置总轮次和每轮训练次数
+
+### PUT /api/season/config
+- **权限**：admin
+- **功能**：更新赛季配置（名称/轮次/分数参数等）
+
+### POST /api/season/restart
+- **权限**：admin
+- **功能**：一键重新开始，**保留历史公演和淘汰记录**
+- **清理的数据**：所有轮次的 RoundTeam、RoundTeamMember、RoundCaptain、CaptainVote、TeamSong、RoundSong、RoundPreparation、PerformanceRoundState、PerformanceValue、Team、TrainingRecord、RehearsalResult
+- **不清除的数据**：User（用户信息）、Song（歌曲库）、TrainingCard（训练卡牌库）
+
+### POST /api/season/reset
+- **权限**：admin
+- **功能**：完全重置，**清空所有业务数据**（包括历史公演和淘汰记录）
+
+### GET /api/season/history
+- **权限**：auth
+- **参数**：`roundId`（必填）
+- **功能**：获取指定轮次的历史数据
+
+---
+
+## 2. 轮次与进度 (Round/Progress)
+
+### GET /api/rounds
+- **权限**：auth
+- **功能**：获取轮次列表
+
+---
+
+## 3. 用户管理 (User)
+
+**文件**：`/api/users`
+
+### GET /api/users
+- **权限**：auth
+- **参数**：`keyword`、`role`、`status`、`teamId`、`page`、`pageSize`
+- **功能**：获取用户列表（支持筛选与分页）
+
+### GET /api/users/stats
+- **权限**：admin
+- **功能**：获取用户统计数据
+
+### GET /api/users/:id
+- **权限**：auth
+- **功能**：获取单个用户详情
+
+### POST /api/users
+- **权限**：admin
+- **功能**：创建单个用户
+- **请求体**：
+  ```json
+  { "name": "张三", "loginCode": "001", "role": "player" }
+  ```
+
+### POST /api/users/batch
+- **权限**：admin
+- **功能**：批量创建用户
+
+### PUT /api/users/:id
+- **权限**：admin
+- **功能**：更新用户信息
+
+### DELETE /api/users/:id
+- **权限**：admin
+- **功能**：删除单个用户（不能删除管理员）
+
+### POST /api/users/batch-delete
+- **权限**：admin
+- **功能**：批量删除用户
+
+### PUT /api/users/:id/status
+- **权限**：admin
+- **功能**：更新用户状态（`active` / `danger` / `eliminated`）
+
+### 头像上传
+| 接口 | 说明 |
+|------|------|
+| `POST /api/users/me/avatar` | 选手上传自己的头像 |
+| `DELETE /api/users/me/avatar` | 选手删除自己的头像 |
+| `POST /api/users/:id/avatar` | 管理员为指定用户上传头像 |
+| `DELETE /api/users/:id/avatar` | 管理员删除指定用户的头像 |
+
+---
+
+## 4. 队伍管理 (Team)
+
+**文件**：`/api/teams`
+
+> **重要**：所有接口的 `roundId` 参数**必填**，确保按轮次隔离。
+
+| 方法 | 路径 | 权限 | 功能 | 说明 |
+|------|------|------|------|------|
+| GET | `/api/teams` | auth | 获取队伍列表 | `roundId` 必填 |
+| GET | `/api/teams/stats/summary` | auth | 队伍统计摘要 | `roundId` 必填 |
+| POST | `/api/teams/setup` | admin | 创建轮次队伍 | |
+| PUT | `/api/teams/setup` | admin | 更新轮次队伍配置 | |
+| POST | `/api/teams/admin/manual-assign` | admin | 手动分配成员 | |
+| POST | `/api/teams/admin/random-assign` | admin | 自动分配成员 | |
+| POST | `/api/teams/:teamId/captain` | admin | 设置队长 | |
+| POST | `/api/teams/:teamId/members/add` | admin | 添加单个成员 | |
+| POST | `/api/teams/:teamId/members/remove` | admin | 移除单个成员 | |
+| POST | `/api/teams/:teamId/lock` | admin | 锁定队伍 | |
+| POST | `/api/teams/:teamId/unlock` | admin | 解锁队伍 | |
+| PUT | `/api/teams/:teamId` | admin | 更新队伍信息 | |
+| DELETE | `/api/teams/:id` | admin | 删除队伍 | |
+| GET | `/api/teams/history` | auth | 获取队伍历史 | `roundId` 必填 |
+| GET | `/api/teams/unassigned/:roundId` | auth | 获取某轮未被分配的选手 | |
+
+---
+
+## 5. 队长管理 (Captain)
+
+**文件**：`/api/captain`
+
+> **重要**：所有接口的 `roundId` 参数**必填**，确保按轮次隔离。
+
+### 投票接口
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/captain/vote` | auth | 投票选队长 |
+| GET | `/api/captain/votes` | auth | 查看投票记录 |
+| GET | `/api/captain/results` | auth | 查看投票结果统计 |
+| DELETE | `/api/captain/votes` | admin | 清空投票 |
+
+### 管理员指派接口
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/captain/admin/assign` | admin | 管理员指定队长 |
+| POST | `/api/captain/admin/unassign` | admin | 取消队长 |
+
+### 查询接口
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/api/captain/assigned` | auth | 查看已指派队长列表 |
+| GET | `/api/captain/history` | auth | 获取队长历史 |
+| **GET** | **`/api/captain/current`** | auth | **按轮次返回已分配的队长列表**（推荐前端使用） |
+| **GET** | **`/api/captain/available-players`** | auth | **按轮次返回可用队长候选人**（推荐前端使用） |
+
+### GET /api/captain/current?roundId=round-1
+**返回格式**：
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "captain_record_id",
+      "playerId": "user_xxx",
+      "playerName": "张三",
+      "playerAvatar": null,
+      "teamId": "team_xxx",
+      "teamName": "A队"
+    }
+  ],
+  "total": 3
+}
+```
+
+### GET /api/captain/available-players?roundId=round-1
+**返回格式**：
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "user_xxx",
+      "name": "李四",
+      "avatar": null,
+      "attributes": { "vocal": 15, "dance": 20, "charm": 12 },
+      "inTeam": true,
+      "status": "active"
+    }
+  ]
+}
+```
+
+---
+
+## 6. 歌曲库管理 (Song Library)
+
+**文件**：`/api/songs`
+
+> 这是一个独立于轮次的**全局歌曲库 CRUD 管理**，数据不会因轮次推进被清理。
+
+| 方法 | 路径 | 权限 | 功能 | 说明 |
+|------|------|------|------|------|
+| GET | `/api/songs` | auth | 获取歌曲库列表 | 支持 `type`/`style`/`keyword` 筛选 |
+| POST | `/api/songs` | admin | 新增歌曲 | |
+| PUT | `/api/songs/:id` | admin | 更新歌曲 | |
+| DELETE | `/api/songs/:id` | admin | 删除歌曲 | |
+
+### POST /api/songs 请求体
+```json
+{
+  "name": "七里香",
+  "type": "group",
+  "style": "流行",
+  "difficulty": 3,
+  "vocalWeight": 4,
+  "danceWeight": 3,
+  "charmWeight": 3,
+  "baseScore": 100,
+  "riskFactor": 0.2,
+  "description": ""
+}
+```
+
+### GET /api/songs 返回格式
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "song_xxx",
+      "name": "七里香",
+      "difficulty": 3,
+      "vocalWeight": 4,
+      "danceWeight": 3,
+      "charmWeight": 3,
+      "type": "group",
+      "style": "流行",
+      "baseScore": 100,
+      "riskFactor": 0.2,
+      "description": "",
+      "enabled": true,
+      "createdAt": "2026-06-24T...",
+      "updatedAt": "2026-06-24T..."
+    }
+  ],
+  "total": 20
+}
+```
+
+### 歌曲模型字段
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| id | string | 自动生成 | 唯一标识 |
+| name | string | - | 歌名 |
+| difficulty | number | 3 | 难度（1~5） |
+| vocalWeight | number | 3 | 声乐权重 |
+| danceWeight | number | 3 | 舞蹈权重 |
+| charmWeight | number | 3 | 魅力权重 |
+| type | string | `group` | `solo` / `duet` / `group` |
+| style | string | `流行` | 风格 |
+| baseScore | number | 100 | 基础分 |
+| riskFactor | number | 0.2 | 风险系数 |
+| description | string | '' | 描述 |
+| enabled | boolean | true | 是否启用 |
+
+---
+
+## 7. 轮次歌曲管理 (Round Song)
+
+**文件**：`/api/songs`（主路由）和 `/api/round-songs`（辅助路由）
+
+> 此模块负责"把歌曲库中的歌曲分配到本轮公演"以及"队伍选歌"。
+
+### 轮次歌曲 (songs.js)
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/songs/round/batch` | admin | 把歌曲添加到本轮公演 |
+| GET | `/api/songs/round/:roundId?` | auth | 获取本轮歌曲（含详情、分配信息） |
+| DELETE | `/api/songs/round/:id` | admin | 移除单条轮次歌曲 |
+| DELETE | `/api/songs/round/clear/:roundId?` | admin | 清空本轮所有歌曲 |
+
+### 队伍选歌 (songs.js)
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/songs/team-songs` | admin | 队伍选择歌曲（增量更新） |
+| POST | `/api/songs/team-songs/batch` | admin | 批量分配歌曲（增量更新） |
+| GET | `/api/songs/team-songs` | auth | 获取队伍歌曲分配记录 |
+| DELETE | `/api/songs/team-songs/:id` | admin | 删除单条分配 |
+
+### 歌曲抢选与释放 (songs.js)
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/songs/release` | admin | 释放歌曲供队长抢选 |
+| POST | `/api/songs/claim` | 队长 | 队长抢选歌曲 |
+| POST | `/api/songs/admin-assign` | admin | 管理员直接分配歌曲 |
+
+### 历史
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/api/songs/history` | auth | 获取歌曲历史 |
+
+### 轮次歌曲辅助路由 (roundSongs.js)
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/round-songs/batch` | admin | 批量添加歌曲到本轮 |
+| GET | `/api/round-songs/:round` | auth | 获取本轮所有歌曲 |
+| GET | `/api/round-songs/:round/full` | auth | 获取本轮所有歌曲（含分配信息） |
+| DELETE | `/api/round-songs/:id` | admin | 移除轮次歌曲 |
+| PUT | `/api/round-songs/:id/scoring` | admin | 更新给分方式 |
+| DELETE | `/api/round-songs/clear/:round` | admin | 清空本轮所有歌曲 |
+
+---
+
+## 8. 训练卡牌管理 (Training Card)
+
+**文件**：`/api/training`
+
+> 这是一个独立于轮次的**全局卡牌库 CRUD 管理**，数据不会因轮次推进被清理。
+
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/api/training/cards` | auth | 获取训练卡列表 |
+| POST | `/api/training/cards` | admin | 新增训练卡 |
+| PUT | `/api/training/cards/:id` | admin | 更新训练卡 |
+| DELETE | `/api/training/cards/:id` | admin | 删除训练卡 |
+
+### POST /api/training/cards 请求体
+```json
+{
+  "name": "声乐特训",
+  "type": "vocal",
+  "description": "提升声乐属性",
+  "effect": { "vocal": 3 },
+  "weight": 10,
+  "enabled": true
+}
+```
+
+### GET /api/training/cards 返回格式
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "card_xxx",
+      "name": "声乐特训",
+      "type": "vocal",
+      "description": "提升声乐属性",
+      "effect": { "vocal": 3 },
+      "weight": 10,
+      "enabled": true,
+      "createdAt": "2026-06-24T...",
+      "updatedAt": "2026-06-24T..."
+    }
+  ],
+  "total": 15
+}
+```
+
+### 卡牌模型字段
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| id | string | 自动生成 | 唯一标识 |
+| name | string | - | 卡牌名称 |
+| type | string | `mixed` | 类型（vocal/dance/charm/mixed 等） |
+| description | string | '' | 描述 |
+| effect | object | `{ vocal: 1 }` | 属性效果（支持 vocal/dance/charm/randomOne/randomTwo/lowest/highest） |
+| weight | number | 10 | 权重（加权随机抽卡用，越大越容易被抽到） |
+| enabled | boolean | true | 是否启用 |
+
+---
+
+## 9. 训练操作 (Training)
+
+**文件**：`/api/training`
+
+> 以下接口涉及轮次数据，需传 `roundId`。
+
+### 配置
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/api/training/config` | auth | 获取训练配置 |
+| PUT | `/api/training/config` | admin | 更新训练配置 |
+
+### 抽卡
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/training/draw` | auth | 抽一张训练卡（更新选手属性） |
+| POST | `/api/training/auto-complete` | admin | 一键完成所有选手训练 |
+| POST | `/api/training/auto-complete-all` | admin | 一键随机补全未训练选手 |
+
+### 记录查询
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/api/training/records` | auth | 获取训练记录（分页） |
+| GET | `/api/training/stats` | auth | 获取训练统计 |
+| GET | `/api/training/history` | auth | 获取训练历史 |
+
+### 记录删除
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| DELETE | `/api/training/clear-user-records` | admin | 取消本轮所有选手训练成果 |
+| DELETE | `/api/training/records/user/:userId` | admin | 清空用户本轮训练记录 |
+| DELETE | `/api/training/records/:id` | admin | 删除单条训练记录 |
+
+---
+
+## 10. 彩排管理 (Rehearsal)
+
+**文件**：`/api/rehearsal`
+
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/rehearsal/roll` | admin | 为队伍随机生成彩排结果 |
+| GET | `/api/rehearsal/results` | auth | 获取彩排结果列表 |
+| DELETE | `/api/rehearsal/results/:id` | admin | 删除指定彩排记录 |
+| GET | `/api/rehearsal/history` | auth | 获取彩排历史 |
+
+---
+
+## 11. 公演管理 (Performance)
+
+**文件**：`/api/performance`
+
+### 公演配置与状态
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/api/performance/config` | auth | 获取公演配置 |
+| PUT | `/api/performance/config` | admin | 更新公演配置 |
+| POST | `/api/performance/start` | admin | 管理员开启本轮公演 |
+| GET | `/api/performance/revealed-teams` | auth | 获取已揭晓队伍列表 |
+
+### 公演结算
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/performance/calculate` | admin | **公演结算**（计算团队/个人得分） |
+| DELETE | `/api/performance` | admin | **清除公演结果** |
+
+### 公演结果查询
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/api/performance` | auth | 按轮次获取公演结果 |
+| GET | `/api/performance/summary` | auth | 获取公演统计摘要 |
+| GET | `/api/performance/result` | admin | 管理员端详细结果 |
+| GET | `/api/performance/my-result` | auth | 选手端我的结果 |
+| GET | `/api/performance/teams` | auth | 获取团队公演结果 |
+| GET | `/api/performance/players` | auth | **获取选手公演结果**（按 rank 排序） |
+
+### 发挥值管理
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/performance/player-generate` | auth | 选手端生成随机发挥值 |
+| POST | `/api/performance/admin-generate` | admin | 管理员为某选手生成发挥值 |
+| POST | `/api/performance/admin-generate-all` | admin | 一键为所有选手生成发挥值 |
+| GET | `/api/performance/player-status` | auth | 获取各选手是否已生成发挥值 |
+| POST | `/api/performance/player-status/save` | admin | 批量保存/覆盖选手发挥值 |
+
+### 揭晓队伍
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/performance/revealed-teams/save` | admin | 保存已揭晓队伍 |
+| POST | `/api/performance/reveal-team` | admin | 揭晓某个队伍的结果 |
+
+### 安全团
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/performance/safe-teams` | admin | 标记安全团 |
+| GET | `/api/performance/safe-teams` | auth | 获取安全团列表 |
+
+### GET /api/performance/players?round=1 返回格式
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "playerId": "user_xxx",
+      "playerName": "张三",
+      "teamId": "team_xxx",
+      "rank": 1,
+      "finalScore": 85.5,
+      "performanceContribution": 80,
+      "baseContribution": 10,
+      "teamRankBonus": 5,
+      "mvpBonus": 3,
+      "popularityWeight": 10,
+      "audienceAffinity": 2,
+      "roundId": "xxxx-uuid-xxxx"
+    }
+  ]
+}
+```
+
+---
+
+## 12. 公演结算与得分规则
+
+### 个人分计算
+
+```
+个人最终分 = 属性分 × 难度系数 + 发挥加成  (截取到 0~120)
+```
+
+**① 属性分（0~100）**：选手三项属性 × 歌曲对应归一化权重之和
+```
+属性分 = vocal × vocal占比 + dance × dance占比 + charm × charm占比
+其中各项占比 = 该项权重 / (vocalWeight + danceWeight + charmWeight)
+```
+
+**② 难度系数**：范围 1.0 ~ 0.6
+```
+难度系数 = 1 - (难度 - 1) × 0.1
+难度1→1.0, 难度2→0.9, 难度3→0.8, 难度4→0.7, 难度5→0.6
+```
+
+**③ 发挥加成**：范围 -10 ~ 30
+```
+发挥加成 = 发挥值 × 2
+发挥值范围 -5 ~ 15
+```
+
+**④ 评级判定**
+
+| 分数 | 评级 | 文本 |
+|------|------|------|
+| ≥ 85 | S | 完美舞台 |
+| ≥ 65 | A | 出色表现 |
+| ≥ 45 | B | 稳定发挥 |
+| ≥ 25 | C | 略有不足 |
+| < 25 | D | 失误较多 |
+
+### 团队分计算
+
+```
+团队分 = 队员个人分平均值 + 随机团队加成(0~20)
+```
+
+### 最终票数（排名依据）
+
+```
+最终票数 = 500(基础票) + 团队分×3 + random(-10, 20)
+```
+
+| 字段 | 计算方式 |
+|------|---------|
+| baseVotes | 固定 500 |
+| attributeVotes | 团队分 × 3 |
+| performanceVotes | random(-10, 20) |
+| eventVotes | 团队加成（0~20 随机，即 teamBonus） |
+| compatibilityVotes | 始终为 0（预留） |
+
+### 排名规则
+
+- **队伍排名**：按 `finalVotes` 降序
+- **选手个人排名（全场）**：按 `playerScore` 降序（公演结算时的排名）
+- **选手队内排名**：按 `playerScore` 在队内降序
+
+### 选手淘汰排名（按个人喜爱度）
+
+`GET /api/elimination/ranking` 和 `GET /api/elimination/candidates` 使用的排名**按个人喜爱度（得票数）排序**，优先级如下：
+
+1. **AudienceVoteFinalRanking**（已释放的最终排名）→ 按得票数排序
+2. **AudienceVote**（原始投票记录）→ 按票数统计排序
+3. **PlayerPerformance.rank**（无可用的喜爱度数据时）→ 按公演得分排名
+
+返回结果中包含 `popularityVotes` 字段，表示该选手获得的喜爱度票数。
+
+---
+
+## 13. 大众评审投票 (Audience Vote)
+
+**文件**：`/api/audience-vote`
+
+### 生成与管理
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/audience-vote/generate` | admin | 生成大众评审投票 |
+| DELETE | `/api/audience-vote` | admin | 清空大众评审投票 |
+| PUT | `/api/audience-vote/seat/:seatNumber` | admin | 微调某个评审的投票 |
+
+### 排名与结果
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/api/audience-vote/ranking` | auth | **获取喜爱度排行榜** |
+| POST | `/api/audience-vote/release` | admin | 释放最终排名，锁定结果 |
+| GET | `/api/audience-vote/final-ranking` | auth | 获取最终个人喜爱度排名 |
+
+### 席位
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/api/audience-vote/seats` | admin | 获取评审席座位列表 |
+| GET | `/api/audience-vote/seat/:seatNumber` | admin | 获取某评审投票详情 |
+
+### GET /api/audience-vote/ranking?roundId=round-1 返回格式
+```json
+{
+  "success": true,
+  "totalAudience": 30,
+  "totalVotes": 120,
+  "rankings": [
+    {
+      "playerId": "user_xxx",
+      "playerName": "张三",
+      "teamId": "team_xxx",
+      "teamName": "A队",
+      "votes": 15,
+      "totalWeight": 10,
+      "rank": 1
+    }
+  ],
+  "weights": [
+    {
+      "playerId": "user_xxx",
+      "playerName": "张三",
+      "teamId": "team_xxx",
+      "teamName": "A队",
+      "baseContribution": 10,
+      "performanceContribution": 80,
+      "teamRankBonus": 5,
+      "mvpBonus": 3,
+      "audienceLuck": 2,
+      "totalWeight": 100
+    }
+  ]
+}
+```
+
+> **注意**：调用前必须先调用 `POST /api/audience-vote/generate` 生成投票，否则返回 `code: 'NOT_GENERATED'`。
+
+---
+
+## 14. 淘汰管理 (Elimination)
+
+**文件**：`/api/elimination`
+
+| 方法 | 路径 | 权限 | 功能 | 说明 |
+|------|------|------|------|------|
+| GET | `/api/elimination` | auth | 获取当前淘汰名单 | |
+| GET | `/api/elimination/stats` | auth | 获取淘汰统计 | |
+| GET | `/api/elimination/history` | auth | 获取完整淘汰历史 | |
+| GET | `/api/elimination/ranking` | auth | 获取排名列表 | |
+| GET | `/api/elimination/candidates` | auth | 获取淘汰候选选手 | |
+| **POST** | **`/api/elimination/manual`** | admin | **手动批量淘汰** | 支持 `userIds` 或 `playerIds` |
+| POST | `/api/elimination/restore/:userId` | admin | 恢复被淘汰选手 | |
+| **PATCH** | **`/api/elimination/restore/:userId`** | admin | **恢复被淘汰选手**（PATCH 兼容） | |
+| POST | `/api/elimination/batch` | admin | 批量淘汰（旧端点兼容） | |
+| DELETE | `/api/elimination/:id` | admin | 删除淘汰记录 | |
+| GET | `/api/elimination/summary` | auth | 获取淘汰摘要 | |
+
+### POST /api/elimination/manual 请求体
+```json
+{
+  "playerIds": ["user_id_1", "user_id_2"],
+  "reason": "管理员手动淘汰",
+  "round": 1
+}
+```
+也可用 `"userIds"` 替代 `"playerIds"`。
+
+### 淘汰排名（按个人喜爱度排序）
+
+`GET /api/elimination/ranking` 返回的排名**按个人喜爱度（得票数）降序排序**，而非按公演得分。
+
+优先级：`AudienceVoteFinalRanking`（已释放最终排名） > `AudienceVote`（原始票数统计） > `PlayerPerformance.rank`（公演分）
+
+返回格式增加 `popularityVotes` 字段：
+
+```json
+{
+  "rankings": [
+    {
+      "rank": 1,
+      "userId": "user_xxx",
+      "name": "张三",
+      "teamId": "team_xxx",
+      "teamName": "A队",
+      "finalScore": 85,
+      "popularityVotes": 25,
+      "status": "safe",
+      "isDanger": false
+    }
+  ]
+}
+```
+
+### POST /api/elimination/manual 返回格式
+```json
+{
+  "success": true,
+  "data": {
+    "round": 1,
+    "eliminatedList": [{ "userId": "user_xxx", "userName": "张三", "rank": null, "finalScore": null }],
+    "eliminatedCount": 1,
+    "failedList": [],
+    "failedCount": 0
+  }
+}
+```
+
+**业务逻辑**：
+- 安全团（`SafeTeam`）中的选手**不能被淘汰**
+- 已淘汰的选手不重复淘汰
+- 成功后自动更新选手状态为 `eliminated`
+
+---
+
+## 15. 聊天室 (Chat)
+
+**文件**：`/api/chat`
+
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/config` | auth | 获取聊天室配置 |
+| PUT | `/config` | admin | 更新聊天室开关状态 |
+| GET | `/messages` | auth | 获取聊天记录（分页/搜索） |
+| GET | `/messages/unread-count` | auth | 获取未读消息数 |
+| POST | `/messages` | auth | 发送聊天消息 |
+| DELETE | `/messages/:id` | auth | 删除单条消息 |
+| DELETE | `/messages` | admin | 清空所有聊天记录 |
+
+---
+
+## 16. 操作日志 (Logs)
+
+**文件**：`/api/logs`
+
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/` | admin | 获取操作日志列表 |
+| POST | `/` | auth | 创建操作日志记录 |
+
+---
+
+## 17. 认证 (Auth)
+
+**文件**：`/api/auth`
+
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| POST | `/api/auth/login` | 公开 | 用户通过登录码登录，返回 JWT token |
+| GET | `/api/auth/me` | token | 获取当前登录用户信息 |
+| POST | `/api/auth/logout` | token | 用户登出 |
+
+---
+
+## 18. 选手端 (Player)
+
+**文件**：`/api/player`
+
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/api/player/performance/result` | auth | 选手端查看公演结果（含队伍排名、个人表现、安全/危险状态） |
+
+---
+
+## 19. 管理员后台 (Admin)
+
+**文件**：`/api/admin`
+
+| 方法 | 路径 | 权限 | 功能 |
+|------|------|------|------|
+| GET | `/api/admin/progress` | admin | 获取当前进度 |
+| POST | `/api/admin/progress/set` | admin | 手动设置进度 |
+| POST | `/api/admin/progress/next` | admin | 自动推进到下一阶段 |
+| GET | `/api/admin/round/:round/preparation` | admin | 获取轮次预先配置 |
+| POST | `/api/admin/round/:round/preparation` | admin | 保存轮次预先配置 |
+| GET | `/api/admin/round/:round/captains` | admin | 获取队长列表 |
+| POST | `/api/admin/round/:round/captains` | admin | 指定/更换队长 |
+| POST | `/api/admin/team/assign` | admin | 手动分配选手到队伍 |
+| POST | `/api/admin/team/random` | admin | 随机分配未入队选手 |
+| POST | `/api/admin/song/release` | admin | 释放歌曲到轮次 |
+| POST | `/api/admin/song/assign` | admin | 手动分配歌曲给队伍 |
+| GET | `/api/admin/training/statistics` | admin | 获取训练统计 |
+| POST | `/api/admin/rehearsal/generate` | admin | 为队伍生成彩排结果 |
+| POST | `/api/admin/performance/calculate` | admin | 公演结算 |
+| POST | `/api/admin/elimination/confirm` | admin | 确认淘汰选手 |
+| POST | `/api/admin/elimination/restore/:playerId` | admin | 复活淘汰选手 |
+
+---
+
+## 20. 轮次隔离说明
+
+### 数据自动清理时机
+
+进入新轮次时（通过 `POST /api/season/next` 或 `POST /api/season/set`），以下数据会被**自动清除**：
+
+| 数据表 | 说明 |
+|--------|------|
+| RoundTeam | 上一轮所有队伍 → 新轮次重新分配阵容 |
+| RoundTeamMember | 上一轮所有成员关系 → 选手在新轮次重新组队 |
+| RoundCaptain | 上一轮所有队长记录 → 新轮次重新选举/指派 |
+| CaptainVote | 上一轮所有投票 → 新轮次重新投票 |
+| TeamSong | 上一轮所有队伍选歌 → 新轮次重新选歌 |
+| RoundSong | 上一轮所有歌曲清单 → 新轮次重新配置歌曲 |
+
+### 不会被清理的数据
+
+- **User** — 选手/管理员信息（永久保留）
+- **Song** — 歌曲库（永久保留）
+- **TrainingCard** — 训练卡牌库（永久保留）
+- **TeamPerformance / PlayerPerformance** — 公演结果（保留历史可查看）
+- **Elimination** — 淘汰记录（保留历史可查看）
+- **TrainingRecord / RehearsalResult** — 训练和彩排记录（保留历史）
+
+### 前端需要配合的改动
+
+1. **所有涉及轮次的接口调用必须传 `roundId`**，确保查询按轮次隔离
+2. **队长查询**：改用 `GET /api/captain/current?roundId=round-X` 替代 `GET /api/users?role=captain`
+3. **可用选手查询**：改用 `GET /api/captain/available-players?roundId=round-X` 替代全局用户列表

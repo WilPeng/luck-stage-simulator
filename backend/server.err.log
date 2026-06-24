@@ -1,0 +1,56 @@
+Generate audience vote error: Error: 该轮尚未生成选手公演结果，无法生成大众评审投票
+    at generateAudienceVoteForRound (C:\Users\86139\Desktop\luck-stage-backend\src\services\audienceVoteService.js:69:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\audienceVote.js:75:20
+Generate audience vote error: Error: 该轮尚未生成选手公演结果，无法生成大众评审投票
+    at generateAudienceVoteForRound (C:\Users\86139\Desktop\luck-stage-backend\src\services\audienceVoteService.js:69:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\audienceVote.js:75:20
+Generate audience vote error: Error: 该轮尚未生成选手公演结果，无法生成大众评审投票
+    at generateAudienceVoteForRound (C:\Users\86139\Desktop\luck-stage-backend\src\services\audienceVoteService.js:69:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\audienceVote.js:75:20
+Generate audience vote error: Error: 该轮尚未生成选手公演结果，无法生成大众评审投票
+    at generateAudienceVoteForRound (C:\Users\86139\Desktop\luck-stage-backend\src\services\audienceVoteService.js:69:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\audienceVote.js:75:20
+Generate audience vote error: Error: 该轮尚未生成选手公演结果，无法生成大众评审投票
+    at generateAudienceVoteForRound (C:\Users\86139\Desktop\luck-stage-backend\src\services\audienceVoteService.js:69:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\audienceVote.js:75:20
+Generate audience vote error: Error: 该轮尚未生成选手公演结果，无法生成大众评审投票
+    at generateAudienceVoteForRound (C:\Users\86139\Desktop\luck-stage-backend\src\services\audienceVoteService.js:69:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\audienceVote.js:75:20
+Get candidates error: Error: 无效的轮次参数
+    at Object.getEliminationCandidates (C:\Users\86139\Desktop\luck-stage-backend\src\services\eliminationService.js:256:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\elimination.js:66:24
+Get candidates error: Error: 无效的轮次参数
+    at Object.getEliminationCandidates (C:\Users\86139\Desktop\luck-stage-backend\src\services\eliminationService.js:256:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\elimination.js:66:24
+Get candidates error: Error: 无效的轮次参数
+    at Object.getEliminationCandidates (C:\Users\86139\Desktop\luck-stage-backend\src\services\eliminationService.js:256:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\elimination.js:66:24
+Get candidates error: Error: 无效的轮次参数
+    at Object.getEliminationCandidates (C:\Users\86139\Desktop\luck-stage-backend\src\services\eliminationService.js:256:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\elimination.js:66:24
+Get candidates error: Error: 无效的轮次参数
+    at Object.getEliminationCandidates (C:\Users\86139\Desktop\luck-stage-backend\src\services\eliminationService.js:256:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\elimination.js:66:24
+Get candidates error: Error: 无效的轮次参数
+    at Object.getEliminationCandidates (C:\Users\86139\Desktop\luck-stage-backend\src\services\eliminationService.js:256:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\elimination.js:66:24
+Get candidates error: Error: 无效的轮次参数
+    at Object.getEliminationCandidates (C:\Users\86139\Desktop\luck-stage-backend\src\services\eliminationService.js:256:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\elimination.js:66:24
+Get candidates error: Error: 无效的轮次参数
+    at Object.getEliminationCandidates (C:\Users\86139\Desktop\luck-stage-backend\src\services\eliminationService.js:256:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\86139\Desktop\luck-stage-backend\src\routes\elimination.js:66:24
