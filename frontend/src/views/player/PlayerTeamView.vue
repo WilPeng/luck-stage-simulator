@@ -434,8 +434,8 @@ onMounted(async () => {
 
 .team-header {
   margin-bottom: 24px;
-  h1 { font-size: 24px; font-weight: 700; margin: 0 0 8px; }
-  .subtitle { color: #999; font-size: 14px; margin: 0; }
+  h1 { font-size: 24px; font-weight: 700; margin: 0 0 8px; color: rgba(255,255,255,0.9); }
+  .subtitle { color: rgba(255,255,255,0.65); font-size: 14px; margin: 0; }
 }
 
 .section-title-bar {
@@ -445,8 +445,8 @@ onMounted(async () => {
 }
 
 .section-card {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 20px;
@@ -460,8 +460,8 @@ onMounted(async () => {
 }
 
 .team-overview-card, .team-apply-card, .team-result-card {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
   border-radius: 12px;
   padding: 16px;
 }
@@ -470,10 +470,10 @@ onMounted(async () => {
   display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 8px;
   .team-overview-name, .apply-team-name { font-size: 16px; font-weight: 600; }
-  .team-overview-count, .apply-team-count { font-size: 13px; color: #999; }
+  .team-overview-count, .apply-team-count { font-size: 13px; color: rgba(255,255,255,0.55); }
 }
 
-.team-captain, .apply-captain { font-size: 13px; color: #aaa; margin-bottom: 12px; }
+.team-captain, .apply-captain { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 12px; }
 .captain-name-highlight { color: #f39c12; font-weight: 500; }
 
 .team-members-list { display: flex; flex-direction: column; gap: 6px; }
@@ -484,7 +484,7 @@ onMounted(async () => {
 .mini-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(102,126,234,0.2); font-size: 14px; }
 .team-member-name { font-size: 13px; flex: 1; }
 .captain-mini-badge { font-size: 10px; color: #f39c12; background: rgba(243,156,18,0.15); padding: 1px 6px; border-radius: 6px; }
-.no-members { font-size: 12px; color: #666; padding: 8px; text-align: center; }
+.no-members { font-size: 12px; color: rgba(255,255,255,0.5); padding: 8px; text-align: center; }
 
 /* 队长视图 */
 .team-card-modern {
@@ -494,7 +494,7 @@ onMounted(async () => {
 }
 .team-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .team-name-large { font-size: 18px; font-weight: 700; }
-.team-capacity { font-size: 14px; color: #999; }
+.team-capacity { font-size: 14px; color: rgba(255,255,255,0.55); }
 
 .member-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .member-chip { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(255,255,255,0.05); border-radius: 20px;
@@ -503,7 +503,7 @@ onMounted(async () => {
 .chip-avatar { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; background: rgba(102,126,234,0.2); }
 .chip-name { font-size: 13px; }
 .chip-badge { font-size: 12px; }
-.no-data { font-size: 12px; color: #666; padding: 12px; text-align: center; }
+.no-data { font-size: 12px; color: rgba(255,255,255,0.5); padding: 12px; text-align: center; }
 
 /* 申请列表 */
 .application-list { display: flex; flex-direction: column; gap: 8px; }
@@ -528,12 +528,12 @@ onMounted(async () => {
 
 /* 已完成结果 */
 .team-result-card { margin-bottom: 12px; }
-.result-team-name { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+.result-team-name { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: rgba(255,255,255,0.9); }
 .result-members { display: flex; flex-wrap: wrap; gap: 8px; }
-.result-member { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(255,255,255,0.03); border-radius: 16px; font-size: 13px; }
+.result-member { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(255,255,255,0.06); border-radius: 16px; font-size: 13px; color: rgba(255,255,255,0.8); }
 .result-captain-badge { font-size: 10px; color: #f39c12; }
 
-.empty-tip { font-size: 13px; color: #666; text-align: center; padding: 16px; }
+.empty-tip { font-size: 13px; color: rgba(255,255,255,0.5); text-align: center; padding: 16px; }
 
 // ===== 移动端适配 =====
 @media (max-width: 768px) {

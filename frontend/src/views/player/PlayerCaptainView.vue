@@ -173,6 +173,7 @@ onMounted(async () => {
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px;
+  color: rgba(255,255,255,0.9);
 }
 
 .voting-section {
@@ -196,7 +197,7 @@ onMounted(async () => {
   .selected-count {
     text-align: center;
     font-size: 14px;
-    color: #666;
+    color: rgba(255,255,255,0.7);
     margin-bottom: 16px;
     strong { color: #667eea; font-size: 18px; }
   }
@@ -211,18 +212,18 @@ onMounted(async () => {
   .candidate-card {
     position: relative;
     padding: 20px;
-    background: white;
-    border: 2px solid #e0e0e0;
+    background: rgba(255,255,255,0.06);
+    border: 2px solid rgba(255,255,255,0.12);
     border-radius: 12px;
     cursor: pointer;
     transition: all 0.3s;
 
     &:hover:not(.disabled) {
       transform: translateY(-4px);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
     }
 
-    &.selected { border-color: #667eea; background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%); }
+    &.selected { border-color: #667eea; background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%); }
     &.disabled { opacity: 0.6; cursor: default; }
 
     .candidate-avatar {
@@ -233,16 +234,16 @@ onMounted(async () => {
     }
 
     .candidate-info { text-align: center;
-      .candidate-name { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #1a1a3a; }
-      .candidate-stats { display: flex; justify-content: center; gap: 8px; font-size: 12px; color: #666;
-        .stat { padding: 2px 8px; background: #f5f5f5; border-radius: 4px; }
+      .candidate-name { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: rgba(255,255,255,0.9); }
+      .candidate-stats { display: flex; justify-content: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,0.6);
+        .stat { padding: 2px 8px; background: rgba(255,255,255,0.08); border-radius: 4px; }
       }
     }
 
     .selected-badge { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: #667eea; color: white; border-radius: 50%; font-size: 14px; font-weight: 700; }
   }
 
-  .voted-notice { text-align: center; padding: 16px; background: #f0f9ff; border-radius: 12px; font-size: 16px; color: #0052d9; display: flex; align-items: center; justify-content: center; gap: 8px;
+  .voted-notice { text-align: center; padding: 16px; background: rgba(0, 82, 217, 0.15); border-radius: 12px; font-size: 16px; color: #64b5f6; display: flex; align-items: center; justify-content: center; gap: 8px;
     .voted-icon { font-size: 24px; }
   }
 
@@ -257,22 +258,22 @@ onMounted(async () => {
 .result-section {
   .result-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
     .result-icon { font-size: 48px; }
-    h2 { font-size: 24px; font-weight: 700; color: #1a1a3a; }
+    h2 { font-size: 24px; font-weight: 700; color: rgba(255,255,255,0.9); }
   }
 
   .results-list { display: flex; flex-direction: column; gap: 12px; }
 
-  .result-item { display: flex; align-items: center; gap: 12px; padding: 16px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  .result-item { display: flex; align-items: center; gap: 12px; padding: 16px; background: rgba(255,255,255,0.06); border-radius: 12px;
     &.winner { background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); }
-    .result-rank { font-size: 20px; font-weight: 700; color: #666; width: 32px; text-align: center; }
+    .result-rank { font-size: 20px; font-weight: 700; color: rgba(255,255,255,0.6); width: 32px; text-align: center; }
     .result-name { font-size: 14px; font-weight: 500; min-width: 100px; }
-    .result-bar { flex: 1; height: 12px; background: #f0f0f0; border-radius: 6px; overflow: hidden;
+    .result-bar { flex: 1; height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden;
       .result-bar-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 6px; transition: width 0.5s; }
     }
     .result-votes { font-size: 14px; font-weight: 600; color: #667eea; min-width: 60px; text-align: right; }
   }
 
-  .no-result { text-align: center; padding: 48px; color: #999; }
+  .no-result { text-align: center; padding: 48px; color: rgba(255,255,255,0.5); }
 }
 
 // ===== 移动端适配 =====
@@ -335,26 +336,6 @@ onMounted(async () => {
       .result-bar { min-width: 40px; }
       .result-votes { font-size: 12px; min-width: auto; white-space: nowrap; }
     }
-  }
-}
-
-// 深色主题覆盖（将白色背景改为透明暗色风格）
-@media (prefers-color-scheme: dark) {
-  .candidate-card {
-    background: rgba(255,255,255,0.06);
-    border-color: rgba(255,255,255,0.1);
-
-    .candidate-info {
-      .candidate-name { color: #fff; }
-      .candidate-stats .stat { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
-    }
-  }
-
-  .result-item {
-    background: rgba(255,255,255,0.04);
-
-    &.winner { background: linear-gradient(135deg, rgba(255,215,0,0.3), rgba(255,237,78,0.2)); }
-    .result-rank { color: rgba(255,255,255,0.5); }
   }
 }
 </style>
