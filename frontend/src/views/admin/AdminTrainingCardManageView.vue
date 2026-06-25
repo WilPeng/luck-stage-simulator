@@ -78,21 +78,21 @@
           <div class="effect-form">
             <div class="effect-row">
               <label>声乐</label>
-              <t-input-number v-model="form.effect.vocal" :min="0" :max="10" size="small" />
+              <t-input-number v-model="form.effect.vocal" :min="-10" :max="10" size="small" />
               <label>舞蹈</label>
-              <t-input-number v-model="form.effect.dance" :min="0" :max="10" size="small" />
+              <t-input-number v-model="form.effect.dance" :min="-10" :max="10" size="small" />
               <label>魅力</label>
-              <t-input-number v-model="form.effect.charm" :min="0" :max="10" size="small" />
+              <t-input-number v-model="form.effect.charm" :min="-10" :max="10" size="small" />
             </div>
             <div class="effect-row">
               <label>随机单属性</label>
-              <t-input-number v-model="form.effect.randomOne" :min="0" :max="10" size="small" />
+              <t-input-number v-model="form.effect.randomOne" :min="-10" :max="10" size="small" />
               <label>随机双属性</label>
-              <t-input-number v-model="form.effect.randomTwo" :min="0" :max="10" size="small" />
+              <t-input-number v-model="form.effect.randomTwo" :min="-10" :max="10" size="small" />
               <label>补弱</label>
-              <t-input-number v-model="form.effect.lowest" :min="0" :max="10" size="small" />
+              <t-input-number v-model="form.effect.lowest" :min="-10" :max="10" size="small" />
               <label>增强</label>
-              <t-input-number v-model="form.effect.highest" :min="0" :max="10" size="small" />
+              <t-input-number v-model="form.effect.highest" :min="-10" :max="10" size="small" />
             </div>
             <div class="effect-row">
               <label>自选属性</label>
@@ -189,14 +189,14 @@ function editCard(card: TrainingCard) {
   form.type = card.type || 'mixed'
   form.description = card.description || ''
   form.effect = {
-    vocal: (card.effect as any)?.vocal || 0,
-    dance: (card.effect as any)?.dance || 0,
-    charm: (card.effect as any)?.charm || 0,
-    randomOne: (card.effect as any)?.randomOne || 0,
-    randomTwo: (card.effect as any)?.randomTwo || 0,
-    lowest: (card.effect as any)?.lowest || 0,
-    highest: (card.effect as any)?.highest || 0,
-    selfSelect: (card.effect as any)?.selfSelect || 0
+    vocal: (card.effect as any)?.vocal ?? 0,
+    dance: (card.effect as any)?.dance ?? 0,
+    charm: (card.effect as any)?.charm ?? 0,
+    randomOne: (card.effect as any)?.randomOne ?? 0,
+    randomTwo: (card.effect as any)?.randomTwo ?? 0,
+    lowest: (card.effect as any)?.lowest ?? 0,
+    highest: (card.effect as any)?.highest ?? 0,
+    selfSelect: (card.effect as any)?.selfSelect ?? 0
   }
   form.weight = card.weight ?? 10
   form.enabled = card.enabled !== false
@@ -220,15 +220,11 @@ async function doSave() {
   }
   saving.value = true
 
-  // 清理 effect 中所有 0 值的字段
+  // 保留所有非 0 的效果值（允许负数）
   const effect: Record<string, number> = {}
   Object.entries(form.effect).forEach(([k, v]) => {
-    if (v > 0) effect[k] = v
+    if (v !== 0) effect[k] = v
   })
-  // 如果没有任何效果，给一个默认
-  if (Object.keys(effect).length === 0) {
-    effect.vocal = 1
-  }
 
   const payload = {
     name: form.name,

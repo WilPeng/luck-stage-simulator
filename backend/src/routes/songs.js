@@ -44,7 +44,7 @@ router.get('/', auth, async (req, res) => {
       const k = keyword.toLowerCase()
       songs = songs.filter(s => (s.name || '').toLowerCase().includes(k) || (s.style || '').toLowerCase().includes(k))
     }
-    songs.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+    songs.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0))
     res.json({ success: true, data: songs, total: songs.length })
   } catch (e) {
     res.status(500).json({ success: false, error: '获取歌曲失败', code: 'SERVER_ERROR' })

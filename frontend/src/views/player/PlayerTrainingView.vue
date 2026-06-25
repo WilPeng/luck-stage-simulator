@@ -79,20 +79,32 @@
       </div>
     </div>
 
-    <!-- ===== 变动记录 ===== -->
+    <!-- ===== 训练记录（表格） ===== -->
     <div v-if="changeLog.length > 0" class="log-section">
       <h2 class="section-title">📋 训练记录</h2>
-      <div class="log-list">
-        <div v-for="(log, i) in changeLog" :key="i" class="log-item">
-          <span class="log-index">#{{ i + 1 }}</span>
-          <span class="log-card">{{ log.cardName }}</span>
-          <span class="log-effects">
-            <span v-if="log.vocal" :class="log.vocal > 0 ? 'up' : 'down'">🎤{{ log.vocal > 0 ? '+' : '' }}{{ log.vocal }}</span>
-            <span v-if="log.dance" :class="log.dance > 0 ? 'up' : 'down'">💃{{ log.dance > 0 ? '+' : '' }}{{ log.dance }}</span>
-            <span v-if="log.charm" :class="log.charm > 0 ? 'up' : 'down'">✨{{ log.charm > 0 ? '+' : '' }}{{ log.charm }}</span>
-          </span>
-        </div>
-      </div>
+      <table class="log-table">
+        <thead>
+          <tr>
+            <th class="col-idx">#</th>
+            <th class="col-name">卡牌</th>
+            <th class="col-desc">描述</th>
+            <th class="col-effect">效果</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(log, i) in changeLog" :key="i">
+            <td class="col-idx">{{ i + 1 }}</td>
+            <td class="col-name">{{ log.cardName }}</td>
+            <td class="col-desc">{{ log.desc || '-' }}</td>
+            <td class="col-effect">
+              <span v-if="log.vocal" :class="log.vocal > 0 ? 'up' : 'down'">🎤{{ log.vocal > 0 ? '+' : '' }}{{ log.vocal }}</span>
+              <span v-if="log.dance" :class="log.dance > 0 ? 'up' : 'down'">💃{{ log.dance > 0 ? '+' : '' }}{{ log.dance }}</span>
+              <span v-if="log.charm" :class="log.charm > 0 ? 'up' : 'down'">✨{{ log.charm > 0 ? '+' : '' }}{{ log.charm }}</span>
+              <span v-if="!log.vocal && !log.dance && !log.charm" class="no-effect">无属性变化</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </template>
@@ -135,7 +147,7 @@ const cardSlots = reactive<CardSlot[]>(
 )
 
 // 变动记录
-const changeLog = reactive<{ cardName: string; vocal: number; dance: number; charm: number }[]>([])
+const changeLog = reactive<{ cardName: string; vocal: number; dance: number; charm: number; desc?: string }[]>([])
 
 // 自选属性缓存（正在等待选择的卡槽索引）
 const pendingSelectIdx = ref<number | null>(null)
@@ -213,7 +225,7 @@ function applyCardResult(idx: number, name: string, type: string, v: number, d: 
   attributes.vocal = Math.max(0, attributes.vocal + v)
   attributes.dance = Math.max(0, attributes.dance + d)
   attributes.charm = Math.max(0, attributes.charm + c)
-  changeLog.unshift({ cardName: name, vocal: v, dance: d, charm: c })
+  changeLog.unshift({ cardName: name, vocal: v, dance: d, charm: c, desc })
   remainingDraws.value = Math.max(0, remainingDraws.value - 1)
   trainingCount.value += 1
 
@@ -322,10 +334,15 @@ onMounted(async () => {
     trainingCount.value = roundRecords.length
     remainingDraws.value = Math.max(0, (config?.drawsPerPlayer || 3) - roundRecords.length)
 
-    // 4. 回填变动记录
+    // 4. 回填变动记录（含描述）
+    if (trainingStore.cards.length === 0) {
+      await trainingStore.fetchCards()
+    }
     for (const r of roundRecords) {
+      const card = trainingStore.cards.find(c => c.id === r.cardId)
       changeLog.push({
         cardName: r.cardName,
+        desc: card?.description || '',
         vocal: r.effect.vocal || 0,
         dance: r.effect.dance || 0,
         charm: r.effect.charm || 0
@@ -506,32 +523,45 @@ onMounted(async () => {
   }
 }
 
-// ===== 变动记录 =====
-.log-section { margin-bottom: 28px; }
+// ===== 训练记录表格 =====
+.log-section { margin-bottom: 28px; width: 100%; max-width: 700px; }
 
-.log-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.log-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.04);
-  border-radius: 8px;
+.log-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 13px;
-  animation: fadeIn 0.3s ease;
 
-  .log-index { color: rgba(255,255,255,0.3); font-size: 11px; width: 24px; flex-shrink: 0; }
-  .log-card { flex: 1; font-weight: 500; color: rgba(255,255,255,0.8); }
-  .log-effects {
-    display: flex; gap: 6px; flex-shrink: 0;
+  thead th {
+    text-align: left;
+    padding: 10px 12px;
+    color: rgba(255,255,255,0.4);
+    font-weight: 500;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  tbody tr {
+    transition: background 0.2s;
+    &:hover { background: rgba(255,255,255,0.03); }
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+
+  td {
+    padding: 10px 12px;
+    vertical-align: middle;
+  }
+
+  .col-idx { width: 40px; color: rgba(255,255,255,0.3); }
+  .col-name { width: 100px; font-weight: 600; color: rgba(255,255,255,0.85); }
+  .col-desc { color: rgba(255,255,255,0.45); font-size: 12px; }
+  .col-effect {
+    width: 140px;
+    text-align: right;
+    white-space: nowrap;
+    span { margin-left: 6px; }
     .up { color: #2ecc71; }
     .down { color: #e74c3c; }
+    .no-effect { color: rgba(255,255,255,0.25); font-size: 12px; }
   }
 }
 

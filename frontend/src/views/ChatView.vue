@@ -22,6 +22,19 @@
     </div>
 
     <div class="chat-messages" ref="messagesContainer">
+      <!-- 加载更多按钮放在顶部，加载更旧的消息 -->
+      <div v-if="chatStore.messages.length < chatStore.total" class="load-more">
+        <t-button
+          theme="primary"
+          variant="outline"
+          size="small"
+          :loading="chatStore.loading"
+          @click="handleLoadMore"
+        >
+          加载更多历史消息
+        </t-button>
+      </div>
+
       <t-loading :loading="chatStore.loading && chatStore.messages.length === 0" text="加载中...">
         <div v-if="chatStore.messages.length === 0" class="empty-state">
           <t-icon name="chat" size="48px" />
@@ -70,17 +83,6 @@
           </div>
         </div>
       </t-loading>
-
-      <div v-if="chatStore.messages.length < chatStore.total" class="load-more">
-        <t-button
-          theme="primary"
-          variant="outline"
-          :loading="chatStore.loading"
-          @click="handleLoadMore"
-        >
-          加载更多
-        </t-button>
-      </div>
     </div>
 
     <div class="chat-input-area">
@@ -304,6 +306,11 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 20px;
+
+  .load-more {
+    text-align: center;
+    margin-bottom: 16px;
+  }
   background: #f9fafb;
 
   .empty-state {

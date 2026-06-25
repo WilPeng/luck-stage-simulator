@@ -100,9 +100,9 @@ const submitting = ref(false)
 const voteResults = ref<{ playerId: string; playerName: string; voteCount: number; rank: number }[]>([])
 
 const candidates = computed(() => {
-  return playerStore.users.filter(user =>
-    user.role !== 'admin' && user.status !== 'eliminated'
-  )
+  return playerStore.users
+    .filter(user => user.role !== 'admin' && user.status !== 'eliminated')
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-CN'))
 })
 
 const maxVotes = computed(() => {

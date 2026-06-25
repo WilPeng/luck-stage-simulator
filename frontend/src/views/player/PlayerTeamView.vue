@@ -216,18 +216,16 @@ const myTeam = computed(() => {
 // 所有队伍
 const allTeams = computed(() => teamStore.teams)
 
-// 未入队选手
+// 未入队选手（按姓名首字母排序）
 const unassignedPlayers = computed(() => {
   const teamMemberIds = new Set<string>()
   teamStore.teams.forEach(t => {
     t.members?.forEach(m => teamMemberIds.add(m.playerId))
     if (t.captainId) teamMemberIds.add(t.captainId)
   })
-  return playerStore.users.filter(u =>
-    u.role !== 'admin' &&
-    u.status !== 'eliminated' &&
-    !teamMemberIds.has(u.id)
-  )
+  return playerStore.users
+    .filter(u => u.role !== 'admin' && u.status !== 'eliminated' && !teamMemberIds.has(u.id))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-CN'))
 })
 
 // 队长可邀请的未入队选手（搜索过滤）

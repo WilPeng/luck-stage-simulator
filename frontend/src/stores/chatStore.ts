@@ -22,7 +22,7 @@ export const useChatStore = defineStore('chat', () => {
   async function fetchMessages(pageNum: number = 1, size: number = 50, keyword: string = ''): Promise<void> {
     loading.value = true
     try {
-      const result = await apiGetChatMessages(pageNum, size, keyword)
+      const result = await apiGetChatMessages({ page: pageNum, pageSize: size, keyword })
       messages.value = result.list
       total.value = result.total
       page.value = result.page
@@ -43,7 +43,7 @@ export const useChatStore = defineStore('chat', () => {
     loading.value = true
     try {
       const nextPage = page.value + 1
-      const result = await apiGetChatMessages(nextPage, pageSize.value, keyword)
+      const result = await apiGetChatMessages({ page: nextPage, pageSize: pageSize.value, keyword })
       messages.value = [...messages.value, ...result.list]
       page.value = nextPage
     } catch (e) {
