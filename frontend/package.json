@@ -24,6 +24,9 @@
     "vue-tsc": "^2.2.8"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "@parcel/watcher"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@parcel/watcher"
+    ]
   }
 }

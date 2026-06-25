@@ -1,11 +1,19 @@
 <template>
   <div class="elimination-page">
-    <!-- 晋级恭喜 -->
-    <div class="congrats-section">
+    <!-- 晋级恭喜（仅未被淘汰的选手） -->
+    <div v-if="!isEliminated" class="congrats-section">
       <div class="congrats-glow"></div>
       <div class="congrats-icon">🏆</div>
       <h1>恭喜！你成功晋级</h1>
       <p class="congrats-text">你的表现出色，成功晋级下一轮！</p>
+    </div>
+
+    <!-- 淘汰告知（仅当前选手被淘汰时） -->
+    <div v-else class="eliminated-self-section">
+      <div class="eliminated-glow"></div>
+      <div class="eliminated-icon">💔</div>
+      <h1>很遗憾，你已被淘汰</h1>
+      <p class="eliminated-text">感谢你在这个舞台上的精彩表现，期待未来再见！</p>
     </div>
 
     <!-- 淘汰名单 -->
@@ -37,14 +45,21 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useAuthStore } from '../../stores/authStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useTeamStore } from '../../stores/teamStore'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const playerStore = usePlayerStore()
 const teamStore = useTeamStore()
 
 const currentRound = computed(() => Number(route.params.round) || 1)
+
+const isEliminated = computed(() => {
+  const user = playerStore.users.find(u => u.id === authStore.currentUser?.id)
+  return user?.status === 'eliminated'
+})
 
 const eliminatedPlayers = computed(() => {
   return playerStore.users.filter(u => u.status === 'eliminated')
@@ -114,6 +129,44 @@ onMounted(async () => {
   .congrats-text {
     font-size: 16px;
     color: rgba(255, 255, 255, 0.7);
+    margin: 0;
+    line-height: 1.6;
+  }
+}
+
+// ===== 淘汰告知 =====
+.eliminated-self-section {
+  text-align: center;
+  position: relative;
+  padding: 60px 20px 40px;
+  margin-bottom: 28px;
+
+  .eliminated-glow {
+    position: absolute;
+    top: 20px; left: 50%;
+    width: 220px; height: 220px;
+    transform: translateX(-50%);
+    background: radial-gradient(circle, rgba(231, 76, 60, 0.12) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .eliminated-icon {
+    font-size: 72px;
+    margin-bottom: 16px;
+    animation: fadePulse 3s ease-in-out infinite;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 0 0 12px;
+    color: #e74c3c;
+  }
+
+  .eliminated-text {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.6);
     margin: 0;
     line-height: 1.6;
   }
@@ -229,6 +282,11 @@ onMounted(async () => {
   50% { transform: translateY(-8px); }
 }
 
+@keyframes fadePulse {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
 // ===== 移动端适配 =====
 @media (max-width: 768px) {
   .congrats-section {
@@ -237,6 +295,14 @@ onMounted(async () => {
     .congrats-icon { font-size: 56px; }
     h1 { font-size: 24px; }
     .congrats-text { font-size: 14px; }
+  }
+
+  .eliminated-self-section {
+    padding: 40px 16px 32px;
+
+    .eliminated-icon { font-size: 56px; }
+    h1 { font-size: 24px; }
+    .eliminated-text { font-size: 14px; }
   }
 
   .eliminated-section {

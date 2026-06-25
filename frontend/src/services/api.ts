@@ -83,7 +83,7 @@ import {
 
 initStorage()
 
-const API_BASE: string = (import.meta as any).env?.VITE_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
+const API_BASE: string = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3000/api'
 
 interface ApiResponse<T> {
   code?: number
@@ -498,7 +498,7 @@ export async function deleteMyAvatar(): Promise<void> {
 export function getAvatarUrl(avatar: string | null | undefined): string | undefined {
   if (!avatar) return undefined
   if (avatar.startsWith('http')) return avatar
-  const base = (import.meta as any).env?.VITE_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
+  const base = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3000/api'
   const serverBase = base.replace(/\/api\/?$/, '')
   return `${serverBase}${avatar}`
 }
@@ -1336,7 +1336,7 @@ export async function startRehearsalAPI(teamId: string): Promise<RehearsalResult
 
 // 查询本轮公演是否已开启（不走 doRequest 避免 data 剥离）
 export async function getPerformanceStarted(round: number): Promise<boolean> {
-  const base = (import.meta as any).env?.VITE_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
+  const base = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3000/api'
   const token = localStorage.getItem('luck_sim_token') || sessionStorage.getItem('luck_sim_token')
   try {
     const res = await fetch(`${base}/performance?round=${round}`, {
@@ -1351,6 +1351,36 @@ export async function getPerformanceStarted(round: number): Promise<boolean> {
     const roundId = `round-${round}`
     return loadPerformanceStarted(roundId)
   }
+}
+
+// 获取轮次公演状态（选手端用于判断显示哪个阶段）
+export async function getPerformanceRoundStatus(roundId: string): Promise<{
+  started: boolean
+  settled: boolean
+  released: boolean
+  opened: boolean
+  seasonStage: string | null
+}> {
+  return safeCall(
+    () => doRequest<{
+      started: boolean
+      settled: boolean
+      released: boolean
+      opened: boolean
+      seasonStage: string | null
+    }>(`/performance/round-status?roundId=${roundId}`),
+    async () => ({ started: false, settled: false, released: false, opened: false, seasonStage: null }),
+    'getPerformanceRoundStatus'
+  )
+}
+
+// 管理员打开公演管理页面
+export async function openPerformance(roundId: string): Promise<void> {
+  return safeCall(
+    () => doRequest<void>('/performance/open', { method: 'POST', body: { roundId } }),
+    async () => {},
+    'openPerformance'
+  )
 }
 
 export async function getPerformanceResults(round?: number): Promise<TeamResult[]> {
@@ -1575,6 +1605,24 @@ export async function getAudienceSeats(roundId: string): Promise<AudienceSeatsRe
     () => doRequest<AudienceSeatsResponse>(`/admin/audience-vote/seats?roundId=${roundId}`),
     async () => ({ success: true, seats: [], totalSeats: 0 }),
     'getAudienceSeats'
+  )
+}
+
+// 选手端查看评审席（不需要 admin 权限）
+export async function getPlayerAudienceSeats(roundId: string): Promise<AudienceSeatsResponse> {
+  return safeCall(
+    () => doRequest<AudienceSeatsResponse>(`/audience-vote/player-seats?roundId=${roundId}`),
+    async () => ({ success: true, seats: [], totalSeats: 0 }),
+    'getPlayerAudienceSeats'
+  )
+}
+
+// 选手端查看单个评审投票详情
+export async function getPlayerAudienceSeatDetail(roundId: string, seatNumber: number): Promise<AudienceVoteDetailResponse> {
+  return safeCall(
+    () => doRequest<AudienceVoteDetailResponse>(`/audience-vote/player-seat/${seatNumber}?roundId=${roundId}`),
+    async () => ({ success: true } as any),
+    'getPlayerAudienceSeatDetail'
   )
 }
 

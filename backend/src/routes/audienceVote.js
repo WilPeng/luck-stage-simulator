@@ -391,10 +391,9 @@ router.post('/release', auth, requireAdmin, async (req, res) => {
     })
     await finalRankingDoc.save()
 
-    // 标记已释放（写入 Season）
+    // 标记已释放（不改变 seasonStage，保留为 'performance' 让选手看到 Phase 4 评审席）
     const season = await getCurrentSeason()
     if (season) {
-      season.currentStage = 'elimination'
       season.updatedAt = now
       await season.save()
     }
@@ -452,6 +451,78 @@ router.get('/final-ranking', auth, async (req, res) => {
   } catch (e) {
     console.error('Get final ranking error:', e)
     res.status(500).json({ success: false, error: '获取最终排名失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== GET /api/audience-vote/player-seats - 选手端查看评审席（不要求 admin）=====
+router.get('/player-seats', auth, async (req, res) => {
+  try {
+    const round = await resolveRoundFromQuery(req)
+    if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
+
+    const members = await AudienceMember.find({ roundId: round.id })
+    const votedSeatNumbers = new Set(members.map(m => m.seatNumber))
+
+    const seats = []
+    for (let i = 1; i <= AUDIENCE_COUNT; i++) {
+      seats.push({
+        id: `seat-${i}`,
+        seatNumber: i,
+        voted: votedSeatNumbers.has(i)
+      })
+    }
+
+    res.json({
+      success: true,
+      totalSeats: AUDIENCE_COUNT,
+      seats
+    })
+  } catch (e) {
+    console.error('Get player seats error:', e)
+    res.status(500).json({ success: false, error: '获取评审席失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== GET /api/audience-vote/player-seat/:seatNumber - 选手端查看某个评审投票详情 =====
+router.get('/player-seat/:seatNumber', auth, async (req, res) => {
+  try {
+    const round = await resolveRoundFromQuery(req)
+    if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
+
+    const seatNumber = parseInt(req.params.seatNumber)
+    if (isNaN(seatNumber) || seatNumber < 1 || seatNumber > AUDIENCE_COUNT) {
+      return res.status(400).json({ success: false, error: '座位号必须在 1-1000 之间', code: 'INVALID_SEAT' })
+    }
+
+    const member = await AudienceMember.findOne({ roundId: round.id, seatNumber })
+    if (!member) {
+      return res.json({
+        success: true,
+        detail: { seatNumber, votes: [] }
+      })
+    }
+
+    const votes = await AudienceVote.find({ roundId: round.id, audienceId: member.id })
+    votes.sort((a, b) => a.voteOrder - b.voteOrder)
+
+    const users = await User.find({})
+    const userMap = {}
+    for (const u of users) userMap[u.id] = u
+
+    return res.json({
+      success: true,
+      detail: {
+        seatNumber,
+        votes: votes.map(v => ({
+          voteOrder: v.voteOrder,
+          playerId: v.playerId,
+          playerName: userMap[v.playerId]?.name || null
+        }))
+      }
+    })
+  } catch (e) {
+    console.error('Get player seat detail error:', e)
+    res.status(500).json({ success: false, error: '获取评审投票详情失败', code: 'SERVER_ERROR' })
   }
 })
 

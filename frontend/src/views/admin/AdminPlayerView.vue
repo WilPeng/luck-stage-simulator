@@ -47,6 +47,23 @@
           新增
         </t-button>
       </div>
+      <div class="import-export-row">
+        <t-button variant="outline" theme="primary" @click="exportCSV">
+          <template #icon><span>📥</span></template>
+          导出CSV
+        </t-button>
+        <t-button variant="outline" theme="primary" @click="triggerImport">
+          <template #icon><span>📤</span></template>
+          导入CSV
+        </t-button>
+        <input
+          ref="importFileInput"
+          type="file"
+          accept=".csv"
+          style="display: none"
+          @change="handleImportFile"
+        />
+      </div>
     </div>
 
     <!-- 移动端卡片列表 -->
@@ -294,13 +311,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue'
-import { MessagePlugin } from 'tdesign-vue-next'
+import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useTeamStore } from '../../stores/teamStore'
-import { getAvatarUrl, uploadAvatar, deleteAvatar } from '../../services/api'
+import { getAvatarUrl, uploadAvatar, deleteAvatar, batchCreateUsers, createUser, getUsers } from '../../services/api'
 import type { User } from '../../types/user'
 import type { FormRule } from 'tdesign-vue-next'
 import { AddIcon } from 'tdesign-icons-vue-next'
+
 
 const playerStore = usePlayerStore()
 const teamStore = useTeamStore()
@@ -330,6 +348,7 @@ const editFormData = reactive({
 })
 
 const editFileInput = ref<HTMLInputElement | null>(null)
+const importFileInput = ref<HTMLInputElement | null>(null)
 const editAvatarUrl = computed(() => getAvatarUrl(editFormData.avatar))
 
 const formRules: Record<string, FormRule[]> = {
@@ -539,6 +558,141 @@ async function handleDelete(player: User) {
   }
 }
 
+// ===== 导入导出 =====
+const CSV_HEADERS = ['name', 'loginCode', 'role', 'status', 'vocal', 'dance', 'charm']
+
+async function exportCSV() {
+  const loading = MessagePlugin.loading('正在获取全部选手数据...')
+  try {
+    const res = await getUsers({ pageSize: 10000 })
+    const allUsers = res.list
+    MessagePlugin.close(loading)
+    const rows = allUsers.map((u: any) => [
+      u.name,
+      u.loginCode,
+      u.role || 'player',
+      u.status || 'active',
+      u.attributes?.vocal ?? 30,
+      u.attributes?.dance ?? 30,
+      u.attributes?.charm ?? 30
+    ])
+    const csv = [CSV_HEADERS.join(','), ...rows.map((r: string[]) => r.join(','))].join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `选手数据_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    MessagePlugin.success(`已导出 ${rows.length} 位选手`)
+  } catch (err: any) {
+    MessagePlugin.close(loading)
+    MessagePlugin.error('导出失败: ' + (err.message || '未知错误'))
+  }
+}
+
+function triggerImport() {
+  importFileInput.value?.click()
+}
+
+async function handleImportFile(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  try {
+    // 读取原始字节，自动检测编码（UTF-8 → GBK 回退），解决中文 CSV 乱码问题
+    const buffer = await file.arrayBuffer()
+    const uint8Array = new Uint8Array(buffer)
+    // 先以 UTF-8 解码
+    let text = new TextDecoder('utf-8', { fatal: false }).decode(uint8Array)
+    // 若出现替换字符（�），说明编码不正确，回退到 GBK
+    if (text.includes('\uFFFD')) {
+      text = new TextDecoder('gbk', { fatal: false }).decode(uint8Array)
+    }
+
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l)
+    if (lines.length < 2) {
+      MessagePlugin.warning('CSV 文件为空或格式不正确')
+      return
+    }
+
+    // 解析表头
+    const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/^\uFEFF/, ''))
+    // 验证必需字段
+    if (!headers.includes('name') || !headers.includes('logincode')) {
+      MessagePlugin.error('CSV 缺少必需列: name, loginCode')
+      return
+    }
+
+    const idx = (h: string) => headers.indexOf(h)
+    const users: Partial<User>[] = []
+    const errors: string[] = []
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim())
+      const nameIdx = idx('name')
+      const codeIdx = idx('logincode')
+      const name = cols[nameIdx] || ''
+      const loginCode = cols[codeIdx] || ''
+
+      if (!name || !loginCode) {
+        errors.push(`第 ${i + 1} 行: 缺少 name 或 loginCode`)
+        continue
+      }
+
+      const role = idx('role') >= 0 ? (cols[idx('role')] || 'player') : 'player'
+      const status = idx('status') >= 0 ? (cols[idx('status')] || 'active') : 'active'
+      const vocal = idx('vocal') >= 0 ? parseInt(cols[idx('vocal')]) || 30 : 30
+      const dance = idx('dance') >= 0 ? parseInt(cols[idx('dance')]) || 30 : 30
+      const charm = idx('charm') >= 0 ? parseInt(cols[idx('charm')]) || 30 : 30
+
+      users.push({
+        name,
+        loginCode,
+        role: role as 'player' | 'captain',
+        status: status as 'active' | 'danger' | 'eliminated',
+        attributes: { vocal, dance, charm }
+      })
+    }
+
+    if (users.length === 0) {
+      MessagePlugin.warning('没有有效的选手数据可导入')
+      return
+    }
+
+    // 确认对话框
+    const confirmDlg = DialogPlugin.confirm({
+      header: '确认导入',
+      body: `将导入 ${users.length} 位选手${errors.length ? `，${errors.length} 行跳过` : ''}`,
+      confirmBtn: '确认导入',
+      onConfirm: async () => {
+        confirmDlg.hide()
+        try {
+          const importing = MessagePlugin.loading(`正在导入 ${users.length} 位选手...`)
+          await batchCreateUsers(users)
+          MessagePlugin.close(importing)
+          MessagePlugin.success(`成功导入 ${users.length} 位选手`)
+          await loadData()
+        } catch (err: any) {
+          MessagePlugin.error(err.message || '导入失败')
+        }
+      }
+    })
+
+    if (errors.length > 0) {
+      DialogPlugin.alert({
+        header: '导入警告',
+        body: errors.join('<br>')
+      })
+    }
+  } catch (err: any) {
+    MessagePlugin.error('读取 CSV 文件失败: ' + (err.message || '未知错误'))
+  }
+
+  target.value = ''
+}
+
 onMounted(async () => {
   await teamStore.fetchTeams()
   await loadData()
@@ -596,6 +750,18 @@ onMounted(async () => {
   
   .add-btn {
     flex-shrink: 0;
+  }
+}
+
+.import-export-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+
+  .t-button {
+    flex: 1;
   }
 }
 

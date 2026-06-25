@@ -515,8 +515,14 @@ async function handleGoToElimination() {
   }
 }
 
-function handleGoToEliminationPage() {
-  router.push(`/admin/round/${currentRoundNumber.value}/elimination`)
+async function handleGoToEliminationPage() {
+  try {
+    await seasonStore.nextStage()
+    MessagePlugin.success('已进入淘汰阶段')
+    router.push(`/admin/round/${currentRoundNumber.value}/elimination`)
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '进入淘汰阶段失败')
+  }
 }
 
 // ==================== 初始化 ====================
@@ -525,6 +531,13 @@ onMounted(async () => {
   if (!seasonStore.season) {
     await seasonStore.fetchSeason()
   }
+
+  // 通知后端已进入公演管理页面
+  try {
+    const { openPerformance } = await import('../../services/api')
+    await openPerformance(roundId)
+  } catch (_) { /* 静默 */ }
+
   await Promise.all([
     teamStore.fetchTeams(roundId),
     songStore.fetchTeamSongs(roundId),

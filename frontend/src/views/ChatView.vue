@@ -131,7 +131,7 @@ function getAvatarUrl(avatar?: string): string {
     return avatar
   }
   // 否则拼接服务器地址
-  return `https://luck-stage-simulator.onrender.com${avatar}`
+  return `http://localhost:3000${avatar}`
 }
 
 // 格式化时间

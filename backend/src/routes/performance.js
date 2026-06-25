@@ -16,6 +16,7 @@ const StageEvent = require('../models/StageEvent')
 const { generateAudienceVoteForRound } = require('../services/audienceVoteService')
 const PerformanceValue = require('../models/PerformanceValue')
 const PerformanceRoundState = require('../models/PerformanceRoundState')
+const AudienceVoteFinalRanking = require('../models/AudienceVoteFinalRanking')
 
 // ====================== 工具函数 ======================
 
@@ -114,12 +115,13 @@ async function resolveRoundFromQuery(req) {
   return null
 }
 
-// ===== 共用工具：发挥值文案映射 =====
+// ===== 共用工具：发挥值文案映射（修正为 -10~40 范围）=====
 function getPerformanceText(value) {
+  if (value >= 30) return '超神发挥'
   if (value >= 15) return '超常发挥'
-  if (value >= 8) return '优秀发挥'
-  if (value >= 0) return '正常发挥'
-  if (value >= -5) return '略有失误'
+  if (value >= 5) return '优秀发挥'
+  if (value >= -2) return '正常发挥'
+  if (value >= -7) return '略有失误'
   return '发挥失常'
 }
 
@@ -241,44 +243,77 @@ function getStageRating(score) {
   return { stageRating: 'D', stageRatingText: '失误较多' }
 }
 
-/** 计算机个人分和评级 */
+/** 计算机个人分和评级 (带控制台日志) */
 function calcPlayerScore(player, song, performanceValue) {
   // 归一化歌曲权重
   const totalWeight = song.vocalWeight + song.danceWeight + song.charmWeight
-  const normalizedVocalW = song.vocalWeight / totalWeight
-  const normalizedDanceW = song.danceWeight / totalWeight
-  const normalizedCharmW = song.charmWeight / totalWeight
+  const normalizedVocalW = +(song.vocalWeight / totalWeight).toFixed(4)
+  const normalizedDanceW = +(song.danceWeight / totalWeight).toFixed(4)
+  const normalizedCharmW = +(song.charmWeight / totalWeight).toFixed(4)
+
+  // ★ BUG 修复: 属性从 player.attributes 中读取，不是 player 顶层 ★
+  const rawVocal = player.attributes?.vocal ?? 0
+  const rawDance = player.attributes?.dance ?? 0
+  const rawCharm = player.attributes?.charm ?? 0
 
   // 属性分 0~100
   const attributeScore = Math.round(
-    (player.vocal || 0) * normalizedVocalW +
-    (player.dance || 0) * normalizedDanceW +
-    (player.charm || 0) * normalizedCharmW
+    rawVocal * normalizedVocalW +
+    rawDance * normalizedDanceW +
+    rawCharm * normalizedCharmW
   )
 
   // 难度系数 difficulty=1→1.0, difficulty=5→0.6
-  const difficultyFactor = 1 - (song.difficulty - 1) * 0.1
+  const difficultyFactor = +(1 - (song.difficulty - 1) * 0.1).toFixed(2)
 
-  // 发挥加成 = 发挥值 × 2 （-10~30）
+  // 发挥加成 = 发挥值 × 2 （-20~80）
   const performanceBonus = performanceValue * 2
 
   // 最终分数 0~120
-  let playerFinalScore = Math.round(attributeScore * difficultyFactor + performanceBonus)
+  const rawScore = attributeScore * difficultyFactor + performanceBonus
+  let playerFinalScore = Math.round(rawScore)
   if (playerFinalScore < 0) playerFinalScore = 0
   if (playerFinalScore > 120) playerFinalScore = 120
 
   const { stageRating, stageRatingText } = getStageRating(playerFinalScore)
 
+  // ===== 控制台详细计算日志 =====
+  console.log('')
+  console.log('╔══════════════════════════════════════════════╗')
+  console.log(`║  个人得分计算 · ${player.name || player.playerId || '未知选手'}`)
+  console.log(`║  歌曲: ${song.name} | 难度: ${song.difficulty}`)
+  console.log(`║  权重: 声乐=${song.vocalWeight} 舞蹈=${song.danceWeight} 魅力=${song.charmWeight}`)
+  console.log(`║  归一化: V=${normalizedVocalW} D=${normalizedDanceW} C=${normalizedCharmW}`)
+  console.log(`║  选手属性: 声乐=${rawVocal} 舞蹈=${rawDance} 魅力=${rawCharm}`)
+  console.log(`║  属性分 = ${rawVocal}×${normalizedVocalW} + ${rawDance}×${normalizedDanceW} + ${rawCharm}×${normalizedCharmW} = ${attributeScore}`)
+  console.log(`║  难度系数 = 1 - (${song.difficulty} - 1)×0.1 = ${difficultyFactor}`)
+  console.log(`║  发挥值 = ${performanceValue} → 发挥加成 = ${performanceValue}×2 = ${performanceBonus}`)
+  console.log(`║  原始分 = ${attributeScore}×${difficultyFactor} + ${performanceBonus} = ${rawScore.toFixed(2)}`)
+  console.log(`║  最终分 = ${playerFinalScore} → 评级: ${stageRating}(${stageRatingText})`)
+  console.log('╚══════════════════════════════════════════════╝')
+
   return { playerScore: playerFinalScore, stageRating, stageRatingText, attributeScore, difficultyFactor, performanceBonus }
 }
 
-/** 计算团队分和团队评级 */
-function calcTeamScore(memberScores) {
+/** 计算团队分和团队评级（带控制台日志） */
+function calcTeamScore(memberScores, teamName) {
   if (memberScores.length === 0) return { teamScore: 0, teamRating: 'D', teamRatingText: '失误较多' }
   const teamAvgScore = Math.round(memberScores.reduce((s, v) => s + v, 0) / memberScores.length)
   const teamBonus = Math.floor(Math.random() * 21) // 0~20
   const teamScore = teamAvgScore + teamBonus
   const { stageRating: teamRating, stageRatingText: teamRatingText } = getStageRating(teamScore)
+
+  console.log('')
+  console.log('╔══════════════════════════════════════════════╗')
+  console.log(`║  团队得分计算 · ${teamName || '未知队伍'}`)
+  console.log(`║  成员个人分: [${memberScores.join(', ')}]`)
+  console.log(`║  团队平均分 = (${memberScores.join(' + ')}) / ${memberScores.length} = ${teamAvgScore}`)
+  console.log(`║  团队加成(随机) = ${teamBonus}`)
+  console.log(`║  团队总分 = ${teamAvgScore} + ${teamBonus} = ${teamScore}`)
+  console.log(`║  最终票数 = 500 + ${teamScore}×3 + random(-10~20) = 500 + ${teamScore * 3} + random`)
+  console.log(`║  评级: ${teamRating}(${teamRatingText})`)
+  console.log('╚══════════════════════════════════════════════╝')
+
   return { teamScore, teamRating, teamRatingText, teamAvgScore, teamBonus }
 }
 
@@ -364,7 +399,7 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
         // 获取发挥值，未生成则随机补一个
         let perfValue = perfValueMap[m.playerId]
         if (perfValue === undefined) {
-          perfValue = randomInt(-5, 15)
+          perfValue = randomInt(-10, 40)
         }
         const { playerScore, stageRating, stageRatingText, attributeScore, difficultyFactor, performanceBonus } =
           calcPlayerScore(u, song, perfValue)
@@ -386,7 +421,7 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
       }
 
       // 计算团队分
-      const { teamScore, teamRating, teamRatingText, teamAvgScore, teamBonus } = calcTeamScore(memberScores)
+      const { teamScore, teamRating, teamRatingText, teamAvgScore, teamBonus } = calcTeamScore(memberScores, team.name)
 
       // 计算最终票数 = 500 + teamScore×3 + random(-10,20)
       const finalVotesRandom = randomInt(-10, 20)
@@ -542,6 +577,25 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
       await logAction(req.user.userId, req.user.name, req.user.role, ACTION_TYPES.PERFORMANCE_CALC || 'PERFORMANCE_CALC',
         'performance', round.id, `第 ${round.index} 轮公演结算完成（新评级体系）：${savedTeams.length} 团 / ${savedPlayers.length} 位选手`)
     } catch (logErr) { console.warn('log error ignored', logErr) }
+
+    // 标记为已结算
+    try {
+      const state = await PerformanceRoundState.findOne({ roundId: dbRoundId })
+      if (state) {
+        state.started = true
+        state.updatedAt = new Date().toISOString()
+        await state.save()
+      } else {
+        const newState = new PerformanceRoundState({
+          id: generateId(),
+          roundId: dbRoundId,
+          roundIndex: round.index,
+          started: true,
+          revealedTeamIds: []
+        })
+        await newState.save()
+      }
+    } catch (stateErr) { console.warn('Save settled state failed:', stateErr) }
 
     // 构造返回数据（对齐文档格式）
     const teamResultsData = savedTeams.map(t => {
@@ -1039,11 +1093,17 @@ router.post('/player-generate', auth, async (req, res) => {
       })
     }
 
+    // 兼容 roundId 格式：DB UUID 和前端 round-1 两种格式
+    const frontRoundId = roundId
+    const roundIdFilter = rId !== frontRoundId
+      ? { $or: [{ roundId: rId }, { roundId: frontRoundId }] }
+      : { roundId: rId }
+
     // 获取选手所在队伍
-    const member = await RoundTeamMember.findOne({ roundId: rId, playerId })
+    const member = await RoundTeamMember.findOne({ ...roundIdFilter, playerId })
     if (!member) return res.status(400).json({ success: false, error: '您未参加本轮组队', code: 'NOT_IN_TEAM' })
 
-    const value = randomInt(-5, 15)
+    const value = randomInt(-10, 40)
     await createPerformanceValue({ roundId: rId, roundIndex: resolvedRound.index, playerId, teamId: member.teamId, value })
 
     res.json({
@@ -1071,11 +1131,15 @@ router.post('/admin-generate', auth, requireAdmin, async (req, res) => {
 
     // 生成发挥值：支持手动指定或随机（逻辑同选手端）
     const value = typeof manualValue === 'number'
-      ? Math.max(-5, Math.min(15, manualValue))
-      : randomInt(-5, 15)
+      ? Math.max(-10, Math.min(40, manualValue))
+      : randomInt(-10, 40)
 
-    // 查找选手所在队伍（与选手端 player-generate 一致）
-    const member = await RoundTeamMember.findOne({ roundId: rId, playerId })
+    // 查找选手所在队伍（兼容两种 roundId 格式）
+    const frontRoundId = roundId
+    const roundIdFilter = rId !== frontRoundId
+      ? { $or: [{ roundId: rId }, { roundId: frontRoundId }] }
+      : { roundId: rId }
+    const member = await RoundTeamMember.findOne({ ...roundIdFilter, playerId })
     await createPerformanceValue({ roundId: rId, roundIndex: round.index, playerId, teamId: member ? member.teamId : null, value })
 
     const user = await User.findOne({ id: playerId })
@@ -1104,17 +1168,23 @@ router.post('/admin-generate-all', auth, requireAdmin, async (req, res) => {
     const members = await RoundTeamMember.find({ roundId: round.id })
     if (members.length === 0) return res.status(400).json({ success: false, error: '该轮没有选手', code: 'NO_PLAYERS' })
 
-    // 清除旧值
-    await PerformanceValue.deleteMany({ roundId: round.id })
+    // 获取已有发挥值（不覆盖已生成的）
+    const existingValues = await PerformanceValue.find({ roundId: round.id })
+    const existingPlayerIds = new Set(existingValues.map(v => v.playerId))
 
     const created = []
+    const skipped = []
     for (const m of members) {
-      const value = randomInt(-5, 15)
+      if (existingPlayerIds.has(m.playerId)) {
+        skipped.push({ playerId: m.playerId, performanceValue: existingValues.find(v => v.playerId === m.playerId)?.performanceValue })
+        continue
+      }
+      const value = randomInt(-10, 40)
       await createPerformanceValue({ roundId: round.id, roundIndex: round.index, playerId: m.playerId, teamId: m.teamId, value })
       created.push({ playerId: m.playerId, performanceValue: value, performanceText: getPerformanceText(value) })
     }
 
-    res.json({ success: true, data: { generatedCount: created.length, players: created } })
+    res.json({ success: true, data: { generatedCount: created.length, skippedCount: skipped.length, players: [...created, ...skipped] } })
   } catch (e) {
     console.error('Admin generate all error:', e)
     res.status(500).json({ success: false, error: '批量生成失败', code: 'SERVER_ERROR' })
@@ -1217,6 +1287,86 @@ router.post('/player-status/save', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// ===== GET /api/performance/round-status - 获取轮次公演状态（选手端用）=====
+router.get('/round-status', auth, async (req, res) => {
+  try {
+    const round = await resolveRoundFromQuery(req)
+    if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
+
+    // 检查 season 当前阶段
+    const season = await getCurrentSeason()
+    const seasonStage = season ? season.currentStage : null
+
+    // 检查 PerformanceRoundState
+    const state = await PerformanceRoundState.findOne({ roundId: round.id })
+    const started = state ? state.started : false
+
+    // 检查是否已结算（TeamPerformance 有记录）
+    const teamPerfs = await TeamPerformance.find({ roundId: round.id })
+    const settled = teamPerfs.length > 0
+
+    // 检查是否已释放（AudienceVoteFinalRanking 有记录）
+    const finalRanking = await AudienceVoteFinalRanking.findOne({ roundId: round.id })
+    const released = !!finalRanking
+
+    res.json({
+      success: true,
+      data: {
+        started,
+        settled,
+        released,
+        seasonStage,
+        // 判断这个轮次是否已进入公演阶段（PerformanceRoundState 存在）
+        opened: !!state
+      }
+    })
+  } catch (e) {
+    console.error('Get round status error:', e)
+    res.status(500).json({ success: false, error: '获取轮次状态失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== POST /api/performance/open - 管理员进入公演管理页面时调用 =====
+router.post('/open', auth, requireAdmin, async (req, res) => {
+  try {
+    const round = await resolveRound(req)
+    if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
+
+    // 更新赛季阶段为 performance（使其可访问）
+    const season = await getCurrentSeason()
+    if (season && season.currentStage !== 'performance') {
+      season.currentStage = 'performance'
+      season.updatedAt = new Date().toISOString()
+      await season.save()
+    }
+
+    // 创建 PerformanceRoundState（如果不存在）
+    let state = await PerformanceRoundState.findOne({ roundId: round.id })
+    if (!state) {
+      state = new PerformanceRoundState({
+        id: generateId(),
+        roundId: round.id,
+        roundIndex: round.index,
+        started: false,
+        revealedTeamIds: [],
+        updatedAt: new Date().toISOString()
+      })
+      await state.save()
+
+      await logAction(
+        req.user.userId, req.user.name || 'admin', 'admin',
+        'PERFORMANCE_OPEN', 'round', round.id,
+        `打开第 ${round.index} 轮公演管理`
+      )
+    }
+
+    res.json({ success: true, data: { opened: true, started: state.started } })
+  } catch (e) {
+    console.error('Open performance error:', e)
+    res.status(500).json({ success: false, error: '开启公演管理失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // ===== POST /api/performance/revealed-teams/save - 保存已揭晓队伍 =====
 router.post('/revealed-teams/save', auth, requireAdmin, async (req, res) => {
   try {
@@ -1282,7 +1432,7 @@ router.post('/reveal-team', auth, requireAdmin, async (req, res) => {
     const membersWithPerf = members.map(m => {
       const u = userMap[m.playerId]
       if (!u) return null
-      const perfValue = valueMap[m.playerId] ?? randomInt(-5, 15) // 未生成则随机补一个
+      const perfValue = valueMap[m.playerId] ?? randomInt(-10, 40) // 未生成则随机补一个
       const { playerScore, stageRating, stageRatingText } = calcPlayerScore(u, song, perfValue)
       return {
         playerId: m.playerId,
@@ -1296,7 +1446,7 @@ router.post('/reveal-team', auth, requireAdmin, async (req, res) => {
 
     // 计算团队分和团队评级
     const memberScores = membersWithPerf.map(m => m.playerScore)
-    const { teamScore, teamRating, teamRatingText } = calcTeamScore(memberScores)
+    const { teamScore, teamRating, teamRatingText } = calcTeamScore(memberScores, team.name)
 
     res.json({
       success: true,
