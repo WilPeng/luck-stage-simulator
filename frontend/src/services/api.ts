@@ -83,7 +83,7 @@ import {
 
 initStorage()
 
-const API_BASE: string = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3000/api'
+const API_BASE: string = (import.meta as any).env?.VITE_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
 
 interface ApiResponse<T> {
   code?: number
@@ -498,7 +498,7 @@ export async function deleteMyAvatar(): Promise<void> {
 export function getAvatarUrl(avatar: string | null | undefined): string | undefined {
   if (!avatar) return undefined
   if (avatar.startsWith('http')) return avatar
-  const base = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3000/api'
+  const base = (import.meta as any).env?.VITE_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
   const serverBase = base.replace(/\/api\/?$/, '')
   return `${serverBase}${avatar}`
 }
@@ -1356,7 +1356,7 @@ export async function startRehearsalAPI(teamId: string): Promise<RehearsalResult
 
 // 查询本轮公演是否已开启（不走 doRequest 避免 data 剥离）
 export async function getPerformanceStarted(round: number): Promise<boolean> {
-  const base = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3000/api'
+  const base = (import.meta as any).env?.VITE_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
   const token = localStorage.getItem('luck_sim_token') || sessionStorage.getItem('luck_sim_token')
   try {
     const res = await fetch(`${base}/performance?round=${round}`, {
