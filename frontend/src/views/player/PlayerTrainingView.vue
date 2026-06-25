@@ -184,8 +184,8 @@ async function handleFlip(idx: number) {
     // 生成描述文本（record 无 description 字段时，从效果值拼接）
     const descText = buildEffectDesc(rv, rd, rc)
 
-    // 自选卡 → 弹出对话框
-    if (cardType === 'self_select') {
+    // 自选卡 → 弹出对话框（通过 cardType 或 effect 中的 selfSelect 判断）
+    if (cardType === 'self_select' || eff.selfSelect) {
       const val = eff.selfSelect || 5
       pendingSelectIdx.value = idx
       pendingSelectValue.value = val
@@ -193,7 +193,7 @@ async function handleFlip(idx: number) {
         type: cardType, name: record.cardName,
         desc: `请选择一项属性${val > 0 ? '+' : ''}${val}`, vocal: 0, dance: 0, charm: 0
       }
-      showSelectDialog(idx, val, record.cardName)
+      showSelectDialog(idx, val, record.cardName, record.id)
       return
     }
 
@@ -231,7 +231,7 @@ function applyCardResult(idx: number, name: string, type: string, v: number, d: 
 }
 
 // 显示自选属性对话框
-function showSelectDialog(idx: number, val: number, cardName: string) {
+function showSelectDialog(idx: number, val: number, cardName: string, recordId?: string) {
   const attrs = [
     { key: 'vocal', label: '🎤 声乐', current: attributes.vocal },
     { key: 'dance', label: '💃 舞蹈', current: attributes.dance },
@@ -245,7 +245,28 @@ function showSelectDialog(idx: number, val: number, cardName: string) {
       h('div', { class: 'select-options' }, attrs.map(a =>
         h('button', {
           class: 'select-option',
-          onClick: () => {
+          onClick: async () => {
+            // 调用后端 API 持久化选择
+            if (recordId) {
+              try {
+                const { applySelfSelect } = await import('../../services/api')
+                const res = await applySelfSelect(recordId, a.key)
+                // 用后端返回的结果更新本地属性
+                attributes.vocal = res.attributes?.vocal ?? Math.max(0, attributes.vocal + (a.key === 'vocal' ? val : 0))
+                attributes.dance = res.attributes?.dance ?? Math.max(0, attributes.dance + (a.key === 'dance' ? val : 0))
+                attributes.charm = res.attributes?.charm ?? Math.max(0, attributes.charm + (a.key === 'charm' ? val : 0))
+              } catch (e: any) {
+                console.warn('[训练] 自选属性同步失败，仅本地更新:', e.message)
+                // 降级：本地更新
+                const attrKey = a.key as 'vocal' | 'dance' | 'charm'
+                attributes[attrKey] = Math.max(0, attributes[attrKey] + val)
+              }
+            } else {
+              // 无 recordId（Mock 模式），直接本地更新
+              const attrKey = a.key as 'vocal' | 'dance' | 'charm'
+              attributes[attrKey] = Math.max(0, attributes[attrKey] + val)
+            }
+
             const ov = a.key === 'vocal' ? val : 0
             const od = a.key === 'dance' ? val : 0
             const oc = a.key === 'charm' ? val : 0

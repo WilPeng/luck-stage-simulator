@@ -5,7 +5,7 @@
  * 选手个人得分 = 属性分 × 难度系数 + 发挥加分
  *   属性分 = player.vocal × nVocalW + player.dance × nDanceW + player.charm × nCharmW
  *   难度系数 = 1 - (song.difficulty - 1) × 0.1  (difficulty=1→1.0, 5→0.6)
- *   发挥加分 = performanceValue × 2 (performanceValue: -5~15, 加分: -10~30)
+ *   发挥加分 = performanceValue × 2 (performanceValue: -10~20, 加分: -20~40)
  *   得分范围 ≈ 0~120
  *
  * 评级映射：
@@ -66,17 +66,17 @@ function calculatePlayerScore(
   playerAttr: { vocal: number; dance: number; charm: number },
   songWeights: { vocal: number; dance: number; charm: number },
   songDifficulty: number,
-  performanceValue: number  // 选手端生成的随机发挥值 (-5~15)
+  performanceValue: number  // 选手端生成的随机发挥值 (-10~20)
 ): { playerScore: number; stageRating: string; stageRatingText: string } {
   const nw = normalizeWeights(songWeights.vocal, songWeights.dance, songWeights.charm)
 
-  // 1. 属性分 (0~100)
+  // 1. 属性分（加权属性值，不再限制 0~100）
   const attrScore = playerAttr.vocal * nw.vocal + playerAttr.dance * nw.dance + playerAttr.charm * nw.charm
 
   // 2. 难度系数 (difficulty: 1 → 1.0, 5 → 0.6)
   const difficultyFactor = 1 - (songDifficulty - 1) * 0.1
 
-  // 3. 发挥加分 (performanceValue: -5~15 → 加分: -10~30)
+  // 3. 发挥加分 (performanceValue: -10~20 → 加分: -20~40)
   const performanceBonus = performanceValue * 2
 
   // 4. 最终得分
@@ -144,15 +144,19 @@ export function calculatePerformanceResults(
       memberScores.push({ member, score: playerScore, rating: stageRating, ratingText: stageRatingText })
     }
 
-    // 团队得分 = 成员平均分 + 随机加成(0~20)
-    const avgMemberScore = Math.round(memberScores.reduce((s, m) => s + m.score, 0) / memberScores.length)
-    const teamBonus = randomInt(0, 20)
-    const teamScore = avgMemberScore + teamBonus
+    // 团队得分 = 成员平均分
+    const teamScore = Math.round(memberScores.reduce((s, m) => s + m.score, 0) / memberScores.length)
     const teamRating = getRating(teamScore)
 
-    // 最终票数 = 基础票数 + 团队得分 × 3 + 排名波动
-    const rankFluctuation = randomInt(-10, 20)
-    const finalVotes = 500 + teamScore * 3 + rankFluctuation
+    // 团队平均魅力（用于最终票数加成）
+    const avgCharm = Math.round(team.members.reduce((s, m) => {
+      const charm = m.player?.attributes?.charm
+        ?? (users.find(u => u.id === m.playerId)?.attributes?.charm ?? 50)
+      return s + charm
+    }, 0) / team.members.length)
+
+    // 最终票数 = 基础票数 + 团队得分 × 3 + 平均魅力
+    const finalVotes = 500 + teamScore * 3 + avgCharm
 
     teamResults.push({
       roundId,
@@ -162,10 +166,10 @@ export function calculatePerformanceResults(
       songName,
       memberCount: team.members.length,
       baseVotes: 500,
-      attributeVotes: avgMemberScore,
-      performanceVotes: rankFluctuation,
+      attributeVotes: teamScore,
+      performanceVotes: 0,
       compatibilityVotes: 0,
-      eventVotes: teamBonus,
+      eventVotes: 0,
       finalVotes: Math.max(0, finalVotes),
       rank: 0,
       status: 'calculated',

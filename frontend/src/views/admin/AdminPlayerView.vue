@@ -310,8 +310,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue'
-import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
+import { ref, computed, onMounted, reactive, h } from 'vue'
+import { MessagePlugin, DialogPlugin, Input } from 'tdesign-vue-next'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { getAvatarUrl, uploadAvatar, deleteAvatar, batchCreateUsers, createUser, getUsers } from '../../services/api'
@@ -562,33 +562,57 @@ async function handleDelete(player: User) {
 const CSV_HEADERS = ['name', 'loginCode', 'role', 'status', 'vocal', 'dance', 'charm']
 
 async function exportCSV() {
-  const loading = MessagePlugin.loading('正在获取全部选手数据...')
-  try {
-    const res = await getUsers({ pageSize: 10000 })
-    const allUsers = res.list
-    MessagePlugin.close(loading)
-    const rows = allUsers.map((u: any) => [
-      u.name,
-      u.loginCode,
-      u.role || 'player',
-      u.status || 'active',
-      u.attributes?.vocal ?? 30,
-      u.attributes?.dance ?? 30,
-      u.attributes?.charm ?? 30
-    ])
-    const csv = [CSV_HEADERS.join(','), ...rows.map((r: string[]) => r.join(','))].join('\n')
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `选手数据_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    MessagePlugin.success(`已导出 ${rows.length} 位选手`)
-  } catch (err: any) {
-    MessagePlugin.close(loading)
-    MessagePlugin.error('导出失败: ' + (err.message || '未知错误'))
-  }
+  // 弹出文件名输入框
+  const defaultName = `选手数据_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}`
+  const inputRef = { value: defaultName }
+  const dialog = DialogPlugin({
+    header: '导出CSV',
+    body: () => h('div', { style: 'padding: 8px 0' }, [
+      h('p', { style: 'margin: 0 0 12px 0; color: rgba(0,0,0,0.6); font-size: 14px' }, '请输入导出文件名：'),
+      h(Input, {
+        modelValue: inputRef.value,
+        'onUpdate:modelValue': (v: string) => { inputRef.value = v },
+        placeholder: '输入文件名',
+        clearable: true,
+        style: 'width: 100%'
+      })
+    ]),
+    confirmBtn: '确认导出',
+    cancelBtn: '取消',
+    onConfirm: async () => {
+      dialog.hide()
+      const fileName = inputRef.value.trim() || defaultName
+
+      const loading = MessagePlugin.loading('正在获取全部选手数据...')
+      try {
+        const res = await getUsers({ pageSize: 10000 })
+        const allUsers = res.list
+        MessagePlugin.close(loading)
+        const rows = allUsers.map((u: any) => [
+          u.name,
+          u.loginCode,
+          u.role || 'player',
+          u.status || 'active',
+          u.attributes?.vocal ?? 30,
+          u.attributes?.dance ?? 30,
+          u.attributes?.charm ?? 30
+        ])
+        const csv = [CSV_HEADERS.join(','), ...rows.map((r: string[]) => r.join(','))].join('\n')
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${fileName}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+        MessagePlugin.success(`已导出 ${rows.length} 位选手`)
+      } catch (err: any) {
+        MessagePlugin.close(loading)
+        MessagePlugin.error('导出失败: ' + (err.message || '未知错误'))
+      }
+    },
+    onCancel: () => { dialog.hide() }
+  })
 }
 
 function triggerImport() {

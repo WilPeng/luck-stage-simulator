@@ -48,7 +48,7 @@
         <h1>第{{ currentRound }}公演·公演结果</h1>
         <p class="subtitle" v-if="phase === 2">发挥值已确定，等待公演结算</p>
         <p class="subtitle" v-else-if="phase === 3">结算已完成</p>
-        <p class="subtitle" v-else-if="phase === 4">大众评审投票已公布</p>
+        <p class="subtitle" v-else-if="phase === 4 && !showRanking">大众评审投票已公布</p>
         <p class="subtitle" v-else>最终结果已公布</p>
       </div>
 
@@ -69,8 +69,86 @@
         <div v-if="!teamResult && phase < 3" class="info-card dim"><span>等待公演结算</span></div>
       </div>
 
-      <!-- ===== Phase 4: 大众评审席（1000座）===== -->
-      <div v-if="phase === 4 && seatsLoaded" class="audience-seats-section">
+      <!-- ===== 得分计算详情 ===== -->
+      <div v-if="scoreBreakdown && phase >= 3" class="score-detail-section">
+        <div class="section-title-bar">
+          <span class="section-icon">📊</span>
+          <span>得分计算详情</span>
+        </div>
+
+        <!-- 个人得分拆解 -->
+        <div class="detail-block">
+          <div class="detail-block-title">① 个人得分</div>
+          <table class="breakdown-table">
+            <tr>
+              <td class="label">选手属性</td>
+              <td class="value">声乐 {{ scoreBreakdown.attrs.vocal }} · 舞蹈 {{ scoreBreakdown.attrs.dance }} · 魅力 {{ scoreBreakdown.attrs.charm }}</td>
+            </tr>
+            <tr>
+              <td class="label">歌曲权重</td>
+              <td class="value">声乐 {{ (scoreBreakdown.songWeights.vocal * 100).toFixed(0) }}% · 舞蹈 {{ (scoreBreakdown.songWeights.dance * 100).toFixed(0) }}% · 魅力 {{ (scoreBreakdown.songWeights.charm * 100).toFixed(0) }}%</td>
+            </tr>
+            <tr class="formula-row">
+              <td class="label">属性分</td>
+              <td class="value formula">
+                {{ scoreBreakdown.attrs.vocal }}×{{ (scoreBreakdown.songWeights.vocal * 100).toFixed(0) }}%
+                + {{ scoreBreakdown.attrs.dance }}×{{ (scoreBreakdown.songWeights.dance * 100).toFixed(0) }}%
+                + {{ scoreBreakdown.attrs.charm }}×{{ (scoreBreakdown.songWeights.charm * 100).toFixed(0) }}%
+                = <strong>{{ scoreBreakdown.attrScore }}</strong>
+              </td>
+            </tr>
+            <tr>
+              <td class="label">难度系数</td>
+              <td class="value">1 - ({{ scoreBreakdown.difficulty }} - 1) × 0.1 = <strong>{{ scoreBreakdown.difficultyFactor }}</strong></td>
+            </tr>
+            <tr>
+              <td class="label">发挥加分</td>
+              <td class="value">{{ scoreBreakdown.perfValue }} × 2 = <strong>{{ scoreBreakdown.performanceBonus > 0 ? '+' : '' }}{{ scoreBreakdown.performanceBonus }}</strong></td>
+            </tr>
+            <tr class="formula-row">
+              <td class="label">原始分</td>
+              <td class="value formula">
+                {{ scoreBreakdown.attrScore }} × {{ scoreBreakdown.difficultyFactor }} + {{ scoreBreakdown.performanceBonus }}
+                = <strong>{{ scoreBreakdown.rawScore }}</strong>
+              </td>
+            </tr>
+            <tr class="result-row">
+              <td class="label">最终得分</td>
+              <td class="value highlight">截断 0~120 → <strong>{{ scoreBreakdown.finalScore }}分</strong></td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- 队伍得分拆解 -->
+        <div class="detail-block">
+          <div class="detail-block-title">② 团队得分 & 最终票数</div>
+          <table class="breakdown-table">
+            <tr>
+              <td class="label">团队平均分</td>
+              <td class="value">round(所有成员个人分平均值) = <strong>{{ scoreBreakdown.teamScore }}分</strong></td>
+            </tr>
+            <tr>
+              <td class="label">基础票数</td>
+              <td class="value">500</td>
+            </tr>
+            <tr>
+              <td class="label">团队得分加成</td>
+              <td class="value">{{ scoreBreakdown.teamScore }} × 3 = <strong>+{{ scoreBreakdown.teamScore * 3 }}</strong></td>
+            </tr>
+            <tr>
+              <td class="label">平均魅力加成</td>
+              <td class="value">魅力平均值 {{ scoreBreakdown.avgCharm }} → <strong>+{{ scoreBreakdown.avgCharm }}</strong></td>
+            </tr>
+            <tr class="result-row">
+              <td class="label">最终票数</td>
+              <td class="value highlight">500 + {{ scoreBreakdown.teamScore }}×3 + {{ scoreBreakdown.avgCharm }} = <strong>{{ scoreBreakdown.finalVotes }}票</strong></td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== 大众评审席（1000座）===== -->
+      <div v-if="showSeats" class="audience-seats-section">
         <div class="section-title-bar">
           <span class="section-icon">🎭</span>
           <span>大众评审席（1000座）</span>
@@ -115,8 +193,8 @@
         </t-dialog>
       </div>
 
-      <!-- ===== Phase 5: 个人喜爱度排名 ===== -->
-      <div v-if="phase === 5 && audienceRankings.length > 0" class="audience-section">
+      <!-- ===== 个人喜爱度排名 ===== -->
+      <div v-if="showRanking" class="audience-section">
         <div class="section-title-bar">
           <span class="section-icon">❤️</span>
           <span>个人喜爱度排名</span>
@@ -155,9 +233,9 @@ import { useAuthStore } from '../../stores/authStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { usePerformanceStore } from '../../stores/performanceStore'
 import {
-  playerGeneratePerformance, getPlayerPerformanceStatus,
-  getAudienceFinalRanking, getPerformanceRoundStatus,
-  getPlayerAudienceSeats, getPlayerAudienceSeatDetail
+  getPlayerPerformanceStatus, getAudienceFinalRanking,
+  getPerformanceRoundStatus, getPlayerAudienceSeats,
+  getPlayerAudienceSeatDetail, savePerformancePlayerStatus
 } from '../../services/api'
 import { savePlayerStatuses, loadPlayerStatuses } from '../../services/performanceService'
 import type { AudienceSeat } from '../../types/performance'
@@ -180,18 +258,20 @@ const phase = computed(() => {
   const rs = roundStatus.value
   if (!rs.opened) return 0
   if (!rs.started) return 1
-  if (rs.released && rs.seasonStage !== 'performance') return 5 // 切换到下阶段→排名
-  if (rs.released) return 4 // 释放→评审席
+  if (rs.released) return 4 // 释放后→显示评审席
   if (rs.settled) return 3
   return 2
 })
+
+// 释放后始终显示大众评审席
+const showSeats = computed(() => phase.value >= 4 && seatsLoaded.value)
 
 // ===== 抽取状态 =====
 const hasDrawn = ref(false)
 const drawing = ref(false)
 const revealed = ref(false)
 const drawValue = ref(0)
-const slotNumbers = [-20, -15, -10, -5, -3, -1, 0, 2, 4, 6, 8, 10, 12, 15, 18, 20, 25, 30, 35, 40]
+const slotNumbers = [-10, -8, -6, -5, -3, -1, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 const currentSlot = ref(0)
 let slotTimer: number | null = null
 
@@ -213,13 +293,64 @@ const resultText = computed(() => {
   if (v >= -10) return '略有失误'
   return '严重失误'
 })
-const barWidth = computed(() => ((drawValue.value + 20) / 60) * 100)
+const barWidth = computed(() => ((drawValue.value + 10) / 30) * 100)
 
 // ===== 队伍结果 =====
 const currentTeam = computed(() => teamStore.getTeamById(currentUser.value?.teamId || ''))
 const teamResult = computed(() =>
   performanceStore.teamPerformanceResults.find(t => t.teamId === currentTeam.value?.id)
 )
+
+// 当前选手的个人演出数据
+const myPerformance = computed(() => {
+  if (!teamResult.value) return null
+  const perf = teamResult.value.playerPerformances?.find((p: any) => p.playerId === currentUser.value?.id)
+  return perf || null
+})
+
+// 详细得分拆解（使用后端返回的真实数据）
+const scoreBreakdown = computed(() => {
+  const tr = teamResult.value
+  const myPerf = myPerformance.value
+  if (!tr || !myPerf) return null
+
+  const attrs = currentUser.value?.attributes || { vocal: 0, dance: 0, charm: 0 }
+  const sw = tr.songWeights || { vocal: 0.34, dance: 0.33, charm: 0.33 }
+
+  // 使用后端返回的实际计算值
+  const attrScore = myPerf.attributeScore ?? Math.round(attrs.vocal * sw.vocal + attrs.dance * sw.dance + attrs.charm * sw.charm)
+  const difficultyFactor = myPerf.difficultyFactor ?? 0.80
+  const perfValue = myPerf.performanceValue || 0
+  const performanceBonus = myPerf.performanceBonus ?? (perfValue * 2)
+
+  // 根据 difficultyFactor 反推难度等级
+  const difficulty = Math.round(1 - (difficultyFactor - 1) / 0.1)
+
+  // 原始分
+  const rawScore = attrScore * difficultyFactor + performanceBonus
+
+  // 最终分（优先用后端返回的）
+  const finalScore = myPerf.playerScore || Math.round(Math.max(0, Math.min(120, rawScore)))
+
+  const avgCharm = tr.teamAttributes?.charm || 0
+  const teamScore = tr.teamScore || 0
+  const finalVotes = tr.finalVotes || 0
+
+  return {
+    attrs,
+    songWeights: sw,
+    attrScore,
+    difficulty,
+    difficultyFactor,
+    perfValue,
+    performanceBonus,
+    rawScore: +rawScore.toFixed(1),
+    finalScore,
+    teamScore,
+    avgCharm,
+    finalVotes
+  }
+})
 
 // ===== 评审席 =====
 const seats = ref<AudienceSeat[]>([])
@@ -264,6 +395,12 @@ async function handleSeatClick(seat: AudienceSeat) {
 // ===== 个人喜爱度排名（Phase 5）=====
 const audienceRankings = ref<any[]>([])
 const myAudienceRanking = ref<{ rank: number; playerName: string; votes: number } | null>(null)
+
+// 进入淘汰阶段后额外显示个人喜爱度排名（seasonStage 不再是 'performance'）
+const showRanking = computed(() => {
+  if (!roundStatus.value) return false
+  return roundStatus.value.released && roundStatus.value.seasonStage !== 'performance' && audienceRankings.value.length > 0
+})
 
 const rankClass = computed(() => {
   const r = myAudienceRanking.value?.rank
@@ -317,16 +454,20 @@ async function doDraw() {
 
 async function finishDraw() {
   const uid = currentUser.value?.id || ''
-  let value: number
-  try {
-    const res = await playerGeneratePerformance({ roundId: roundId.value, playerId: uid })
-    value = res.performanceValue
-  } catch {
-    value = Math.floor(Math.random() * 61) - 20
-  }
+  // 客户端生成随机发挥值（-10 ~ 20）
+  const value = Math.floor(Math.random() * 31) - 10
   drawValue.value = value
   revealed.value = true
   drawing.value = false
+
+  // 使用统一的 player-status/save 接口持久化
+  try {
+    await savePerformancePlayerStatus(roundId.value, [{ playerId: uid, performanceValue: value }])
+  } catch (e: any) {
+    console.warn('[Performance] 保存发挥值失败，仅本地存储:', e.message)
+  }
+
+  // 本地存储作为回退
   const statuses = loadPlayerStatuses(roundId.value)
   const idx = statuses.findIndex(s => s.playerId === uid)
   const entry = { playerId: uid, playerName: currentUser.value?.name || '', teamId: currentUser.value?.teamId || '', teamName: currentTeam.value?.name || '', generated: true, performanceValue: value }
@@ -576,4 +717,109 @@ onMounted(async () => {
   .seats-grid { grid-template-columns: repeat(10, 1fr); gap: 2px; }
   .seat-item .seat-icon { font-size: 10px; }
 }
+// ===== 得分详情 =====
+.score-detail-section {
+  width: 100%;
+  max-width: 700px;
+  margin-top: 20px;
+}
+
+.section-title-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffd700;
+}
+
+.section-icon { font-size: 20px; }
+
+.detail-block {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.detail-block-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  tr {
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+
+  tr:last-child { border-bottom: none; }
+
+  td {
+    padding: 8px 4px;
+    font-size: 13px;
+  }
+
+  .label {
+    color: rgba(255,255,255,0.45);
+    white-space: nowrap;
+    width: 90px;
+    vertical-align: top;
+  }
+
+  .value {
+    color: rgba(255,255,255,0.75);
+
+    &.formula {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 12px;
+      color: rgba(255,255,255,0.65);
+      line-height: 1.6;
+    }
+
+    strong {
+      color: #fff;
+      font-weight: 700;
+    }
+
+    &.highlight {
+      strong {
+        color: #ffd700;
+        font-size: 15px;
+      }
+    }
+  }
+
+  .formula-row td { padding: 10px 4px; }
+
+  .result-row td {
+    padding: 10px 4px 6px;
+    border-top: 1px solid rgba(255,215,0,0.2);
+  }
+}
+
+.results-preview {
+  width: 100%;
+  max-width: 700px;
+  margin-top: 20px;
+
+  .info-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
 </style>

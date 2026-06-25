@@ -83,7 +83,7 @@ import {
 
 initStorage()
 
-const API_BASE: string = (import.meta as any).env?.VITE_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
+const API_BASE: string = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3000/api'
 
 interface ApiResponse<T> {
   code?: number
@@ -498,7 +498,7 @@ export async function deleteMyAvatar(): Promise<void> {
 export function getAvatarUrl(avatar: string | null | undefined): string | undefined {
   if (!avatar) return undefined
   if (avatar.startsWith('http')) return avatar
-  const base = (import.meta as any).env?.VITE_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
+  const base = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3000/api'
   const serverBase = base.replace(/\/api\/?$/, '')
   return `${serverBase}${avatar}`
 }
@@ -1258,6 +1258,26 @@ export async function drawTrainingCard(userId: string, round?: number): Promise<
 }
 export const drawTraining = drawTrainingCard
 
+export async function applySelfSelect(recordId: string, selectedAttr: string): Promise<{ selectedAttr: string; delta: number; attributes: { vocal: number; dance: number; charm: number } }> {
+  return safeCall(
+    () => doRequest('/training/apply-self-select', {
+      method: 'POST',
+      body: JSON.stringify({ recordId, selectedAttr })
+    }),
+    async () => {
+      // Mock: 随机一项增加 5 点
+      const attr = selectedAttr as 'vocal' | 'dance' | 'charm'
+      const key = `luck_sim_training_attrs` as const
+      const stored = JSON.parse(localStorage.getItem(key) || '{}')
+      if (!stored[attr]) stored[attr] = 50
+      stored[attr] += 5
+      localStorage.setItem(key, JSON.stringify(stored))
+      return { selectedAttr, delta: 5, attributes: stored }
+    },
+    'applySelfSelect'
+  )
+}
+
 export async function getTrainingRecords(params?: TrainingRecordQuery): Promise<TrainingRecordListResponse> {
   // GET 请求用 query 参数
   const query = new URLSearchParams()
@@ -1336,7 +1356,7 @@ export async function startRehearsalAPI(teamId: string): Promise<RehearsalResult
 
 // 查询本轮公演是否已开启（不走 doRequest 避免 data 剥离）
 export async function getPerformanceStarted(round: number): Promise<boolean> {
-  const base = (import.meta as any).env?.VITE_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
+  const base = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3000/api'
   const token = localStorage.getItem('luck_sim_token') || sessionStorage.getItem('luck_sim_token')
   try {
     const res = await fetch(`${base}/performance?round=${round}`, {
@@ -1463,8 +1483,8 @@ export async function playerGeneratePerformance(params: { roundId: string; playe
       body: JSON.stringify(params)
     }),
     async () => {
-      // Mock: 随机 -20 ~ 40
-      const value = Math.floor(Math.random() * 61) - 20
+      // Mock: 随机 -10 ~ 20
+      const value = Math.floor(Math.random() * 31) - 10
       return { performanceValue: value }
     },
     'playerGeneratePerformance'

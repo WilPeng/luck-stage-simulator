@@ -17,8 +17,8 @@
     <div class="teams-section">
       <h2 class="section-title">队伍详情</h2>
       
-      <!-- 如果队伍数据和候选人数据都为空，显示提示 -->
-      <t-alert v-if="teamStore.teams.length === 0 && store.candidates.length === 0" theme="warning" style="margin-bottom: 16px">
+      <!-- 如果队伍详情为空，显示提示 -->
+      <t-alert v-if="teamsWithDetails.length === 0" theme="warning" style="margin-bottom: 16px">
         <template #message>
           暂无队伍数据，请先完成组队。您可以前往 <router-link to="/admin/team">组队管理</router-link> 创建队伍。
         </template>
@@ -231,57 +231,89 @@ const showConfirmDialog = ref(false)
 const selectedIds = ref<string[]>([])
 
 // 获取队伍详情数据
-// 以喜爱度排名为主要数据源，合并候选人数据
+// 优先以喜爱度排名为主要数据源，如果尚未生成则从 teamStore 直接构建
 const teamsWithDetails = computed(() => {
   const audienceRankings = performanceStore.audienceRankings
   const candidates = store.candidates
-  
+  const storedTeams = teamStore.teams
+
   console.log('[AdminEliminationView] 计算 teamsWithDetails:', {
     audienceRankingsCount: audienceRankings.length,
-    candidatesCount: candidates.length
+    candidatesCount: candidates.length,
+    storedTeamsCount: storedTeams.length
   })
 
-  // 按 teamId 将喜爱度排名分组，构建队伍
-  const teamMap = new Map<string, {
-    teamId: string
-    teamName: string
-    teamScore: any
-    teamRank: any
-    members: any[]
-  }>()
-  
-  audienceRankings.forEach(ranking => {
-    const tid = ranking.teamId || 'unknown'
-    if (!teamMap.has(tid)) {
-      // 从候选人中查找该队伍的团秀得分
-      const teamCandidates = candidates.filter(c => c.teamId === tid)
-      teamMap.set(tid, {
+  if (audienceRankings.length > 0) {
+    // 方案A：以喜爱度排名为主数据源构建队伍详情
+    const teamMap = new Map<string, {
+      teamId: string
+      teamName: string
+      teamScore: any
+      teamRank: any
+      members: any[]
+    }>()
+
+    audienceRankings.forEach(ranking => {
+      const tid = ranking.teamId || 'unknown'
+      if (!teamMap.has(tid)) {
+        const teamCandidates = candidates.filter(c => c.teamId === tid)
+        teamMap.set(tid, {
+          teamId: tid,
+          teamName: ranking.teamName || `队伍 ${tid.slice(0, 4)}`,
+          teamScore: teamCandidates[0]?.teamShowScore || '-',
+          teamRank: teamCandidates[0]?.rank || '-',
+          members: []
+        })
+      }
+
+      const candidate = candidates.find(c => c.userId === ranking.playerId)
+
+      teamMap.get(tid)!.members.push({
+        playerId: ranking.playerId,
         teamId: tid,
-        teamName: ranking.teamName || `队伍 ${tid.slice(0, 4)}`,
-        teamScore: teamCandidates[0]?.teamShowScore || '-',
-        teamRank: teamCandidates[0]?.rank || '-',
-        members: []
+        teamName: ranking.teamName || teamMap.get(tid)!.teamName,
+        name: ranking.playerName || '未知',
+        isCaptain: false,
+        personalRating: candidate?.personalScore || '-',
+        teamScore: candidate?.teamShowScore || '-',
+        audienceVotes: ranking.votes || '-',
+        audienceRank: ranking.rank || '-'
+      })
+    })
+
+    const result = Array.from(teamMap.values())
+    console.log('[AdminEliminationView] 从喜爱度排名构建:', result.length, '个队伍')
+    return result
+  }
+
+  // 方案B：喜爱度排名不可用时，从 teamStore 直接构建
+  const result = storedTeams.map(team => {
+    const teamCandidates = candidates.filter(c => c.teamId === team.id)
+    const teamName = team.name || `队伍 ${team.id.slice(0, 4)}`
+    return {
+      teamId: team.id,
+      teamName,
+      teamScore: teamCandidates[0]?.teamShowScore || '-',
+      teamRank: teamCandidates[0]?.rank || '-',
+      members: (team.members || []).map(member => {
+        const candidate = candidates.find(c => c.userId === member.playerId)
+        const player = member.player || member as any
+        return {
+          playerId: member.playerId,
+          teamId: team.id,
+          teamName,
+          name: candidate?.userName || player?.name || member.playerId,
+          isCaptain: team.captainId === member.playerId,
+          personalRating: candidate?.personalScore || '-',
+          teamScore: candidate?.teamShowScore || '-',
+          audienceVotes: '-',
+          audienceRank: '-'
+        }
       })
     }
-    
-    // 从候选人中查找个人评分
-    const candidate = candidates.find(c => c.userId === ranking.playerId)
-    
-    teamMap.get(tid)!.members.push({
-      playerId: ranking.playerId,
-      teamId: tid,
-      teamName: ranking.teamName || teamMap.get(tid)!.teamName,
-      name: ranking.playerName || '未知',
-      isCaptain: false,
-      personalRating: candidate?.personalScore || '-',
-      teamScore: candidate?.teamShowScore || '-',
-      audienceVotes: ranking.votes || '-',
-      audienceRank: ranking.rank || '-'
-    })
   })
 
-  const result = Array.from(teamMap.values())
-  console.log('[AdminEliminationView] 构建的队伍:', result.length, '个队伍, 总成员:', result.reduce((s, t) => s + t.members.length, 0), '人')
+  console.log('[AdminEliminationView] 从队伍存储构建:', result.length, '个队伍')
   return result
 })
 

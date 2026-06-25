@@ -115,7 +115,7 @@ async function resolveRoundFromQuery(req) {
   return null
 }
 
-// ===== 共用工具：发挥值文案映射（修正为 -10~40 范围）=====
+// ===== 共用工具：发挥值文案映射（-10~20 范围）=====
 function getPerformanceText(value) {
   if (value >= 30) return '超神发挥'
   if (value >= 15) return '超常发挥'
@@ -256,7 +256,7 @@ function calcPlayerScore(player, song, performanceValue) {
   const rawDance = player.attributes?.dance ?? 0
   const rawCharm = player.attributes?.charm ?? 0
 
-  // 属性分 0~100
+  // 属性分（加权属性值，不再限制 0~100）
   const attributeScore = Math.round(
     rawVocal * normalizedVocalW +
     rawDance * normalizedDanceW +
@@ -298,23 +298,20 @@ function calcPlayerScore(player, song, performanceValue) {
 /** 计算团队分和团队评级（带控制台日志） */
 function calcTeamScore(memberScores, teamName) {
   if (memberScores.length === 0) return { teamScore: 0, teamRating: 'D', teamRatingText: '失误较多' }
-  const teamAvgScore = Math.round(memberScores.reduce((s, v) => s + v, 0) / memberScores.length)
-  const teamBonus = Math.floor(Math.random() * 21) // 0~20
-  const teamScore = teamAvgScore + teamBonus
+  const teamScore = Math.round(memberScores.reduce((s, v) => s + v, 0) / memberScores.length)
   const { stageRating: teamRating, stageRatingText: teamRatingText } = getStageRating(teamScore)
 
   console.log('')
   console.log('╔══════════════════════════════════════════════╗')
   console.log(`║  团队得分计算 · ${teamName || '未知队伍'}`)
   console.log(`║  成员个人分: [${memberScores.join(', ')}]`)
-  console.log(`║  团队平均分 = (${memberScores.join(' + ')}) / ${memberScores.length} = ${teamAvgScore}`)
-  console.log(`║  团队加成(随机) = ${teamBonus}`)
-  console.log(`║  团队总分 = ${teamAvgScore} + ${teamBonus} = ${teamScore}`)
-  console.log(`║  最终票数 = 500 + ${teamScore}×3 + random(-10~20) = 500 + ${teamScore * 3} + random`)
+  console.log(`║  团队平均分 = (${memberScores.join(' + ')}) / ${memberScores.length} = ${teamScore}`)
+  console.log(`║  团队总分 = ${teamScore}`)
+  console.log(`║  最终票数 = 500 + ${teamScore}×3 + avgCharm`)
   console.log(`║  评级: ${teamRating}(${teamRatingText})`)
   console.log('╚══════════════════════════════════════════════╝')
 
-  return { teamScore, teamRating, teamRatingText, teamAvgScore, teamBonus }
+  return { teamScore, teamRating, teamRatingText }
 }
 
 // ====================== POST /api/performance/calculate - 公演结算（新评级体系） ======================
@@ -399,10 +396,10 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
         // 获取发挥值，未生成则随机补一个
         let perfValue = perfValueMap[m.playerId]
         if (perfValue === undefined) {
-          perfValue = randomInt(-10, 40)
-        }
-        const { playerScore, stageRating, stageRatingText, attributeScore, difficultyFactor, performanceBonus } =
-          calcPlayerScore(u, song, perfValue)
+        perfValue = randomInt(-10, 20)
+      }
+      const { playerScore, stageRating, stageRatingText, attributeScore, difficultyFactor, performanceBonus } =
+        calcPlayerScore(u, song, perfValue)
 
         memberResults.push({
           playerId: u.id,
@@ -421,11 +418,13 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
       }
 
       // 计算团队分
-      const { teamScore, teamRating, teamRatingText, teamAvgScore, teamBonus } = calcTeamScore(memberScores, team.name)
+      const { teamScore, teamRating, teamRatingText } = calcTeamScore(memberScores, team.name)
 
-      // 计算最终票数 = 500 + teamScore×3 + random(-10,20)
-      const finalVotesRandom = randomInt(-10, 20)
-      const finalVotes = BASE_VOTES + teamScore * 3 + finalVotesRandom
+      // 团队平均魅力（用于最终票数加成）
+      const teamCharm = Math.round(memberResults.reduce((s, m) => s + (userMap[m.playerId]?.attributes?.charm || 0), 0) / memberResults.length)
+
+      // 计算最终票数 = 500 + teamScore×3 + avgCharm
+      const finalVotes = BASE_VOTES + teamScore * 3 + teamCharm
 
       // 舞台事件（保留原有逻辑）
       let eventVotes = 0
@@ -445,10 +444,9 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
       const dw = song.danceWeight || 3
       const cw = song.charmWeight || 3
 
-      // 团队平均属性
+      // 团队平均属性（teamCharm 已在上面算出，此处复用）
       const teamVocal = Math.round(memberResults.reduce((s, m) => s + (userMap[m.playerId]?.attributes?.vocal || 0), 0) / memberResults.length)
       const teamDance = Math.round(memberResults.reduce((s, m) => s + (userMap[m.playerId]?.attributes?.dance || 0), 0) / memberResults.length)
-      const teamCharm = Math.round(memberResults.reduce((s, m) => s + (userMap[m.playerId]?.attributes?.charm || 0), 0) / memberResults.length)
 
       // 归一化歌曲权重
       const totalW = vw + dw + cw
@@ -464,9 +462,9 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
         memberCount: teamMembers.length,
         baseVotes: BASE_VOTES,
         attributeVotes: teamScore * 3,
-        performanceVotes: finalVotesRandom,
+        performanceVotes: 0,
         compatibilityVotes: 0,
-        eventVotes: teamBonus,
+        eventVotes: 0,
         finalVotes,
         finalScore: finalVotes, // 兼容旧字段
         rank: 0,
@@ -640,7 +638,10 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
           stageRating: p.stageRating || '',
           stageRatingText: p.stageRatingText || '',
           contribution: p.playerScore ? Math.round((p.playerScore / totalTeamScore) * 100) : 0,
-          rankInTeam: p.rankInTeam || 0
+          rankInTeam: p.rankInTeam || 0,
+          attributeScore: p.attributeScore || 0,
+          difficultyFactor: p.difficultyFactor || 0,
+          performanceBonus: p.performanceBonus || 0
         }))
       }
     })
@@ -1103,7 +1104,7 @@ router.post('/player-generate', auth, async (req, res) => {
     const member = await RoundTeamMember.findOne({ ...roundIdFilter, playerId })
     if (!member) return res.status(400).json({ success: false, error: '您未参加本轮组队', code: 'NOT_IN_TEAM' })
 
-    const value = randomInt(-10, 40)
+    const value = randomInt(-10, 20)
     await createPerformanceValue({ roundId: rId, roundIndex: resolvedRound.index, playerId, teamId: member.teamId, value })
 
     res.json({
@@ -1129,10 +1130,10 @@ router.post('/admin-generate', auth, requireAdmin, async (req, res) => {
     // 删除旧值（管理员可覆盖）
     await PerformanceValue.deleteMany({ roundId: rId, playerId })
 
-    // 生成发挥值：支持手动指定或随机（逻辑同选手端）
+    // 生成发挥值：支持手动指定或随机
     const value = typeof manualValue === 'number'
-      ? Math.max(-10, Math.min(40, manualValue))
-      : randomInt(-10, 40)
+      ? Math.max(-10, Math.min(20, manualValue))
+      : randomInt(-10, 20)
 
     // 查找选手所在队伍（兼容两种 roundId 格式）
     const frontRoundId = roundId
@@ -1179,7 +1180,7 @@ router.post('/admin-generate-all', auth, requireAdmin, async (req, res) => {
         skipped.push({ playerId: m.playerId, performanceValue: existingValues.find(v => v.playerId === m.playerId)?.performanceValue })
         continue
       }
-      const value = randomInt(-10, 40)
+      const value = randomInt(-10, 20)
       await createPerformanceValue({ roundId: round.id, roundIndex: round.index, playerId: m.playerId, teamId: m.teamId, value })
       created.push({ playerId: m.playerId, performanceValue: value, performanceText: getPerformanceText(value) })
     }
@@ -1247,7 +1248,7 @@ router.get('/player-status', auth, async (req, res) => {
 })
 
 // ===== POST /api/performance/player-status/save - 批量保存/覆盖选手发挥值 =====
-router.post('/player-status/save', auth, requireAdmin, async (req, res) => {
+router.post('/player-status/save', auth, async (req, res) => {
   try {
     const { roundId, players } = req.body
     if (!roundId) return res.status(400).json({ success: false, error: 'roundId 必填', code: 'MISSING_ROUND_ID' })
@@ -1262,8 +1263,9 @@ router.post('/player-status/save', auth, requireAdmin, async (req, res) => {
 
       let perfVal = parseInt(p.performanceValue)
       if (isNaN(perfVal)) continue
-      if (perfVal < -5) perfVal = -5
-      if (perfVal > 15) perfVal = 15
+      // 允许范围 -10 ~ 20
+      if (perfVal < -10) perfVal = -10
+      if (perfVal > 20) perfVal = 20
 
       // 覆盖式保存：先删旧值，再写入新值
       await PerformanceValue.deleteMany({ roundId: round.id, playerId: p.playerId })
@@ -1432,7 +1434,7 @@ router.post('/reveal-team', auth, requireAdmin, async (req, res) => {
     const membersWithPerf = members.map(m => {
       const u = userMap[m.playerId]
       if (!u) return null
-      const perfValue = valueMap[m.playerId] ?? randomInt(-10, 40) // 未生成则随机补一个
+      const perfValue = valueMap[m.playerId] ?? randomInt(-10, 20) // 未生成则随机补一个
       const { playerScore, stageRating, stageRatingText } = calcPlayerScore(u, song, perfValue)
       return {
         playerId: m.playerId,

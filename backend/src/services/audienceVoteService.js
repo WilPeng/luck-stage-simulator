@@ -1,4 +1,5 @@
 const { generateId, randomInt } = require('../utils/helpers')
+const { getCollection } = require('../config/db')
 const AudienceVoteSession = require('../models/AudienceVoteSession')
 const AudienceMember = require('../models/AudienceMember')
 const AudienceVote = require('../models/AudienceVote')
@@ -10,13 +11,10 @@ const User = require('../models/User')
 const AUDIENCE_COUNT = 1000
 const VOTES_PER_AUDIENCE = 3
 
-function getTeamRankBonus(rank) {
-  if (rank === 1) return 50
-  if (rank === 2) return 30
-  if (rank === 3) return 20
-  if (rank === 4) return 10
-  if (rank === 5) return 5
-  return 0
+function getTeamRankBonus(rank, totalTeams) {
+  // rank=1 → +30, rank=last → +0, 中间等差递减
+  if (totalTeams <= 1) return 0
+  return Math.round(30 * (totalTeams - rank) / (totalTeams - 1))
 }
 
 function sampleWithoutReplacement(players, count) {
@@ -78,18 +76,26 @@ async function generateAudienceVoteForRound(round) {
   const teamRankMap = {}
   for (const t of teamPerfs) teamRankMap[t.teamId] = t.rank
 
+  // 总队伍数（用于等差递减排名加成）
+  const totalTeams = teamPerfs.length
+
   // 生成权重细分数据（五项分数）
   const playerWeights = []
   const weightDetails = []
   for (const pp of playerPerfs) {
     const u = userMap[pp.playerId]
     const attrs = u && u.attributes ? u.attributes : { vocal: 30, dance: 30, charm: 30 }
-    const baseContribution = Math.round(((attrs.vocal || 0) + (attrs.dance || 0) + (attrs.charm || 0)) * 0.5)
-    const performanceContribution = Math.max(0, (pp.performanceValue || 0) * 2 + randomInt(-5, 5))
-    const teamRank = teamRankMap[pp.teamId] || 99
-    const teamRankBonus = getTeamRankBonus(teamRank)
-    const mvpBonus = pp.rankInTeam === 1 ? randomInt(15, 30) : 0
-    const audienceLuck = randomInt(5, 35)
+    // ① 基础属性贡献 = 魅力 × 2
+    const baseContribution = Math.round((attrs.charm || 0) * 2)
+    // ② 实时发挥贡献 = max(0, 发挥值 + random(-5, 5))
+    const performanceContribution = Math.max(0, (pp.performanceValue || 0) + randomInt(-5, 5))
+    // ③ 团队排名加成：第 1 名 +30，最后一名 +0，中间等差递减
+    const teamRank = teamRankMap[pp.teamId] || totalTeams
+    const teamRankBonus = getTeamRankBonus(teamRank, totalTeams)
+    // ④ 队内 MVP 加成
+    const mvpBonus = pp.rankInTeam === 1 ? randomInt(10, 20) : 0
+    // ⑤ 观众缘随机值
+    const audienceLuck = randomInt(0, 15)
     const totalWeight = baseContribution + performanceContribution + teamRankBonus + mvpBonus + audienceLuck
 
     const team = teamMap[pp.teamId]
@@ -127,6 +133,22 @@ async function generateAudienceVoteForRound(round) {
       audienceLuck,
       totalWeight
     })
+  }
+
+  // ===== 差距拉大调整 =====
+  // 将权重最低的选手权重降为 10，该选手降低 N，所有选手等量降低 N
+  // 用调整后的权重进行加权抽样
+  const minWeight = Math.min(...playerWeights.map(p => p.weight))
+  if (minWeight > 10) {
+    const N = minWeight - 10
+    for (const pw of playerWeights) pw.weight -= N
+    for (const wd of weightDetails) wd.totalWeight -= N
+    // 同步更新数据库中的 popularityWeight
+    const ppCollection = getCollection('PlayerPerformance')
+    await ppCollection.updateMany(
+      { roundId: round.id },
+      { $inc: { popularityWeight: -N } }
+    )
   }
 
   await clearAudienceVote(round.id)

@@ -475,7 +475,7 @@ export function drawTrainingCard(userId: string): Promise<TrainingRecord> {
       cardId: card.id,
       cardName: card.name,
       cardType: card.type,
-      effect: { vocal: vocalChange, dance: danceChange, charm: charmChange },
+      effect: card.type === 'self_select' ? { ...card.effect } : { vocal: vocalChange, dance: danceChange, charm: charmChange },
       attributesAfter: user?.attributes,
       round: config.currentRound,
       createdAt: new Date().toLocaleString()

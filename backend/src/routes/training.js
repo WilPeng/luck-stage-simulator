@@ -7,6 +7,28 @@ const Round = require('../models/Round')
 const RoundTeamMember = require('../models/RoundTeamMember')
 const User = require('../models/User')
 
+// 确保自主特训卡存在（首次抽卡时创建）
+async function ensureSelfSelectCard() {
+  try {
+    const existing = await TrainingCard.findOne({ type: 'self_select' })
+    if (!existing) {
+      const card = new TrainingCard({
+        id: generateId(),
+        name: '自主特训',
+        type: 'self_select',
+        description: '自由选择一项属性增加',
+        effect: { selfSelect: 5 },
+        weight: 8,
+        enabled: true
+      })
+      await card.save()
+      console.log('[Training] 已创建自主特训卡')
+    }
+  } catch (e) {
+    console.warn('[Training] 初始化自主特训卡失败:', e.message)
+  }
+}
+
 const router = express.Router()
 
 function computeAttrDelta(drawn, user) {
@@ -83,6 +105,7 @@ function normalizeEffect(eff) {
     if (typeof eff.vocal === 'number') result.vocal = eff.vocal
     if (typeof eff.dance === 'number') result.dance = eff.dance
     if (typeof eff.charm === 'number') result.charm = eff.charm
+    if (typeof eff.selfSelect === 'number') result.selfSelect = eff.selfSelect
   }
   return result
 }
@@ -215,6 +238,9 @@ router.delete('/cards/:id', auth, requireAdmin, async (req, res) => {
 // ===== POST /api/training/draw - 抽一张训练卡 =====
 router.post('/draw', auth, async (req, res) => {
   try {
+    // 确保自主特训卡存在
+    await ensureSelfSelectCard()
+
     const { roundId, roundIndex, round: roundQuery, playerId, userId } = req.body
     const pid = playerId || userId || req.user.userId
     const rIdxInput = roundIndex !== undefined ? parseInt(roundIndex) : (roundQuery !== undefined ? parseInt(roundQuery) : null)
@@ -280,7 +306,7 @@ router.post('/draw', auth, async (req, res) => {
       cardId: record.cardId,
       cardName: record.cardName,
       cardType: record.cardType,
-      effect: normalizeEffect(record.attrDelta || record.effect),
+      effect: record.cardType === 'self_select' ? normalizeEffect(record.effect) : normalizeEffect(record.attrDelta),
       attributesAfter: normalizeAttributesAfter(record.attributesAfter),
       round: record.roundIndex,
       createdAt: record.createdAt
@@ -306,6 +332,57 @@ router.post('/draw', auth, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '抽卡失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== POST /api/training/apply-self-select - 自主特训卡选择属性 =====
+router.post('/apply-self-select', auth, async (req, res) => {
+  try {
+    const { recordId, selectedAttr } = req.body
+    if (!recordId || !selectedAttr) {
+      return res.status(400).json({ success: false, error: 'recordId 和 selectedAttr 必填', code: 'MISSING_PARAM' })
+    }
+    if (!['vocal', 'dance', 'charm'].includes(selectedAttr)) {
+      return res.status(400).json({ success: false, error: 'selectedAttr 必须是 vocal/dance/charm', code: 'INVALID_PARAM' })
+    }
+
+    const record = await TrainingRecord.findOne({ id: recordId })
+    if (!record) {
+      return res.status(404).json({ success: false, error: '训练记录不存在', code: 'RECORD_NOT_FOUND' })
+    }
+
+    const eff = record.effect || {}
+    const selfSelectVal = eff.selfSelect
+    if (typeof selfSelectVal !== 'number') {
+      return res.status(400).json({ success: false, error: '该记录不是自主特训卡', code: 'NOT_SELF_SELECT' })
+    }
+
+    // 更新记录中的 attrDelta
+    record.attrDelta = { vocal: 0, dance: 0, charm: 0, [selectedAttr]: selfSelectVal }
+    await record.save()
+
+    // 更新用户属性
+    const user = await User.findOne({ id: record.playerId })
+    if (user) {
+      user.attributes = user.attributes || { vocal: 30, dance: 30, charm: 30 }
+      user.attributes[selectedAttr] = (user.attributes[selectedAttr] || 0) + selfSelectVal
+      await user.save()
+
+      return res.json({
+        success: true,
+        data: {
+          selectedAttr,
+          delta: selfSelectVal,
+          attrDelta: record.attrDelta,
+          attributes: user.attributes
+        }
+      })
+    }
+
+    res.json({ success: true, data: { selectedAttr, delta: selfSelectVal, attrDelta: record.attrDelta } })
+  } catch (e) {
+    console.error('Apply self select error:', e)
+    res.status(500).json({ success: false, error: '应用自主特训失败', code: 'SERVER_ERROR' })
   }
 })
 

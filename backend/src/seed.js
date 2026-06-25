@@ -135,7 +135,8 @@ const seedData = async () => {
       { id: 'tc012', name: '综合练习', type: 'mixed', description: '综合能力训练', effect: { vocal: 1, dance: 1, charm: 1 }, weight: 25, enabled: true },
       { id: 'tc013', name: '超级摆烂', type: 'event', description: '彻底休息，随机两项属性下降', effect: { randomTwo: -3 }, weight: 8, enabled: true },
       { id: 'tc014', name: '潜力觉醒', type: 'event', description: '潜力觉醒，最低属性中幅提升', effect: { lowest: 4 }, weight: 12, enabled: true },
-      { id: 'tc015', name: '突破极限', type: 'event', description: '突破自身极限，最高属性中幅提升', effect: { highest: 3 }, weight: 10, enabled: true }
+      { id: 'tc015', name: '突破极限', type: 'event', description: '突破自身极限，最高属性中幅提升', effect: { highest: 3 }, weight: 10, enabled: true },
+      { id: 'tc016', name: '自主特训', type: 'self_select', description: '自由选择一项属性增加', effect: { selfSelect: 5 }, weight: 8, enabled: true }
     ]
     await TrainingCard.insertMany(trainingCards)
     console.log(`Created ${trainingCards.length} training cards`)

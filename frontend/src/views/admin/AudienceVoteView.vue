@@ -140,6 +140,9 @@
       <div v-if="!props.embedded" class="page-header">
         <h1>{{ released ? '个人喜爱度最终结果' : '大众评审投票结果' }}</h1>
         <div class="header-actions">
+          <t-button theme="primary" variant="outline" @click="handleExport">
+            导出喜爱度表格
+          </t-button>
           <t-button v-if="!released" theme="danger" variant="outline" @click="handleReset">
             重新设置权重
           </t-button>
@@ -154,6 +157,9 @@
       </div>
       <div v-else class="embedded-actions">
         <t-space>
+          <t-button variant="outline" size="small" @click="handleExport">
+            导出表格
+          </t-button>
           <t-button v-if="!released" variant="outline" size="small" @click="handleReset">
             重新设置
           </t-button>
@@ -344,7 +350,7 @@ const currentRoundId = computed(() => props.roundId || seasonStore.currentRoundI
 // 权重编辑表单（每个选手一行，可编辑各项权重值）
 const weightForm = ref<PlayerPopularityWeight[]>([])
 
-// 加载选手列表并初始化权重表单
+// 加载选手列表并初始化权重表单（使用实际数据推算默认值）
 async function loadPlayers() {
   const roundId = currentRoundId.value
   if (!roundId) return
@@ -354,41 +360,81 @@ async function loadPlayers() {
     await teamStore.fetchTeams(roundId)
   }
 
-  const teams = teamStore.teams
-  const allPlayers: { id: string; name: string; teamId?: string; teamName?: string }[] = []
+  // 尝试获取公演结算结果（含各队伍排名和选手发挥值）
+  const teamResults = store.teamPerformanceResults || []
 
-  // 从队伍成员中提取所有选手
-  for (const team of teams) {
-    if (team.members) {
-      for (const member of team.members) {
-        if (member.player) {
-          allPlayers.push({
-            id: member.playerId,
-            name: member.player.name,
-            teamId: team.id,
-            teamName: team.name
-          })
-        }
+  // 构建队伍排名映射 { teamId → rank }
+  const teamRankMap: Record<string, number> = {}
+  const totalTeams = teamResults.length
+  for (const tr of teamResults) {
+    teamRankMap[tr.teamId] = tr.rank || totalTeams
+  }
+
+  // 构建选手发挥数据映射 { playerId → { performanceValue, rankInTeam } }
+  const perfMap: Record<string, { performanceValue: number; rankInTeam: number }> = {}
+  for (const tr of teamResults) {
+    if (tr.playerPerformances) {
+      for (const p of tr.playerPerformances) {
+        perfMap[p.playerId] = { performanceValue: p.performanceValue || 0, rankInTeam: p.rankInTeam || 99 }
       }
     }
   }
 
-  // 初始化权重表单（随机生成基础值，管理员可在此基础上调整）
-  weightForm.value = allPlayers.map(p => ({
-    playerId: p.id,
-    playerName: p.name,
-    teamId: p.teamId || '',
-    teamName: p.teamName || '未分配',
-    baseContribution: Math.floor(Math.random() * 50) + 10,     // 10~59
-    performanceContribution: Math.floor(Math.random() * 30) + 5, // 5~34
-    teamRankBonus: Math.floor(Math.random() * 20),              // 0~19
-    mvpBonus: Math.floor(Math.random() * 10),                   // 0~9
-    audienceLuck: Math.floor(Math.random() * 40),               // 0~39
-    totalWeight: 0
-  }))
-  weightForm.value.forEach(w => {
-    w.totalWeight = w.baseContribution + w.performanceContribution + w.teamRankBonus + w.mvpBonus + w.audienceLuck
-  })
+  // 计算团队排名加成（与后端算法一致）
+  function calcTeamRankBonus(rank: number, total: number): number {
+    if (total <= 1) return 0
+    return Math.round(30 * (total - rank) / (total - 1))
+  }
+
+  const teams = teamStore.teams
+  weightForm.value = []
+
+  for (const team of teams) {
+    if (!team.members) continue
+    for (const member of team.members) {
+      if (!member.player) continue
+
+      const charm = member.player.attributes?.charm || member.player.attributes?.魅力 || 0
+      const playerId = member.playerId
+      const perfData = perfMap[playerId]
+      const teamRank = teamRankMap[team.id] || 1
+
+      // ① 基础属性贡献 = 魅力 × 2
+      const baseContribution = Math.round(charm * 2)
+
+      // ② 实时发挥贡献（有实际发挥值时使用，否则按默认范围随机）
+      let performanceContribution: number
+      if (perfData) {
+        performanceContribution = Math.max(0, perfData.performanceValue)
+      } else {
+        performanceContribution = Math.floor(Math.random() * 20) + 1
+      }
+
+      // ③ 团队排名加成（等差递减）
+      const teamRankBonus = calcTeamRankBonus(teamRank, totalTeams || 1)
+
+      // ④ 队内 MVP 加成
+      const mvpBonus = (perfData && perfData.rankInTeam === 1) ? Math.floor(Math.random() * 11) + 10 : 0
+
+      // ⑤ 观众缘随机值
+      const audienceLuck = Math.floor(Math.random() * 16)
+
+      const totalWeight = baseContribution + performanceContribution + teamRankBonus + mvpBonus + audienceLuck
+
+      weightForm.value.push({
+        playerId,
+        playerName: member.player.name || member.playerId,
+        teamId: team.id,
+        teamName: team.name || '',
+        baseContribution,
+        performanceContribution,
+        teamRankBonus,
+        mvpBonus,
+        audienceLuck,
+        totalWeight
+      })
+    }
+  }
 }
 
 // 重新计算某行的总权重
@@ -424,6 +470,50 @@ function getWeightBreakdown(item: PlayerPopularityWeight): string {
     `队内MVP加成：${item.mvpBonus}`,
     `随机观众缘：${item.audienceLuck}`
   ].join('\n')
+}
+
+// 导出个人喜爱度 CSV 表格
+function handleExport() {
+  const rankings = store.audienceRankings
+  if (!rankings || rankings.length === 0) {
+    MessagePlugin.warning('暂无喜爱度数据可导出')
+    return
+  }
+
+  const weightsMap = new Map(store.audienceWeights.map(w => [w.playerId, w]))
+
+  // CSV 表头
+  const headers = ['排名', '选手', '队伍', '得票数', '总权重', '基础属性贡献', '实时发挥贡献', '团队排名加成', 'MVP加成', '随机观众缘']
+
+  // 构造每一行
+  const rows = rankings.map((item) => {
+    const w = weightsMap.get(item.playerId)
+    return [
+      item.rank,
+      item.playerName,
+      item.teamName,
+      item.votes,
+      w?.totalWeight ?? item.totalWeight ?? '',
+      w?.baseContribution ?? '',
+      w?.performanceContribution ?? '',
+      w?.teamRankBonus ?? '',
+      w?.mvpBonus ?? '',
+      w?.audienceLuck ?? ''
+    ].map(v => `"${v}"`).join(',')
+  })
+
+  const csvContent = [headers.join(','), ...rows].join('\n')
+  const BOM = '\uFEFF' // UTF-8 BOM -> Excel 自动识别中文
+  const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `个人喜爱度排行_${currentRoundId.value || 'unknown'}.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  MessagePlugin.success('喜爱度表格已导出')
 }
 
 async function handleGenerate() {

@@ -159,33 +159,46 @@
               </div>
             </div>
 
-            <!-- 选中队伍的详情 -->
-            <div v-if="selectedTeamForReveal" class="detail-section">
-              <h2>{{ selectedTeamForReveal.teamName }} — 结算详情</h2>
+            <!-- 已揭晓队伍的详情（每次点击追加） -->
+            <div v-for="teamDetail in selectedTeamForReveal" :key="teamDetail.teamId" class="detail-section">
+              <h2>
+                {{ teamDetail.teamName }} — 结算详情
+                <span class="close-detail" @click="selectedTeamForReveal = selectedTeamForReveal.filter((t: any) => t.teamId !== teamDetail.teamId)">✕</span>
+              </h2>
               <div class="team-detail">
                 <div class="detail-item">
                   <span class="detail-label">歌曲</span>
-                  <span class="detail-value">{{ selectedTeamForReveal.songName }}</span>
+                  <span class="detail-value">{{ teamDetail.songName }}</span>
                 </div>
                 <div class="detail-item">
-                  <span class="detail-label">成员舞台评级</span>
+                  <span class="detail-label">成员舞台评级 <span class="detail-hint">（点击展开得分公式）</span></span>
                   <div class="member-ratings">
-                    <div v-for="p in selectedTeamForReveal.playerPerformances" :key="p.playerId" class="member-rating-item">
-                      <span class="member-name">{{ p.playerName }}</span>
-                      <span class="member-score">{{ p.playerScore }}分</span>
-                      <t-tag :theme="getRatingTheme(p.stageRating)" size="small" class="rating-tag">
-                        {{ p.stageRating }} · {{ p.stageRatingText }}
-                      </t-tag>
+                    <div v-for="p in teamDetail.playerPerformances" :key="p.playerId" class="member-rating-item" @click="p._expanded = !p._expanded">
+                      <div class="member-rating-header">
+                        <span class="member-name">{{ p.playerName }}</span>
+                        <span class="member-score">{{ p.playerScore }}分</span>
+                        <t-tag :theme="getRatingTheme(p.stageRating)" size="small" class="rating-tag">
+                          {{ p.stageRating }} · {{ p.stageRatingText }}
+                        </t-tag>
+                        <span class="expand-icon">{{ p._expanded ? '▲' : '▼' }}</span>
+                      </div>
+                      <div v-if="p._expanded" class="member-formula-detail">
+                        <div>属性分 = <strong>{{ p.attributeScore || '?' }}</strong></div>
+                        <div>难度系数 = 1 - (difficulty-1)×0.1 = <strong>{{ p.difficultyFactor || '?' }}</strong></div>
+                        <div>发挥加分 = {{ p.performanceValue >= 0 ? '+' : '' }}{{ p.performanceValue }} × 2 = <strong>{{ p.performanceBonus || (p.performanceValue || 0) * 2 }}</strong></div>
+                        <div class="formula-line">原始分 = {{ p.attributeScore || '?' }} × {{ p.difficultyFactor || '?' }} + {{ p.performanceBonus || (p.performanceValue || 0) * 2 }} = <strong>约{{ calcRawScore(p) }}</strong></div>
+                        <div class="result-line">截断 0~120 → <strong>{{ p.playerScore }}分</strong> | 评级 <strong>{{ p.stageRating }}</strong></div>
+                      </div>
                     </div>
                   </div>
                 </div>
                 <div class="detail-item team-rating-block">
                   <span class="detail-label">团队综合评级</span>
                   <div class="team-rating-display">
-                    <t-tag :theme="getRatingTheme(selectedTeamForReveal.teamRating)" size="large" class="team-rating-tag">
-                      {{ selectedTeamForReveal.teamRating }} · {{ selectedTeamForReveal.teamRatingText }}
+                    <t-tag :theme="getRatingTheme(teamDetail.teamRating)" size="large" class="team-rating-tag">
+                      {{ teamDetail.teamRating }} · {{ teamDetail.teamRatingText }}
                     </t-tag>
-                    <span class="team-score">{{ selectedTeamForReveal.teamScore }}分</span>
+                    <span class="team-score">{{ teamDetail.teamScore }}分</span>
                   </div>
                 </div>
                 <!-- 最终票数构成 -->
@@ -194,25 +207,19 @@
                   <div class="breakdown-list">
                     <div class="breakdown-row">
                       <span>基础票数</span>
-                      <span>{{ selectedTeamForReveal.baseVotes }}</span>
+                      <span>500</span>
                     </div>
                     <div class="breakdown-row">
-                      <span>团队得分（{{ selectedTeamForReveal.teamScore }}分）</span>
-                      <span>+{{ selectedTeamForReveal.attributeVotes }}</span>
+                      <span>团队得分（{{ teamDetail.teamScore }}分）× 3</span>
+                      <span>+{{ teamDetail.teamScore * 3 }}</span>
                     </div>
                     <div class="breakdown-row">
-                      <span>发挥波动</span>
-                      <span :class="selectedTeamForReveal.performanceVotes >= 0 ? 'positive' : 'negative'">
-                        {{ selectedTeamForReveal.performanceVotes >= 0 ? '+' : '' }}{{ selectedTeamForReveal.performanceVotes }}
-                      </span>
-                    </div>
-                    <div class="breakdown-row">
-                      <span>团队加成</span>
-                      <span class="positive">+{{ selectedTeamForReveal.eventVotes }}</span>
+                      <span>平均魅力加成</span>
+                      <span class="positive">+{{ teamDetail.teamAttributes?.charm || 0 }}</span>
                     </div>
                     <div class="breakdown-row total">
                       <span>最终票数</span>
-                      <span>{{ selectedTeamForReveal.finalVotes }}票</span>
+                      <span>{{ teamDetail.finalVotes }}票</span>
                     </div>
                   </div>
                 </div>
@@ -335,8 +342,8 @@ const pagedPlayers = computed(() => {
 async function initPlayerStatuses() {
   const roundId = currentRoundIdComputed.value
   try {
-    const { getPerformancePlayerStatus } = await import('../../services/api')
-    const result = await getPerformancePlayerStatus(roundId)
+    const { getPlayerPerformanceStatus } = await import('../../services/api')
+    const result = await getPlayerPerformanceStatus(roundId)
     if (result.players?.length > 0) {
       playerStatuses.value = result.players
       performanceStarted.value = result.started || false
@@ -402,9 +409,9 @@ async function handleStartPerformance() {
   }
 }
 
-// 为单个选手生成随机发挥值（与选手端 playerGeneratePerformance mock 一致）
+// 为单个选手生成随机发挥值
 function generateRandomValue(): number {
-  return Math.floor(Math.random() * 61) - 20 // -20 ~ 40
+  return Math.floor(Math.random() * 31) - 10 // -10 ~ 20
 }
 
 function handleGeneratePlayer(player: any) {
@@ -441,7 +448,7 @@ function handleGoToSettlement() {
 
 // ==================== 阶段二：公演结算 ====================
 const calculating = ref(false)
-const selectedTeamForReveal = ref<any>(null)
+const selectedTeamForReveal = ref<any[]>([])
 const allTeamsRevealed = ref(false)
 
 const teamPerformanceResults = computed(() => performanceStore.teamPerformanceResults)
@@ -475,7 +482,10 @@ async function handleCalculate() {
 }
 
 function handleRevealTeam(team: any) {
-  selectedTeamForReveal.value = team
+  // 避免重复添加
+  if (!selectedTeamForReveal.value.find((t: any) => t.teamId === team.teamId)) {
+    selectedTeamForReveal.value.push(team)
+  }
   team.status = 'confirmed'
   performanceStore.teamPerformanceResults = [...performanceStore.teamPerformanceResults]
 
@@ -488,6 +498,10 @@ function handleRevealTeam(team: any) {
       .map((t: any) => t.teamId)
     saveRevealedTeams(currentRoundIdComputed.value, revealed)
   }
+}
+
+function calcRawScore(p: any): number {
+  return Math.round((p.attributeScore || 0) * (p.difficultyFactor || 0.8) + (p.performanceBonus || (p.performanceValue || 0) * 2))
 }
 
 function getRatingTheme(rating: string): string {
@@ -730,6 +744,20 @@ onMounted(async () => {
 }
 
 .detail-section {
+  margin-bottom: 20px;
+  h2 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    .close-detail {
+      font-size: 14px;
+      color: #999;
+      cursor: pointer;
+      padding: 2px 8px;
+      border-radius: 4px;
+      &:hover { color: #e34d59; background: rgba(227,77,89,0.08); }
+    }
+  }
   .team-detail {
     .detail-item {
       margin-bottom: 16px;
@@ -748,17 +776,54 @@ onMounted(async () => {
       gap: 8px;
 
       .member-rating-item {
-        display: flex;
-        align-items: center;
-        gap: 12px;
         padding: 10px 12px;
         background: #f7f8fa;
         border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.2s;
+
+        &:hover { background: #e8eaf0; }
+
+        .member-rating-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
 
         .member-name { flex:1; font-weight:500; }
         .member-score { font-weight:700; color:#0052d9; min-width:50px; text-align:right; }
         .rating-tag { min-width:100px; text-align:center; }
+        .expand-icon { color: #999; font-size: 10px; min-width: 16px; text-align: center; }
+
+        .member-formula-detail {
+          margin-top: 8px;
+          padding: 8px 12px;
+          background: rgba(0,0,0,0.03);
+          border-radius: 6px;
+          font-size: 12px;
+          color: #666;
+          line-height: 1.8;
+          font-family: 'Consolas', 'Courier New', monospace;
+
+          div { margin-bottom: 4px; }
+          div:last-child { margin-bottom: 0; }
+
+          strong { color: #1a1a2e; }
+
+          .result-line {
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            strong { color: #0052d9; font-size: 13px; }
+          }
+        }
       }
+    }
+
+    .detail-hint {
+      font-size: 12px;
+      color: #999;
+      font-weight: 400;
     }
 
     .team-rating-block {

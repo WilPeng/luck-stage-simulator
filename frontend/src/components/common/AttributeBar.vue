@@ -8,7 +8,7 @@
       <div 
         class="bar-fill" 
         :class="colorClass"
-        :style="{ width: `${Math.min(value, 100)}%` }"
+        :style="{ width: `${value}%` }"
       ></div>
     </div>
   </div>

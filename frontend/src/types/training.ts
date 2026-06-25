@@ -1,7 +1,7 @@
 export interface TrainingCard {
   id: string
   name: string
-  type: 'vocal' | 'dance' | 'charm' | 'mixed' | 'event'
+  type: 'vocal' | 'dance' | 'charm' | 'mixed' | 'event' | 'self_select'
   description: string
   effect: TrainingEffect
   weight: number
