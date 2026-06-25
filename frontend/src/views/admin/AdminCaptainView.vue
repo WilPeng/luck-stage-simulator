@@ -49,9 +49,7 @@
                   <t-tag v-if="selectedCaptains.includes(candidate.id)" theme="primary" size="small">已选择</t-tag>
                 </div>
                 <div class="candidate-stats">
-                  <span class="stat">🎤 {{ candidate.attributes?.vocal || 0 }}</span>
-                  <span class="stat">💃 {{ candidate.attributes?.dance || 0 }}</span>
-                  <span class="stat">✨ {{ candidate.attributes?.charm || 0 }}</span>
+                  <span class="stat votes">🗳️ {{ getVoteCount(candidate.id) }} 票</span>
                 </div>
                 <div class="candidate-status">
                   <span :class="`status-tag ${candidate.status}`">
@@ -386,6 +384,11 @@ function getStatusText(status: string): string {
   return map[status] || status
 }
 
+function getVoteCount(playerId: string): number {
+  const record = groupedRecords.value.find(r => r.playerId === playerId)
+  return record?.votes || 0
+}
+
 function handleImageError(event: Event) {
   const img = event.target as HTMLImageElement
   const alt = img.getAttribute('alt')
@@ -702,6 +705,12 @@ onMounted(loadData)
     background: #f5f7fa;
     border-radius: 4px;
     color: #595959;
+  }
+
+  .stat.votes {
+    background: rgba(0, 82, 217, 0.1);
+    color: #0052d9;
+    font-weight: 600;
   }
 }
 

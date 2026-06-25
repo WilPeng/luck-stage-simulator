@@ -29,11 +29,7 @@
               </div>
               <div class="candidate-info">
                 <div class="candidate-name">{{ candidate.name }}</div>
-                <div class="candidate-stats">
-                  <span class="stat">🎤 {{ candidate.attributes?.vocal || 0 }}</span>
-                  <span class="stat">💃 {{ candidate.attributes?.dance || 0 }}</span>
-                  <span class="stat">✨ {{ candidate.attributes?.charm || 0 }}</span>
-                </div>
+
               </div>
               <div v-if="selectedIds.includes(candidate.id)" class="selected-badge">✓</div>
             </div>
