@@ -96,7 +96,8 @@ export const usePerformanceStore = defineStore('performance', () => {
     loading.value = true
     try {
       if (round !== undefined) currentRound.value = round
-      teamResults.value = await getPerformanceResults(round)
+      const result: any = await getPerformanceResults(round)
+      teamResults.value = Array.isArray(result) ? result : (result.teams || [])
     } catch (e) {
       teamResults.value = []
     } finally {

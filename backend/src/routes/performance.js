@@ -627,7 +627,7 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
         teamRatingText: o.teamRatingText || '',
         songWeights: o.songWeights || { vocal: 0.34, dance: 0.33, charm: 0.33 },
         teamAttributes: o.teamAttributes || { vocal: 0, dance: 0, charm: 0 },
-        playerPerformances: teamPlayerResults.map(p => ({
+        playerPerformances: (teamPlayerResults.length > 0 ? teamPlayerResults : (o.memberPerformances || [])).map(p => ({
           roundId: o.roundId,
           playerId: p.playerId,
           playerName: p.playerName,

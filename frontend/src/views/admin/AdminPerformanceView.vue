@@ -173,16 +173,16 @@
                 <div class="detail-item">
                   <span class="detail-label">成员舞台评级 <span class="detail-hint">（点击展开得分公式）</span></span>
                   <div class="member-ratings">
-                    <div v-for="p in teamDetail.playerPerformances" :key="p.playerId" class="member-rating-item" @click="p._expanded = !p._expanded">
+                    <div v-for="p in getTeamPlayers(teamDetail)" :key="p.playerId" class="member-rating-item" @click="togglePlayerExpanded(p.playerId)">
                       <div class="member-rating-header">
                         <span class="member-name">{{ p.playerName }}</span>
                         <span class="member-score">{{ p.playerScore }}分</span>
                         <t-tag :theme="getRatingTheme(p.stageRating)" size="small" class="rating-tag">
                           {{ p.stageRating }} · {{ p.stageRatingText }}
                         </t-tag>
-                        <span class="expand-icon">{{ p._expanded ? '▲' : '▼' }}</span>
+                        <span class="expand-icon">{{ expandedPlayers.has(p.playerId) ? '▲' : '▼' }}</span>
                       </div>
-                      <div v-if="p._expanded" class="member-formula-detail">
+                      <div v-if="expandedPlayers.has(p.playerId)" class="member-formula-detail">
                         <div>属性分 = <strong>{{ p.attributeScore || '?' }}</strong></div>
                         <div>难度系数 = 1 - (difficulty-1)×0.1 = <strong>{{ p.difficultyFactor || '?' }}</strong></div>
                         <div>发挥加分 = {{ p.performanceValue >= 0 ? '+' : '' }}{{ p.performanceValue }} × 2 = <strong>{{ p.performanceBonus || (p.performanceValue || 0) * 2 }}</strong></div>
@@ -265,7 +265,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
 import { usePerformanceStore } from '../../stores/performanceStore'
@@ -450,6 +450,16 @@ function handleGoToSettlement() {
 const calculating = ref(false)
 const selectedTeamForReveal = ref<any[]>([])
 const allTeamsRevealed = ref(false)
+// 展开的选手公式详情（使用 Set 避免依赖动态属性）
+const expandedPlayers = reactive(new Set<string>())
+function togglePlayerExpanded(playerId: string) {
+  if (expandedPlayers.has(playerId)) expandedPlayers.delete(playerId)
+  else expandedPlayers.add(playerId)
+}
+// 获取队伍的成员列表（兼容 playerPerformances 和 memberPerformances 两种字段名）
+function getTeamPlayers(team: any): any[] {
+  return team?.playerPerformances || team?.memberPerformances || []
+}
 
 const teamPerformanceResults = computed(() => performanceStore.teamPerformanceResults)
 const sortedTeamResults = computed(() => performanceStore.sortedTeamPerformanceResults)

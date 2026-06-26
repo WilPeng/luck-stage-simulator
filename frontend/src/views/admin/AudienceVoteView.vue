@@ -617,6 +617,12 @@ onMounted(async () => {
   // 检查是否已有生成的投票数据
   await refreshData()
 
+  // 检查最终结果是否已释放（持久化恢复）
+  const alreadyReleased = await store.fetchFinalRanking(currentRoundId.value)
+  if (alreadyReleased) {
+    released.value = true
+  }
+
   if (store.audienceVoteGenerated) {
     // 已有投票结果，直接显示排行榜
   } else {
