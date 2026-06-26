@@ -55,3 +55,26 @@ body {
     height: 6px;
   }
 }
+
+/* ===== 选手端浅色主题覆盖 ===== */
+.player-layout .player-main * {
+  color: #333 !important;
+}
+
+/* 保留彩色元素 */
+.player-layout .player-main .up,
+.player-layout .player-main [class*="positive"] { color: #2ecc71 !important; }
+.player-layout .player-main .down,
+.player-layout .player-main [class*="negative"] { color: #e74c3c !important; }
+.player-layout .player-main .rank-gold,
+.player-layout .player-main [class*="rank-gold"] { color: #ffd700 !important; }
+.player-layout .player-main .rank-silver { color: #c0c0c0 !important; }
+.player-layout .player-main .rank-bronze { color: #cd7f32 !important; }
+.player-layout .player-main .rank-top { color: #ff6b6b !important; }
+.player-layout .player-main .stage-badge.completed { color: #52c41a !important; }
+.player-layout .player-main .stage-badge.current { color: #667eea !important; }
+.player-layout .player-main .section-title-bar { color: #667eea !important; }
+.player-layout .player-main .up { color: #2ecc71 !important; }
+.player-layout .player-main .down { color: #e74c3c !important; }
+.player-layout .player-main a { color: #667eea !important; }
+.player-layout .player-main .voted-count { color: #2ecc71 !important; }
