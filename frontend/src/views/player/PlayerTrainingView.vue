@@ -359,7 +359,7 @@ onMounted(async () => {
   max-width: 1000px;
   margin: 0 auto;
   padding: 0 4px;
-  color: #fff;
+  color: #333;
 }
 
 .page-header {
@@ -390,8 +390,8 @@ onMounted(async () => {
 }
 
 .attr-item {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: #fff;
+  border: 1px solid #e8e8e8;
   border-radius: 12px;
   padding: 14px;
   position: relative;

@@ -226,7 +226,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .player-rehearsal {
-  color: #fff;
+  color: #333;
 }
 
 .rehearsal-header {

@@ -1181,7 +1181,13 @@ export async function deleteTrainingCard(id: string): Promise<void> {
     'deleteTrainingCard'
   )
 }
-export const getTrainingCardById = getTrainingCards
+export async function getTrainingCardById(id: string): Promise<TrainingCard> {
+  return safeCall(
+    () => doRequest<TrainingCard>(`/training/cards/${id}`),
+    async () => { throw new Error('getTrainingCardById mock not supported') },
+    'getTrainingCardById'
+  )
+}
 export async function batchCreateTrainingCards(cards: any[]): Promise<TrainingCard[]> {
   return safeCall(
     () => doRequest<TrainingCard[]>('/training/cards/batch', {

@@ -274,7 +274,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .player-profile {
-  color: #fff;
+  color: #333;
 }
 
 .profile-header {

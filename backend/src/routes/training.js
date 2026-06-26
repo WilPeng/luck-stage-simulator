@@ -193,6 +193,17 @@ router.get('/cards', auth, async (req, res) => {
   }
 })
 
+// ===== GET /api/training/cards/:id - 获取单张训练卡 =====
+router.get('/cards/:id', auth, async (req, res) => {
+  try {
+    const card = await TrainingCard.findOne({ id: req.params.id })
+    if (!card) return res.status(404).json({ success: false, error: '训练卡不存在', code: 'NOT_FOUND' })
+    res.json({ success: true, data: card })
+  } catch (e) {
+    res.status(500).json({ success: false, error: '获取训练卡失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // ===== POST /api/training/cards - 新增训练卡 =====
 router.post('/cards', auth, requireAdmin, async (req, res) => {
   try {

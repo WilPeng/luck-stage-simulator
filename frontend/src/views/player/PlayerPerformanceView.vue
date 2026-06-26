@@ -550,8 +550,9 @@ onMounted(async () => {
   align-items: center;
   // justify-content: center 在结果页用 flex-start
   color: #fff;
-  background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #0a0a2a 100%);
+  background: #f5f7fa;
   padding: 20px;
+  color: #333;
 }
 
 // ===== Phase 0 =====

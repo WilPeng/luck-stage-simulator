@@ -387,7 +387,14 @@ router.post('/release', auth, requireAdmin, async (req, res) => {
     if (!roundId || !roundSongId) {
       return res.status(400).json({ success: false, error: '缺少 roundId 或 roundSongId', code: 'MISSING_PARAM' })
     }
-    const roundSong = await RoundSong.findOne({ id: roundSongId, roundId })
+    // 兼容 roundId 格式：支持 UUID 和 round-1 两种格式
+    const round = await getRound(roundId)
+    const dbRoundId = round ? round.id : roundId
+    // 同时查询两种 roundId 格式
+    const roundSong = await RoundSong.findOne({
+      id: roundSongId,
+      $or: [{ roundId: dbRoundId }, { roundId: roundId }]
+    })
     if (!roundSong) {
       return res.status(404).json({ success: false, error: '歌曲不存在', code: 'SONG_NOT_FOUND' })
     }

@@ -296,7 +296,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .player-song {
-  color: #fff;
+  color: #333;
   max-width: 1000px;
   margin: 0 auto;
   padding: 0 4px;

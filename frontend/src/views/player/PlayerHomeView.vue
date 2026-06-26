@@ -197,7 +197,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .player-home {
-  color: #fff;
+  color: #333;
 }
 
 .welcome-section {

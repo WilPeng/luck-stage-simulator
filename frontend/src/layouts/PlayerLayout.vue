@@ -272,14 +272,14 @@ onMounted(async () => {
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #0a0a2a 100%);
+  background: #f5f7fa;
 }
 
 .player-header {
   flex-shrink: 0;
-  background: linear-gradient(90deg, rgba(75, 0, 130, 0.9) 0%, rgba(0, 191, 255, 0.9) 100%);
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
   padding: 12px 24px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   z-index: 100;
 }
 
@@ -306,7 +306,6 @@ onMounted(async () => {
   font-size: 20px;
   font-weight: bold;
   color: #fff;
-  text-shadow: 0 2px 10px rgba(255, 255, 255, 0.3);
 }
 
 .header-info {
@@ -342,6 +341,14 @@ onMounted(async () => {
   color: #fff;
   font-weight: 600;
   font-size: 15px;
+}
+
+.player-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: #f5f7fa;
+  color: #333;
 }
 
 .logout-btn {
@@ -411,8 +418,8 @@ onMounted(async () => {
 .player-sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.03);
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  background: #fff;
+  border-right: 1px solid #e8e8e8;
   overflow-y: auto;
   padding: 12px 0;
 }
@@ -432,13 +439,13 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  color: rgba(255, 255, 255, 0.5);
+  color: #999;
   font-size: 12px;
   font-weight: 600;
 
   &.current {
-    color: #ffd700;
-    background: rgba(255, 215, 0, 0.1);
+    color: #667eea;
+    background: rgba(102, 126, 234, 0.08);
     border-radius: 8px;
   }
 
@@ -477,22 +484,23 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  color: rgba(255, 255, 255, 0.7);
+  color: #666;
   text-decoration: none;
   font-size: 14px;
   transition: all 0.2s;
   border-radius: 0;
 
   &:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.06);
+    color: #333;
+    background: #f0f0f5;
   }
 
   &.active {
-    color: #fff;
-    background: linear-gradient(90deg, rgba(75, 0, 130, 0.4), rgba(0, 191, 255, 0.15));
-    border-left: 3px solid #ffd700;
+    color: #667eea;
+    background: linear-gradient(90deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.05));
+    border-left: 3px solid #667eea;
     padding-left: 13px;
+    font-weight: 600;
   }
 
   &.stage-item {
@@ -506,21 +514,14 @@ onMounted(async () => {
     pointer-events: none;
   }
 
-  &.completed {
-    .nav-text {
-      color: rgba(0, 168, 112, 0.8);
-    }
+  &.completed .nav-text {
+    color: #52c41a;
   }
 
   &.current {
-    background: rgba(0, 82, 217, 0.15);
-    border-left: 3px solid #0052d9;
+    background: rgba(102, 126, 234, 0.1);
+    border-left: 3px solid #667eea;
     padding-left: 13px;
-
-    .nav-text {
-      color: #0052d9;
-      font-weight: 600;
-    }
   }
 }
 
@@ -616,7 +617,7 @@ onMounted(async () => {
     z-index: 101;
     transition: left 0.3s ease;
     width: 200px;
-    background: rgba(10, 10, 26, 0.98);
+    background: #fff;
     padding-top: 56px;
 
     &.open {
@@ -648,9 +649,9 @@ onMounted(async () => {
     bottom: 0;
     left: 0;
     right: 0;
-    background: rgba(10, 10, 26, 0.98);
-    backdrop-filter: blur(20px);
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: #fff;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
+    border-top: 1px solid #e8e8e8;
     z-index: 98;
     padding: 6px 2px;
     padding-bottom: calc(6px + env(safe-area-inset-bottom));
@@ -664,14 +665,14 @@ onMounted(async () => {
     justify-content: center;
     padding: 6px 2px;
     text-decoration: none;
-    color: rgba(255, 255, 255, 0.5);
+    color: #999;
     transition: all 0.2s;
     border-radius: 10px;
     gap: 3px;
 
     &.active {
-      color: #fff;
-      background: rgba(162, 155, 254, 0.15);
+      color: #667eea;
+      background: rgba(102, 126, 234, 0.1);
     }
   }
 
