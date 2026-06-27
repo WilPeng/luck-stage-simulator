@@ -129,7 +129,7 @@ export const useTrainingCardStore = defineStore('training', () => {
     saving.value = true
     try {
       await deleteTrainingCard(id)
-      cards.value = cards.value.filter(c => c.id !== id)
+      await fetchCards()
     } finally {
       saving.value = false
     }
