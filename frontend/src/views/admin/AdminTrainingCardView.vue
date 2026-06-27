@@ -377,8 +377,8 @@ import { ref, computed, onMounted } from 'vue'
 import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
 import { useTrainingCardStore } from '../../stores/trainingCardStore'
 import { useSeasonStore } from '../../stores/seasonStore'
-import { getUsers } from '../../services/api'
-import type { TrainingCard, AutoCompleteResult, TrainingRecord } from '../../types/training'
+import { getUsers, doRequest } from '../../services/api'
+import type { TrainingCard, AutoCompleteResult, TrainingRecord, TrainingRecordListResponse } from '../../types/training'
 import type { User } from '../../types/user'
 
 const store = useTrainingCardStore()
@@ -568,11 +568,12 @@ async function fetchPlayers(): Promise<void> {
 async function fetchTrainingRecords(): Promise<void> {
   recordsLoading.value = true
   try {
-    const result = await store.fetchRecords({
-      round: currentRound.value,
-      pageSize: 1000
-    })
-    trainingRecords.value = result
+    // 直接调用后端 API，不使用 safeCall（避免静默降级到 mock 数据）
+    const query = new URLSearchParams()
+    query.append('roundId', `round-${currentRound.value}`)
+    query.append('pageSize', '999')
+    const result = await doRequest<TrainingRecordListResponse>(`/training/records?${query.toString()}`)
+    trainingRecords.value = result.list || []
   } catch (error: any) {
     MessagePlugin.error(error.message || '获取训练记录失败')
     trainingRecords.value = []
