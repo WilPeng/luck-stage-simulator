@@ -18,6 +18,8 @@ export interface TrainingEffect {
   highest?: number
   lowest?: number
   selfSelect?: number   // 自选属性 +/-N，由前端弹出选择
+  multiply?: number     // 随机一项属性乘以该倍数（1.5=+50%, 2=翻倍, 0.5=减半），自动转换为加减值
+  multiplyAll?: number  // 三项属性全部乘以该倍数，自动转换为加减值
 }
 
 export interface TrainingConfig {

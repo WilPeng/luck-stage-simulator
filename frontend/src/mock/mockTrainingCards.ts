@@ -81,5 +81,32 @@ export const mockTrainingCards: TrainingCard[] = [
     effect: { selfSelect: 5 },
     weight: 8,
     enabled: true
+  },
+  {
+    id: 'tc010',
+    name: '名师点拨',
+    type: 'event',
+    description: '大师级导师一对一指导，随机一项属性翻倍',
+    effect: { multiply: 2 },
+    weight: 5,
+    enabled: true
+  },
+  {
+    id: 'tc011',
+    name: '全面蜕变',
+    type: 'mixed',
+    description: '脱胎换骨的改变，三项属性均提升50%',
+    effect: { multiplyAll: 1.5 },
+    weight: 5,
+    enabled: true
+  },
+  {
+    id: 'tc012',
+    name: '受伤恢复期',
+    type: 'event',
+    description: '身体状态下滑，随机一项属性减半',
+    effect: { multiply: 0.5 },
+    weight: 6,
+    enabled: true
   }
 ]

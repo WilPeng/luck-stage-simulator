@@ -190,6 +190,18 @@
                 <span class="effect-label">📈 最高属性</span>
                 <span class="effect-value positive">+{{ card.effect.highest }}</span>
               </div>
+              <div v-if="card.effect.multiply" class="effect-row">
+                <span class="effect-label">🎲 随机倍率</span>
+                <span class="effect-value" :class="getMultiplyClass(card.effect.multiply)">
+                  ×{{ card.effect.multiply }}
+                </span>
+              </div>
+              <div v-if="card.effect.multiplyAll" class="effect-row">
+                <span class="effect-label">🌐 全体倍率</span>
+                <span class="effect-value" :class="getMultiplyClass(card.effect.multiplyAll)">
+                  ×{{ card.effect.multiplyAll }}
+                </span>
+              </div>
             </div>
             <div class="card-footer">
               <span class="weight-info">权重: {{ card.weight }}</span>
@@ -268,6 +280,12 @@
           </t-form-item>
           <t-form-item label="最低属性加成">
             <t-input-number v-model="cardForm.effect.lowest" :min="1" :max="20" theme="column" placeholder="留空为无效果" />
+          </t-form-item>
+          <t-form-item label="随机倍率效果">
+            <t-input-number v-model="cardForm.effect.multiply" :min="0.1" :max="5" :step="0.1" :decimalPlaces="1" theme="column" placeholder="1=不变，1.5=+50%" />
+          </t-form-item>
+          <t-form-item label="全体倍率效果">
+            <t-input-number v-model="cardForm.effect.multiplyAll" :min="0.1" :max="5" :step="0.1" :decimalPlaces="1" theme="column" placeholder="1=不变，2=翻倍" />
           </t-form-item>
         </div>
       </t-form>
@@ -453,7 +471,9 @@ const cardForm = ref({
     randomOne: undefined as number | undefined,
     randomTwo: undefined as number | undefined,
     highest: undefined as number | undefined,
-    lowest: undefined as number | undefined
+    lowest: undefined as number | undefined,
+    multiply: undefined as number | undefined,
+    multiplyAll: undefined as number | undefined
   }
 })
 
@@ -509,6 +529,11 @@ function formatEffect(value: number | undefined): string {
   return value > 0 ? `+${value}` : `${value}`
 }
 
+function getMultiplyClass(value: number | undefined): string {
+  if (!value) return ''
+  return value > 1 ? 'positive' : value < 1 ? 'negative' : ''
+}
+
 function getAttrLabel(key: string): string {
   const labels: Record<string, string> = {
     vocal: 'Vocal',
@@ -517,7 +542,9 @@ function getAttrLabel(key: string): string {
     randomOne: '随机',
     randomTwo: '随机两项',
     highest: '最高',
-    lowest: '最低'
+    lowest: '最低',
+    multiply: '随机倍率',
+    multiplyAll: '全体倍率'
   }
   return labels[key] || key
 }
@@ -557,7 +584,12 @@ async function fetchTrainingRecords(): Promise<void> {
 function getRecordTooltip(record: TrainingRecord): string {
   const effects = Object.entries(record.effect)
     .filter(([, value]) => value)
-    .map(([key, value]) => `${getAttrLabel(key)} ${(value as number) > 0 ? '+' : ''}${value}`)
+    .map(([key, value]) => {
+      if (key === 'multiply' || key === 'multiplyAll') {
+        return `${getAttrLabel(key)} ×${value}`
+      }
+      return `${getAttrLabel(key)} ${(value as number) > 0 ? '+' : ''}${value}`
+    })
   return effects.length > 0 ? effects.join('，') : '无效果'
 }
 
@@ -626,7 +658,9 @@ function resetCardForm(): void {
       randomOne: undefined,
       randomTwo: undefined,
       highest: undefined,
-      lowest: undefined
+      lowest: undefined,
+      multiply: undefined,
+      multiplyAll: undefined
     }
   }
 }
@@ -645,7 +679,9 @@ function populateCardForm(card: TrainingCard): void {
       randomOne: card.effect.randomOne,
       randomTwo: card.effect.randomTwo,
       highest: card.effect.highest,
-      lowest: card.effect.lowest
+      lowest: card.effect.lowest,
+      multiply: card.effect.multiply,
+      multiplyAll: card.effect.multiplyAll
     }
   }
 }

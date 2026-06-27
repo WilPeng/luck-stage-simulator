@@ -189,6 +189,18 @@ async function handleFlip(idx: number) {
         const min = Math.min(cur.vocal, cur.dance, cur.charm)
         if (cur.vocal === min) rv += eff.lowest; if (cur.dance === min) rd += eff.lowest; if (cur.charm === min) rc += eff.lowest
       }
+      if (eff.multiply && (eff as any).multiply > 0) {
+        const factor = (eff as any).multiply - 1
+        const pick = (['vocal', 'dance', 'charm'] as const)[Math.floor(Math.random() * 3)]
+        const delta = Math.round(cur[pick] * factor)
+        if (pick === 'vocal') rv += delta; else if (pick === 'dance') rd += delta; else rc += delta
+      }
+      if (eff.multiplyAll && (eff as any).multiplyAll > 0) {
+        const factor = (eff as any).multiplyAll - 1
+        rv += Math.round(cur.vocal * factor)
+        rd += Math.round(cur.dance * factor)
+        rc += Math.round(cur.charm * factor)
+      }
     }
 
     // 统一取 cardType，兼容后端可能用 type 字段

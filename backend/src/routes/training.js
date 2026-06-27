@@ -1,6 +1,7 @@
 const express = require('express')
 const { auth, requireAdmin } = require('../middleware/auth')
 const { generateId, logAction, getCurrentSeason, randomInt, ACTION_TYPES } = require('../utils/helpers')
+const { getCollection } = require('../config/db')
 const TrainingCard = require('../models/TrainingCard')
 const TrainingRecord = require('../models/TrainingRecord')
 const Round = require('../models/Round')
@@ -60,6 +61,22 @@ function computeAttrDelta(drawn, user) {
   if (typeof eff.highest === 'number') {
     const k = Object.keys(cur).reduce((m, x) => cur[x] > cur[m] ? x : m, 'vocal')
     attrDelta[k] += eff.highest
+  }
+
+  // 倍数效果：根据当前属性值将倍数转换为加减值
+  // delta = Math.round(current_value × (multiply - 1))
+  if (typeof eff.multiply === 'number' && eff.multiply > 0) {
+    const factor = eff.multiply - 1
+    const keys = ['vocal', 'dance', 'charm']
+    const k = keys[Math.floor(Math.random() * 3)]
+    attrDelta[k] += Math.round(cur[k] * factor)
+  }
+
+  if (typeof eff.multiplyAll === 'number' && eff.multiplyAll > 0) {
+    const factor = eff.multiplyAll - 1
+    for (const k of ['vocal', 'dance', 'charm']) {
+      attrDelta[k] += Math.round(cur[k] * factor)
+    }
   }
 
   return attrDelta
@@ -239,7 +256,12 @@ router.put('/cards/:id', auth, requireAdmin, async (req, res) => {
 // ===== DELETE /api/training/cards/:id =====
 router.delete('/cards/:id', auth, requireAdmin, async (req, res) => {
   try {
-    await TrainingCard.deleteOne({ id: req.params.id })
+    const collection = getCollection('TrainingCard')
+    const result = await collection.deleteOne({ id: req.params.id })
+    // 直接使用原生 MongoDB deleteOne，绕开 normalizeQuery，确保删除生效
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, error: '训练卡不存在', code: 'NOT_FOUND' })
+    }
     res.json({ success: true })
   } catch (e) {
     res.status(500).json({ success: false, error: '删除失败', code: 'SERVER_ERROR' })

@@ -26,7 +26,7 @@
         <template #effect="{ row }">
           <div class="effect-list">
             <span v-for="(val, key) in row.effect" :key="key" class="effect-item">
-              {{ effectLabel(key) }} {{ val >= 0 ? '+' : '' }}{{ val }}
+              {{ effectLabel(key) }} {{ formatEffectDisplay(key, val) }}
             </span>
             <span v-if="!row.effect || Object.keys(row.effect).length === 0" class="no-effect">无效果</span>
           </div>
@@ -98,6 +98,12 @@
               <label>自选属性</label>
               <t-input-number v-model="form.effect.selfSelect" :min="-10" :max="10" size="small" />
             </div>
+            <div class="effect-row">
+              <label>随机倍率</label>
+              <t-input-number v-model="form.effect.multiply" :min="0.1" :max="5" :step="0.1" :decimalPlaces="1" size="small" placeholder="1=不变" />
+              <label>全体倍率</label>
+              <t-input-number v-model="form.effect.multiplyAll" :min="0.1" :max="5" :step="0.1" :decimalPlaces="1" size="small" placeholder="1=不变" />
+            </div>
           </div>
         </t-form-item>
         <t-form-item label="启用">
@@ -135,7 +141,9 @@ const form = reactive({
     randomTwo: 0,
     lowest: 0,
     highest: 0,
-    selfSelect: 0
+    selfSelect: 0,
+    multiply: 0,
+    multiplyAll: 0
   },
   weight: 10,
   enabled: true
@@ -166,8 +174,16 @@ function typeLabel(type?: string) {
 }
 
 function effectLabel(key: string): string {
-  const map: Record<string, string> = { vocal: '声乐', dance: '舞蹈', charm: '魅力', randomOne: '随机单', randomTwo: '随机双', lowest: '补弱', highest: '增强', selfSelect: '自选' }
+  const map: Record<string, string> = { vocal: '声乐', dance: '舞蹈', charm: '魅力', randomOne: '随机单', randomTwo: '随机双', lowest: '补弱', highest: '增强', selfSelect: '自选', multiply: '随机倍率', multiplyAll: '全体倍率' }
   return map[key] || key
+}
+
+function formatEffectDisplay(key: string, val: number): string {
+  // 倍数效果显示为 ×1.5 格式
+  if (key === 'multiply' || key === 'multiplyAll') {
+    return '×' + val
+  }
+  return (val >= 0 ? '+' : '') + val
 }
 
 async function loadCards() {
@@ -196,7 +212,9 @@ function editCard(card: TrainingCard) {
     randomTwo: (card.effect as any)?.randomTwo ?? 0,
     lowest: (card.effect as any)?.lowest ?? 0,
     highest: (card.effect as any)?.highest ?? 0,
-    selfSelect: (card.effect as any)?.selfSelect ?? 0
+    selfSelect: (card.effect as any)?.selfSelect ?? 0,
+    multiply: (card.effect as any)?.multiply ?? 0,
+    multiplyAll: (card.effect as any)?.multiplyAll ?? 0
   }
   form.weight = card.weight ?? 10
   form.enabled = card.enabled !== false
@@ -208,7 +226,7 @@ function resetForm() {
   form.name = ''
   form.type = 'mixed'
   form.description = ''
-  form.effect = { vocal: 0, dance: 0, charm: 0, randomOne: 0, randomTwo: 0, lowest: 0, highest: 0, selfSelect: 0 }
+  form.effect = { vocal: 0, dance: 0, charm: 0, randomOne: 0, randomTwo: 0, lowest: 0, highest: 0, selfSelect: 0, multiply: 0, multiplyAll: 0 }
   form.weight = 10
   form.enabled = true
 }
