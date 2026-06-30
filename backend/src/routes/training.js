@@ -804,6 +804,12 @@ router.delete('/records/user/:userId', auth, requireAdmin, async (req, res) => {
       }
     }
     if (roundIndex) filter.roundIndex = parseInt(roundIndex)
+
+    const records = await TrainingRecord.find(filter)
+    if (records.length === 0) {
+      return res.json({ success: true, data: { deletedCount: 0 } })
+    }
+
     const user = await User.findOne({ id: userId })
     if (user && user.attributes) {
       for (const r of records) {

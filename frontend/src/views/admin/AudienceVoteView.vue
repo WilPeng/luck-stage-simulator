@@ -258,19 +258,48 @@
             <t-tag theme="primary" variant="light">总座位：1000</t-tag>
             <t-tag theme="success" variant="light">已投票：{{ store.audienceTotalAudience }}</t-tag>
           </t-space>
-          <span class="seats-tip">点击座位查看该评审的投票详情</span>
+          <t-space class="filter-group" v-if="store.audienceVoteGenerated">
+            <t-select v-model="filterGender" placeholder="性别" clearable size="small" style="width:130px">
+              <t-option value="" label="全部" />
+              <t-option value="男" :label="`男（${genderStats.male}人）`" />
+              <t-option value="女" :label="`女（${genderStats.female}人）`" />
+            </t-select>
+            <t-select v-model="filterAge" placeholder="年龄" clearable size="small" style="width:130px">
+              <t-option value="" label="全部" />
+              <t-option v-for="r in ageStats" :key="r.label" :value="r.label" :label="`${r.label}（${r.count}人）`" />
+            </t-select>
+            <t-select v-model="filterOccupation" placeholder="职业" clearable size="small" style="width:140px">
+              <t-option value="" label="全部" />
+              <t-option v-for="o in occupationStats" :key="o.name" :value="o.name" :label="`${o.name}（${o.count}人）`" />
+            </t-select>
+            <t-tag variant="light" v-if="filterGender || filterAge || filterOccupation">
+              {{ filteredSeats.length }} 人
+            </t-tag>
+          </t-space>
         </div>
         <div class="seats-grid">
           <div
-            v-for="seat in seats"
+            v-for="seat in filteredSeats"
             :key="seat.id"
             class="seat-item"
             :class="{ voted: seat.voted }"
             @click="handleSeatClick(seat)"
           >
-            <t-tooltip :content="`${seat.seatNumber}号评审`" placement="top">
-              <span class="seat-icon">{{ seat.voted ? '🎭' : '🪑' }}</span>
-            </t-tooltip>
+            <div class="seat-inner">
+              <template v-if="seat.voted && seat.gender">
+                <t-tooltip placement="top">
+                  <template #content>
+                    <div>{{ seat.seatNumber }}号评审</div>
+                    <div style="font-size:12px;opacity:0.8">{{ seat.gender }} · {{ seat.age }}岁 · {{ seat.occupation }}</div>
+                  </template>
+                  <span class="seat-gender-age">{{ seat.gender }} {{ seat.age }}岁</span>
+                </t-tooltip>
+                <span class="seat-occupation">{{ seat.occupation }}</span>
+              </template>
+              <t-tooltip v-else placement="top" :content="`${seat.seatNumber}号评审`">
+                <span class="seat-empty">—</span>
+              </t-tooltip>
+            </div>
           </div>
         </div>
       </t-card>
@@ -284,6 +313,12 @@
         :footer="false"
       >
         <div v-if="store.selectedAudienceDetail" class="vote-detail-editable">
+          <!-- 评审档案 -->
+          <div v-if="store.selectedAudienceDetail.gender" class="reviewer-profile">
+            <span class="profile-tag gender">{{ store.selectedAudienceDetail.gender }}</span>
+            <span class="profile-tag age">{{ store.selectedAudienceDetail.age }}岁</span>
+            <span class="profile-tag occupation">{{ store.selectedAudienceDetail.occupation }}</span>
+          </div>
           <div class="edit-hint">可修改该评审的投票对象，下拉选择选手</div>
           <div
             v-for="vote in store.selectedAudienceDetail.votes"
@@ -455,6 +490,59 @@ const seats = computed<AudienceSeat[]>(() => {
       seatNumber,
       voted: false
     }
+  })
+})
+
+// 筛选状态
+const filterGender = ref<string>('')
+const filterAge = ref<string>('')
+const filterOccupation = ref<string>('')
+
+// 统计各选项人数
+const genderStats = computed(() => {
+  const voted = seats.value.filter(s => s.voted && s.gender)
+  const male = voted.filter(s => s.gender === '男').length
+  const female = voted.filter(s => s.gender === '女').length
+  return { male, female }
+})
+
+const AGE_RANGES = [
+  { label: '18-22岁', min: 18, max: 22 },
+  { label: '23-30岁', min: 23, max: 30 },
+  { label: '31-40岁', min: 31, max: 40 },
+  { label: '41-50岁', min: 41, max: 50 },
+  { label: '51-60岁', min: 51, max: 60 }
+]
+
+const ageStats = computed(() => {
+  return AGE_RANGES.map(r => {
+    const count = seats.value.filter(s => s.voted && s.age && s.age >= r.min && s.age <= r.max).length
+    return { ...r, count }
+  })
+})
+
+const occupationStats = computed(() => {
+  const map: Record<string, number> = {}
+  for (const s of seats.value) {
+    if (s.voted && s.occupation) {
+      map[s.occupation] = (map[s.occupation] || 0) + 1
+    }
+  }
+  return Object.entries(map)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+})
+
+// 筛选后的座位
+const filteredSeats = computed(() => {
+  return seats.value.filter(s => {
+    if (filterGender.value && s.gender !== filterGender.value) return false
+    if (filterAge.value) {
+      const range = AGE_RANGES.find(r => r.label === filterAge.value)
+      if (range && (!s.age || s.age < range.min || s.age > range.max)) return false
+    }
+    if (filterOccupation.value && s.occupation !== filterOccupation.value) return false
+    return true
   })
 })
 
@@ -898,6 +986,13 @@ watch(currentRoundId, (newVal, oldVal) => {
   flex-wrap: wrap;
   gap: 8px;
 
+  .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
   .seats-tip {
     font-size: 13px;
     color: #999;
@@ -932,6 +1027,41 @@ watch(currentRoundId, (newVal, oldVal) => {
   border-radius: 4px;
   transition: all 0.2s;
   font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+
+  .seat-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    line-height: 1.15;
+    text-align: center;
+    width: 100%;
+    padding: 2px;
+  }
+
+  .seat-gender-age {
+    font-size: 10px;
+    font-weight: 600;
+    color: #667eea;
+    white-space: nowrap;
+  }
+
+  .seat-occupation {
+    font-size: 8px;
+    color: #888;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .seat-empty {
+    font-size: 11px;
+    color: #ccc;
+  }
 
   &:hover {
     background: #e5e7eb;
@@ -974,6 +1104,26 @@ watch(currentRoundId, (newVal, oldVal) => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+
+  .reviewer-profile {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #f0f4ff, #eef1f8);
+    border-radius: 8px;
+    align-items: center;
+
+    .profile-tag {
+      font-size: 12px;
+      padding: 2px 10px;
+      border-radius: 12px;
+      color: #fff;
+
+      &.gender { background: #667eea; }
+      &.age { background: #f093fb; }
+      &.occupation { background: #4facfe; }
+    }
+  }
 
   .edit-hint {
     font-size: 13px;

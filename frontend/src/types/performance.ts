@@ -261,6 +261,9 @@ export interface AudienceMember {
   id: string
   roundId: string
   seatNumber: number
+  gender?: string | null   // 男 / 女
+  age?: number | null      // 18-60
+  occupation?: string | null // 职业
 }
 
 // 评审投票记录
@@ -305,11 +308,17 @@ export interface AudienceSeat {
   seatNumber: number
   voted: boolean
   votes?: string[] // 投票的选手名称列表
+  gender?: string | null   // 性别
+  age?: number | null      // 年龄
+  occupation?: string | null // 职业
 }
 
 // 某评审的投票详情
 export interface AudienceVoteDetail {
   seatNumber: number
+  gender?: string | null
+  age?: number | null
+  occupation?: string | null
   votes: {
     voteOrder: number
     playerId: string

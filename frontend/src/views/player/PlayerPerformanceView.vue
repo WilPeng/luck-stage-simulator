@@ -157,16 +157,46 @@
           <span class="seats-info">总座位：1000</span>
           <span class="seats-info voted-count">已投票：{{ votedSeatCount }}</span>
           <span class="seats-tip">点击已投票座位查看详情</span>
+          <t-space class="filter-group" v-if="votedSeatCount > 0">
+            <t-select v-model="filterGender" placeholder="性别" clearable size="small" style="width:110px">
+              <t-option value="" label="全部" />
+              <t-option value="男" :label="`男（${genderStats.male}）`" />
+              <t-option value="女" :label="`女（${genderStats.female}）`" />
+            </t-select>
+            <t-select v-model="filterAge" placeholder="年龄" clearable size="small" style="width:115px">
+              <t-option value="" label="全部" />
+              <t-option v-for="r in ageStats" :key="r.label" :value="r.label" :label="`${r.label}（${r.count}）`" />
+            </t-select>
+            <t-select v-model="filterOccupation" placeholder="职业" clearable size="small" style="width:120px">
+              <t-option value="" label="全部" />
+              <t-option v-for="o in occupationStats" :key="o.name" :value="o.name" :label="`${o.name}（${o.count}）`" />
+            </t-select>
+            <span v-if="filterGender || filterAge || filterOccupation" class="filter-result">{{ filteredSeats.length }}人</span>
+          </t-space>
         </div>
         <div class="seats-grid">
           <div
-            v-for="seat in seats"
+            v-for="seat in filteredSeats"
             :key="seat.id"
             class="seat-item"
             :class="{ voted: seat.voted, selected: selectedSeat === seat.seatNumber }"
             @click="handleSeatClick(seat)"
           >
-            <span class="seat-icon">{{ seat.voted ? '🎭' : '🪑' }}</span>
+            <div class="seat-inner">
+              <template v-if="seat.voted && seat.gender">
+                <t-tooltip placement="top">
+                  <template #content>
+                    <div>{{ seat.seatNumber }}号评审</div>
+                    <div style="font-size:12px;opacity:0.8">{{ seat.gender }} · {{ seat.age }}岁 · {{ seat.occupation }}</div>
+                  </template>
+                  <span class="seat-gender-age">{{ seat.gender }} {{ seat.age }}岁</span>
+                </t-tooltip>
+                <span class="seat-occupation">{{ seat.occupation }}</span>
+              </template>
+              <t-tooltip v-else placement="top" :content="`${seat.seatNumber}号评审`">
+                <span class="seat-empty">—</span>
+              </t-tooltip>
+            </div>
           </div>
         </div>
 
@@ -181,6 +211,12 @@
           <div v-if="seatDetailLoading" class="detail-loading">加载中...</div>
           <div v-else-if="seatDetailVotes.length === 0" class="detail-empty">该评审尚未投票</div>
           <div v-else class="seat-detail-list">
+            <!-- 评审档案 -->
+            <div v-if="seatDetailProfile" class="reviewer-profile">
+              <span class="profile-tag gender">{{ seatDetailProfile.gender }}</span>
+              <span class="profile-tag age">{{ seatDetailProfile.age }}岁</span>
+              <span class="profile-tag occupation">{{ seatDetailProfile.occupation }}</span>
+            </div>
             <div
               v-for="vote in seatDetailVotes"
               :key="vote.voteOrder"
@@ -360,8 +396,50 @@ const detailVisible = ref(false)
 const selectedSeatNumber = ref(0)
 const seatDetailLoading = ref(false)
 const seatDetailVotes = ref<{ voteOrder: number; playerName: string }[]>([])
+const seatDetailProfile = ref<{ gender: string; age: number; occupation: string } | null>(null)
+
+// 筛选状态
+const filterGender = ref<string>('')
+const filterAge = ref<string>('')
+const filterOccupation = ref<string>('')
 
 const votedSeatCount = computed(() => seats.value.filter(s => s.voted).length)
+
+const genderStats = computed(() => {
+  const voted = seats.value.filter(s => s.voted && s.gender)
+  return { male: voted.filter(s => s.gender === '男').length, female: voted.filter(s => s.gender === '女').length }
+})
+
+const AGE_RANGES = [
+  { label: '18-22岁', min: 18, max: 22 },
+  { label: '23-30岁', min: 23, max: 30 },
+  { label: '31-40岁', min: 31, max: 40 },
+  { label: '41-50岁', min: 41, max: 50 },
+  { label: '51-60岁', min: 51, max: 60 }
+]
+
+const ageStats = computed(() => AGE_RANGES.map(r => ({
+  ...r,
+  count: seats.value.filter(s => s.voted && s.age && s.age >= r.min && s.age <= r.max).length
+})))
+
+const occupationStats = computed(() => {
+  const map: Record<string, number> = {}
+  for (const s of seats.value) {
+    if (s.voted && s.occupation) map[s.occupation] = (map[s.occupation] || 0) + 1
+  }
+  return Object.entries(map).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
+})
+
+const filteredSeats = computed(() => seats.value.filter(s => {
+  if (filterGender.value && s.gender !== filterGender.value) return false
+  if (filterAge.value) {
+    const range = AGE_RANGES.find(r => r.label === filterAge.value)
+    if (range && (!s.age || s.age < range.min || s.age > range.max)) return false
+  }
+  if (filterOccupation.value && s.occupation !== filterOccupation.value) return false
+  return true
+}))
 
 async function fetchSeats() {
   try {
@@ -380,8 +458,17 @@ async function handleSeatClick(seat: AudienceSeat) {
   detailVisible.value = true
   seatDetailLoading.value = true
   seatDetailVotes.value = []
+  seatDetailProfile.value = null
   try {
     const res = await getPlayerAudienceSeatDetail(roundId.value, seat.seatNumber)
+    // 提取评审档案
+    if (res.detail?.gender) {
+      seatDetailProfile.value = {
+        gender: res.detail.gender,
+        age: res.detail.age,
+        occupation: res.detail.occupation
+      }
+    }
     seatDetailVotes.value = res.detail?.votes?.map((v: any) => ({
       voteOrder: v.voteOrder,
       playerName: v.playerName || '未知选手'
@@ -644,10 +731,15 @@ onMounted(async () => {
   .seats-info { font-size: 13px; color: rgba(255,255,255,0.5); }
   .voted-count { color: rgba(102,126,234,0.8); }
   .seats-tip { font-size: 12px; color: rgba(255,255,255,0.3); margin-left: auto; }
+  .filter-group { margin-left: auto; }
+  .filter-result { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; }
 }
 .seats-grid { display: grid; grid-template-columns: repeat(20, 1fr); gap: 4px; }
-.seat-item { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; cursor: default; border-radius: 4px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); transition: all 0.15s;
-  .seat-icon { font-size: 14px; line-height: 1; }
+.seat-item { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; cursor: default; border-radius: 4px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); transition: all 0.15s; overflow: hidden;
+  .seat-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; line-height: 1.15; text-align: center; width: 100%; padding: 2px; }
+  .seat-gender-age { font-size: 10px; font-weight: 600; color: rgba(180,160,255,0.9); white-space: nowrap; }
+  .seat-occupation { font-size: 8px; color: rgba(255,255,255,0.35); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .seat-empty { font-size: 11px; color: rgba(255,255,255,0.15); }
   &.voted { background: rgba(102,126,234,0.12); border-color: rgba(102,126,234,0.25); cursor: pointer;
     &:hover { background: rgba(102,126,234,0.22); border-color: rgba(102,126,234,0.4); transform: scale(1.1); z-index: 1; }
   }
@@ -660,6 +752,13 @@ onMounted(async () => {
 .seat-detail-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(0,0,0,0.04); border-radius: 8px;
   .vote-order { font-size: 13px; color: rgba(0,0,0,0.55); min-width: 48px; }
   .vote-player { font-size: 14px; font-weight: 600; color: rgba(0,0,0,0.85); }
+}
+.reviewer-profile { display: flex; gap: 8px; padding: 8px 12px; background: linear-gradient(135deg, rgba(102,126,234,0.08), rgba(118,75,162,0.08)); border-radius: 8px; align-items: center; margin-bottom: 4px;
+  .profile-tag { font-size: 12px; padding: 2px 10px; border-radius: 12px; color: #fff;
+    &.gender { background: #667eea; }
+    &.age { background: #f093fb; }
+    &.occupation { background: #4facfe; }
+  }
 }
 
 // ===== 个人喜爱度排名 (Phase 5) =====

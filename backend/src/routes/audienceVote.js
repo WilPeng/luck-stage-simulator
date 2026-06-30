@@ -182,15 +182,20 @@ router.get('/seats', auth, requireAdmin, async (req, res) => {
     if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
 
     const members = await AudienceMember.find({ roundId: round.id })
-    const votedSeatNumbers = new Set(members.map(m => m.seatNumber))
+    const memberMap = {}
+    for (const m of members) memberMap[m.seatNumber] = m
 
-    // 固定返回 1000 个座位，已投票的标记 voted: true
+    // 固定返回 1000 个座位，已投票的标记 voted: true，附带评审档案
     const seats = []
     for (let i = 1; i <= AUDIENCE_COUNT; i++) {
+      const m = memberMap[i]
       seats.push({
         id: `seat-${i}`,
         seatNumber: i,
-        voted: votedSeatNumbers.has(i)
+        voted: !!m,
+        gender: m ? m.gender : null,
+        age: m ? m.age : null,
+        occupation: m ? m.occupation : null
       })
     }
 
@@ -241,6 +246,9 @@ router.get('/seat/:seatNumber', auth, requireAdmin, async (req, res) => {
       success: true,
       detail: {
         seatNumber,
+        gender: member.gender || null,
+        age: member.age || null,
+        occupation: member.occupation || null,
         votes: votes.map(v => ({
           voteOrder: v.voteOrder,
           playerId: v.playerId,
@@ -461,14 +469,19 @@ router.get('/player-seats', auth, async (req, res) => {
     if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
 
     const members = await AudienceMember.find({ roundId: round.id })
-    const votedSeatNumbers = new Set(members.map(m => m.seatNumber))
+    const memberMap = {}
+    for (const m of members) memberMap[m.seatNumber] = m
 
     const seats = []
     for (let i = 1; i <= AUDIENCE_COUNT; i++) {
+      const m = memberMap[i]
       seats.push({
         id: `seat-${i}`,
         seatNumber: i,
-        voted: votedSeatNumbers.has(i)
+        voted: !!m,
+        gender: m ? m.gender : null,
+        age: m ? m.age : null,
+        occupation: m ? m.occupation : null
       })
     }
 
@@ -513,6 +526,9 @@ router.get('/player-seat/:seatNumber', auth, async (req, res) => {
       success: true,
       detail: {
         seatNumber,
+        gender: member.gender || null,
+        age: member.age || null,
+        occupation: member.occupation || null,
         votes: votes.map(v => ({
           voteOrder: v.voteOrder,
           playerId: v.playerId,

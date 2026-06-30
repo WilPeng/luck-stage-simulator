@@ -11,6 +11,32 @@ const User = require('../models/User')
 const AUDIENCE_COUNT = 1000
 const VOTES_PER_AUDIENCE = 3
 
+// 评审随机档案生成
+const GENDERS = ['男', '女']
+const NON_STUDENT_OCCUPATIONS = [
+  '教师', '医生', '程序员', '设计师', '销售', '会计', '律师',
+  '公务员', '自由职业', '企业职员', '个体户', '媒体从业者', '艺术工作者',
+  '服务业', '工程师', '护士', '研究员', '编辑', '摄影师'
+]
+
+function randomGender() {
+  return GENDERS[Math.floor(Math.random() * GENDERS.length)]
+}
+
+function randomAge() {
+  return 18 + Math.floor(Math.random() * 43) // 18 ~ 60
+}
+
+function randomOccupation(age) {
+  // 22岁及以下：90%概率为学生，10%为其他职业
+  if (age <= 22) {
+    if (Math.random() < 0.9) return '学生'
+    return NON_STUDENT_OCCUPATIONS[Math.floor(Math.random() * NON_STUDENT_OCCUPATIONS.length)]
+  }
+  // 22岁以上：不出现学生
+  return NON_STUDENT_OCCUPATIONS[Math.floor(Math.random() * NON_STUDENT_OCCUPATIONS.length)]
+}
+
 function getTeamRankBonus(rank, totalTeams) {
   // rank=1 → +30, rank=last → +0, 中间等差递减
   if (totalTeams <= 1) return 0
@@ -163,7 +189,15 @@ async function generateAudienceVoteForRound(round) {
 
   const members = []
   for (let i = 1; i <= AUDIENCE_COUNT; i++) {
-    members.push({ id: generateId(), roundId: round.id, seatNumber: i })
+    const age = randomAge()
+    members.push({
+      id: generateId(),
+      roundId: round.id,
+      seatNumber: i,
+      gender: randomGender(),
+      age,
+      occupation: randomOccupation(age)
+    })
   }
   const savedMembers = await AudienceMember.insertMany(members)
 
