@@ -605,7 +605,7 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .admin-performance {
   padding: 16px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
   min-height: 100vh;
 }
 
@@ -615,7 +615,7 @@ onMounted(async () => {
   h1 {
     font-size: 24px;
     font-weight: 600;
-    color: #1a1a2e;
+    color: var(--text-primary);
     margin: 0 0 12px 0;
   }
 
@@ -629,7 +629,7 @@ onMounted(async () => {
 }
 
 .overview-section {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 16px;
@@ -652,8 +652,8 @@ onMounted(async () => {
   flex-direction: column;
   gap: 4px;
 
-  .label { font-size:12px; color:#86909c; }
-  .value { font-size:18px; font-weight:600; color:#1a1a2e; }
+  .label { font-size:12px; color: var(--text-secondary); }
+  .value { font-size:18px; font-weight:600; color: var(--text-primary); }
 }
 
 .status-section {
@@ -663,7 +663,7 @@ onMounted(async () => {
 
   .generated-count {
     font-size:14px;
-    color:#4e5969;
+    color: var(--text-secondary);
   }
 }
 
@@ -690,17 +690,17 @@ onMounted(async () => {
   th, td {
     padding: 10px 8px;
     text-align: left;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--border-color);
   }
 
   th {
-    background: #fafafa;
+    background: var(--table-header-bg);
     font-weight: 600;
-    color: #333;
+    color: var(--text-primary);
   }
 
   .player-name { font-weight:600; }
-  .team-name { color:#666; }
+  .team-name { color: var(--text-secondary); }
 
   .performance-value {
     .value {
@@ -708,7 +708,7 @@ onMounted(async () => {
       font-size: 15px;
       &.positive { color:#00a870; }
       &.negative { color:#e34d59; }
-      &.pending { color:#999; font-weight:400; }
+      &.pending { color: var(--text-tertiary); font-weight:400; }
     }
   }
 
@@ -716,7 +716,7 @@ onMounted(async () => {
 }
 
 .teams-section, .detail-section, .ranking-section {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 16px;
@@ -735,7 +735,7 @@ onMounted(async () => {
     border-radius: 8px;
     margin-bottom: 8px;
     font-size: 12px;
-    color: #86909c;
+    color: var(--text-secondary);
   }
 
   .table-row {
@@ -747,9 +747,9 @@ onMounted(async () => {
     transition: background .2s;
 
     &:hover { background:#f7f8fa; }
-    .team-name { font-weight:500; color:#1a1a2e; }
-    .song-name { color:#4e5969; }
-    .member-count { color:#4e5969; }
+    .team-name { font-weight:500; color: var(--text-primary); }
+    .song-name { color: var(--text-secondary); }
+    .member-count { color: var(--text-secondary); }
   }
 }
 
@@ -761,7 +761,7 @@ onMounted(async () => {
     justify-content: space-between;
     .close-detail {
       font-size: 14px;
-      color: #999;
+      color: var(--text-tertiary);
       cursor: pointer;
       padding: 2px 8px;
       border-radius: 4px;
@@ -772,8 +772,8 @@ onMounted(async () => {
     .detail-item {
       margin-bottom: 16px;
 
-      .detail-label { font-size:14px; font-weight:500; color:#4e5969; display:block; margin-bottom:8px; }
-      .detail-value { font-size:14px; color:#1a1a2e; }
+      .detail-label { font-size:14px; font-weight:500; color: var(--text-secondary); display:block; margin-bottom:8px; }
+      .detail-value { font-size:14px; color: var(--text-primary); }
 
       &.final {
         .final-score { font-size:28px; font-weight:700; color:#0052d9; }
@@ -803,7 +803,7 @@ onMounted(async () => {
         .member-name { flex:1; font-weight:500; }
         .member-score { font-weight:700; color:#0052d9; min-width:50px; text-align:right; }
         .rating-tag { min-width:100px; text-align:center; }
-        .expand-icon { color: #999; font-size: 10px; min-width: 16px; text-align: center; }
+        .expand-icon { color: var(--text-tertiary); font-size: 10px; min-width: 16px; text-align: center; }
 
         .member-formula-detail {
           margin-top: 8px;
@@ -811,14 +811,14 @@ onMounted(async () => {
           background: rgba(0,0,0,0.03);
           border-radius: 6px;
           font-size: 12px;
-          color: #666;
+          color: var(--text-secondary);
           line-height: 1.8;
           font-family: 'Consolas', 'Courier New', monospace;
 
           div { margin-bottom: 4px; }
           div:last-child { margin-bottom: 0; }
 
-          strong { color: #1a1a2e; }
+          strong { color: var(--text-primary); }
 
           .result-line {
             margin-top: 6px;
@@ -832,7 +832,7 @@ onMounted(async () => {
 
     .detail-hint {
       font-size: 12px;
-      color: #999;
+      color: var(--text-tertiary);
       font-weight: 400;
     }
 
@@ -870,7 +870,7 @@ onMounted(async () => {
           justify-content: space-between;
           padding: 6px 0;
           font-size: 14px;
-          color: #4e5969;
+          color: var(--text-secondary);
 
           .positive { color: #00a870; font-weight: 600; }
           .negative { color: #e34d59; font-weight: 600; }
@@ -910,7 +910,7 @@ onMounted(async () => {
       font-weight: 600; font-size: 14px;
     }
 
-    .team-name { flex:1; font-size:14px; font-weight:500; color:#1a1a2e; }
+    .team-name { flex:1; font-size:14px; font-weight:500; color: var(--text-primary); }
     .score { font-size:15px; font-weight:700; color:#0052d9; }
   }
 }

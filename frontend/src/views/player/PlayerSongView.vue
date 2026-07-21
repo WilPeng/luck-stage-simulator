@@ -296,7 +296,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .player-song {
-  color: #333;
+color: var(--text-primary);
   max-width: 1000px;
   margin: 0 auto;
   padding: 0 4px;
@@ -307,7 +307,7 @@ onMounted(async () => {
   position: relative;
   margin-bottom: 28px;
   padding-bottom: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-color);
 
   &::after {
     content: '';
@@ -332,7 +332,7 @@ onMounted(async () => {
   }
 
   .subtitle {
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-tertiary);
     margin: 0;
     font-size: 14px;
     letter-spacing: 0.3px;
@@ -365,7 +365,7 @@ onMounted(async () => {
   margin-bottom: 16px;
   font-size: 15px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
 
   .section-icon {
     font-size: 20px;
@@ -390,7 +390,7 @@ onMounted(async () => {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
   border-radius: 14px;
   padding: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
   transition: all 0.3s ease;
   overflow: hidden;
 
@@ -463,7 +463,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--card-bg);
   border-radius: 10px;
 
   @media (min-width: 700px) {
@@ -483,7 +483,7 @@ onMounted(async () => {
 .song-name {
   font-size: 17px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
@@ -541,7 +541,7 @@ onMounted(async () => {
 .score-label {
   display: block;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
@@ -559,14 +559,14 @@ onMounted(async () => {
     align-items: center;
     gap: 4px;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--text-secondary);
   }
 }
 
 // ===== 分配信息 =====
 .song-assignments {
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border-color);
 }
 
 .assignment-info {
@@ -594,7 +594,7 @@ onMounted(async () => {
   .assignment-members {
     .members-label {
       font-size: 12px;
-      color: rgba(255, 255, 255, 0.45);
+      color: var(--text-tertiary);
       margin-bottom: 8px;
       display: block;
     }
@@ -611,14 +611,14 @@ onMounted(async () => {
       gap: 5px;
       padding: 5px 12px;
       background: rgba(255, 255, 255, 0.07);
-      border: 1px solid rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
       border-radius: 16px;
       font-size: 13px;
-      color: rgba(255, 255, 255, 0.8);
+      color: var(--text-secondary);
       transition: all 0.2s;
 
       &:hover {
-        background: rgba(255, 255, 255, 0.1);
+        background: var(--hover-bg);
       }
 
       &.is-me {
@@ -640,7 +640,7 @@ onMounted(async () => {
 
   .no-members {
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted);
     font-style: italic;
     padding: 6px 0;
   }
@@ -678,11 +678,11 @@ onMounted(async () => {
 
     .meta-item {
       padding: 5px 12px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: var(--hover-bg);
+      border: 1px solid var(--border-color);
       border-radius: 8px;
       font-size: 12px;
-      color: rgba(255, 255, 255, 0.75);
+      color: var(--text-secondary);
     }
   }
 
@@ -740,7 +740,7 @@ onMounted(async () => {
   gap: 8px;
   padding: 8px 12px;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--text-muted);
 
   .no-assign-icon {
     font-size: 18px;
@@ -826,13 +826,13 @@ onMounted(async () => {
     font-size: 20px;
     font-weight: 700;
     margin: 0 0 10px 0;
-    color: rgba(255, 255, 255, 0.65);
+    color: var(--text-tertiary);
     letter-spacing: 0.5px;
   }
 
   p {
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--text-muted);
     margin: 0;
     letter-spacing: 0.3px;
   }
@@ -912,12 +912,12 @@ onMounted(async () => {
   .overview-song {
     font-size: 14px;
     font-weight: 700;
-    color: #fff;
+    color: var(--text-primary);
   }
 
   .overview-type {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-tertiary);
   }
 }
 </style>

@@ -75,6 +75,42 @@ router.post('/', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// ===== POST /api/songs/batch - 批量导入歌曲 =====
+router.post('/batch', auth, requireAdmin, async (req, res) => {
+  try {
+    const { songs } = req.body
+    if (!Array.isArray(songs) || songs.length === 0) {
+      return res.status(400).json({ success: false, error: 'songs 数组必填且不能为空', code: 'INVALID_PARAMS' })
+    }
+    const results = []
+    for (const item of songs) {
+      if (!item.name) continue
+      const song = new Song({
+        id: generateId(),
+        name: item.name,
+        style: item.style || '流行',
+        type: item.type || 'team_show',
+        difficulty: typeof item.difficulty === 'number' ? item.difficulty : 3,
+        vocalWeight: typeof item.vocalWeight === 'number' ? item.vocalWeight : 3,
+        danceWeight: typeof item.danceWeight === 'number' ? item.danceWeight : 3,
+        charmWeight: typeof item.charmWeight === 'number' ? item.charmWeight : 3,
+        baseScore: typeof item.baseScore === 'number' ? item.baseScore : 100,
+        riskFactor: typeof item.riskFactor === 'number' ? item.riskFactor : 0.2,
+        description: item.description || '',
+        enabled: true,
+        createdAt: new Date().toISOString()
+      })
+      await song.save()
+      results.push(song)
+    }
+    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.SONG_LIBRARY_ADD, 'song', 'batch', `批量导入 ${results.length} 首歌曲`)
+    res.json({ success: true, data: results, count: results.length })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '批量导入失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // ===== PUT /api/songs/:id - 更新歌曲 =====
 router.put('/:id', auth, requireAdmin, async (req, res) => {
   try {
@@ -502,6 +538,62 @@ router.post('/admin-assign', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '分配歌曲失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// 随机产生一首歌曲
+router.get('/random', auth, requireAdmin, async (req, res) => {
+  try {
+    const path = require('path')
+    const songLibraryPath = path.join(__dirname, '..', 'data', 'songLibrary.json')
+    const songLibrary = require(songLibraryPath)
+    const { generateRandomSong } = require('../utils/randomSong')
+
+    if (!songLibrary || songLibrary.length === 0) {
+      return res.status(500).json({ success: false, error: '歌曲库为空', code: 'EMPTY_LIBRARY' })
+    }
+
+    // 获取数据库中已有的歌名集合（用于去重提示，但不阻止）
+    const existingSongs = await Song.find({})
+    const existingNames = new Set(existingSongs.map(s => s.name))
+
+    // 随机选取一首歌曲
+    let songInfo, attempts = 0, maxAttempts = 100
+    do {
+      const randomIndex = Math.floor(Math.random() * songLibrary.length)
+      songInfo = songLibrary[randomIndex]
+      attempts++
+    } while (songInfo && existingNames.has(songInfo.title) && attempts < maxAttempts)
+
+    // 如果循环结束后 songInfo 为 undefined，直接随机选一首
+    if (!songInfo) {
+      const randomIndex = Math.floor(Math.random() * songLibrary.length)
+      songInfo = songLibrary[randomIndex]
+    }
+
+    // 生成游戏属性
+    const songData = generateRandomSong(songInfo)
+
+    // 保存到数据库
+    const song = new Song({
+      id: generateId(),
+      ...songData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    })
+    await song.save()
+
+    const isDuplicate = existingNames.has(songInfo.title)
+    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.SONG_CREATE, 'song', song.id, `随机产生歌曲: ${songData.name}`)
+
+    res.json({
+      success: true,
+      data: song.toObject(),
+      message: isDuplicate ? `歌曲"${songData.name}"已存在，但已重新生成属性并保存` : `成功随机产生歌曲: ${songData.name}`
+    })
+  } catch (e) {
+    console.error('随机产生歌曲失败:', e)
+    res.status(500).json({ success: false, error: '随机产生歌曲失败', code: 'SERVER_ERROR' })
   }
 })
 

@@ -5,10 +5,20 @@
         <h1>歌曲库管理</h1>
         <p>管理全局歌曲库，所有轮次公演均可使用</p>
       </div>
-      <t-button theme="primary" @click="showAddDialog = true">
-        <template #icon><AddIcon /></template>
-        新增歌曲
-      </t-button>
+      <t-space>
+        <t-button theme="success" variant="outline" @click="handleRandomSong" :loading="randomSongLoading">
+          <template #icon><RocketIcon /></template>
+          随机产生歌曲
+        </t-button>
+        <t-button theme="primary" variant="outline" @click="showBatchDialog = true">
+          <template #icon><FileIcon /></template>
+          批量导入
+        </t-button>
+        <t-button theme="primary" @click="showAddDialog = true">
+          <template #icon><AddIcon /></template>
+          新增歌曲
+        </t-button>
+      </t-space>
     </div>
 
     <!-- 筛选栏 -->
@@ -129,14 +139,100 @@
         </t-form-item>
       </t-form>
     </t-dialog>
+
+    <!-- 批量导入弹窗 -->
+    <t-dialog
+      v-model:visible="showBatchDialog"
+      header="批量导入歌曲"
+      :confirm-btn="{ content: '确认导入（共 ' + batchSongList.length + ' 首）', loading: batchSaving }"
+      :cancel-btn="{}"
+      width="900px"
+      @confirm="doBatchImport"
+      @close="resetBatchForm"
+    >
+      <div class="batch-import">
+        <t-alert theme="info" message="填写每首歌曲的配置信息，至少填写歌名" close style="margin-bottom: 12px" />
+
+        <div class="batch-rows">
+          <div
+            v-for="(item, idx) in batchSongList"
+            :key="idx"
+            class="batch-row-card"
+          >
+            <div class="batch-row-header">
+              <span class="batch-row-index">#{{ idx + 1 }}</span>
+              <t-button
+                v-if="batchSongList.length > 1"
+                variant="text"
+                theme="danger"
+                size="small"
+                @click="removeBatchRow(idx)"
+              >删除</t-button>
+            </div>
+            <div class="batch-row-body">
+              <div class="batch-row-left">
+                <div class="batch-field">
+                  <label class="batch-label">歌名</label>
+                  <t-input v-model="item.name" placeholder="必填" />
+                </div>
+                <div class="batch-field">
+                  <label class="batch-label">类型</label>
+                  <t-select v-model="item.type">
+                    <t-option value="team_show" label="公演" />
+                    <t-option value="solo" label="独唱" />
+                    <t-option value="duet" label="合唱" />
+                    <t-option value="group" label="团秀" />
+                  </t-select>
+                </div>
+                <div class="batch-field">
+                  <label class="batch-label">风格</label>
+                  <t-input v-model="item.style" placeholder="流行" />
+                </div>
+                <div class="batch-field">
+                  <label class="batch-label">难度</label>
+                  <t-rate v-model="item.difficulty" :count="5" size="small" />
+                </div>
+              </div>
+              <div class="batch-row-right">
+                <div class="batch-field">
+                  <label class="batch-label">声乐</label>
+                  <t-input-number v-model="item.vocalWeight" :min="1" :max="10" />
+                </div>
+                <div class="batch-field">
+                  <label class="batch-label">舞蹈</label>
+                  <t-input-number v-model="item.danceWeight" :min="1" :max="10" />
+                </div>
+                <div class="batch-field">
+                  <label class="batch-label">魅力</label>
+                  <t-input-number v-model="item.charmWeight" :min="1" :max="10" />
+                </div>
+                <div class="batch-field">
+                  <label class="batch-label">基础分</label>
+                  <t-input-number v-model="item.baseScore" :min="0" :max="200" />
+                </div>
+                <div class="batch-field">
+                  <label class="batch-label">风险系数</label>
+                  <t-input-number v-model="item.riskFactor" :min="0" :max="1" :step="0.1" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <t-button variant="dashed" block style="margin-top: 12px" @click="addBatchRow">
+          <template #icon><AddIcon /></template>
+          添加一首歌曲
+        </t-button>
+      </div>
+    </t-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
-import { AddIcon } from 'tdesign-icons-vue-next'
-import { getSongs, createSong, updateSong, deleteSong } from '../../services/api'
+import { AddIcon, FileIcon, RocketIcon } from 'tdesign-icons-vue-next'
+import { getSongs, createSong, updateSong, deleteSong, batchCreateSongs, randomSong } from '../../services/api'
 import type { Song } from '../../types/song'
 
 // 筛选条件
@@ -156,6 +252,49 @@ const pagination = reactive({
   pageSize: 20,
   total: 0
 })
+
+// 批量导入
+const showBatchDialog = ref(false)
+const batchSaving = ref(false)
+
+// 随机产生歌曲
+const randomSongLoading = ref(false)
+
+interface BatchSongItem {
+  name: string
+  type: string
+  style: string
+  difficulty: number
+  vocalWeight: number
+  danceWeight: number
+  charmWeight: number
+  baseScore: number
+  riskFactor: number
+}
+
+function createEmptyBatchSong(): BatchSongItem {
+  return {
+    name: '',
+    type: 'team_show',
+    style: '流行',
+    difficulty: 3,
+    vocalWeight: 3,
+    danceWeight: 3,
+    charmWeight: 3,
+    baseScore: 100,
+    riskFactor: 0.2
+  }
+}
+
+const batchSongList = ref<BatchSongItem[]>([createEmptyBatchSong()])
+
+function addBatchRow() {
+  batchSongList.value.push(createEmptyBatchSong())
+}
+
+function removeBatchRow(idx: number) {
+  batchSongList.value.splice(idx, 1)
+}
 
 const form = reactive({
   name: '',
@@ -288,6 +427,45 @@ async function doDelete(id: string) {
   }
 }
 
+// 随机产生歌曲
+async function handleRandomSong() {
+  randomSongLoading.value = true
+  try {
+    const song = await randomSong()
+    MessagePlugin.success(`成功随机产生歌曲: ${song.name}`)
+    await loadSongs()
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '随机产生歌曲失败')
+  } finally {
+    randomSongLoading.value = false
+  }
+}
+
+// 批量导入
+function resetBatchForm() {
+  batchSongList.value = [createEmptyBatchSong()]
+}
+
+async function doBatchImport() {
+  const validSongs = batchSongList.value.filter(s => s.name.trim())
+  if (validSongs.length === 0) {
+    MessagePlugin.warning('请至少填写一首歌的歌名')
+    return
+  }
+  batchSaving.value = true
+  try {
+    await batchCreateSongs(validSongs as any)
+    MessagePlugin.success(`成功导入 ${validSongs.length} 首歌曲`)
+    showBatchDialog.value = false
+    resetBatchForm()
+    await loadSongs()
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '批量导入失败')
+  } finally {
+    batchSaving.value = false
+  }
+}
+
 onMounted(loadSongs)
 </script>
 
@@ -295,7 +473,7 @@ onMounted(loadSongs)
 .admin-song-manage {
   min-height: 100%;
   padding: 20px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
 }
 
 .page-header {
@@ -307,12 +485,12 @@ onMounted(loadSongs)
   h1 {
     margin: 0 0 4px;
     font-size: 22px;
-    color: #1a1a2e;
+    color: var(--text-primary);
   }
 
   p {
     margin: 0;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 13px;
   }
 }
@@ -357,6 +535,84 @@ onMounted(loadSongs)
   &.charm {
     background: rgba(162, 155, 254, 0.1);
     color: #a29bfe;
+  }
+}
+
+.batch-import {
+  .batch-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 500px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .batch-row-card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 14px;
+    background: var(--table-header-bg);
+    flex-shrink: 0;
+    transition: border-color 0.2s;
+
+    &:hover {
+      border-color: #d0d0d0;
+      background: var(--card-bg);
+    }
+
+    .batch-row-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+
+      .batch-row-index {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--text-tertiary);
+      }
+    }
+
+    .batch-row-body {
+      display: flex;
+      gap: 16px;
+      padding: 0;
+
+      .batch-row-left,
+      .batch-row-right {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+    }
+
+    .batch-field {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+
+      .batch-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        flex-shrink: 0;
+        width: 52px;
+        text-align: right;
+      }
+
+      :deep(.t-input),
+      :deep(.t-select),
+      :deep(.t-input-number) {
+        width: 100%;
+      }
+
+      :deep(.t-input-number) {
+        width: 100%;
+      }
+    }
   }
 }
 </style>

@@ -374,6 +374,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
 import { useTrainingCardStore } from '../../stores/trainingCardStore'
 import { useSeasonStore } from '../../stores/seasonStore'
@@ -381,11 +382,15 @@ import { getUsers, doRequest } from '../../services/api'
 import type { TrainingCard, AutoCompleteResult, TrainingRecord, TrainingRecordListResponse } from '../../types/training'
 import type { User } from '../../types/user'
 
+const route = useRoute()
 const store = useTrainingCardStore()
 const seasonStore = useSeasonStore()
 
-// 当前轮次（从 seasonStore 获取）
-const currentRound = computed(() => seasonStore.currentRoundIndex)
+// 当前轮次（优先从路由参数获取，回退到 seasonStore）
+const currentRound = computed(() => {
+  const roundFromRoute = parseInt(route.params.round as string) || 0
+  return roundFromRoute > 0 ? roundFromRoute : seasonStore.currentRoundIndex
+})
 
 // 状态
 const autoCompleting = ref(false)
@@ -831,7 +836,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .admin-training-page {
-  background: #f5f7fa;
+  background: var(--bg-primary);
   min-height: 100%;
   padding: 16px;
 }
@@ -859,7 +864,7 @@ onMounted(async () => {
 }
 
 .stat-card {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
   display: flex;
@@ -906,13 +911,13 @@ onMounted(async () => {
 .stat-value {
   font-size: 22px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .stat-label {
   font-size: 12px;
-  color: #8a8a8a;
+  color: var(--text-tertiary);
   margin-top: 2px;
 }
 
@@ -953,7 +958,7 @@ onMounted(async () => {
 
 .config-label {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 // 操作按钮区
@@ -963,7 +968,7 @@ onMounted(async () => {
 
 // 训练情况区域
 .training-records-section {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 16px;
@@ -978,7 +983,7 @@ onMounted(async () => {
 }
 
 .training-users-table {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   overflow: hidden;
 
@@ -987,11 +992,11 @@ onMounted(async () => {
     grid-template-columns: 140px 1fr 180px 200px;
     gap: 12px;
     padding: 12px 16px;
-    background: #f5f7fa;
+    background: var(--bg-primary);
     font-weight: 600;
     font-size: 14px;
-    color: #333;
-    border-bottom: 1px solid #e5e7eb;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
 
     @media (max-width: 768px) {
       display: none;
@@ -1003,7 +1008,7 @@ onMounted(async () => {
     grid-template-columns: 140px 1fr 180px 200px;
     gap: 12px;
     padding: 12px 16px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--border-color);
     align-items: center;
     transition: background 0.2s ease;
 
@@ -1012,7 +1017,7 @@ onMounted(async () => {
     }
 
     &:hover {
-      background: #fafafa;
+      background: var(--table-header-bg);
     }
 
     &.completed {
@@ -1037,13 +1042,13 @@ onMounted(async () => {
     .player-name {
       font-size: 15px;
       font-weight: 600;
-      color: #333;
+      color: var(--text-primary);
     }
   }
 
   .col-records {
     .no-records {
-      color: #999;
+      color: var(--text-tertiary);
       font-size: 13px;
     }
 
@@ -1066,7 +1071,7 @@ onMounted(async () => {
     }
 
     .no-attributes {
-      color: #999;
+      color: var(--text-tertiary);
       font-size: 13px;
     }
   }
@@ -1110,13 +1115,13 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background: #f8f9fa;
+  background: var(--hover-bg);
   border-radius: 8px;
 }
 
 .user-name {
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 // 卡牌列表区
@@ -1134,13 +1139,13 @@ onMounted(async () => {
   h2 {
     font-size: 16px;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
     margin: 0;
   }
 
   .expected-count-label {
     font-size: 13px;
-    color: #666;
+    color: var(--text-secondary);
     white-space: nowrap;
   }
 }
@@ -1160,7 +1165,7 @@ onMounted(async () => {
 }
 
 .card-item {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
@@ -1173,7 +1178,7 @@ onMounted(async () => {
 
   &.disabled {
     opacity: 0.7;
-    background: #f8f9fa;
+    background: var(--hover-bg);
   }
 }
 
@@ -1187,13 +1192,13 @@ onMounted(async () => {
 .card-name {
   font-size: 15px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--text-primary);
   margin: 0 0 6px 0;
 }
 
 .card-desc {
   font-size: 12px;
-  color: #8a8a8a;
+  color: var(--text-tertiary);
   margin: 0 0 12px 0;
   line-height: 1.4;
 }
@@ -1209,13 +1214,13 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   padding: 6px 10px;
-  background: #f8f9fa;
+  background: var(--hover-bg);
   border-radius: 6px;
 }
 
 .effect-label {
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .effect-value {
@@ -1236,24 +1241,24 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding-top: 10px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-color);
 }
 
 .weight-info {
   font-size: 11px;
-  color: #8a8a8a;
+  color: var(--text-tertiary);
 }
 
 // 弹窗样式
 .effect-section {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px dashed #eee;
+  border-top: 1px dashed var(--border-color);
 
   h4 {
     font-size: 14px;
     font-weight: 600;
-    color: #333;
+    color: var(--text-primary);
     margin: 0 0 12px 0;
   }
 }
@@ -1276,13 +1281,13 @@ onMounted(async () => {
 
     .label {
       font-size: 12px;
-      color: #8a8a8a;
+      color: var(--text-tertiary);
     }
 
     .value {
       font-size: 28px;
       font-weight: 700;
-      color: #1a1a1a;
+      color: var(--text-primary);
     }
   }
 }
@@ -1293,7 +1298,7 @@ onMounted(async () => {
   h4 {
     font-size: 14px;
     font-weight: 600;
-    color: #333;
+    color: var(--text-primary);
     margin: 0 0 12px 0;
   }
 }
@@ -1311,18 +1316,18 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  background: #f8f9fa;
+  background: var(--hover-bg);
   border-radius: 6px;
 
   .user-info {
     flex: 1;
     font-size: 13px;
-    color: #333;
+    color: var(--text-primary);
   }
 
   .record-count {
     font-size: 12px;
-    color: #8a8a8a;
+    color: var(--text-tertiary);
   }
 }
 </style>

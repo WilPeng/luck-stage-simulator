@@ -33,7 +33,25 @@ const COLLECTIONS = [
   'TeamApplication', // 队伍申请
   'RoundPreparation', // 轮次预先准备
   'PerformanceRoundState', // 公演轮次状态（公演是否开启、已揭晓队伍等）
-  'Team'             // 队伍（每轮独立组队，存储阵型和队长）
+  'Team',            // 队伍（每轮独立组队，存储阵型和队长）
+  // Big Brother 集合
+  'BBHouseguest',
+  'BBSeason',
+  'BBRound',
+  'BBHohRecord',
+  'BBNomination',
+  'BBVetoRecord',
+  'BBEvictionVote',
+  'BBEviction',
+  'BBChatMessage',
+  'BBOperationLog',
+  // 恋综集合
+  'LVSeason',
+  'LVPlayer',
+  'LVLoveVote',
+  'LVPairingResult',
+  'LVElimination',
+  'LVOperationLog'
 ]
 
 let connected = false

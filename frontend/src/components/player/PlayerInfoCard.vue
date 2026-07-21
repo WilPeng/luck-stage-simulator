@@ -88,7 +88,7 @@ const statusClass = computed(() => props.status)
   border-radius: 16px;
   padding: 24px;
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
 }
 
 .card-header {
@@ -126,7 +126,7 @@ const statusClass = computed(() => props.status)
 }
 
 .player-name {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 20px;
   font-weight: 700;
   margin: 0;
@@ -145,13 +145,13 @@ const statusClass = computed(() => props.status)
   }
   
   &.player {
-    background: rgba(255, 255, 255, 0.2);
-    color: #fff;
+    background: var(--hover-bg);
+    color: var(--text-primary);
   }
   
   &.admin {
     background: #3498db;
-    color: #fff;
+    color: var(--text-primary);
   }
 }
 
@@ -163,23 +163,23 @@ const statusClass = computed(() => props.status)
   
   &.active {
     background: linear-gradient(135deg, #27ae60, #2ecc71);
-    color: #fff;
+    color: var(--text-primary);
   }
   
   &.danger {
     background: linear-gradient(135deg, #f39c12, #e67e22);
-    color: #fff;
+    color: var(--text-primary);
   }
   
   &.eliminated {
     background: linear-gradient(135deg, #e74c3c, #c0392b);
-    color: #fff;
+    color: var(--text-primary);
   }
 }
 
 .card-body {
   padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--border-color);
 }
 
 .team-info {
@@ -189,12 +189,12 @@ const statusClass = computed(() => props.status)
   margin-bottom: 16px;
   
   .team-label {
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-tertiary);
     font-size: 14px;
   }
   
   .team-name {
-    color: #fff;
+    color: var(--text-primary);
     font-weight: 600;
     font-size: 14px;
   }
@@ -217,13 +217,13 @@ const statusClass = computed(() => props.status)
 }
 
 .stat-value {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 20px;
   font-weight: 700;
 }
 
 .stat-label {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 </style>

@@ -173,7 +173,7 @@ onMounted(async () => {
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px;
-  color: rgba(255,255,255,0.9);
+  color: var(--text-primary);
 }
 
 .voting-section {
@@ -197,7 +197,7 @@ onMounted(async () => {
   .selected-count {
     text-align: center;
     font-size: 14px;
-    color: rgba(255,255,255,0.7);
+    color: var(--text-secondary);
     margin-bottom: 16px;
     strong { color: #667eea; font-size: 18px; }
   }
@@ -212,8 +212,8 @@ onMounted(async () => {
   .candidate-card {
     position: relative;
     padding: 20px;
-    background: rgba(255,255,255,0.06);
-    border: 2px solid rgba(255,255,255,0.12);
+    background: var(--hover-bg);
+    border: 2px solid var(--border-color);
     border-radius: 12px;
     cursor: pointer;
     transition: all 0.3s;
@@ -234,9 +234,9 @@ onMounted(async () => {
     }
 
     .candidate-info { text-align: center;
-      .candidate-name { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: rgba(255,255,255,0.9); }
-      .candidate-stats { display: flex; justify-content: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,0.6);
-        .stat { padding: 2px 8px; background: rgba(255,255,255,0.08); border-radius: 4px; }
+      .candidate-name { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
+      .candidate-stats { display: flex; justify-content: center; gap: 8px; font-size: 12px; color: var(--text-tertiary);
+        .stat { padding: 2px 8px; background: var(--hover-bg); border-radius: 4px; }
       }
     }
 
@@ -258,22 +258,22 @@ onMounted(async () => {
 .result-section {
   .result-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
     .result-icon { font-size: 48px; }
-    h2 { font-size: 24px; font-weight: 700; color: rgba(255,255,255,0.9); }
+    h2 { font-size: 24px; font-weight: 700; color: var(--text-primary); }
   }
 
   .results-list { display: flex; flex-direction: column; gap: 12px; }
 
-  .result-item { display: flex; align-items: center; gap: 12px; padding: 16px; background: rgba(255,255,255,0.06); border-radius: 12px;
+  .result-item { display: flex; align-items: center; gap: 12px; padding: 16px; background: var(--hover-bg); border-radius: 12px;
     &.winner { background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); }
-    .result-rank { font-size: 20px; font-weight: 700; color: rgba(255,255,255,0.6); width: 32px; text-align: center; }
+    .result-rank { font-size: 20px; font-weight: 700; color: var(--text-tertiary); width: 32px; text-align: center; }
     .result-name { font-size: 14px; font-weight: 500; min-width: 100px; }
-    .result-bar { flex: 1; height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden;
+    .result-bar { flex: 1; height: 12px; background: var(--hover-bg); border-radius: 6px; overflow: hidden;
       .result-bar-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 6px; transition: width 0.5s; }
     }
     .result-votes { font-size: 14px; font-weight: 600; color: #667eea; min-width: 60px; text-align: right; }
   }
 
-  .no-result { text-align: center; padding: 48px; color: rgba(255,255,255,0.5); }
+  .no-result { text-align: center; padding: 48px; color: var(--text-tertiary); }
 }
 
 // ===== 移动端适配 =====

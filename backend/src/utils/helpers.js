@@ -134,9 +134,11 @@ const randomInt = (min, max) => {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-const getCurrentSeason = async () => {
+const getCurrentSeason = async (gameId) => {
   const Season = require('../models/Season')
-  return await Season.findOne()
+  const query = {}
+  if (gameId) query.gameId = gameId
+  return await Season.findOne(query)
 }
 
 // 用户信息脱敏（组队/选手列表返回用）

@@ -322,7 +322,7 @@ onMounted(async () => {
 <style lang="scss" scoped>
 // ===== 页面整体 =====
 .song-selection {
-  color: #333;
+color: var(--text-primary);
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 4px;
@@ -333,7 +333,7 @@ onMounted(async () => {
   position: relative;
   margin-bottom: 28px;
   padding-bottom: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-color);
 
   .page-header-top {
     display: flex;
@@ -387,7 +387,7 @@ onMounted(async () => {
   }
 
   .subtitle {
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-tertiary);
     margin: 0;
     font-size: 14px;
     letter-spacing: 0.3px;
@@ -420,7 +420,7 @@ onMounted(async () => {
 
     p {
       margin: 0;
-      color: rgba(255, 255, 255, 0.5);
+      color: var(--text-tertiary);
       font-size: 14px;
     }
   }
@@ -440,7 +440,7 @@ onMounted(async () => {
     .pool-count {
       font-size: 13px;
       font-weight: 500;
-      color: rgba(255, 255, 255, 0.4);
+      color: var(--text-muted);
     }
   }
 }
@@ -462,14 +462,14 @@ onMounted(async () => {
 
 .song-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.05);
-  border: 2px solid rgba(255, 255, 255, 0.08);
+  background: var(--card-bg);
+  border: 2px solid var(--border-color);
   border-radius: 14px;
   padding: 16px;
   transition: all 0.25s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--hover-bg);
     border-color: rgba(255, 255, 255, 0.15);
     transform: translateY(-2px);
   }
@@ -488,7 +488,7 @@ onMounted(async () => {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(255, 255, 255, 0.05);
+      background: var(--card-bg);
       border-radius: 10px;
     }
 
@@ -525,7 +525,7 @@ onMounted(async () => {
 
       .stat-label {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.4);
+        color: var(--text-muted);
       }
 
       .stat-value {
@@ -563,14 +563,14 @@ onMounted(async () => {
 
     .weight {
       font-size: 13px;
-      color: rgba(255, 255, 255, 0.65);
+      color: var(--text-tertiary);
     }
   }
 
   .card-action {
     margin-top: 14px;
     padding-top: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid var(--border-color);
 
     .claim-btn {
       height: 42px !important;
@@ -596,10 +596,10 @@ onMounted(async () => {
       gap: 8px;
       padding: 10px;
       background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
       border-radius: 10px;
       font-size: 14px;
-      color: rgba(255, 255, 255, 0.4);
+      color: var(--text-muted);
 
       .claimed-icon {
         font-size: 18px;
@@ -620,7 +620,7 @@ onMounted(async () => {
   .section-sub {
     font-size: 13px;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted);
   }
 }
 
@@ -678,7 +678,7 @@ onMounted(async () => {
     background: rgba(255, 255, 255, 0.04);
     border-radius: 10px;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--text-secondary);
   }
 }
 
@@ -706,11 +706,11 @@ onMounted(async () => {
     font-size: 20px;
     font-weight: 700;
     margin: 0 0 8px 0;
-    color: rgba(255, 255, 255, 0.65);
+    color: var(--text-tertiary);
   }
 
   p {
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted);
     margin: 0;
     font-size: 14px;
   }
@@ -740,11 +740,11 @@ onMounted(async () => {
     font-size: 20px;
     font-weight: 700;
     margin: 0 0 8px 0;
-    color: rgba(255, 255, 255, 0.65);
+    color: var(--text-tertiary);
   }
 
   p {
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted);
     margin: 0;
     font-size: 14px;
   }
@@ -786,8 +786,8 @@ onMounted(async () => {
   }
 
   .song-result-card {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 16px;
     transition: all 0.2s;
@@ -828,11 +828,11 @@ onMounted(async () => {
       display: flex;
       gap: 16px;
       padding-top: 10px;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      border-top: 1px solid var(--border-color);
 
       .result-stat {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.6);
+        color: var(--text-tertiary);
       }
     }
   }
@@ -848,7 +848,7 @@ onMounted(async () => {
     }
 
     p {
-      color: rgba(255, 255, 255, 0.4);
+      color: var(--text-muted);
       margin: 0;
       font-size: 14px;
     }

@@ -154,7 +154,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useSeasonStore } from '../../stores/seasonStore'
 import { usePlayerStore } from '../../stores/playerStore'
@@ -164,6 +164,7 @@ import { STAGE_ORDER, STAGE_NAMES, getStageName } from '../../types/season'
 import type { StageType, StageStatus } from '../../types/season'
 
 const router = useRouter()
+const route = useRoute()
 const seasonStore = useSeasonStore()
 const playerStore = usePlayerStore()
 
@@ -322,7 +323,8 @@ async function handleReset() {
     MessagePlugin.success('赛季已重置，跳转到第一公演')
     resetting.value = false
     // 跳转到第一公演预先准备阶段
-    router.push('/admin/round/1/preparation')
+    const route = useRoute()
+    router.push(`/games/${route.params.gameId}/admin/round/1/preparation`)
   } catch (e: any) {
     MessagePlugin.error('重置失败: ' + (e.message || '后端接口异常'))
     resetting.value = false
@@ -349,7 +351,7 @@ onMounted(loadData)
 .admin-stage {
   min-height: 100%;
   padding: 12px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
 }
 
 .stage-card {
@@ -365,14 +367,14 @@ onMounted(loadData)
 
   h1 {
     margin: 0 0 4px;
-    color: #1f2329;
+    color: var(--text-primary);
     font-size: 22px;
     line-height: 1.25;
   }
 
   p {
     margin: 0;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -395,7 +397,7 @@ onMounted(loadData)
   min-width: 0;
   padding: 12px;
   border-radius: 8px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
 }
 
 .overview-value {
@@ -409,7 +411,7 @@ onMounted(loadData)
 .overview-label {
   display: block;
   margin-top: 4px;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -425,14 +427,14 @@ onMounted(loadData)
 
 .matrix-header {
   display: flex;
-  background: #f0f2f5;
+  background: var(--bg-primary);
   border-radius: 8px 8px 0 0;
   font-weight: 600;
 }
 
 .matrix-row {
   display: flex;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-color);
 
   &:last-child {
     border-bottom: none;
@@ -446,15 +448,15 @@ onMounted(loadData)
   display: flex;
   align-items: center;
   justify-content: center;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--border-color);
 
   &:last-child {
     border-right: none;
   }
 
   &.header-cell {
-    background: #f0f2f5;
-    color: #1f2329;
+    background: var(--bg-primary);
+    color: var(--text-primary);
     font-size: 14px;
 
     &.current-round {
@@ -464,8 +466,8 @@ onMounted(loadData)
   }
 
   &.stage-name {
-    background: #fafbfc;
-    color: #1f2329;
+    background: var(--table-header-bg);
+    color: var(--text-primary);
     font-weight: 500;
     justify-content: flex-start;
     min-width: 140px;
@@ -476,7 +478,7 @@ onMounted(loadData)
     transition: all 0.2s;
 
     &:hover {
-      background: #f0f6ff;
+      background: var(--hover-bg);
     }
   }
 
@@ -506,8 +508,8 @@ onMounted(loadData)
   }
 
   &.cell-pending {
-    background: #fff;
-    color: #9ca3af;
+    background: var(--card-bg);
+    color: var(--text-tertiary);
   }
 }
 
@@ -533,13 +535,13 @@ onMounted(loadData)
 .confirm-content {
   p {
     margin: 0 0 16px;
-    color: #1f2329;
+    color: var(--text-primary);
     font-size: 14px;
   }
 }
 
 .confirm-info {
-  background: #f5f7fa;
+  background: var(--bg-primary);
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 16px;
@@ -551,17 +553,17 @@ onMounted(loadData)
   padding: 8px 0;
 
   &:not(:last-child) {
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border-color);
   }
 }
 
 .info-label {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
 .info-value {
-  color: #1f2329;
+  color: var(--text-primary);
   font-weight: 600;
   font-size: 14px;
 }

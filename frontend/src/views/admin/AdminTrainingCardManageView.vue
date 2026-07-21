@@ -290,7 +290,7 @@ onMounted(loadCards)
 .admin-card-manage {
   min-height: 100%;
   padding: 20px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
 }
 
 .page-header {
@@ -302,12 +302,12 @@ onMounted(loadCards)
   h1 {
     margin: 0 0 4px;
     font-size: 22px;
-    color: #1a1a2e;
+    color: var(--text-primary);
   }
 
   p {
     margin: 0;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 13px;
   }
 }
@@ -325,7 +325,7 @@ onMounted(loadCards)
 .effect-item {
   font-size: 12px;
   padding: 1px 6px;
-  background: #f0f5ff;
+  background: var(--hover-bg);
   color: #0052d9;
   border-radius: 4px;
   white-space: nowrap;
@@ -333,7 +333,7 @@ onMounted(loadCards)
 
 .no-effect {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .weight-value {
@@ -343,7 +343,7 @@ onMounted(loadCards)
 
 .form-hint {
   font-size: 11px;
-  color: #999;
+  color: var(--text-tertiary);
   margin-left: 8px;
 }
 
@@ -360,7 +360,7 @@ onMounted(loadCards)
 
     label {
       font-size: 12px;
-      color: #666;
+      color: var(--text-secondary);
       white-space: nowrap;
       min-width: 60px;
     }

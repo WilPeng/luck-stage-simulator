@@ -56,6 +56,10 @@
           <template #icon><span>📤</span></template>
           导入CSV
         </t-button>
+        <t-button variant="outline" theme="danger" @click="handleClearNonAdmin">
+          <template #icon><span>🗑️</span></template>
+          清空所有玩家
+        </t-button>
         <input
           ref="importFileInput"
           type="file"
@@ -311,10 +315,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive, h } from 'vue'
-import { MessagePlugin, DialogPlugin, Input } from 'tdesign-vue-next'
+import { MessagePlugin, DialogPlugin, Input, Checkbox } from 'tdesign-vue-next'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useTeamStore } from '../../stores/teamStore'
-import { getAvatarUrl, uploadAvatar, deleteAvatar, batchCreateUsers, createUser, getUsers } from '../../services/api'
+import { getAvatarUrl, uploadAvatar, deleteAvatar, batchCreateUsers, createUser, getUsers, clearNonAdminUsers } from '../../services/api'
 import type { User } from '../../types/user'
 import type { FormRule } from 'tdesign-vue-next'
 import { AddIcon } from 'tdesign-icons-vue-next'
@@ -568,7 +572,7 @@ async function exportCSV() {
   const dialog = DialogPlugin({
     header: '导出CSV',
     body: () => h('div', { style: 'padding: 8px 0' }, [
-      h('p', { style: 'margin: 0 0 12px 0; color: rgba(0,0,0,0.6); font-size: 14px' }, '请输入导出文件名：'),
+      h('p', { style: 'margin: 0 0 12px 0; color: var(--text-secondary); font-size: 14px' }, '请输入导出文件名：'),
       h(Input, {
         modelValue: inputRef.value,
         'onUpdate:modelValue': (v: string) => { inputRef.value = v },
@@ -686,14 +690,32 @@ async function handleImportFile(e: Event) {
     }
 
     // 确认对话框
+    const overwriteMode = ref(false)
     const confirmDlg = DialogPlugin.confirm({
       header: '确认导入',
-      body: `将导入 ${users.length} 位选手${errors.length ? `，${errors.length} 行跳过` : ''}`,
+      body: () => h('div', { style: 'padding: 8px 0' }, [
+        h('p', { style: 'margin: 0 0 12px 0; color: var(--text-secondary); font-size: 14px' },
+          `将导入 ${users.length} 位选手${errors.length ? `，${errors.length} 行跳过` : ''}`
+        ),
+        h('div', { style: 'display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border-color)' }, [
+          h(Checkbox, {
+            modelValue: overwriteMode.value,
+            'onUpdate:modelValue': (v: boolean) => { overwriteMode.value = v }
+          }),
+          h('span', { style: 'font-size: 13px; color: #e34d4d' }, '覆盖所有玩家（管理员不会被删除）')
+        ])
+      ]),
       confirmBtn: '确认导入',
       onConfirm: async () => {
         confirmDlg.hide()
         try {
-          const importing = MessagePlugin.loading(`正在导入 ${users.length} 位选手...`)
+          const msg = overwriteMode.value ? '正在清除现有玩家并导入...' : `正在导入 ${users.length} 位选手...`
+          const importing = MessagePlugin.loading(msg)
+
+          if (overwriteMode.value) {
+            await clearNonAdminUsers()
+          }
+
           await batchCreateUsers(users)
           MessagePlugin.close(importing)
           MessagePlugin.success(`成功导入 ${users.length} 位选手`)
@@ -717,6 +739,27 @@ async function handleImportFile(e: Event) {
   target.value = ''
 }
 
+async function handleClearNonAdmin() {
+  const confirmDlg = DialogPlugin.confirm({
+    header: '确认清空',
+    body: '确定要删除所有非管理员玩家吗？此操作不可恢复！',
+    confirmBtn: '确认清空',
+    theme: 'danger',
+    onConfirm: async () => {
+      confirmDlg.hide()
+      try {
+        const loading = MessagePlugin.loading('正在清空所有玩家...')
+        const result = await clearNonAdminUsers()
+        MessagePlugin.close(loading)
+        MessagePlugin.success(`已清空 ${result.deletedCount} 个非管理员玩家`)
+        await loadData()
+      } catch (err: any) {
+        MessagePlugin.error(err.message || '清空失败')
+      }
+    }
+  })
+}
+
 onMounted(async () => {
   await teamStore.fetchTeams()
   await loadData()
@@ -725,14 +768,14 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .admin-players {
-  background: #f5f7fa;
+  background: var(--bg-primary);
   padding: 12px;
   min-height: 100%;
   padding-bottom: env(safe-area-inset-bottom, 20px);
 }
 
 .header-section {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 12px;
@@ -749,12 +792,12 @@ onMounted(async () => {
     font-size: 20px;
     font-weight: 700;
     margin: 0;
-    color: #000;
+    color: var(--text-primary);
   }
   
   .total-count {
     font-size: 14px;
-    color: rgba(0, 0, 0, 0.5);
+    color: var(--text-tertiary);
   }
 }
 
@@ -782,7 +825,7 @@ onMounted(async () => {
   gap: 8px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
 
   .t-button {
     flex: 1;
@@ -796,7 +839,7 @@ onMounted(async () => {
 }
 
 .player-card {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -842,7 +885,7 @@ onMounted(async () => {
 .player-name {
   font-size: 16px;
   font-weight: 600;
-  color: #000;
+  color: var(--text-primary);
   margin-bottom: 4px;
 }
 
@@ -857,7 +900,7 @@ onMounted(async () => {
 }
 
 .card-body {
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
   padding-top: 12px;
 }
 
@@ -873,7 +916,7 @@ onMounted(async () => {
   .attr-label {
     display: block;
     font-size: 12px;
-    color: rgba(0, 0, 0, 0.5);
+    color: var(--text-tertiary);
     margin-bottom: 4px;
   }
   
@@ -894,11 +937,11 @@ onMounted(async () => {
   font-size: 13px;
   
   .team-info {
-    color: rgba(0, 0, 0, 0.6);
+    color: var(--text-secondary);
   }
   
   .login-status {
-    color: rgba(0, 0, 0, 0.4);
+    color: var(--text-muted);
     
     &.logged {
       color: #00a870;
@@ -912,7 +955,7 @@ onMounted(async () => {
   gap: 8px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
 }
 
 .empty-state, .loading-state {
@@ -929,12 +972,12 @@ onMounted(async () => {
   
   .empty-text {
     font-size: 14px;
-    color: rgba(0, 0, 0, 0.4);
+    color: var(--text-muted);
   }
 }
 
 .pagination-section {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 12px;
   margin-top: 12px;
@@ -954,7 +997,7 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   padding: 20px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
   
   .detail-avatar {
     width: 64px;
@@ -984,7 +1027,7 @@ onMounted(async () => {
 
 .detail-section {
   padding: 16px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .detail-item {
@@ -993,13 +1036,13 @@ onMounted(async () => {
   padding: 8px 0;
   
   .detail-label {
-    color: rgba(0, 0, 0, 0.5);
+    color: var(--text-tertiary);
     font-size: 14px;
   }
   
   .detail-value {
     font-size: 14px;
-    color: #000;
+    color: var(--text-primary);
   }
 }
 
@@ -1027,13 +1070,13 @@ onMounted(async () => {
   .attr-name {
     width: 50px;
     font-size: 13px;
-    color: rgba(0, 0, 0, 0.6);
+    color: var(--text-secondary);
   }
   
   .attr-bar {
     flex: 1;
     height: 8px;
-    background: #f0f0f0;
+    background: var(--progress-bg);
     border-radius: 4px;
     overflow: hidden;
     
@@ -1076,7 +1119,7 @@ onMounted(async () => {
     label {
       display: block;
       font-size: 13px;
-      color: rgba(0, 0, 0, 0.6);
+      color: var(--text-secondary);
       margin-bottom: 8px;
     }
     
@@ -1096,7 +1139,7 @@ onMounted(async () => {
   align-items: center;
   margin-bottom: 20px;
   padding: 16px;
-  background: #f8f9fa;
+  background: var(--hover-bg);
   border-radius: 12px;
 }
 
@@ -1168,7 +1211,7 @@ onMounted(async () => {
 
 .avatar-hint {
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.4);
+  color: var(--text-muted);
   margin-top: 8px;
 }
 

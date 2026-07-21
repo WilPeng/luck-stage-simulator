@@ -13,7 +13,7 @@
   align-items: center;
   justify-content: center;
   min-height: 60vh;
-  color: #fff;
+  color: var(--text-primary);
   gap: 16px;
 }
 
@@ -29,7 +29,7 @@
 
 .placeholder-desc {
   margin: 0;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
   font-size: 14px;
 }
 </style>

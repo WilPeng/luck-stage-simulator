@@ -1,0 +1,210 @@
+<template>
+  <div class="lv-vote">
+    <div class="page-header">
+      <h1>喜爱值投送</h1>
+      <span class="round-tag">第{{ $route.params.round }}轮</span>
+      <span v-if="hasSubmitted" class="submitted-tag">已提交</span>
+      <span v-else-if="isFuture" class="future-tag">未开始</span>
+    </div>
+
+    <!-- 已提交结果（只读展示） -->
+    <div v-if="hasSubmitted" class="result-view">
+      <div class="total-banner submitted">
+        <div class="total-label">你投送的喜爱值总额</div>
+        <div class="total-value">{{ totalBudget }}</div>
+      </div>
+      <h3 class="result-title">投送详情</h3>
+      <div class="votes-list">
+        <div v-for="v in myVotes" :key="v.id" class="vote-item">
+          <span class="vote-target">{{ v.targetName }}</span>
+          <span class="vote-value">{{ v.value }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div v-else-if="!isCurrentStage" class="not-current">
+      <p>当前不是喜爱值投送阶段</p>
+    </div>
+
+    <!-- 投送表单（未提交时） -->
+    <div v-else class="vote-form">
+      <div class="total-banner">
+        <div class="total-label">你可投送的喜爱值总额</div>
+        <div class="total-value">{{ totalBudget }}</div>
+        <div class="total-hint">随机抽取 40-70</div>
+      </div>
+
+      <div class="remaining-info" :class="{ error: remaining < 0 || !allDifferent }">
+        <span>剩余可分配: {{ remaining }}</span>
+        <span v-if="!allDifferent" class="error-text">每个选手的喜爱值必须不同！</span>
+        <span v-else-if="remaining === 0" class="ok-text">✅ 分配完成</span>
+      </div>
+
+      <div class="players-list">
+        <div v-for="p in targets" :key="p.id" class="player-row">
+          <span class="player-name">{{ p.name }}</span>
+          <input v-model.number="voteValues[p.id]" type="number" class="vote-input"
+            min="1" :max="totalBudget" placeholder="0"
+            @input="onValueChange" />
+        </div>
+      </div>
+
+      <button class="lv-btn lv-btn-primary submit-btn" @click="submitVotes"
+        :disabled="!canSubmit || submitting">
+        {{ submitting ? '提交中...' : '提交投送' }}
+      </button>
+
+      <div v-if="submitSuccess" class="success-toast">✅ 投送提交成功！</div>
+      <div v-if="submitError" class="error-toast">{{ submitError }}</div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { useLvAuthStore } from '../../../stores/lovevarietyAuthStore'
+import { useLvSeasonStore } from '../../../stores/lovevarietySeasonStore'
+import { lvGetActivePlayers, lvGetMyVotes, lvSubmitVotes } from '../../../services/lovevarietyApi'
+
+const route = useRoute()
+const authStore = useLvAuthStore()
+const seasonStore = useLvSeasonStore()
+
+const roundNum = computed(() => Number(route.params.round) || 1)
+const roundId = computed(() => `round-${roundNum.value}`)
+const isCurrentStage = computed(() => seasonStore.currentStage === 'love_vote')
+const isCurrentRound = computed(() => roundNum.value === seasonStore.currentRoundNumber)
+const isFuture = computed(() => seasonStore.getStageStatus(roundNum.value, 'love_vote') === 'future')
+
+// 是否已提交：初始根据阶段状态判断，提交成功后变为 true
+const hasSubmitted = ref(false)
+
+// 随机抽取 40-70
+const totalBudget = ref(0)
+
+const targets = ref<{ id: string; name: string }[]>([])
+const voteValues = ref<Record<string, number>>({})
+const myVotes = ref<any[]>([])
+const submitting = ref(false)
+const submitSuccess = ref(false)
+const submitError = ref('')
+
+const totalUsed = computed(() => {
+  return Object.values(voteValues.value).reduce((sum, v) => sum + (v || 0), 0)
+})
+
+const remaining = computed(() => totalBudget.value - totalUsed.value)
+
+const allDifferent = computed(() => {
+  const values = Object.values(voteValues.value).filter(v => v > 0)
+  const unique = new Set(values)
+  return unique.size === values.length
+})
+
+const canSubmit = computed(() => {
+  return remaining.value === 0 && allDifferent.value && Object.keys(voteValues.value).length > 0
+})
+
+function onValueChange() {
+  submitError.value = ''
+}
+
+async function submitVotes() {
+  if (!canSubmit.value) return
+  submitting.value = true
+  submitError.value = ''
+  try {
+    const votes = Object.entries(voteValues.value)
+      .filter(([_, v]) => v > 0)
+      .map(([targetId, value]) => {
+        const player = targets.value.find(p => p.id === targetId)
+        return { targetId, targetName: player?.name || '', value }
+      })
+    await lvSubmitVotes(roundId.value, votes, totalBudget.value)
+    submitSuccess.value = true
+    hasSubmitted.value = true
+    // 重新加载已提交的记录
+    myVotes.value = await lvGetMyVotes(roundId.value)
+    setTimeout(() => submitSuccess.value = false, 3000)
+  } catch (e: any) {
+    submitError.value = e.message || '提交失败'
+  } finally {
+    submitting.value = false
+  }
+}
+
+onMounted(async () => {
+  try {
+    // 检查是否已提交投送
+    const existingVotes = await lvGetMyVotes(roundId.value)
+    if (existingVotes.length > 0) {
+      hasSubmitted.value = true
+      myVotes.value = existingVotes
+      totalBudget.value = existingVotes.reduce((s: number, v: any) => s + v.value, 0)
+      return
+    }
+  } catch {}
+
+  try {
+    // 加载活跃选手（排除自己）
+    const all = await lvGetActivePlayers()
+    targets.value = all.filter(p => p.id !== authStore.currentUser?.id)
+    // 初始化投送值
+    targets.value.forEach(p => { voteValues.value[p.id] = 0 })
+    // 随机抽取 40-70
+    totalBudget.value = Math.floor(Math.random() * 31) + 40
+  } catch {}
+})
+</script>
+
+<style scoped>
+.lv-vote { max-width: 600px; margin: 0 auto; }
+.page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
+.round-tag { background: #ff69b422; color: #ff69b4; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #ff69b444; }
+.history-tag { background: #88888822; color: #aaa; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
+.submitted-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
+.future-tag { background: #44444422; color: #666; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
+.not-current, .history-view, .result-view { text-align: center; padding: 40px 0; color: #888; }
+.result-title { font-size: 16px; color: #e0e0e0; margin: 24px 0 12px; }
+.votes-list { max-width: 400px; margin: 0 auto; }
+.vote-item { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #ff69b411; }
+.vote-target { color: #e0e0e0; }
+.vote-value { color: #ff69b4; font-weight: 600; }
+.empty-tip { color: #666; padding: 20px; }
+.total-banner {
+  background: linear-gradient(135deg, #ff69b422, #ff149322);
+  border: 1px solid #ff69b4; border-radius: 12px; padding: 20px;
+  text-align: center; margin-bottom: 16px;
+}
+.total-label { font-size: 13px; color: #aaa; }
+.total-value { font-size: 36px; font-weight: 700; color: #ff69b4; margin: 4px 0; }
+.total-hint { font-size: 12px; color: #888; }
+.total-banner.submitted { background: linear-gradient(135deg, #00ff8822, #00cc6622); border-color: #00ff88; }
+.remaining-info { text-align: center; font-size: 14px; color: #888; margin-bottom: 16px; }
+.remaining-info.error { color: #ff4444; }
+.remaining-info .error-text { display: block; font-size: 12px; color: #ff4444; margin-top: 4px; }
+.remaining-info .ok-text { display: block; font-size: 12px; color: #00ff88; margin-top: 4px; }
+.players-list { margin-bottom: 20px; }
+.player-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; border-bottom: 1px solid #ff69b411;
+}
+.player-name { font-size: 15px; font-weight: 500; color: #e0e0e0; }
+.vote-input {
+  width: 80px; background: #1a0f2e; border: 1px solid #ff69b422; color: #e0e0e0;
+  padding: 6px 10px; border-radius: 6px; font-size: 16px; text-align: center; outline: none;
+}
+.vote-input:focus { border-color: #ff69b4; }
+.lv-btn {
+  background: transparent; border: 1px solid #ff69b444; color: #ff69b4;
+  padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s;
+}
+.lv-btn:hover { background: #ff69b422; }
+.lv-btn-primary { background: #ff69b422; border-color: #ff69b4; }
+.lv-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.submit-btn { display: block; width: 100%; padding: 12px; font-size: 16px; }
+.success-toast { text-align: center; color: #00ff88; margin-top: 12px; font-size: 14px; }
+.error-toast { text-align: center; color: #ff4444; margin-top: 12px; font-size: 14px; }
+</style>

@@ -157,9 +157,10 @@ async function setupTeams(req, res) {
     const rId = round ? round.id : (roundId || 'default-round')
     const rIdx = round ? round.index : null
 
-    // 删除该 round 下原有队伍和成员
-    await RoundTeam.deleteMany({ roundId: rId })
-    await RoundTeamMember.deleteMany({ roundId: rId })
+    // 兼容两种 roundId 格式：UUID 或前端格式（如 "round-1"）
+    // 同时删除两种格式下的旧数据，避免重复
+    await RoundTeam.deleteMany({ roundId: { $in: [rId, roundId].filter(Boolean) } })
+    await RoundTeamMember.deleteMany({ roundId: { $in: [rId, roundId].filter(Boolean) } })
 
     // 批量创建新队伍，id 格式: {roundId}-team-{N}
     const newTeams = []
@@ -220,11 +221,15 @@ router.post('/admin/manual-assign', auth, requireAdmin, async (req, res) => {
     const rId = round ? round.id : (roundId || null)
     if (!rId) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
 
-    const teams = await RoundTeam.find({ roundId: rId })
+    // 兼容两种 roundId 格式：UUID 或前端格式
+    let teams = await RoundTeam.find({ roundId: rId })
+    if (teams.length === 0 && rId !== roundId) {
+      teams = await RoundTeam.find({ roundId })
+    }
     const teamIds = new Set(teams.map(t => t.id))
 
-    // 清空该轮的成员
-    await RoundTeamMember.deleteMany({ roundId: rId })
+    // 清空该轮的成员（同时兼容两种 roundId 格式）
+    await RoundTeamMember.deleteMany({ roundId: { $in: [rId, roundId].filter(Boolean) } })
 
     // 按 assignments 分配
     const userMap = {}
@@ -285,12 +290,24 @@ router.post('/admin/random-assign', auth, requireAdmin, async (req, res) => {
     const rId = round ? round.id : (roundId || null)
     if (!rId) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
 
-    // 该轮已分配的队伍和成员
-    const teams = await RoundTeam.find({ roundId: rId })
+    // 兼容两种 roundId 格式：UUID（Round 文档的 id）或前端格式（如 "round-1"）
+    let teams = await RoundTeam.find({ roundId: rId })
+    // 如果 UUID 查不到，尝试用前端格式 roundId 再查（兼容 roundId 存为 "round-1" 格式的情况）
+    if (teams.length === 0 && rId !== roundId) {
+      teams = await RoundTeam.find({ roundId })
+    }
     if (teams.length === 0) {
       return res.status(400).json({ success: false, error: '请先配置队伍', code: 'NO_TEAMS' })
     }
-    const existingMembers = await RoundTeamMember.find({ roundId: rId })
+    // 确定实际使用的 roundId（优先用找到队伍时的 roundId）
+    const actualRoundId = teams[0].roundId
+
+    let existingMembers = await RoundTeamMember.find({ roundId: actualRoundId })
+    // 如果实际 roundId 不同于 rId，也查一下 rId 下的成员
+    if (actualRoundId !== rId) {
+      const rIdMembers = await RoundTeamMember.find({ roundId: rId })
+      if (rIdMembers.length > 0) existingMembers = rIdMembers
+    }
     const assignedPlayerIds = new Set(existingMembers.map(m => m.playerId))
 
     // 所有 active 未被淘汰的选手
@@ -321,7 +338,7 @@ router.post('/admin/random-assign', auth, requireAdmin, async (req, res) => {
       const t = available[Math.floor(Math.random() * available.length)]
       const m = new RoundTeamMember({
         id: generateId(),
-        roundId: rId,
+        roundId: actualRoundId,
         roundIndex: round ? round.index : null,
         teamId: t.id,
         playerId: player.id,
@@ -332,10 +349,10 @@ router.post('/admin/random-assign', auth, requireAdmin, async (req, res) => {
       assignedCount++
     }
 
-    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TEAM_RANDOM_ASSIGN, 'round', rId, `自动分配 ${assignedCount} 名未组队选手`)
+    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TEAM_RANDOM_ASSIGN, 'round', actualRoundId, `自动分配 ${assignedCount} 名未组队选手`)
 
     // 返回更新后的队伍列表
-    const allMembers = await RoundTeamMember.find({ roundId: rId })
+    const allMembers = await RoundTeamMember.find({ roundId: actualRoundId })
     const userMap = {}
     for (const u of users) userMap[u.id] = u
     const membersByTeam = {}

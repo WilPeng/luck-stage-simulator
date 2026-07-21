@@ -148,7 +148,7 @@
 
       <div class="empty-state" v-else>
         <p>暂无属性变化记录</p>
-        <router-link to="/player/training" class="go-train-btn">去训练</router-link>
+        <router-link :to="`/games/${authStore.currentGameId}/player/training`" class="go-train-btn">去训练</router-link>
       </div>
     </div>
   </div>
@@ -274,7 +274,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .player-profile {
-  color: #333;
+color: var(--text-primary);
 }
 
 .profile-header {
@@ -292,7 +292,7 @@ onMounted(async () => {
   }
 
   .subtitle {
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-tertiary);
     margin: 0 0 16px 0;
     font-size: 12px;
   }
@@ -369,7 +369,7 @@ onMounted(async () => {
   }
 
   .overlay-text {
-    color: #fff;
+    color: var(--text-primary);
     font-size: 11px;
     font-weight: 500;
   }
@@ -395,7 +395,7 @@ onMounted(async () => {
 
 .upload-btn {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
+  color: var(--text-primary);
 
   &:hover {
     transform: translateY(-2px);
@@ -408,9 +408,9 @@ onMounted(async () => {
 }
 
 .delete-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--hover-bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 
   &:hover {
     background: rgba(231, 76, 60, 0.2);
@@ -422,11 +422,11 @@ onMounted(async () => {
 .avatar-hint {
   margin: 0;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
 }
 
 .card {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
 }
@@ -440,7 +440,7 @@ onMounted(async () => {
 }
 
 .attr-card {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
   border-left: 3px solid transparent;
@@ -464,19 +464,19 @@ onMounted(async () => {
 }
 
 .attr-label {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-tertiary);
   font-size: 13px;
 }
 
 .attr-value {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 24px;
   font-weight: 700;
 }
 
 .attr-bar-track {
   height: 6px;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--progress-bg);
   border-radius: 3px;
   overflow: hidden;
   margin-bottom: 6px;
@@ -493,7 +493,7 @@ onMounted(async () => {
 }
 
 .attr-description {
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
   font-size: 11px;
 }
 
@@ -506,7 +506,7 @@ onMounted(async () => {
 }
 
 .summary-card {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 14px;
   display: flex;
@@ -526,12 +526,12 @@ onMounted(async () => {
 }
 
 .summary-label {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-tertiary);
   font-size: 11px;
 }
 
 .summary-value {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 16px;
   font-weight: 600;
   overflow: hidden;
@@ -554,7 +554,7 @@ onMounted(async () => {
   .section-title {
     font-size: 14px;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-primary);
     margin: 0;
   }
 }
@@ -580,12 +580,12 @@ onMounted(async () => {
 
 .record-card-name {
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 13px;
 }
 
 .record-time {
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--text-muted);
   font-size: 11px;
 }
 
@@ -619,7 +619,7 @@ onMounted(async () => {
   padding: 16px;
 
   p {
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--text-muted);
     font-size: 13px;
     margin: 0 0 12px 0;
   }
@@ -630,7 +630,7 @@ onMounted(async () => {
   padding: 8px 20px;
   background: linear-gradient(135deg, #a29bfe, #6c5ce7);
   border-radius: 8px;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 600;
   transition: all 0.2s;

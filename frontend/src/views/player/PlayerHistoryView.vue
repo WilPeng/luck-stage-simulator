@@ -149,7 +149,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .player-history {
-  color: #333;
+color: var(--text-primary);
   min-height: 100vh;
   padding: 20px;
   background: #f5f7fa;
@@ -185,16 +185,16 @@ onMounted(async () => {
   }
   
   .subtitle {
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-tertiary);
     margin: 0;
     font-size: 14px;
   }
 }
 
 :deep(.t-card) {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--card-bg);
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
   
   .t-card__body {
     padding: 24px;
@@ -212,7 +212,7 @@ onMounted(async () => {
   
   :deep(.t-timeline-item__label) {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-tertiary);
   }
   
   :deep(.t-timeline-item__dot) {
@@ -225,12 +225,12 @@ onMounted(async () => {
   }
   
   :deep(.t-timeline-item__content) {
-    color: #fff;
+    color: var(--text-primary);
   }
 }
 
 .timeline-content {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
   border-left: 3px solid #667eea;
@@ -266,13 +266,13 @@ onMounted(async () => {
 
 .action-time {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-tertiary);
 }
 
 .content-detail {
   margin: 0;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
 }
 
 .no-history-card {
@@ -286,7 +286,7 @@ onMounted(async () => {
 
 :deep(.t-empty) {
   .t-empty__description {
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-tertiary);
   }
 }
 

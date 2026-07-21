@@ -8,6 +8,9 @@
         </div>
         <div class="header-info">
           <span class="stage-tag">{{ stageDisplay }}</span>
+          <button class="theme-toggle-btn" @click="authStore.toggleTheme()" :title="authStore.theme === 'dark' ? '切换浅色模式' : '切换深色模式'">
+            {{ authStore.theme === 'dark' ? '☀️' : '🌙' }}
+          </button>
           <span class="user-name">{{ authStore.currentUser?.name }}</span>
           <button class="logout-btn" @click="handleLogout">退出</button>
         </div>
@@ -57,22 +60,31 @@
             :key="round"
             class="nav-section"
           >
-            <div class="nav-section-title" :class="{ current: round === currentRoundNumber }">
+            <div
+              class="nav-section-title"
+              :class="{ current: round === currentRoundNumber }"
+              @click="toggleRound(round)"
+            >
+              <span class="collapse-icon" :class="{ collapsed: isRoundCollapsed(round) }">▾</span>
               <span>第{{ round }}公演</span>
               <span class="round-status" :class="getRoundStatus(round)">{{ getRoundStatusText(round) }}</span>
             </div>
-            <div
-              v-for="stage in stageList"
-              :key="`${round}-${stage.key}`"
-              v-show="isStageVisible(round, stage.key)"
-              class="nav-item"
-              :class="{ active: isActive(round, stage.key) }"
-              @click="navigateTo(`/admin/round/${round}/${stage.key}`)"
-            >
-              <span class="nav-icon">{{ stage.icon }}</span>
-              <span class="nav-text">{{ stage.text }}</span>
-              <span v-if="isCompleted(round, stage.key)" class="item-badge completed">✓</span>
-              <span v-if="isCurrent(round, stage.key)" class="item-badge current">●</span>
+            <div class="collapse-content" :class="{ collapsed: isRoundCollapsed(round) }">
+              <div class="collapse-inner">
+                <div
+                  v-for="stage in stageList"
+                  :key="`${round}-${stage.key}`"
+                  v-show="isStageVisible(round, stage.key)"
+                  class="nav-item"
+                  :class="{ active: isActive(round, stage.key) }"
+                  @click="navigateTo(`${gamePrefix}/admin/round/${round}/${stage.key}`)"
+                >
+                  <span class="nav-icon">{{ stage.icon }}</span>
+                  <span class="nav-text">{{ stage.text }}</span>
+                  <span v-if="isCompleted(round, stage.key)" class="item-badge completed">✓</span>
+                  <span v-if="isCurrent(round, stage.key)" class="item-badge current">●</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -103,32 +115,32 @@
     <nav class="mobile-tab-bar">
       <div
         class="tab-item"
-        :class="{ active: $route.path === '/admin/dashboard' }"
-        @click="navigateTo('/admin/dashboard')"
+        :class="{ active: $route.path === `${gamePrefix}/admin/dashboard` }"
+        @click="navigateTo(`${gamePrefix}/admin/dashboard`)"
       >
         <span class="tab-icon">📊</span>
         <span class="tab-text">总览</span>
       </div>
       <div
         class="tab-item"
-        :class="{ active: $route.path === '/admin/stage' }"
-        @click="navigateTo('/admin/stage')"
+        :class="{ active: $route.path === `${gamePrefix}/admin/stage` }"
+        @click="navigateTo(`${gamePrefix}/admin/stage`)"
       >
         <span class="tab-icon">🎯</span>
         <span class="tab-text">赛程</span>
       </div>
       <div
         class="tab-item"
-        :class="{ active: $route.path === '/admin/players' }"
-        @click="navigateTo('/admin/players')"
+        :class="{ active: $route.path === `${gamePrefix}/admin/players` }"
+        @click="navigateTo(`${gamePrefix}/admin/players`)"
       >
         <span class="tab-icon">👥</span>
         <span class="tab-text">玩家</span>
       </div>
       <div
         class="tab-item"
-        :class="{ active: $route.path === '/admin/logs' }"
-        @click="navigateTo('/admin/logs')"
+        :class="{ active: $route.path === `${gamePrefix}/admin/logs` }"
+        @click="navigateTo(`${gamePrefix}/admin/logs`)"
       >
         <span class="tab-icon">📜</span>
         <span class="tab-text">日志</span>
@@ -150,6 +162,19 @@ const router = useRouter()
 const route = useRoute()
 const mobileMenuOpen = ref(false)
 
+const gamePrefix = computed(() => `/games/${authStore.currentGameId}`)
+
+// 每轮公演的折叠状态，默认所有轮次都展开
+const collapsedRounds = ref<Record<number, boolean>>({})
+
+function toggleRound(round: number) {
+  collapsedRounds.value[round] = !collapsedRounds.value[round]
+}
+
+function isRoundCollapsed(round: number): boolean {
+  return collapsedRounds.value[round] === true
+}
+
 const currentRoundNumber = computed(() => seasonStore.currentRoundNumber)
 const totalRounds = computed(() => seasonStore.totalRounds)
 const rounds = computed(() => Array.from({ length: totalRounds.value }, (_, i) => i + 1))
@@ -159,15 +184,15 @@ const stageDisplay = computed(() => {
 })
 
 // 固定菜单
-const fixedItems = [
-  { path: '/admin/dashboard', icon: '📊', text: '总览' },
-  { path: '/admin/players', icon: '👥', text: '玩家管理' }
-]
+const fixedItems = computed(() => [
+  { path: `${gamePrefix.value}/admin/dashboard`, icon: '📊', text: '总览' },
+  { path: `${gamePrefix.value}/admin/players`, icon: '👥', text: '玩家管理' }
+])
 
 // 赛程控制菜单
-const stageItems = [
-  { path: '/admin/stage', icon: '🎯', text: '赛程矩阵' }
-]
+const stageItems = computed(() => [
+  { path: `${gamePrefix.value}/admin/stage`, icon: '🎯', text: '赛程矩阵' }
+])
 
 // 阶段配置
 const stageConfig: Record<StageType, { icon: string; text: string }> = {
@@ -189,14 +214,14 @@ const stageList = computed(() => {
 })
 
 // 其他管理菜单
-const otherItems = [
-  { path: '/admin/songs', icon: '🎵', text: '歌曲管理' },
-  { path: '/admin/training-cards', icon: '🃏', text: '训练卡牌' },
-  { path: '/admin/training-records', icon: '📈', text: '训练记录' },
-  { path: '/admin/ranking', icon: '🏅', text: '排名总览' },
-  { path: '/admin/chat', icon: '💬', text: '聊天室' },
-  { path: '/admin/logs', icon: '📜', text: '操作日志' }
-]
+const otherItems = computed(() => [
+  { path: `${gamePrefix.value}/admin/songs`, icon: '🎵', text: '歌曲管理' },
+  { path: `${gamePrefix.value}/admin/training-cards`, icon: '🃏', text: '训练卡牌' },
+  { path: `${gamePrefix.value}/admin/training-records`, icon: '📈', text: '训练记录' },
+  { path: `${gamePrefix.value}/admin/ranking`, icon: '🏅', text: '排名总览' },
+  { path: `${gamePrefix.value}/admin/chat`, icon: '💬', text: '聊天室' },
+  { path: `${gamePrefix.value}/admin/logs`, icon: '📜', text: '操作日志' }
+])
 
 // 获取轮次状态
 function getRoundStatus(round: number): string {
@@ -233,7 +258,7 @@ function isStageVisible(round: number, stage: StageType): boolean {
 
 // 检查路由是否激活
 function isActive(round: number, stage: StageType): boolean {
-  const stagePath = `/admin/round/${round}/${stage}`
+  const stagePath = `${gamePrefix.value}/admin/round/${round}/${stage}`
   return route.path.startsWith(stagePath)
 }
 
@@ -244,10 +269,9 @@ function navigateTo(path: string) {
 }
 
 async function handleLogout() {
-  // 先清除所有持久化数据，再跳转
   await authStore.logout()
   authStore.clearAuth()
-  await router.replace('/login')
+  await router.replace(`/games/${authStore.currentGameId}/login`)
 }
 
 // 初始化加载
@@ -257,21 +281,60 @@ onMounted(async () => {
   } catch (e) {
     console.error('[AdminLayout] 初始化加载失败:', e)
   }
+  // 初始化主题
+  authStore.initTheme()
 })
 </script>
 
 <style lang="scss" scoped>
+/* ===================== CSS 变量（主题切换） ===================== */
+.admin-layout {
+  --bg-primary: #f0f2f5;
+  --bg-secondary: #ffffff;
+  --card-bg: #ffffff;
+  --card-border: #e8e8e8;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-tertiary: #999999;
+  --text-muted: #bbbbbb;
+  --border-color: #e8e8e8;
+  --sidebar-bg: #ffffff;
+  --header-bg: #ffffff;
+  --hover-bg: rgba(0, 82, 204, 0.06);
+  --active-bg: rgba(0, 82, 204, 0.08);
+  --progress-bg: #f0f0f0;
+  --primary-color: #0052cc;
+
+  &[data-theme="dark"] {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #2a2a4a;
+    --card-bg: #2a2a4a;
+    --card-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --text-tertiary: rgba(255, 255, 255, 0.45);
+    --text-muted: rgba(255, 255, 255, 0.35);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --sidebar-bg: #2a2a4a;
+    --header-bg: #2a2a4a;
+    --hover-bg: rgba(255, 255, 255, 0.06);
+    --active-bg: rgba(255, 255, 255, 0.1);
+    --progress-bg: rgba(255, 255, 255, 0.15);
+    --primary-color: #667eea;
+  }
+}
+
 .admin-layout {
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  background: #f0f2f5;
+  background: var(--bg-primary);
 }
 
 .admin-header {
   flex-shrink: 0;
-  background: #fff;
+  background: var(--header-bg);
   padding: 0 24px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   z-index: 100;
@@ -310,6 +373,26 @@ onMounted(async () => {
   gap: 12px;
 }
 
+.theme-toggle-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+  padding: 0;
+
+  &:hover {
+    background: var(--hover-bg);
+    transform: scale(1.05);
+  }
+}
+
 .stage-tag {
   padding: 4px 12px;
   background: linear-gradient(135deg, #0052cc, #003da6);
@@ -320,17 +403,17 @@ onMounted(async () => {
 }
 
 .user-name {
-  color: #333;
+  color: var(--text-primary);
   font-weight: 500;
   font-size: 14px;
 }
 
 .logout-btn {
   padding: 5px 12px;
-  background: #fff;
-  border: 1px solid #d9d9d9;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  color: #333;
+  color: var(--text-primary);
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
@@ -353,7 +436,7 @@ onMounted(async () => {
   span {
     width: 22px;
     height: 2px;
-    background: #333;
+    background: var(--text-primary);
     border-radius: 2px;
   }
 }
@@ -368,8 +451,8 @@ onMounted(async () => {
 .admin-sider {
   width: 220px;
   flex-shrink: 0;
-  background: #fff;
-  border-right: 1px solid #e8e8e8;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-color);
   overflow-y: auto;
 }
 
@@ -386,16 +469,34 @@ onMounted(async () => {
 .nav-section-title {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
   padding: 8px 12px 4px;
   font-size: 11px;
   font-weight: 600;
-  color: #8c8c8c;
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: var(--text-secondary);
+  }
 
   &.current {
-    color: #0052cc;
+    color: var(--primary-color);
+  }
+
+  .collapse-icon {
+    font-size: 10px;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+    width: 12px;
+    text-align: center;
+
+    &.collapsed {
+      transform: rotate(-90deg);
+    }
   }
 
   .round-status {
@@ -421,12 +522,28 @@ onMounted(async () => {
   }
 }
 
+// 折叠展开动画
+.collapse-content {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.3s ease;
+
+  &.collapsed {
+    grid-template-rows: 0fr;
+  }
+
+  .collapse-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+}
+
 .nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
-  color: #595959;
+  color: var(--text-secondary);
   text-decoration: none;
   font-size: 14px;
   border-radius: 6px;
@@ -434,13 +551,13 @@ onMounted(async () => {
   cursor: pointer;
 
   &:hover {
-    color: #0052cc;
-    background: rgba(0, 82, 204, 0.06);
+    color: var(--primary-color);
+    background: var(--hover-bg);
   }
 
   &.active {
-    color: #0052cc;
-    background: rgba(0, 82, 204, 0.08);
+    color: var(--primary-color);
+    background: var(--active-bg);
     font-weight: 500;
   }
 }
@@ -477,7 +594,7 @@ onMounted(async () => {
   flex: 1;
   overflow-y: auto;
   padding: 20px;
-  background: #f0f2f5;
+  background: var(--bg-primary);
 }
 
 .overlay {
@@ -525,7 +642,7 @@ onMounted(async () => {
     z-index: 101;
     transition: left 0.3s ease;
     width: 200px;
-    background: #fff;
+    background: var(--sidebar-bg);
 
     &.open {
       left: 0;
@@ -547,8 +664,8 @@ onMounted(async () => {
     bottom: 0;
     left: 0;
     right: 0;
-    background: #fff;
-    border-top: 1px solid #e8e8e8;
+    background: var(--sidebar-bg);
+    border-top: 1px solid var(--border-color);
     z-index: 98;
     padding: 6px 2px;
     padding-bottom: calc(6px + env(safe-area-inset-bottom));
@@ -562,14 +679,14 @@ onMounted(async () => {
     justify-content: center;
     padding: 6px 2px;
     text-decoration: none;
-    color: #8c8c8c;
+    color: var(--text-tertiary);
     transition: all 0.2s;
     border-radius: 8px;
     gap: 3px;
     cursor: pointer;
 
     &.active {
-      color: #0052cc;
+      color: var(--primary-color);
     }
   }
 

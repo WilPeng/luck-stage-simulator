@@ -14,6 +14,7 @@ class User {
     this.attributes = data.attributes || { vocal: 30, dance: 30, charm: 30 }
     this.trainingCount = data.trainingCount || 0
     this.avatar = data.avatar || null
+    this.gameId = data.gameId || null
     this.createdAt = data.createdAt || new Date().toISOString()
     this.updatedAt = data.updatedAt || new Date().toISOString()
   }

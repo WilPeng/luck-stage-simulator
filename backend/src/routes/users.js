@@ -290,6 +290,44 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// 清除所有非管理员用户（用于导入覆盖模式）
+// 注意：必须放在 /:id 路由之前，否则会被 /:id 匹配到导致 USER_NOT_FOUND
+router.delete('/clear-non-admin', auth, requireAdmin, async (req, res) => {
+  try {
+    // 查找所有非管理员用户
+    const nonAdminUsers = await User.find({ role: { $ne: 'admin' } })
+
+    // 清理队伍关联
+    for (const user of nonAdminUsers) {
+      if (user.teamId) {
+        const team = await Team.findOne({ id: user.teamId })
+        if (team) {
+          team.memberIds = team.memberIds.filter(id => id !== user.id)
+          if (team.captainId === user.id) {
+            team.captainId = team.memberIds.length > 0 ? team.memberIds[0] : null
+          }
+          await team.save()
+        }
+      }
+    }
+
+    // 删除所有非管理员用户
+    await User.deleteMany({ role: { $ne: 'admin' } })
+
+    const deletedCount = nonAdminUsers.length
+    await logAction(req.user.userId, req.user.name, req.user.role, 'clear_non_admin_users', 'user', 'batch', `清除所有非管理员用户，共 ${deletedCount} 个`)
+
+    res.json({
+      success: true,
+      data: { deletedCount },
+      message: `已清除 ${deletedCount} 个非管理员用户`
+    })
+  } catch (error) {
+    console.error('Clear non-admin users error:', error)
+    res.status(500).json({ success: false, error: '清除用户失败', code: 'SERVER_ERROR' })
+  }
+})
+
 router.delete('/:id', auth, requireAdmin, async (req, res) => {
   try {
     const user = await User.findOne({ id: req.params.id })

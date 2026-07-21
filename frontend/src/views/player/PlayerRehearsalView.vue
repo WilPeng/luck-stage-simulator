@@ -43,7 +43,7 @@
     <div v-else class="no-rehearsal">
       <t-empty description="彩排尚未开始">
         <template #image>
-          <t-icon name="info-circle" style="font-size: 48px; color: #fff" />
+          <t-icon name="info-circle" style="font-size: 48px; color: var(--text-primary)" />
         </template>
       </t-empty>
       <p class="empty-desc">{{ isCaptain ? '作为队长，你可以开启彩排' : '请等待队长开启彩排' }}</p>
@@ -226,7 +226,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .player-rehearsal {
-  color: #333;
+color: var(--text-primary);
 }
 
 .rehearsal-header {
@@ -239,7 +239,7 @@ onMounted(async () => {
   }
   
   .subtitle {
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-tertiary);
     margin: 0;
     font-size: 14px;
   }
@@ -248,7 +248,7 @@ onMounted(async () => {
 .team-card {
   margin-bottom: 24px;
   background: rgba(255, 255, 255, 0.05) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
 }
 
 .team-header {
@@ -269,7 +269,7 @@ onMounted(async () => {
 .result-card {
   margin-bottom: 24px;
   background: rgba(255, 255, 255, 0.05) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
   text-align: center;
 }
 
@@ -285,7 +285,7 @@ onMounted(async () => {
 }
 
 .result-desc {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
   font-size: 15px;
   margin: 0 0 20px 0;
 }
@@ -296,7 +296,7 @@ onMounted(async () => {
 
 .effect-label {
   display: block;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-tertiary);
   font-size: 13px;
   margin-bottom: 12px;
 }
@@ -315,12 +315,12 @@ onMounted(async () => {
 }
 
 .time-label {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-tertiary);
   font-size: 13px;
 }
 
 .time-value {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -328,7 +328,7 @@ onMounted(async () => {
   margin-bottom: 24px;
   padding: 24px;
   background: rgba(255, 255, 255, 0.05) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -337,26 +337,26 @@ onMounted(async () => {
   text-align: center;
 
   :deep(.t-empty__description) {
-    color: #fff;
+    color: var(--text-primary);
     font-size: 16px;
   }
 }
 
 .empty-desc {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-tertiary);
   margin: 0;
 }
 
 .tips-card {
   background: rgba(255, 255, 255, 0.05) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
 }
 
 .tips-title {
   font-size: 16px;
   font-weight: 600;
   margin: 0;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .tips-list {
@@ -369,7 +369,7 @@ onMounted(async () => {
 }
 
 .tips-list li {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -388,7 +388,7 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--hover-bg);
   border-radius: 10px;
   margin-bottom: 12px;
   font-size: 14px;
@@ -406,10 +406,10 @@ onMounted(async () => {
 }
 
 .team-rehearsal-card {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
   transition: all 0.2s;
 
   &:hover {
@@ -432,7 +432,7 @@ onMounted(async () => {
   .team-rehearsal-name {
     font-size: 15px;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-primary);
   }
 }
 
@@ -440,7 +440,7 @@ onMounted(async () => {
   .rehearsal-event-name {
     display: block;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--text-secondary);
     margin-bottom: 8px;
   }
 
@@ -473,7 +473,7 @@ onMounted(async () => {
 
 .no-rehearsal-brief {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-muted);
   font-style: italic;
 }
 </style>

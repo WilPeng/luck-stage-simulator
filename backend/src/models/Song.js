@@ -12,6 +12,7 @@ class Song extends BaseModel {
       this.id = data.id || null
       this.name = data.name || ''
       this.difficulty = typeof data.difficulty === 'number' ? data.difficulty : 3
+      this.gameId = data.gameId || null
       this.vocalWeight = typeof data.vocalWeight === 'number' ? data.vocalWeight : 3
       this.danceWeight = typeof data.danceWeight === 'number' ? data.danceWeight : 3
       this.charmWeight = typeof data.charmWeight === 'number' ? data.charmWeight : 3

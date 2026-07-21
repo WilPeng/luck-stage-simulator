@@ -54,11 +54,12 @@ function handleCancel() {
 }
 
 .dialog-content {
-  background: #1a1a2e;
+  background: var(--card-bg, #1a1a2e);
   border-radius: 12px;
   padding: 24px;
   min-width: 320px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border-color, rgba(255,255,255,0.1));
 }
 
 .dialog-header {
@@ -68,7 +69,7 @@ function handleCancel() {
   margin-bottom: 16px;
   
   h3 {
-    color: #fff;
+    color: var(--text-primary, #fff);
     margin: 0;
   }
 }
@@ -76,13 +77,13 @@ function handleCancel() {
 .close-btn {
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.5));
   font-size: 20px;
   cursor: pointer;
   transition: color 0.3s;
   
   &:hover {
-    color: #fff;
+    color: var(--text-primary, #fff);
   }
 }
 
@@ -90,7 +91,7 @@ function handleCancel() {
   margin-bottom: 20px;
   
   p {
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--text-secondary, rgba(255, 255, 255, 0.8));
     margin: 0;
     line-height: 1.6;
   }
@@ -112,11 +113,11 @@ function handleCancel() {
 }
 
 .btn-cancel {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: var(--hover-bg, rgba(255, 255, 255, 0.2));
+  color: var(--text-primary, #fff);
   
   &:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--active-bg, rgba(255, 255, 255, 0.3));
   }
 }
 

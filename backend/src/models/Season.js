@@ -13,6 +13,7 @@ class Season extends BaseModel {
     super('Season')
     this.id = data?.id || null
     this.name = data?.name || '乘风2026'
+    this.gameId = data?.gameId || null
     this.currentRound = data?.currentRound ?? 1
     this.currentStage = data?.currentStage || 'preparation'
     this.totalRounds = data?.totalRounds ?? 3

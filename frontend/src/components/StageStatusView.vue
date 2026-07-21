@@ -132,7 +132,7 @@ const currentStageName = computed(() => {
     gap: 8px;
     margin-bottom: 20px;
     padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--border-color);
 
     .completed-label {
       color: #9ca3af;

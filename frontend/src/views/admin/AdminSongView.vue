@@ -62,6 +62,29 @@
               <span class="value">{{ getSongDifficulty(song.songId) }}</span>
             </div>
           </div>
+          <div class="song-weights">
+            <div class="weight-bar">
+              <div class="weight-label">Vocal</div>
+              <div class="weight-track">
+                <div class="weight-fill vocal" :style="{ width: getSongWeightPercent(song.songId, 'vocal') + '%' }"></div>
+              </div>
+              <span class="weight-value">{{ getSongWeight(song.songId, 'vocal') }}</span>
+            </div>
+            <div class="weight-bar">
+              <div class="weight-label">Dance</div>
+              <div class="weight-track">
+                <div class="weight-fill dance" :style="{ width: getSongWeightPercent(song.songId, 'dance') + '%' }"></div>
+              </div>
+              <span class="weight-value">{{ getSongWeight(song.songId, 'dance') }}</span>
+            </div>
+            <div class="weight-bar">
+              <div class="weight-label">Charm</div>
+              <div class="weight-track">
+                <div class="weight-fill charm" :style="{ width: getSongWeightPercent(song.songId, 'charm') + '%' }"></div>
+              </div>
+              <span class="weight-value">{{ getSongWeight(song.songId, 'charm') }}</span>
+            </div>
+          </div>
           <div class="song-actions">
             <t-button
               v-if="!song.released && !song.assignedTeamId"
@@ -132,6 +155,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useTeamStore } from '../../stores/teamStore'
 import { useSongStore } from '../../stores/songStore'
@@ -140,6 +164,7 @@ import { getTeams as dsGetTeams } from '../../services/dataService'
 import type { RoundTeam } from '../../types/round'
 import type { RoundSong } from '../../types/round'
 
+const route = useRoute()
 const teamStore = useTeamStore()
 const songStore = useSongStore()
 const seasonStore = useSeasonStore()
@@ -195,9 +220,28 @@ function getSongDifficulty(songId: string): number {
   return song?.difficulty || 0
 }
 
+function getSongWeight(songId: string, type: 'vocal' | 'dance' | 'charm'): number {
+  const song = songStore.songs.find(s => s.id === songId)
+  if (!song) return 0
+  const map = { vocal: song.vocalWeight, dance: song.danceWeight, charm: song.charmWeight }
+  return map[type] || 0
+}
+
+function getSongWeightPercent(songId: string, type: 'vocal' | 'dance' | 'charm'): number {
+  const song = songStore.songs.find(s => s.id === songId)
+  if (!song) return 0
+  const total = song.vocalWeight + song.danceWeight + song.charmWeight
+  if (total === 0) return 0
+  const map = { vocal: song.vocalWeight, dance: song.danceWeight, charm: song.charmWeight }
+  return Math.round((map[type] / total) * 100)
+}
+
 async function releaseSong(roundSongId: string) {
   try {
-    await songStore.releaseSong(roundSongId)
+    // 从路由参数获取轮次号，确保使用正确的 roundId
+    const roundFromRoute = parseInt(route.params.round as string) || 0
+    const roundId = roundFromRoute > 0 ? `round-${roundFromRoute}` : seasonStore.currentRoundId
+    await songStore.releaseSong(roundSongId, roundId)
     MessagePlugin.success('歌曲已释放，队长可以抢选')
   } catch (error: any) {
     MessagePlugin.error(error.message || '释放失败')
@@ -218,6 +262,9 @@ async function handleAdminAssign() {
   
   assigning.value = true
   try {
+    // 从路由参数获取轮次号
+    const roundFromRoute = parseInt(route.params.round as string) || 0
+    const roundId = roundFromRoute > 0 ? `round-${roundFromRoute}` : seasonStore.currentRoundId
     // 调用后端接口直接分配
     // 注意：selectedSong 是 RoundSong，需要用 songId 字段（歌曲库 ID）
     await songStore.assignTeamSongs([
@@ -225,7 +272,7 @@ async function handleAdminAssign() {
         teamId: assignTeamId.value,
         songId: selectedSong.value.songId
       }
-    ])
+    ], roundId)
     MessagePlugin.success('分配成功')
     showAssignDialog.value = false
     await refreshData()
@@ -239,7 +286,9 @@ async function handleAdminAssign() {
 async function refreshData() {
   loading.value = true
   try {
-    const roundId = seasonStore.currentRoundId
+    // 从路由参数获取轮次号，确保不同轮次加载各自的选歌数据
+    const roundFromRoute = parseInt(route.params.round as string) || 0
+    const roundId = roundFromRoute > 0 ? `round-${roundFromRoute}` : seasonStore.currentRoundId
     if (!roundId) {
       MessagePlugin.error('当前轮次未设置')
       return
@@ -312,7 +361,7 @@ onMounted(() => {
 }
 
 .team-card {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
@@ -329,7 +378,7 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .team-name {
@@ -344,12 +393,12 @@ onMounted(() => {
     gap: 8px;
     margin-bottom: 12px;
     padding: 8px 12px;
-    background: #f5f7fa;
+    background: var(--bg-primary);
     border-radius: 6px;
 
     .label {
       font-size: 14px;
-      color: #666;
+      color: var(--text-secondary);
     }
 
     .captain-name {
@@ -370,12 +419,12 @@ onMounted(() => {
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    background: #f5f7fa;
+    background: var(--bg-primary);
     border-radius: 6px;
     font-size: 14px;
 
     .member-name {
-      color: #333;
+      color: var(--text-primary);
     }
   }
 }
@@ -387,7 +436,7 @@ onMounted(() => {
 }
 
 .song-card {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
@@ -404,7 +453,7 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .song-title {
@@ -423,7 +472,7 @@ onMounted(() => {
 
     .label {
       font-size: 14px;
-      color: #666;
+      color: var(--text-secondary);
     }
 
     .value {
@@ -437,6 +486,64 @@ onMounted(() => {
   margin-top: 16px;
 }
 
+.song-weights {
+  padding: 12px 0;
+  border-top: 1px solid var(--border-color);
+  margin-top: 4px;
+}
+
+.weight-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.weight-label {
+  width: 48px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.weight-track {
+  flex: 1;
+  height: 8px;
+  background: var(--progress-bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.weight-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+
+  &.vocal {
+    background: linear-gradient(90deg, #e34d59, #f78ba7);
+  }
+
+  &.dance {
+    background: linear-gradient(90deg, #00a870, #8fd4a0);
+  }
+
+  &.charm {
+    background: linear-gradient(90deg, #ed7b2f, #ffcbae);
+  }
+}
+
+.weight-value {
+  width: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  color: var(--text-primary);
+}
+
 .assign-form {
   padding: 16px 0;
 }
@@ -444,20 +551,20 @@ onMounted(() => {
 .assign-song-info {
   margin-bottom: 20px;
   padding: 12px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
   border-radius: 6px;
 }
 
 .assign-label {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   margin-right: 8px;
 }
 
 .assign-song-name {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .assign-form-item {
@@ -468,7 +575,7 @@ onMounted(() => {
     margin-bottom: 8px;
     font-size: 14px;
     font-weight: 500;
-    color: #333;
+    color: var(--text-primary);
   }
 }
 

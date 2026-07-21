@@ -371,14 +371,14 @@ onMounted(async () => {
   max-width: 1000px;
   margin: 0 auto;
   padding: 0 4px;
-  color: #333;
+color: var(--text-primary);
 }
 
 .page-header {
   position: relative;
   margin-bottom: 24px;
   padding-bottom: 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid var(--border-color);
   &::after {
     content: '';
     position: absolute;
@@ -388,7 +388,7 @@ onMounted(async () => {
     border-radius: 2px;
   }
   h1 { font-size: 26px; font-weight: 800; margin: 0 0 6px 0; letter-spacing: 1px; }
-  .subtitle { color: rgba(255,255,255,0.45); margin: 0; font-size: 14px; }
+  .subtitle { color: var(--text-tertiary); margin: 0; font-size: 14px; }
 }
 
 // ===== 属性面板 =====
@@ -402,8 +402,8 @@ onMounted(async () => {
 }
 
 .attr-item {
-  background: #fff;
-  border: 1px solid #e8e8e8;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 14px;
   position: relative;
@@ -415,12 +415,12 @@ onMounted(async () => {
     align-items: center;
     margin: 6px 0 8px;
   }
-  .attr-label { font-size: 13px; color: rgba(255,255,255,0.5); }
+  .attr-label { font-size: 13px; color: var(--text-tertiary); }
   .attr-value { font-size: 22px; font-weight: 800; }
 
   .attr-bar {
     height: 4px;
-    background: rgba(255,255,255,0.06);
+    background: var(--hover-bg);
     border-radius: 4px;
     overflow: hidden;
   }
@@ -443,10 +443,10 @@ onMounted(async () => {
   gap: 24px;
   justify-content: center;
   padding: 10px;
-  background: rgba(255,255,255,0.03);
+  background: var(--hover-bg);
   border-radius: 10px;
   font-size: 14px;
-  color: rgba(255,255,255,0.6);
+  color: var(--text-tertiary);
   strong { color: #ffd700; }
 }
 
@@ -458,7 +458,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  .section-sub { font-size: 13px; font-weight: 400; color: rgba(255,255,255,0.35); }
+  .section-sub { font-size: 13px; font-weight: 400; color: var(--text-muted); }
 }
 
 // ===== 卡牌网格 =====
@@ -505,7 +505,7 @@ onMounted(async () => {
 
   .card-back {
     background: linear-gradient(135deg, #667eea, #764ba2);
-    color: #fff;
+    color: var(--text-primary);
     .cb-icon { font-size: 22px; }
     .cb-num { font-size: 10px; opacity: 0.5; margin-top: 2px; }
   }
@@ -529,7 +529,7 @@ onMounted(async () => {
     .cf-effects { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; }
     .cf-effect {
       font-size: 10px; padding: 1px 4px; border-radius: 3px;
-      &.up { background: rgba(255,255,255,0.2); }
+      &.up { background: var(--hover-bg); }
       &.down { background: rgba(0,0,0,0.2); }
     }
   }
@@ -546,16 +546,16 @@ onMounted(async () => {
   thead th {
     text-align: left;
     padding: 10px 12px;
-    color: rgba(255,255,255,0.4);
+    color: var(--text-muted);
     font-weight: 500;
     font-size: 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid var(--border-color);
   }
 
   tbody tr {
     transition: background 0.2s;
-    &:hover { background: rgba(255,255,255,0.03); }
-    border-bottom: 1px solid rgba(255,255,255,0.03);
+    &:hover { background: var(--hover-bg); }
+    border-bottom: 1px solid var(--border-color);
   }
 
   td {
@@ -563,9 +563,9 @@ onMounted(async () => {
     vertical-align: middle;
   }
 
-  .col-idx { width: 40px; color: rgba(255,255,255,0.3); }
-  .col-name { width: 100px; font-weight: 600; color: rgba(255,255,255,0.85); }
-  .col-desc { color: rgba(255,255,255,0.45); font-size: 12px; }
+  .col-idx { width: 40px; color: var(--text-muted); }
+  .col-name { width: 100px; font-weight: 600; color: var(--text-secondary); }
+  .col-desc { color: var(--text-tertiary); font-size: 12px; }
   .col-effect {
     width: 140px;
     text-align: right;
@@ -573,7 +573,7 @@ onMounted(async () => {
     span { margin-left: 6px; }
     .up { color: #2ecc71; }
     .down { color: #e74c3c; }
-    .no-effect { color: rgba(255,255,255,0.25); font-size: 12px; }
+    .no-effect { color: var(--text-muted); font-size: 12px; }
   }
 }
 
@@ -586,7 +586,7 @@ onMounted(async () => {
 :deep(.select-dialog) {
   text-align: center;
   .select-hint {
-    color: rgba(255,255,255,0.7);
+    color: var(--text-secondary);
     font-size: 14px;
     margin: 0 0 16px;
   }
@@ -600,7 +600,7 @@ onMounted(async () => {
     border: 1px solid rgba(255,215,0,0.3);
     border-radius: 10px;
     background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,107,107,0.05));
-    color: #fff;
+    color: var(--text-primary);
     font-size: 15px;
     font-weight: 600;
     cursor: pointer;

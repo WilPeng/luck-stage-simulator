@@ -100,18 +100,25 @@ router.get('/ranking', auth, async (req, res) => {
     const round = await resolveRoundFromQuery(req)
     if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
 
-    const session = await AudienceVoteSession.findOne({ roundId: round.id })
-    if (!session) {
-      return res.json({ success: false, error: '尚未生成大众评审投票，请先调用生成接口', message: '请检查 roundId 参数是否正确', code: 'NOT_GENERATED' })
-    }
-
+    // 兼容两种 roundId 格式：DB UUID 和前端 round-N
+    const perfRoundId = round.id
     const frontRoundId = `round-${round.index || 1}`
+    const roundIdFilter = perfRoundId !== frontRoundId
+      ? { $or: [{ roundId: perfRoundId }, { roundId: frontRoundId }] }
+      : { roundId: perfRoundId }
+
+    // session 查找也要兼容两种格式
+    const session = await AudienceVoteSession.findOne({
+      $or: [{ roundId: perfRoundId }, { roundId: frontRoundId }].filter((c, i, arr) =>
+        arr.findIndex(x => JSON.stringify(x) === JSON.stringify(c)) === i
+      )
+    })
 
     const [votes, playerPerfs, users, teams] = await Promise.all([
-      AudienceVote.find({ roundId: round.id }),
-      PlayerPerformance.find({ roundId: round.id }),
+      session ? AudienceVote.find(roundIdFilter) : Promise.resolve([]),
+      PlayerPerformance.find(roundIdFilter),
       User.find({}),
-      RoundTeam.find({ $or: [{ roundId: round.id }, { roundId: frontRoundId }] })
+      RoundTeam.find({ $or: [{ roundId: perfRoundId }, { roundId: frontRoundId }] })
     ])
 
     const userMap = {}
@@ -134,7 +141,7 @@ router.get('/ranking', auth, async (req, res) => {
           playerId: pp.playerId,
           playerName: pp.playerName || (userMap[pp.playerId]?.name) || null,
           teamId: pp.teamId || null,
-          teamName: team?.name || null,
+          teamName: team?.name || pp.teamName || null,
           votes: voteCounts[pp.playerId] || 0,
           totalWeight: pp.popularityWeight || 0
         }
@@ -150,7 +157,7 @@ router.get('/ranking', auth, async (req, res) => {
         playerId: pp.playerId,
         playerName: pp.playerName || (userMap[pp.playerId]?.name) || null,
         teamId: pp.teamId || null,
-        teamName: team?.name || null,
+        teamName: team?.name || pp.teamName || null,
         baseContribution: pp.baseContribution || 0,
         performanceContribution: pp.performanceContribution || 0,
         teamRankBonus: pp.teamRankBonus || 0,

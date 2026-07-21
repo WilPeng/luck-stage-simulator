@@ -729,7 +729,7 @@ watch(currentRoundId, (newVal, oldVal) => {
 <style lang="scss" scoped>
 .audience-vote-page {
   padding: 16px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
   min-height: 100%;
 
   &.embedded {
@@ -747,7 +747,7 @@ watch(currentRoundId, (newVal, oldVal) => {
   h1 {
     margin: 0;
     font-size: 20px;
-    color: #333;
+    color: var(--text-primary);
   }
 
   .header-actions {
@@ -785,13 +785,13 @@ watch(currentRoundId, (newVal, oldVal) => {
   th, td {
     padding: 10px 8px;
     text-align: center;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--border-color);
   }
 
   thead th {
-    background: #fafafa;
+    background: var(--table-header-bg);
     font-weight: 600;
-    color: #333;
+    color: var(--text-primary);
     white-space: nowrap;
     position: sticky;
     top: 0;
@@ -799,7 +799,7 @@ watch(currentRoundId, (newVal, oldVal) => {
   }
 
   tbody tr:hover {
-    background: #f5f7fa;
+    background: var(--bg-primary);
   }
 
   .col-rank { width: 40px; }
@@ -810,12 +810,12 @@ watch(currentRoundId, (newVal, oldVal) => {
 
   .player-name-cell {
     font-weight: 600;
-    color: #1a1a2e;
+    color: var(--text-primary);
   }
 
   .team-name-cell {
     font-size: 12px;
-    color: #666;
+    color: var(--text-secondary);
   }
 
   .weight-input {
@@ -830,7 +830,7 @@ watch(currentRoundId, (newVal, oldVal) => {
   }
 
   .hint-icon {
-    color: #999;
+    color: var(--text-tertiary);
     font-size: 12px;
     vertical-align: middle;
     margin-left: 2px;
@@ -854,7 +854,7 @@ watch(currentRoundId, (newVal, oldVal) => {
 }
 
 .stat-card {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
   display: flex;
@@ -873,13 +873,13 @@ watch(currentRoundId, (newVal, oldVal) => {
 
     .stat-label {
       font-size: 13px;
-      color: #666;
+      color: var(--text-secondary);
     }
 
     .stat-value {
       font-size: 20px;
       font-weight: 700;
-      color: #333;
+      color: var(--text-primary);
     }
   }
 }
@@ -916,11 +916,11 @@ watch(currentRoundId, (newVal, oldVal) => {
   gap: 12px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: #f9f9f9;
+  background: var(--table-hover-bg);
   transition: background 0.2s;
 
   &:hover {
-    background: #f0f0f0;
+    background: var(--progress-bg);
   }
 
   &.top3 {
@@ -939,7 +939,7 @@ watch(currentRoundId, (newVal, oldVal) => {
     background: #e5e7eb;
     font-size: 13px;
     font-weight: 600;
-    color: #333;
+    color: var(--text-primary);
     flex-shrink: 0;
   }
 
@@ -953,12 +953,12 @@ watch(currentRoundId, (newVal, oldVal) => {
     .player-name {
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--text-primary);
     }
 
     .team-name {
       font-size: 12px;
-      color: #999;
+      color: var(--text-tertiary);
     }
   }
 
@@ -972,7 +972,7 @@ watch(currentRoundId, (newVal, oldVal) => {
 }
 
 .info-icon {
-  color: #999;
+  color: var(--text-tertiary);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -995,7 +995,7 @@ watch(currentRoundId, (newVal, oldVal) => {
 
   .seats-tip {
     font-size: 13px;
-    color: #999;
+    color: var(--text-tertiary);
   }
 }
 
@@ -1006,7 +1006,7 @@ watch(currentRoundId, (newVal, oldVal) => {
   max-height: 400px;
   overflow-y: auto;
   padding: 8px;
-  background: #fafafa;
+  background: var(--table-header-bg);
   border-radius: 8px;
 
   @media (max-width: 1200px) {
@@ -1051,7 +1051,7 @@ watch(currentRoundId, (newVal, oldVal) => {
 
   .seat-occupation {
     font-size: 8px;
-    color: #888;
+    color: var(--text-tertiary);
     white-space: nowrap;
     max-width: 100%;
     overflow: hidden;
@@ -1060,7 +1060,7 @@ watch(currentRoundId, (newVal, oldVal) => {
 
   .seat-empty {
     font-size: 11px;
-    color: #ccc;
+    color: var(--text-tertiary);
   }
 
   &:hover {
@@ -1083,19 +1083,19 @@ watch(currentRoundId, (newVal, oldVal) => {
     align-items: center;
     gap: 16px;
     padding: 12px;
-    background: #f5f7fa;
+    background: var(--bg-primary);
     border-radius: 8px;
 
     .vote-order {
       font-size: 13px;
-      color: #666;
+      color: var(--text-secondary);
       width: 60px;
     }
 
     .vote-player {
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--text-primary);
     }
   }
 }
@@ -1127,7 +1127,7 @@ watch(currentRoundId, (newVal, oldVal) => {
 
   .edit-hint {
     font-size: 13px;
-    color: #999;
+    color: var(--text-tertiary);
     padding: 8px 12px;
     background: #fff7e6;
     border-radius: 6px;
@@ -1138,12 +1138,12 @@ watch(currentRoundId, (newVal, oldVal) => {
     align-items: center;
     gap: 16px;
     padding: 10px 12px;
-    background: #f5f7fa;
+    background: var(--bg-primary);
     border-radius: 8px;
 
     .vote-order {
       font-size: 13px;
-      color: #666;
+      color: var(--text-secondary);
       width: 60px;
       flex-shrink: 0;
     }

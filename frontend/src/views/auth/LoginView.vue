@@ -12,9 +12,21 @@
 
     <t-card class="login-card" :bordered="false">
       <div class="card-header">
-        <span class="logo-icon">🎤</span>
-        <h1 class="title">乘风2026运气赛</h1>
+        <span class="logo-icon">{{ currentGame.icon }}</span>
+        <h1 class="title">{{ currentGame.name }}运气赛</h1>
         <p class="subtitle">输入你的专属登录码，进入本轮舞台</p>
+      </div>
+
+      <div class="game-selector">
+        <label class="form-label">选择游戏</label>
+        <t-select
+          v-model="selectedGameId"
+          :options="gameOptions"
+          placeholder="请选择模拟游戏"
+          size="large"
+          :disabled="isLoading"
+          @change="onGameChange"
+        />
       </div>
 
       <div class="login-form">
@@ -23,7 +35,7 @@
             <label class="form-label">登录码</label>
             <t-input
               v-model="loginCode"
-              placeholder="请输入登录码"
+              :placeholder="`请输入登录码（如 ${currentGame.loginCodePrefix}）`"
               autocomplete="off"
               :disabled="isLoading"
               size="large"
@@ -69,11 +81,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useAuthStore } from '../../stores/authStore'
+import { useBbAuthStore } from '../../stores/bbAuthStore'
+import { useLvAuthStore } from '../../stores/lovevarietyAuthStore'
 import { useRouter, useRoute } from 'vue-router'
+import { GAMES, getGameById, DEFAULT_GAME_ID } from '../../config/games'
 
 const authStore = useAuthStore()
+const bbAuthStore = useBbAuthStore()
+const lvAuthStore = useLvAuthStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -86,7 +103,22 @@ const error = ref('')
 const success = ref('')
 const recentCodes = ref<string[]>([])
 
-// 加载最近登录码
+const selectedGameId = ref<string>(
+  (route.path.startsWith('/games/bigbrother/') ? 'bigbrother' : (route.params.gameId as string)) || authStore.currentGameId || DEFAULT_GAME_ID
+)
+
+const gameOptions = GAMES.map((g) => ({
+  label: `${g.icon} ${g.name}`,
+  value: g.id,
+}))
+
+const currentGame = computed(() => {
+  return getGameById(selectedGameId.value) || GAMES[0]
+})
+
+const isBB = computed(() => selectedGameId.value === 'bigbrother')
+const isLV = computed(() => selectedGameId.value === 'lovevariety')
+
 function loadRecentCodes() {
   try {
     const stored = localStorage.getItem(LOGIN_CODES_KEY)
@@ -96,9 +128,8 @@ function loadRecentCodes() {
   }
 }
 
-// 保存登录码到最近列表
 function saveRecentCode(code: string) {
-  const list = recentCodes.value.filter(c => c !== code)
+  const list = recentCodes.value.filter((c) => c !== code)
   list.unshift(code)
   if (list.length > MAX_RECENT_CODES) list.length = MAX_RECENT_CODES
   recentCodes.value = list
@@ -107,6 +138,15 @@ function saveRecentCode(code: string) {
 
 function fillCode(code: string) {
   loginCode.value = code
+}
+
+async function onGameChange(gameId: string) {
+  if (gameId === 'bigbrother') {
+    // Big Brother 不设置 authStore 的 currentGameId
+  } else {
+    authStore.setCurrentGameId(gameId)
+  }
+  await router.replace(`/games/${gameId}/login`)
 }
 
 async function handleLogin() {
@@ -122,31 +162,32 @@ async function handleLogin() {
   success.value = ''
 
   try {
-    const result = await authStore.login(trimmed)
+    const store = isBB.value ? bbAuthStore : isLV.value ? lvAuthStore : authStore
+    const result = await store.loginUser(trimmed)
 
     if (!result) {
       error.value = '登录码不存在，请检查后重新输入'
       return
     }
 
-    // 登录成功，保存登录码到最近列表
     saveRecentCode(trimmed)
-
-    success.value = '登录成功，正在进入舞台...'
+    success.value = '登录成功，正在进入...'
     await new Promise((resolve) => setTimeout(resolve, 500))
 
-    const redirect = (route.query.redirect as string) ||
-      (result.user.role === 'admin' ? '/admin/dashboard' : '/player/home')
+    const redirect =
+      (route.query.redirect as string) ||
+      (result.user.role === 'admin'
+        ? `/games/${selectedGameId.value}/admin/dashboard`
+        : `/games/${selectedGameId.value}/player/home`)
     await router.replace(redirect)
-  } catch (err) {
-    error.value = '登录失败，请稍后重试'
+  } catch (err: any) {
+    error.value = err.message || '登录失败，请稍后重试'
     console.error('Login error:', err)
   } finally {
     isLoading.value = false
   }
 }
 
-// 初始化加载最近登录码
 loadRecentCodes()
 </script>
 
@@ -283,6 +324,18 @@ loadRecentCodes()
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.game-selector {
+  margin-bottom: 16px;
+}
+
+.game-selector .form-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 8px;
 }
 
 .form-space {
@@ -428,7 +481,7 @@ loadRecentCodes()
   }
 }
 
-:deep(.t-input) {
+::deep(.t-input) {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
   color: #fff;
@@ -450,7 +503,45 @@ loadRecentCodes()
   }
 }
 
-:deep(.login-btn) {
+::deep(.t-select) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+
+  .t-input__inner {
+    color: #fff;
+  }
+
+  &:hover:not(.t-is-disabled) {
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  &.t-is-focused {
+    border-color: #a29bfe;
+    box-shadow: 0 0 20px rgba(162, 155, 254, 0.3);
+  }
+}
+
+::deep(.t-select__dropdown) {
+  background: rgba(20, 20, 50, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+
+  .t-select-option {
+    color: rgba(255, 255, 255, 0.8);
+
+    &:hover {
+      background: rgba(162, 155, 254, 0.2);
+    }
+
+    &.t-is-selected {
+      color: #a29bfe;
+      background: rgba(162, 155, 254, 0.15);
+    }
+  }
+}
+
+::deep(.login-btn) {
   background: linear-gradient(135deg, #a29bfe, #6c5ce7) !important;
   border: none !important;
   color: #fff !important;
@@ -461,12 +552,12 @@ loadRecentCodes()
   }
 }
 
-:deep(.t-alert--error) {
+::deep(.t-alert--error) {
   background: rgba(255, 107, 107, 0.15);
   border-color: rgba(255, 107, 107, 0.3);
 }
 
-:deep(.t-alert--success) {
+::deep(.t-alert--success) {
   background: rgba(46, 204, 113, 0.15);
   border-color: rgba(46, 204, 113, 0.3);
 }

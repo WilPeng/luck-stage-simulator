@@ -178,14 +178,15 @@ function goToTask() {
 }
 
 const taskLink = computed(() => {
+  const prefix = `/games/${authStore.currentGameId}/player`
   switch (seasonStore.season?.currentStage) {
-    case 'team': return '/player/team'
-    case 'song': return '/player/song'
-    case 'training': return '/player/training'
-    case 'rehearsal': return '/player/rehearsal'
-    case 'performance': return '/player/performance'
-    case 'elimination': return '/player/elimination'
-    default: return '/player/home'
+    case 'team': return `${prefix}/team`
+    case 'song': return `${prefix}/song`
+    case 'training': return `${prefix}/training`
+    case 'rehearsal': return `${prefix}/rehearsal`
+    case 'performance': return `${prefix}/performance`
+    case 'elimination': return `${prefix}/elimination`
+    default: return `${prefix}/home`
   }
 })
 
@@ -197,7 +198,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .player-home {
-  color: #333;
+color: var(--text-primary);
 }
 
 .welcome-section {
@@ -214,12 +215,12 @@ onMounted(async () => {
   }
 
   .player-name {
-    color: #fff;
-    -webkit-text-fill-color: #fff;
+    color: var(--text-primary);
+    -webkit-text-fill-color: var(--text-primary);
   }
 
   .season-info {
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-tertiary);
     margin: 0;
     font-size: 12px;
   }
@@ -234,7 +235,7 @@ onMounted(async () => {
 }
 
 .info-card {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 14px 16px;
   display: flex;
@@ -266,7 +267,7 @@ onMounted(async () => {
 
   h3 {
     margin: 0;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--text-tertiary);
     font-size: 11px;
     font-weight: 500;
   }
@@ -279,7 +280,7 @@ onMounted(async () => {
   font-size: 12px;
   font-weight: 600;
   background: linear-gradient(135deg, #a29bfe, #6c5ce7);
-  color: #fff;
+  color: var(--text-primary);
 
   &.training { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
   &.team { background: linear-gradient(135deg, #4ecdc4, #44a08d); }
@@ -290,7 +291,7 @@ onMounted(async () => {
 }
 
 .team-name {
-  color: #fff;
+  color: var(--text-primary);
   font-weight: 600;
   font-size: 14px;
   overflow: hidden;
@@ -301,14 +302,14 @@ onMounted(async () => {
 .team-role {
   display: inline-block;
   padding: 2px 6px;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--progress-bg);
   border-radius: 6px;
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-secondary);
 }
 
 .status-text {
-  color: #fff;
+  color: var(--text-primary);
   font-weight: 600;
   font-size: 14px;
   &.active { color: #2ecc71; }
@@ -317,14 +318,14 @@ onMounted(async () => {
 }
 
 .training-count {
-  color: #fff;
+  color: var(--text-primary);
   font-weight: 700;
   font-size: 22px;
   line-height: 1.1;
 }
 
 .training-hint {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-tertiary);
   font-size: 11px;
 }
 
@@ -337,7 +338,7 @@ onMounted(async () => {
 }
 
 .card {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
 }
@@ -352,7 +353,7 @@ onMounted(async () => {
   .header-title {
     font-size: 14px;
     font-weight: 600;
-    color: #fff;
+    color: var(--text-primary);
   }
 }
 
@@ -378,13 +379,13 @@ onMounted(async () => {
   justify-content: space-between;
   margin-bottom: 4px;
 
-  .attr-name { color: rgba(255, 255, 255, 0.7); font-size: 12px; }
-  .attr-value { color: #fff; font-weight: 600; font-size: 12px; }
+  .attr-name { color: var(--text-secondary); font-size: 12px; }
+  .attr-value { color: var(--text-primary); font-weight: 600; font-size: 12px; }
 }
 
 .attr-bar-track {
   height: 5px;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--progress-bg);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -412,13 +413,13 @@ onMounted(async () => {
 .task-info { flex: 1; min-width: 0; }
 
 .task-stage {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-tertiary);
   font-size: 12px;
   margin: 0 0 6px 0;
 }
 
 .task-desc {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 13px;
   margin: 0;
   line-height: 1.5;
@@ -430,7 +431,7 @@ onMounted(async () => {
   background: linear-gradient(135deg, #a29bfe, #6c5ce7);
   border: none;
   border-radius: 8px;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -458,7 +459,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 4px;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-color);
 
   &:last-child {
     border-bottom: none;
@@ -467,12 +468,12 @@ onMounted(async () => {
 }
 
 .log-time {
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--text-muted);
   font-size: 11px;
 }
 
 .log-detail {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -480,7 +481,7 @@ onMounted(async () => {
 .empty-logs {
   text-align: center;
   padding: 16px;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--text-muted);
   font-size: 12px;
 }
 

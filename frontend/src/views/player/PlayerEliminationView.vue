@@ -90,7 +90,7 @@ onMounted(async () => {
   min-height: 100vh;
   padding: 24px 20px;
   background: #f5f7fa;
-  color: #333;
+color: var(--text-primary);
 }
 
 // ===== 晋级恭喜 =====
@@ -128,7 +128,7 @@ onMounted(async () => {
 
   .congrats-text {
     font-size: 16px;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--text-secondary);
     margin: 0;
     line-height: 1.6;
   }
@@ -166,7 +166,7 @@ onMounted(async () => {
 
   .eliminated-text {
     font-size: 16px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-tertiary);
     margin: 0;
     line-height: 1.6;
   }
@@ -175,7 +175,7 @@ onMounted(async () => {
 // ===== 淘汰名单 =====
 .eliminated-section {
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 20px;
 }
@@ -199,7 +199,7 @@ onMounted(async () => {
 
   .section-count {
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted);
     background: rgba(231, 76, 60, 0.15);
     padding: 2px 10px;
     border-radius: 10px;
@@ -253,7 +253,7 @@ onMounted(async () => {
 
   .player-team {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted);
   }
 }
 
@@ -272,7 +272,7 @@ onMounted(async () => {
 
   .empty-text {
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.4);
+    color: var(--text-muted);
   }
 }
 

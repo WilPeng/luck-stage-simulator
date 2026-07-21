@@ -449,7 +449,7 @@ watch(currentRound, () => {
 
   p {
     margin: 0;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 13px;
   }
 }
@@ -473,7 +473,7 @@ watch(currentRound, () => {
 .config-label {
   font-size: 14px;
   font-weight: 500;
-  color: #1f2329;
+  color: var(--text-primary);
 }
 
 .team-structure {
@@ -488,12 +488,12 @@ watch(currentRound, () => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
   border-radius: 6px;
 
   .team-label {
     font-size: 14px;
-    color: #1f2329;
+    color: var(--text-primary);
   }
 }
 
@@ -509,7 +509,7 @@ watch(currentRound, () => {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
   border-radius: 6px;
 
   .song-name {
@@ -519,7 +519,7 @@ watch(currentRound, () => {
 
   .song-difficulty {
     font-size: 12px;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 
   .remove-btn {
@@ -527,7 +527,7 @@ watch(currentRound, () => {
     height: 20px;
     border: none;
     background: none;
-    color: #9ca3af;
+    color: var(--text-tertiary);
     cursor: pointer;
     font-size: 16px;
 
@@ -540,8 +540,8 @@ watch(currentRound, () => {
 .empty-songs {
   padding: 24px;
   text-align: center;
-  color: #9ca3af;
-  background: #f5f7fa;
+  color: var(--text-tertiary);
+  background: var(--bg-primary);
   border-radius: 6px;
   margin-bottom: 16px;
 }
@@ -550,7 +550,7 @@ watch(currentRound, () => {
   display: flex;
   gap: 24px;
   padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border-color);
 }
 
 .summary-item {
@@ -560,13 +560,13 @@ watch(currentRound, () => {
 
   .summary-label {
     font-size: 12px;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 
   .summary-value {
     font-size: 16px;
     font-weight: 600;
-    color: #1f2329;
+    color: var(--text-primary);
   }
 }
 
@@ -595,14 +595,14 @@ watch(currentRound, () => {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   margin-bottom: 8px;
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    background: #f5f7fa;
+    background: var(--bg-primary);
   }
 
   &.selected {
@@ -618,7 +618,7 @@ watch(currentRound, () => {
 
   .song-info {
     font-size: 12px;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 }
 

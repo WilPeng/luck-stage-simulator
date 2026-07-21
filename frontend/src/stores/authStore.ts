@@ -2,33 +2,64 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User } from '../types/user'
 import { login, logout as apiLogout } from '../services/api'
+import { DEFAULT_GAME_ID } from '../config/games'
 
 export const useAuthStore = defineStore('auth', () => {
   const currentUser = ref<User | null>(null)
+  const currentGameId = ref<string>(
+    sessionStorage.getItem('luck_sim_current_game') || DEFAULT_GAME_ID
+  )
   const isLoggedIn = computed(() => !!currentUser.value)
   const isAdmin = computed(() => currentUser.value?.role === 'admin')
   const isPlayer = computed(() => ['player', 'captain'].includes(currentUser.value?.role || ''))
   const isCaptain = computed(() => currentUser.value?.role === 'captain')
 
-  // 登录：兼容两种响应格式
-  //   真实后端: { success, data: User, token } → doRequest 拆出 User
-  //   Mock:     { token, user }
+  function setCurrentGameId(gameId: string) {
+    currentGameId.value = gameId
+    sessionStorage.setItem('luck_sim_current_game', gameId)
+  }
+
+  function gameKey(base: string): string {
+    return `${currentGameId.value}_${base}`
+  }
+
+  // ---- 主题切换（深色/浅色模式） ----
+  const THEME_KEY = 'luck_sim_theme'
+  const theme = ref<'dark' | 'light'>(
+    (localStorage.getItem(THEME_KEY) as 'dark' | 'light') || 'light'
+  )
+
+  function applyTheme(t: 'dark' | 'light') {
+    theme.value = t
+    localStorage.setItem(THEME_KEY, t)
+    document.querySelectorAll('.admin-layout, .player-layout').forEach(el => {
+      el.setAttribute('data-theme', t)
+    })
+  }
+
+  function toggleTheme() {
+    applyTheme(theme.value === 'dark' ? 'light' : 'dark')
+  }
+
+  function initTheme() {
+    applyTheme(theme.value)
+  }
+
   async function loginUser(code: string): Promise<{ token?: string; user: User } | null> {
     const result = await login(code)
     if (!result) return null
 
-    // 提取 token——可能以 result.token 或 result 根层存在
     const token = result.token || ''
-    // 提取 user——mock 返回 { token, user }，真实后端直接返回 User
     const user: User = result.user || result
 
     if (token) {
-      sessionStorage.setItem('luck_sim_token', token)
-      localStorage.setItem('luck_sim_token', token)
+      sessionStorage.setItem(gameKey('token'), token)
+      localStorage.setItem(gameKey('token'), token)
     }
     if (user) {
       currentUser.value = user
-      sessionStorage.setItem('luck_sim_user', JSON.stringify(user))
+      sessionStorage.setItem(gameKey('user'), JSON.stringify(user))
+      saveLoggedPlayer(user)
     }
     return { token, user }
   }
@@ -36,10 +67,12 @@ export const useAuthStore = defineStore('auth', () => {
   async function logout(): Promise<void> {
     await apiLogout()
     currentUser.value = null
+    sessionStorage.removeItem(gameKey('token'))
+    sessionStorage.removeItem(gameKey('user'))
   }
 
   function restoreSession(): boolean {
-    const userJson = sessionStorage.getItem('luck_sim_user')
+    const userJson = sessionStorage.getItem(gameKey('user'))
     if (userJson) {
       try {
         currentUser.value = JSON.parse(userJson)
@@ -57,6 +90,32 @@ export const useAuthStore = defineStore('auth', () => {
     currentUser.value = user
   }
 
+  function saveLoggedPlayer(user: User) {
+    const key = gameKey('logged_players')
+    const stored = localStorage.getItem(key)
+    const list: User[] = stored ? JSON.parse(stored) : []
+    const idx = list.findIndex(u => u.loginCode === user.loginCode)
+    if (idx >= 0) {
+      list[idx] = user
+    } else {
+      list.push(user)
+    }
+    localStorage.setItem(key, JSON.stringify(list))
+  }
+
+  function getLoggedPlayers(): User[] {
+    const key = gameKey('logged_players')
+    const stored = localStorage.getItem(key)
+    return stored ? JSON.parse(stored) : []
+  }
+
+  async function switchToPlayer(player: User): Promise<void> {
+    const result = await loginUser(player.loginCode)
+    if (!result) {
+      throw new Error('切换账号失败，无法获取认证信息')
+    }
+  }
+
   function updateUser(user: User): void {
     if (currentUser.value && currentUser.value.id === user.id) {
       currentUser.value = user
@@ -64,14 +123,17 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function getDefaultRedirectPath(): string {
-    if (isAdmin.value) return '/admin/dashboard'
-    if (isPlayer.value) return '/player/home'
-    return '/login'
+    const prefix = `/games/${currentGameId.value}`
+    if (isAdmin.value) return `${prefix}/admin/dashboard`
+    if (isPlayer.value) return `${prefix}/player/home`
+    return `${prefix}/login`
   }
 
   return {
-    currentUser, isLoggedIn, isAdmin, isPlayer, isCaptain,
+    currentUser, currentGameId, isLoggedIn, isAdmin, isPlayer, isCaptain,
+    setCurrentGameId, gameKey,
     login: loginUser, logout, restoreSession, clearAuth, setUser,
-    updateUser, getDefaultRedirectPath
+    updateUser, getDefaultRedirectPath, switchToPlayer, getLoggedPlayers,
+    theme, toggleTheme, initTheme
   }
 })

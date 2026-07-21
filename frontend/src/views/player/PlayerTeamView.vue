@@ -432,8 +432,8 @@ onMounted(async () => {
 
 .team-header {
   margin-bottom: 24px;
-  h1 { font-size: 24px; font-weight: 700; margin: 0 0 8px; color: rgba(255,255,255,0.9); }
-  .subtitle { color: rgba(255,255,255,0.65); font-size: 14px; margin: 0; }
+  h1 { font-size: 24px; font-weight: 700; margin: 0 0 8px; color: var(--text-primary); }
+  .subtitle { color: var(--text-tertiary); font-size: 14px; margin: 0; }
 }
 
 .section-title-bar {
@@ -443,8 +443,8 @@ onMounted(async () => {
 }
 
 .section-card {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: var(--hover-bg);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 20px;
@@ -458,8 +458,8 @@ onMounted(async () => {
 }
 
 .team-overview-card, .team-apply-card, .team-result-card {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.15);
+  background: var(--hover-bg);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 16px;
 }
@@ -468,56 +468,56 @@ onMounted(async () => {
   display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 8px;
   .team-overview-name, .apply-team-name { font-size: 16px; font-weight: 600; }
-  .team-overview-count, .apply-team-count { font-size: 13px; color: rgba(255,255,255,0.55); }
+  .team-overview-count, .apply-team-count { font-size: 13px; color: var(--text-tertiary); }
 }
 
-.team-captain, .apply-captain { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 12px; }
+.team-captain, .apply-captain { font-size: 13px; color: var(--text-tertiary); margin-bottom: 12px; }
 .captain-name-highlight { color: #f39c12; font-weight: 500; }
 
 .team-members-list { display: flex; flex-direction: column; gap: 6px; }
-.team-member-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,0.03);
+.team-member-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--hover-bg);
   &.is-captain { background: rgba(243,156,18,0.1); }
 }
 
 .mini-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(102,126,234,0.2); font-size: 14px; }
 .team-member-name { font-size: 13px; flex: 1; }
 .captain-mini-badge { font-size: 10px; color: #f39c12; background: rgba(243,156,18,0.15); padding: 1px 6px; border-radius: 6px; }
-.no-members { font-size: 12px; color: rgba(255,255,255,0.5); padding: 8px; text-align: center; }
+.no-members { font-size: 12px; color: var(--text-tertiary); padding: 8px; text-align: center; }
 
 /* 队长视图 */
 .team-card-modern {
-  background: rgba(255,255,255,0.03);
+  background: var(--hover-bg);
   border-radius: 12px;
   padding: 16px;
 }
 .team-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .team-name-large { font-size: 18px; font-weight: 700; }
-.team-capacity { font-size: 14px; color: rgba(255,255,255,0.55); }
+.team-capacity { font-size: 14px; color: var(--text-tertiary); }
 
 .member-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.member-chip { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(255,255,255,0.05); border-radius: 20px;
+.member-chip { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--card-bg); border-radius: 20px;
   &.chip-captain { background: rgba(243,156,18,0.15); border: 1px solid rgba(243,156,18,0.3); }
 }
 .chip-avatar { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; background: rgba(102,126,234,0.2); }
 .chip-name { font-size: 13px; }
 .chip-badge { font-size: 12px; }
-.no-data { font-size: 12px; color: rgba(255,255,255,0.5); padding: 12px; text-align: center; }
+.no-data { font-size: 12px; color: var(--text-tertiary); padding: 12px; text-align: center; }
 
 /* 申请列表 */
 .application-list { display: flex; flex-direction: column; gap: 8px; }
-.application-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; }
+.application-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--hover-bg); border-radius: 8px; }
 .app-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(102,126,234,0.2); font-size: 14px; }
 .app-name { flex: 1; font-size: 14px; }
 
 /* 邀请列表 */
 .search-box { margin-bottom: 12px; }
 .player-list { display: flex; flex-direction: column; gap: 8px; }
-.player-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 8px; }
+.player-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--hover-bg); border-radius: 8px; }
 .player-row-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(102,126,234,0.2); font-size: 14px; }
 .player-row-name { flex: 1; font-size: 14px; }
 
 /* 邀请卡片 */
-.invite-card { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(46,204,113,0.2); border-radius: 10px; margin-bottom: 8px; }
+.invite-card { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--hover-bg); border: 1px solid rgba(46,204,113,0.2); border-radius: 10px; margin-bottom: 8px; }
 .invite-text { font-size: 14px; flex: 1; }
 
 /* 队伍申请卡片 */
@@ -526,12 +526,12 @@ onMounted(async () => {
 
 /* 已完成结果 */
 .team-result-card { margin-bottom: 12px; }
-.result-team-name { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: rgba(255,255,255,0.9); }
+.result-team-name { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--text-primary); }
 .result-members { display: flex; flex-wrap: wrap; gap: 8px; }
-.result-member { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(255,255,255,0.06); border-radius: 16px; font-size: 13px; color: rgba(255,255,255,0.8); }
+.result-member { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--hover-bg); border-radius: 16px; font-size: 13px; color: var(--text-secondary); }
 .result-captain-badge { font-size: 10px; color: #f39c12; }
 
-.empty-tip { font-size: 13px; color: rgba(255,255,255,0.5); text-align: center; padding: 16px; }
+.empty-tip { font-size: 13px; color: var(--text-tertiary); text-align: center; padding: 16px; }
 
 // ===== 移动端适配 =====
 @media (max-width: 768px) {

@@ -83,7 +83,18 @@ import {
 
 initStorage()
 
-const API_BASE: string = (import.meta as any).env?.VITE_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
+const STATIC_API_BASE: string = 'https://luck-stage-simulator.onrender.com'
+
+function getApiBase(): string {
+  const gameId = sessionStorage.getItem('luck_sim_current_game') || 'shengfeng2026'
+  return `${STATIC_API_BASE}/api/${gameId}`
+}
+
+function getToken(): string | null {
+  const gameId = sessionStorage.getItem('luck_sim_current_game') || 'shengfeng2026'
+  const key = `${gameId}_token`
+  return localStorage.getItem(key) || sessionStorage.getItem(key)
+}
 
 interface ApiResponse<T> {
   code?: number
@@ -99,8 +110,8 @@ function buildHeaders(token: string | null): Record<string, string> {
 }
 
 export async function doRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('luck_sim_token') || sessionStorage.getItem('luck_sim_token')
-  const url = `${API_BASE}${path}`
+  const token = getToken()
+  const url = `${getApiBase()}${path}`
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -149,7 +160,7 @@ export async function login(loginCode: string): Promise<{ token: string; user: U
   //    后端格式: { success: true, data: User, token: "jwt..." }
   //    不能走 doRequest（它只返回 json.data，会丢掉 token）
   try {
-    const url = `${API_BASE}/auth/login`
+    const url = `${getApiBase()}/auth/login`
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -397,14 +408,24 @@ export async function deleteUser(id: string): Promise<void> {
   )
 }
 
-export async function batchDeleteUsers(ids: string[]): Promise<void> {
+export async function batchDeleteUsers(userIds: string[]): Promise<void> {
   return safeCall(
     () => doRequest<void>('/users/batch-delete', {
       method: 'POST',
-      body: JSON.stringify({ ids })
+      body: JSON.stringify({ userIds })
     }),
     async () => { throw new Error('Mock not supported for batchDeleteUsers') },
     'batchDeleteUsers'
+  )
+}
+
+export async function clearNonAdminUsers(): Promise<{ deletedCount: number }> {
+  return safeCall(
+    () => doRequest<{ deletedCount: number }>('/users/clear-non-admin', {
+      method: 'DELETE'
+    }),
+    async () => { throw new Error('Mock not supported for clearNonAdminUsers') },
+    'clearNonAdminUsers'
   )
 }
 
@@ -446,10 +467,10 @@ export type BatchCreateResult = User[]
 // ================== 头像 ==================
 
 export async function uploadAvatar(userId: string, file: File): Promise<{ avatar: string; user: User }> {
-  const token = localStorage.getItem('luck_sim_token')
+  const token = getToken()
   const formData = new FormData()
   formData.append('avatar', file)
-  const res = await fetch(`${API_BASE}/users/${userId}/avatar`, {
+  const res = await fetch(`${getApiBase()}/users/${userId}/avatar`, {
     method: 'POST',
     headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     body: formData
@@ -461,10 +482,10 @@ export async function uploadAvatar(userId: string, file: File): Promise<{ avatar
 
 // 选手自己上传头像（专用接口 /api/player/avatar）
 export async function uploadMyAvatar(file: File): Promise<{ avatar: string; userId: string }> {
-  const token = localStorage.getItem('luck_sim_token')
+  const token = getToken()
   const formData = new FormData()
   formData.append('avatar', file)
-  const res = await fetch(`${API_BASE}/player/avatar`, {
+  const res = await fetch(`${getApiBase()}/player/avatar`, {
     method: 'POST',
     headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     body: formData
@@ -484,8 +505,8 @@ export async function deleteAvatar(userId: string): Promise<void> {
 
 // 选手自己删除头像（专用接口 /api/player/avatar）
 export async function deleteMyAvatar(): Promise<void> {
-  const token = localStorage.getItem('luck_sim_token')
-  const res = await fetch(`${API_BASE}/player/avatar`, {
+  const token = getToken()
+  const res = await fetch(`${getApiBase()}/player/avatar`, {
     method: 'DELETE',
     headers: token ? { 'Authorization': `Bearer ${token}` } : {},
   })
@@ -498,9 +519,9 @@ export async function deleteMyAvatar(): Promise<void> {
 export function getAvatarUrl(avatar: string | null | undefined): string | undefined {
   if (!avatar) return undefined
   if (avatar.startsWith('http')) return avatar
-  const base = (import.meta as any).env?.VITE_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
-  const serverBase = base.replace(/\/api\/?$/, '')
-  return `${serverBase}${avatar}`
+  // avatar 已经是相对于后端的路径（如 /uploads/avatars/xxx.jpg）
+  // 开发时通过 Vite proxy 转发，生产时由部署服务处理
+  return avatar
 }
 
 // ================== 队伍 ==================
@@ -1082,6 +1103,14 @@ export async function createSong(songData: { name: string; type?: string; style?
   )
 }
 
+export async function randomSong(): Promise<Song> {
+  return safeCall(
+    () => doRequest<Song>('/songs/random'),
+    async () => { throw new Error('Mock not supported') },
+    'randomSong'
+  )
+}
+
 export async function batchCreateSongs(songs: { name: string; type?: string; style?: string; difficulty?: number }[]): Promise<Song[]> {
   return safeCall(
     () => doRequest<Song[]>('/songs/batch', {
@@ -1362,10 +1391,9 @@ export async function startRehearsalAPI(teamId: string): Promise<RehearsalResult
 
 // 查询本轮公演是否已开启（不走 doRequest 避免 data 剥离）
 export async function getPerformanceStarted(round: number): Promise<boolean> {
-  const base = (import.meta as any).env?.VITE_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
-  const token = localStorage.getItem('luck_sim_token') || sessionStorage.getItem('luck_sim_token')
+  const token = getToken()
   try {
-    const res = await fetch(`${base}/performance?round=${round}`, {
+    const res = await fetch(`${getApiBase()}/performance?round=${round}`, {
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
     })
     const json = await res.json()

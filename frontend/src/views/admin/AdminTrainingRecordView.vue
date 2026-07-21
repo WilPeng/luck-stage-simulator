@@ -252,7 +252,7 @@ onMounted(loadData)
 .admin-training-records {
   min-height: 100%;
   padding: 12px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
 }
 
 .round-selector {
@@ -261,13 +261,13 @@ onMounted(loadData)
   gap: 8px;
   margin-bottom: 12px;
   padding: 10px 12px;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 
   label {
     font-size: 13px;
-    color: rgba(0, 0, 0, 0.7);
+    color: var(--text-secondary);
     white-space: nowrap;
     font-weight: 500;
   }
@@ -284,13 +284,13 @@ onMounted(loadData)
     margin: 0 0 4px;
     font-size: 20px;
     line-height: 1.25;
-    color: #1a1a2e;
+    color: var(--text-primary);
   }
 
   p {
     margin: 0;
     font-size: 12px;
-    color: #86909c;
+    color: var(--text-secondary);
   }
 }
 
@@ -336,7 +336,7 @@ onMounted(loadData)
 
 .stat-label {
   font-size: 11px;
-  color: #86909c;
+  color: var(--text-secondary);
 }
 
 .section-title,
@@ -357,9 +357,9 @@ onMounted(loadData)
 
 .summary-item,
 .record-item {
-  border: 1px solid #e7e9ee;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: #fff;
+  background: var(--card-bg);
   padding: 12px;
   transition: transform 0.15s;
 
@@ -373,21 +373,21 @@ onMounted(loadData)
   display: block;
   font-size: 14px;
   font-weight: 600;
-  color: #1a1a2e;
+  color: var(--text-primary);
 }
 
 .player-code,
 .record-time,
 .after-line {
   font-size: 11px;
-  color: #86909c;
+  color: var(--text-secondary);
 }
 
 .record-card {
   display: block;
   margin-top: 3px;
   font-size: 12px;
-  color: #4e5969;
+  color: var(--text-secondary);
 }
 
 .attr-line,
@@ -404,8 +404,8 @@ onMounted(loadData)
   line-height: 1;
   padding: 5px 7px;
   border-radius: 6px;
-  background: #f2f3f5;
-  color: #4e5969;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
 }
 
 .change-line .positive {
@@ -419,7 +419,7 @@ onMounted(loadData)
 }
 
 .change-line .neutral {
-  color: #86909c;
+  color: var(--text-secondary);
 }
 
 .after-line {

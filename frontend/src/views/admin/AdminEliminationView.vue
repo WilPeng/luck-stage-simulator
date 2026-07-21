@@ -20,7 +20,7 @@
       <!-- 如果队伍详情为空，显示提示 -->
       <t-alert v-if="teamsWithDetails.length === 0" theme="warning" style="margin-bottom: 16px">
         <template #message>
-          暂无队伍数据，请先完成组队。您可以前往 <router-link to="/admin/team">组队管理</router-link> 创建队伍。
+          暂无队伍数据，请先完成组队。您可以前往 <router-link :to="`/games/${$route.params.gameId}/admin/team`">组队管理</router-link> 创建队伍。
         </template>
       </t-alert>
       
@@ -499,7 +499,7 @@ onMounted(async () => {
 .admin-elimination {
   min-height: 100%;
   padding: 20px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
 }
 
 .page-header {
@@ -510,20 +510,20 @@ onMounted(async () => {
 
   h1 {
     margin: 0 0 8px;
-    color: #1a1a2e;
+    color: var(--text-primary);
     font-size: 24px;
   }
 
   p {
     margin: 0;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 14px;
   }
 }
 
 .section-title {
   margin: 0 0 16px;
-  color: #1a1a2e;
+  color: var(--text-primary);
   font-size: 18px;
   font-weight: 600;
 }
@@ -537,7 +537,7 @@ onMounted(async () => {
 }
 
 .team-card {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
@@ -549,7 +549,7 @@ onMounted(async () => {
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 16px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 2px solid var(--border-color);
 
   .team-info {
     display: flex;
@@ -559,7 +559,7 @@ onMounted(async () => {
     h3 {
       margin: 0;
       font-size: 18px;
-      color: #1a1a2e;
+      color: var(--text-primary);
     }
   }
 
@@ -574,7 +574,7 @@ onMounted(async () => {
 
       .score-label {
         font-size: 12px;
-        color: #6b7280;
+        color: var(--text-secondary);
         margin-bottom: 4px;
       }
 
@@ -598,12 +598,12 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: #f9f9f9;
+  background: var(--table-hover-bg);
   border-radius: 8px;
   transition: background 0.2s;
 
   &:hover {
-    background: #f0f0f0;
+    background: var(--progress-bg);
   }
 }
 
@@ -617,7 +617,7 @@ onMounted(async () => {
 .member-name {
   font-weight: 500;
   font-size: 14px;
-  color: #1a1a2e;
+  color: var(--text-primary);
 }
 
 .member-details {
@@ -634,13 +634,13 @@ onMounted(async () => {
 
   .detail-label {
     font-size: 11px;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 
   .detail-value {
     font-size: 14px;
     font-weight: 500;
-    color: #1a1a2e;
+    color: var(--text-primary);
   }
 }
 
@@ -651,7 +651,7 @@ onMounted(async () => {
 
 .table-wrap {
   overflow-x: auto;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
@@ -662,7 +662,7 @@ onMounted(async () => {
   font-size: 14px;
 
   thead {
-    background: #f8f9fa;
+    background: var(--hover-bg);
     
     th {
       padding: 12px;
@@ -694,7 +694,7 @@ onMounted(async () => {
 
     td {
       padding: 12px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--border-color);
     }
   }
 }
@@ -737,7 +737,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: #f9f9f9;
+  background: var(--table-hover-bg);
   border-radius: 8px;
 
   .record-info {
@@ -752,12 +752,12 @@ onMounted(async () => {
 
     .record-detail {
       font-size: 12px;
-      color: #6b7280;
+      color: var(--text-secondary);
     }
 
     .record-time {
       font-size: 11px;
-      color: #9ca3af;
+      color: var(--text-tertiary);
     }
   }
 }

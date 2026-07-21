@@ -1,8 +1,20 @@
 <template>
   <div class="admin-ranking">
     <div class="page-header">
-      <h2>选手排名总览</h2>
-      <p class="page-desc">展示所有选手在各轮公演中的排名变化</p>
+      <div class="page-header-left">
+        <h2>选手排名总览</h2>
+        <p class="page-desc">展示所有选手在各轮公演中的排名变化</p>
+      </div>
+      <t-button
+        v-if="tableData.length > 0"
+        theme="default"
+        class="export-btn"
+        :loading="exporting"
+        @click="exportAsImage"
+      >
+        <template #icon><span class="export-icon">📷</span></template>
+        导出图片
+      </t-button>
     </div>
 
     <div class="ranking-table-container" v-if="!loading && tableData.length > 0">
@@ -69,10 +81,12 @@ import {
   getAvatarUrl
 } from '../../services/api'
 import type { PlayerResult } from '../../types/performance'
+import html2canvas from 'html2canvas'
 
 const seasonStore = useSeasonStore()
 const playerStore = usePlayerStore()
 const loading = ref(false)
+const exporting = ref(false)
 
 // 总轮次数
 const totalRounds = computed(() => seasonStore.season?.currentRound || 0)
@@ -124,7 +138,7 @@ async function loadRankings() {
     for (let round = 1; round <= totalRounds.value; round++) {
       const roundId = `round-${round}`
       
-      // 获取选手得分（仅用于 playerName 回退）
+      // 获取选手得分（用于 playerName 回退 + 团队信息兜底）
       try {
         const players = await getPlayerScores(round)
         allRoundsData[round] = players || []
@@ -148,6 +162,28 @@ async function loadRankings() {
       } catch (e) {
         allPopularityData[round] = {}
         allTeamNames[round] = {}
+      }
+
+      // 兜底：如果喜爱度排名数据为空，从 getPlayerScores 中提取团队名称和排名信息
+      if (Object.keys(allPopularityData[round] || {}).length === 0) {
+        const players = allRoundsData[round] || []
+        players.forEach((player: any) => {
+          const playerId = player.playerId || player.userId || player.id || ''
+          if (!playerId) return
+          if (player.rank !== undefined && player.rank !== null) {
+            if (!allPopularityData[round]) allPopularityData[round] = {}
+            // 仅当该选手尚未有排名数据时才填充
+            if (!allPopularityData[round][playerId]) {
+              allPopularityData[round][playerId] = { votes: 0, rank: player.rank }
+            }
+          }
+          if (player.teamName) {
+            if (!allTeamNames[round]) allTeamNames[round] = {}
+            if (!allTeamNames[round][playerId]) {
+              allTeamNames[round][playerId] = player.teamName
+            }
+          }
+        })
       }
     }
 
@@ -248,6 +284,39 @@ onMounted(async () => {
   await seasonStore.fetchPerformanceRound()
   await loadRankings()
 })
+
+// 导出表格为图片
+async function exportAsImage() {
+  const el = document.querySelector('.ranking-table-container') as HTMLElement
+  if (!el) return
+
+  exporting.value = true
+  try {
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      allowTaint: false
+    })
+
+    canvas.toBlob((blob) => {
+      if (!blob) return
+      const now = new Date()
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      const link = document.createElement('a')
+      link.download = `选手排名总览_${dateStr}.png`
+      link.href = URL.createObjectURL(blob)
+      link.click()
+      URL.revokeObjectURL(link.href)
+      MessagePlugin.success('图片导出成功')
+    })
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '导出图片失败')
+  } finally {
+    exporting.value = false
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -258,18 +327,36 @@ onMounted(async () => {
 
 .page-header {
   margin-bottom: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+
+  .page-header-left {
+    flex: 1;
+    min-width: 0;
+  }
 
   h2 {
     font-size: 20px;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--text-primary);
     margin: 0 0 8px 0;
   }
 
   .page-desc {
     font-size: 14px;
-    color: #666;
+    color: var(--text-secondary);
     margin: 0;
+  }
+
+  .export-btn {
+    flex-shrink: 0;
+    margin-top: 2px;
+
+    .export-icon {
+      font-size: 16px;
+    }
   }
 }
 
@@ -297,7 +384,7 @@ onMounted(async () => {
       text-align: center;
       font-weight: 600;
       font-size: 14px;
-      color: #333;
+      color: var(--text-primary);
       border-bottom: 2px solid #e8e8e8;
       white-space: nowrap;
 
@@ -317,7 +404,7 @@ onMounted(async () => {
         .col-sub {
           font-size: 11px;
           font-weight: 400;
-          color: #999;
+          color: var(--text-tertiary);
           margin-top: 2px;
         }
       }
@@ -329,12 +416,12 @@ onMounted(async () => {
       transition: background 0.2s;
 
       &:hover {
-        background: #f9f9f9;
+        background: var(--table-hover-bg);
       }
 
       &:not(:last-child) {
         td {
-          border-bottom: 1px solid #f0f0f0;
+          border-bottom: 1px solid var(--border-color);
         }
       }
     }
@@ -353,13 +440,13 @@ onMounted(async () => {
 
           .player-name {
             font-weight: 500;
-            color: #1a1a1a;
+            color: var(--text-primary);
             font-size: 15px;
           }
 
           .player-team {
             font-size: 12px;
-            color: #999;
+            color: var(--text-tertiary);
           }
         }
       }
@@ -404,7 +491,7 @@ onMounted(async () => {
           .rank-number {
             font-size: 20px;
             font-weight: 700;
-            color: #333;
+            color: var(--text-primary);
             line-height: 1.2;
           }
 
@@ -420,7 +507,7 @@ onMounted(async () => {
 
           .rank-team {
             font-size: 11px;
-            color: #888;
+            color: var(--text-tertiary);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -476,12 +563,12 @@ onMounted(async () => {
 
   p {
     margin: 8px 0;
-    color: #666;
+    color: var(--text-secondary);
     font-size: 16px;
 
     &.empty-hint {
       font-size: 14px;
-      color: #999;
+      color: var(--text-tertiary);
     }
   }
 }
@@ -495,7 +582,7 @@ onMounted(async () => {
 
   p {
     margin-top: 16px;
-    color: #666;
+    color: var(--text-secondary);
     font-size: 14px;
   }
 }

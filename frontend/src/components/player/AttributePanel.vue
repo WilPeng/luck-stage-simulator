@@ -81,14 +81,14 @@ const lowestAttr = computed(() => {
 
 <style lang="scss" scoped>
 .attribute-panel {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--card-bg);
   border-radius: 16px;
   padding: 24px;
   backdrop-filter: blur(10px);
 }
 
 .panel-title {
-  color: #fff;
+  color: var(--text-primary);
   margin: 0 0 20px 0;
   font-size: 18px;
   font-weight: 600;
@@ -125,7 +125,7 @@ const lowestAttr = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--hover-bg);
   border-radius: 10px;
 }
 
@@ -136,12 +136,12 @@ const lowestAttr = computed(() => {
 }
 
 .attr-label {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
 .attr-num {
-  color: #fff;
+  color: var(--text-primary);
   font-weight: 600;
   font-size: 16px;
 }
@@ -149,7 +149,7 @@ const lowestAttr = computed(() => {
 .attr-bar-wrapper {
   flex: 1;
   height: 8px;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--hover-bg);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -165,7 +165,7 @@ const lowestAttr = computed(() => {
   justify-content: space-around;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--border-color);
 }
 
 .summary-item {
@@ -174,13 +174,13 @@ const lowestAttr = computed(() => {
 
 .summary-label {
   display: block;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-tertiary);
   font-size: 12px;
   margin-bottom: 4px;
 }
 
 .summary-value {
-  color: #fff;
+  color: var(--text-primary);
   font-weight: 600;
   font-size: 16px;
 }

@@ -8,9 +8,10 @@ class StageEvent extends BaseModel {
   constructor(data) {
     super('StageEvent')
     this.name = ''
-    this.voteEffect = 0      // 正数为加分，负数为扣分
+    this.voteEffect = 0
     this.description = ''
     this.enabled = true
+    this.gameId = null
     this.createdAt = new Date().toISOString()
     if (data) Object.assign(this, data)
   }

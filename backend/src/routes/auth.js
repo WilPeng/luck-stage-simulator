@@ -13,7 +13,9 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ success: false, error: '登录码不能为空', code: 'INVALID_CODE' })
     }
 
-    const user = await User.findOne({ loginCode: loginInput })
+    const filter = { loginCode: loginInput }
+    if (req.gameId) filter.gameId = req.gameId
+    const user = await User.findOne(filter)
     if (!user) {
       return res.status(404).json({ success: false, error: '登录码不存在', code: 'INVALID_CODE' })
     }

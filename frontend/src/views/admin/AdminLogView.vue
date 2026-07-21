@@ -140,7 +140,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .admin-logs {
-  background: #f5f7fa;
+  background: var(--bg-primary);
   padding: 24px;
   min-height: 100%;
 }
@@ -158,11 +158,11 @@ onMounted(async () => {
     font-size: 24px;
     font-weight: 700;
     margin: 0 0 8px 0;
-    color: #000;
+    color: var(--text-primary);
   }
 
   .subtitle {
-    color: rgba(0, 0, 0, 0.6);
+    color: var(--text-secondary);
     margin: 0;
     font-size: 14px;
   }
@@ -174,21 +174,21 @@ onMounted(async () => {
 }
 
 .log-time {
-  color: rgba(0, 0, 0, 0.6);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
 .log-user {
   font-weight: 600;
-  color: #000;
+  color: var(--text-primary);
 }
 
 .log-target {
-  color: rgba(0, 0, 0, 0.6);
+  color: var(--text-secondary);
 }
 
 .log-detail {
-  color: rgba(0, 0, 0, 0.8);
+  color: var(--text-primary);
 }
 
 @media (max-width: 768px) {

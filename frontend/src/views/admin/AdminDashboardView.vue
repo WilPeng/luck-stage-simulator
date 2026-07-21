@@ -137,7 +137,7 @@
       <t-col :xs="24" :lg="12">
         <t-card title="最近操作日志" :bordered="false">
           <template #actions>
-            <t-button theme="primary" variant="text" size="small" @click="$router.push('/admin/logs')">
+            <t-button theme="primary" variant="text" size="small" @click="goToLogs()">
               查看全部
             </t-button>
           </template>
@@ -157,7 +157,7 @@
 
     <t-card title="队伍排名预览" :bordered="false">
       <template #actions>
-        <t-button theme="primary" variant="text" size="small" @click="$router.push('/admin/performance')">
+        <t-button theme="primary" variant="text" size="small" @click="goToPerformance()">
           查看公演详情
         </t-button>
       </template>
@@ -189,6 +189,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { useSeasonStore } from '../../stores/seasonStore'
@@ -196,11 +197,21 @@ import { useLogStore } from '../../stores/logStore'
 import { usePerformanceStore } from '../../stores/performanceStore'
 import type { User } from '../../types/user'
 
+const router = useRouter()
+const route = useRoute()
 const playerStore = usePlayerStore()
 const teamStore = useTeamStore()
 const seasonStore = useSeasonStore()
 const logStore = useLogStore()
 const performanceStore = usePerformanceStore()
+
+function goToLogs() {
+  router.push(`/games/${route.params.gameId}/admin/logs`)
+}
+
+function goToPerformance() {
+  router.push(`/games/${route.params.gameId}/admin/performance`)
+}
 
 const totalPlayers = computed(() => playerStore.getPlayers().length)
 const loggedInPlayers = computed(() => playerStore.users.filter((u: User) => u.hasLogin).length)
@@ -247,7 +258,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .admin-dashboard {
-  background: #f5f7fa;
+  background: var(--bg-primary);
   padding: 24px;
   min-height: 100%;
 }
@@ -312,7 +323,7 @@ onMounted(async () => {
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: #000;
+  color: var(--text-primary);
   line-height: 1.2;
 
   &.stage-name {
@@ -322,7 +333,7 @@ onMounted(async () => {
 
 .stat-label {
   font-size: 14px;
-  color: rgba(0, 0, 0, 0.6);
+  color: var(--text-secondary);
   margin-top: 4px;
 }
 
@@ -342,7 +353,7 @@ onMounted(async () => {
   gap: 12px;
   padding: 12px 16px;
   border-radius: 8px;
-  background: #f8f9fa;
+  background: var(--hover-bg);
   transition: all 0.3s;
 
   &.completed {
@@ -397,7 +408,7 @@ onMounted(async () => {
 
 .timeline-name {
   font-weight: 500;
-  color: #000;
+  color: var(--text-primary);
 }
 
 .log-item {
@@ -409,19 +420,19 @@ onMounted(async () => {
 }
 
 .log-time {
-  color: rgba(0, 0, 0, 0.6);
+  color: var(--text-secondary);
   font-size: 13px;
   white-space: nowrap;
 }
 
 .log-user {
   font-weight: 500;
-  color: #000;
+  color: var(--text-primary);
   white-space: nowrap;
 }
 
 .log-action {
-  color: rgba(0, 0, 0, 0.8);
+  color: var(--text-primary);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;

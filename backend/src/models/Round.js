@@ -12,6 +12,7 @@ class Round extends BaseModel {
     this.seasonId = null
     this.index = null
     this.stage = 'preparation'
+    this.gameId = null
     this.createdAt = new Date().toISOString()
     this.updatedAt = new Date().toISOString()
     this.teamCount = 5

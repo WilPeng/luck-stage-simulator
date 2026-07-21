@@ -8,6 +8,7 @@ class ChatMessage extends BaseModel {
   constructor(data) {
     super('ChatMessage')
     this.roundId = null
+    this.gameId = null
     if (data) Object.assign(this, data)
   }
 

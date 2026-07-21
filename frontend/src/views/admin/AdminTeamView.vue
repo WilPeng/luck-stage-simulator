@@ -415,6 +415,7 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
 import { SettingIcon, RefreshIcon } from 'tdesign-icons-vue-next'
 import { useTeamStore } from '../../stores/teamStore'
@@ -425,6 +426,7 @@ import { getTeams as dsGetTeams } from '../../services/dataService'
 import type { RoundTeam, RoundTeamMember } from '../../types/round'
 import type { User } from '../../types/user'
 
+const route = useRoute()
 const teamStore = useTeamStore()
 const playerStore = usePlayerStore()
 const seasonStore = useSeasonStore()
@@ -449,10 +451,11 @@ const filteredUnassignedPlayers = ref<User[]>([])
 
 // 加载状态
 const setupLoading = ref(false)
-// 使用 computed + setter 实现双向绑定到 store
-const currentRoundId = computed({
-  get: () => seasonStore.currentRoundId,
-  set: (val: string) => seasonStore.setCurrentRoundId(val)
+// 从路由参数获取轮次号，确保不同轮次加载各自的组队数据
+const roundFromRoute = computed(() => parseInt(route.params.round as string) || 0)
+const currentRoundId = computed(() => {
+  const r = roundFromRoute.value
+  return r > 0 ? `round-${r}` : seasonStore.currentRoundId
 })
 const loading = computed(() => teamStore.loading)
 
@@ -640,7 +643,12 @@ function doSetupTeams() {
 // 自动分配
 async function handleAutoDistribute() {
   try {
-    await teamStore.randomAssign(currentRoundId.value)
+    // 优先使用队伍数据中已有的 roundId（与 setupTeams 创建时一致），
+    // 确保后端能正确匹配到队伍
+    const actualRoundId = teamStore.teams.length > 0 && teamStore.teams[0].roundId
+      ? teamStore.teams[0].roundId
+      : currentRoundId.value
+    await teamStore.randomAssign(actualRoundId)
     // 自动将队长角色选手设置为各自队伍的队长
     await autoSetCaptains()
     MessagePlugin.success('自动分配完成')
@@ -656,7 +664,10 @@ async function autoSetCaptains() {
     // 优先从按轮次API获取当前轮队长，降级使用 User.role
     let allCaptains: any[] = []
     try {
-      const roundId = `round-${seasonStore.currentRoundNumber || 1}`
+      // 使用队伍数据中的实际 roundId
+      const roundId = teamStore.teams.length > 0 && teamStore.teams[0].roundId
+        ? teamStore.teams[0].roundId
+        : `round-${seasonStore.currentRoundNumber || 1}`
       const captainsRes = await getCurrentCaptains(roundId)
       if (captainsRes.success && captainsRes.data.length > 0) {
         allCaptains = captainsRes.data.map(c => {
@@ -959,26 +970,19 @@ async function handleMoveMember() {
 
 // 初始化
 onMounted(async () => {
-  // 先获取赛季信息以获取当前轮次
+  // 先获取赛季信息
   if (!seasonStore.season) {
     await seasonStore.fetchSeason()
   }
-  
-  // 如果没有设置当前轮次ID，根据当前轮次号构造roundId
-  if (!currentRoundId.value) {
-    const roundNum = seasonStore.currentRoundNumber
-    const roundId = `round-${roundNum}`
-    seasonStore.setCurrentRoundId(roundId)
-  }
-  
+
   if (currentRoundId.value) {
     // 加载玩家数据和队伍数据
     await Promise.all([
       fetchTeamManagementUsers(),
       teamStore.fetchTeams(currentRoundId.value)
     ])
-    
-    // 如果 teams 为空，从 dataService 直接读取（防止其他页面干扰 seasonStore）
+
+    // 如果 teams 为空，从 dataService 直接读取
     if (teamStore.teams.length === 0) {
       const dsData = dsGetTeams(currentRoundId.value)
       if (dsData.length > 0) {
@@ -986,8 +990,9 @@ onMounted(async () => {
         teamStore.teams = dsData
       }
     }
-    
+
     console.log('[AdminTeamView] 加载完成:', {
+      roundId: currentRoundId.value,
       teams: teamStore.teams.length,
       players: playerStore.users.length
     })
@@ -997,7 +1002,7 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .admin-teams {
-  background: #f5f7fa;
+  background: var(--bg-primary);
   padding: 12px;
   min-height: 100%;
   padding-bottom: env(safe-area-inset-bottom, 20px);
@@ -1012,7 +1017,7 @@ onMounted(async () => {
 
 .stat-card {
   flex: 1;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 10px;
   padding: 14px 12px;
   text-align: center;
@@ -1033,7 +1038,7 @@ onMounted(async () => {
 
   .stat-label {
     font-size: 11px;
-    color: rgba(0, 0, 0, 0.5);
+    color: var(--text-tertiary);
     margin-top: 4px;
   }
 }
@@ -1051,25 +1056,25 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 14px;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 10px 10px 0 0;
   margin-bottom: 1px;
 
   .section-title {
     font-size: 15px;
     font-weight: 600;
-    color: #1a1a2e;
+    color: var(--text-primary);
   }
 
   .section-count {
     font-size: 12px;
-    color: rgba(0, 0, 0, 0.45);
+    color: var(--text-tertiary);
   }
 }
 
 // 未分配选手
 .unassigned-section {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 10px;
   margin-bottom: 12px;
   overflow: hidden;
@@ -1096,7 +1101,7 @@ onMounted(async () => {
 
   &:active {
     transform: scale(0.95);
-    background: #f0f5ff;
+    background: var(--hover-bg);
   }
 
   .chip-avatar {
@@ -1119,14 +1124,14 @@ onMounted(async () => {
 
   .chip-name {
     font-size: 12px;
-    color: #1a1a2e;
+    color: var(--text-primary);
     font-weight: 500;
   }
 }
 
 // 队伍列表
 .teams-section {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -1143,7 +1148,7 @@ onMounted(async () => {
   background: linear-gradient(135deg, #fafafa 0%, #fff 100%);
   border-radius: 10px;
   padding: 14px;
-  border: 1px solid #eee;
+  border: 1px solid var(--border-color);
   transition: all 0.2s;
 
   &:active {
@@ -1165,12 +1170,12 @@ onMounted(async () => {
   .team-name {
     font-size: 17px;
     font-weight: 700;
-    color: #1a1a2e;
+    color: var(--text-primary);
   }
 
   .team-meta {
     font-size: 12px;
-    color: rgba(0, 0, 0, 0.45);
+    color: var(--text-tertiary);
   }
 }
 
@@ -1185,17 +1190,17 @@ onMounted(async () => {
   border: 1px solid rgba(255, 208, 168, 0.3);
 
   &.no-captain {
-    background: #f5f7fa;
+    background: var(--bg-primary);
     border-color: #e8e8e8;
 
     .captain-value {
-      color: #999;
+      color: var(--text-tertiary);
     }
   }
 
   .captain-label {
     font-size: 11px;
-    color: rgba(0, 0, 0, 0.45);
+    color: var(--text-tertiary);
   }
 
   .captain-value {
@@ -1221,7 +1226,7 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
   padding: 8px;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
@@ -1238,8 +1243,8 @@ onMounted(async () => {
   }
 
   &.add-member {
-    background: #f5f7fa;
-    border: 1px dashed #ccc;
+    background: var(--bg-primary);
+    border: 1px dashed var(--border-color);
 
     .add-icon {
       font-size: 20px;
@@ -1273,7 +1278,7 @@ onMounted(async () => {
 
   .member-name {
     font-size: 11px;
-    color: #1a1a2e;
+    color: var(--text-primary);
     text-align: center;
     max-width: 60px;
     overflow: hidden;
@@ -1284,7 +1289,7 @@ onMounted(async () => {
   .captain-badge {
     font-size: 9px;
     color: #e34d59;
-    background: #fff;
+    background: var(--card-bg);
     padding: 2px 6px;
     border-radius: 4px;
     font-weight: 600;
@@ -1295,7 +1300,7 @@ onMounted(async () => {
   display: flex;
   justify-content: space-around;
   padding: 12px 0;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-color);
 
   .attr-item {
     text-align: center;
@@ -1303,7 +1308,7 @@ onMounted(async () => {
     .attr-label {
       display: block;
       font-size: 10px;
-      color: rgba(0, 0, 0, 0.45);
+      color: var(--text-tertiary);
       margin-bottom: 4px;
     }
 
@@ -1323,11 +1328,11 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   padding: 8px 0;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-color);
 
   .song-label {
     font-size: 11px;
-    color: rgba(0, 0, 0, 0.45);
+    color: var(--text-tertiary);
   }
 }
 
@@ -1336,7 +1341,7 @@ onMounted(async () => {
   justify-content: flex-end;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-color);
 }
 
 // 设置表单
@@ -1351,7 +1356,7 @@ onMounted(async () => {
       font-size: 13px;
       font-weight: 600;
       margin-bottom: 8px;
-      color: #1a1a2e;
+      color: var(--text-primary);
     }
   }
 
@@ -1437,7 +1442,7 @@ onMounted(async () => {
     border-radius: 8px;
 
     &:active {
-      background: #f5f7fa;
+      background: var(--bg-primary);
     }
 
     .member-avatar {
@@ -1460,7 +1465,7 @@ onMounted(async () => {
     .member-name {
       flex: 1;
       font-size: 13px;
-      color: #1a1a2e;
+      color: var(--text-primary);
     }
   }
 }
@@ -1477,7 +1482,7 @@ onMounted(async () => {
     border-radius: 8px;
 
     &:active {
-      background: #f5f7fa;
+      background: var(--bg-primary);
     }
 
     .member-avatar {
@@ -1500,7 +1505,7 @@ onMounted(async () => {
     .member-name {
       flex: 1;
       font-size: 13px;
-      color: #1a1a2e;
+      color: var(--text-primary);
     }
   }
 }
@@ -1529,7 +1534,7 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
@@ -1543,12 +1548,12 @@ onMounted(async () => {
     flex: 1;
     font-size: 13px;
     font-weight: 600;
-    color: #1a1a2e;
+    color: var(--text-primary);
   }
 
   .song-style {
     font-size: 11px;
-    color: rgba(0, 0, 0, 0.45);
+    color: var(--text-tertiary);
   }
 }
 
@@ -1561,7 +1566,7 @@ onMounted(async () => {
     flex-direction: column;
     align-items: center;
     padding: 20px 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border-color);
     margin-bottom: 16px;
 
     .detail-avatar {
@@ -1572,7 +1577,7 @@ onMounted(async () => {
     .detail-name {
       font-size: 18px;
       font-weight: 700;
-      color: #1a1a2e;
+      color: var(--text-primary);
     }
   }
 
@@ -1583,7 +1588,7 @@ onMounted(async () => {
       padding: 8px 0;
 
       .info-label {
-        color: rgba(0, 0, 0, 0.45);
+        color: var(--text-tertiary);
         font-size: 12px;
       }
 
@@ -1596,7 +1601,7 @@ onMounted(async () => {
 
   .detail-attrs {
     padding: 16px 0;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--border-color);
 
     .attr-bar-item {
       display: flex;
@@ -1612,7 +1617,7 @@ onMounted(async () => {
       .attr-bar {
         flex: 1;
         height: 8px;
-        background: #f0f0f0;
+        background: var(--progress-bg);
         border-radius: 4px;
         overflow: hidden;
 
@@ -1637,14 +1642,14 @@ onMounted(async () => {
 
   .detail-actions {
     padding-top: 16px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--border-color);
   }
 }
 
 .no-data {
   text-align: center;
   padding: 24px;
-  color: rgba(0, 0, 0, 0.35);
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -1664,7 +1669,7 @@ onMounted(async () => {
 
   .empty-text {
     font-size: 13px;
-    color: rgba(0, 0, 0, 0.35);
+    color: var(--text-muted);
   }
 }
 

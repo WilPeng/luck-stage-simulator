@@ -602,7 +602,7 @@ onMounted(loadData)
 
   p {
     margin: 0;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 13px;
   }
 }
@@ -614,7 +614,7 @@ onMounted(loadData)
 
 .subtitle-info {
   margin-left: 8px;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -628,7 +628,7 @@ onMounted(loadData)
   display: flex;
   gap: 12px;
   padding: 16px;
-  background: #fff;
+  background: var(--card-bg);
   border: 2px solid #e5e7eb;
   border-radius: 8px;
   cursor: pointer;
@@ -691,7 +691,7 @@ onMounted(loadData)
 .candidate-name {
   font-size: 15px;
   font-weight: 600;
-  color: #1f2329;
+  color: var(--text-primary);
 }
 
 .candidate-stats {
@@ -702,9 +702,9 @@ onMounted(loadData)
   .stat {
     font-size: 12px;
     padding: 2px 6px;
-    background: #f5f7fa;
+    background: var(--bg-primary);
     border-radius: 4px;
-    color: #595959;
+    color: var(--text-secondary);
   }
 
   .stat.votes {
@@ -732,7 +732,7 @@ onMounted(loadData)
 
     &.eliminated {
       background: rgba(156, 163, 175, 0.1);
-      color: #9ca3af;
+      color: var(--text-tertiary);
     }
   }
 }
@@ -745,7 +745,7 @@ onMounted(loadData)
 .empty-state {
   text-align: center;
   padding: 40px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
   border-radius: 8px;
 
   .empty-icon {
@@ -755,7 +755,7 @@ onMounted(loadData)
   }
 
   p {
-    color: #9ca3af;
+    color: var(--text-tertiary);
     margin: 0;
   }
 }
@@ -802,13 +802,13 @@ onMounted(loadData)
   .captain-name {
     font-size: 14px;
     font-weight: 600;
-    color: #1f2329;
+    color: var(--text-primary);
     display: block;
   }
 
   .captain-attr {
     font-size: 11px;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 }
 
@@ -833,7 +833,7 @@ onMounted(loadData)
 .empty-captains {
   text-align: center;
   padding: 32px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
   border-radius: 8px;
 
   .empty-icon {
@@ -843,7 +843,7 @@ onMounted(loadData)
   }
 
   p {
-    color: #9ca3af;
+    color: var(--text-tertiary);
     margin: 0;
     font-size: 13px;
   }
@@ -858,8 +858,8 @@ onMounted(loadData)
 
 .team-formation-item {
   padding: 12px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   transition: all 0.2s;
 
@@ -883,7 +883,7 @@ onMounted(loadData)
   .team-name {
     font-size: 14px;
     font-weight: 600;
-    color: #1f2329;
+    color: var(--text-primary);
   }
 }
 
@@ -900,7 +900,7 @@ onMounted(loadData)
     .assigned-captain-name {
       font-size: 13px;
       font-weight: 500;
-      color: #1f2329;
+      color: var(--text-primary);
     }
   }
 }
@@ -942,7 +942,7 @@ onMounted(loadData)
 .tips-section {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border-color);
 }
 
 .tip-item {
@@ -957,7 +957,7 @@ onMounted(loadData)
 
   .tip-text {
     font-size: 12px;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 }
 
@@ -972,18 +972,18 @@ onMounted(loadData)
   th, td {
     padding: 12px;
     text-align: left;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border-color);
     font-size: 13px;
   }
 
   th {
-    background: #f5f7fa;
+    background: var(--bg-primary);
     font-weight: 600;
-    color: #595959;
+    color: var(--text-secondary);
   }
 
   td {
-    color: #1f2329;
+    color: var(--text-primary);
   }
 }
 
@@ -1003,7 +1003,7 @@ onMounted(loadData)
 }
 
 .no-voters {
-  color: #999;
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 

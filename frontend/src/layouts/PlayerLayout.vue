@@ -4,12 +4,16 @@
       <div class="header-content">
         <div class="logo-section">
           <span class="logo-icon">🎤</span>
-          <span class="logo-text">乘风2026</span>
+          <span class="logo-text">{{ gameName }}</span>
         </div>
         <div class="header-info">
           <span class="stage-tag" :class="stageClass">{{ stageName }}</span>
+          <button class="theme-toggle-btn" @click="authStore.toggleTheme()" :title="authStore.theme === 'dark' ? '切换浅色模式' : '切换深色模式'">
+            {{ authStore.theme === 'dark' ? '☀️' : '🌙' }}
+          </button>
           <div class="user-info">
             <span class="user-name">{{ currentUser?.name }}</span>
+            <button class="logout-btn" @click="openSwitchModal">切换</button>
             <button class="logout-btn" @click="handleLogout">退出</button>
           </div>
           <button class="menu-toggle" @click="mobileMenuOpen = !mobileMenuOpen">
@@ -45,29 +49,38 @@
             :key="round"
             class="nav-section"
           >
-            <div class="nav-section-header" :class="{ current: round === currentRoundNumber }">
+            <div
+              class="nav-section-header"
+              :class="{ current: round === currentRoundNumber }"
+              @click="toggleRound(round)"
+            >
+              <span class="collapse-icon" :class="{ collapsed: isRoundCollapsed(round) }">▾</span>
               <span class="section-icon">🎭</span>
               <span class="section-title">第{{ round }}公演</span>
               <span class="section-status" :class="getRoundStatus(round)">{{ getRoundStatusText(round) }}</span>
             </div>
-            <router-link
-              v-for="stage in roundStages"
-              :key="`${round}-${stage.type}`"
-              :to="getStagePath(round, stage.type)"
-              class="nav-item stage-item"
-              :class="{
-                active: isActive(getStagePath(round, stage.type)),
-                disabled: !isStageAccessible(round, stage.type),
-                completed: isStageCompleted(round, stage.type),
-                current: isStageActive(round, stage.type)
-              }"
-              @click="handleStageClick($event, round, stage.type)"
-            >
-              <span class="nav-icon">{{ stage.icon }}</span>
-              <span class="nav-text">{{ stage.name }}</span>
-              <span v-if="isStageCompleted(round, stage.type)" class="stage-badge completed">✓</span>
-              <span v-if="isStageActive(round, stage.type)" class="stage-badge current">●</span>
-            </router-link>
+            <div class="collapse-content" :class="{ collapsed: isRoundCollapsed(round) }">
+              <div class="collapse-inner">
+                <router-link
+                  v-for="stage in roundStages"
+                  :key="`${round}-${stage.type}`"
+                  :to="getStagePath(round, stage.type)"
+                  class="nav-item stage-item"
+                  :class="{
+                    active: isActive(getStagePath(round, stage.type)),
+                    disabled: !isStageAccessible(round, stage.type),
+                    completed: isStageCompleted(round, stage.type),
+                    current: isStageActive(round, stage.type)
+                  }"
+                  @click="handleStageClick($event, round, stage.type)"
+                >
+                  <span class="nav-icon">{{ stage.icon }}</span>
+                  <span class="nav-text">{{ stage.name }}</span>
+                  <span v-if="isStageCompleted(round, stage.type)" class="stage-badge completed">✓</span>
+                  <span v-if="isStageActive(round, stage.type)" class="stage-badge current">●</span>
+                </router-link>
+              </div>
+            </div>
           </div>
         </div>
       </aside>
@@ -92,6 +105,54 @@
       </router-link>
     </nav>
   </div>
+
+  <!-- 切换选手弹窗 -->
+  <Teleport to="body">
+    <div v-if="showSwitchModal" class="switch-overlay" @click.self="showSwitchModal = false">
+      <div class="switch-modal">
+        <div class="switch-modal-header">
+          <h3>切换选手</h3>
+          <button class="switch-close-btn" @click="showSwitchModal = false">✕</button>
+        </div>
+        <div class="switch-search">
+          <input
+            v-model="switchKeyword"
+            type="text"
+            placeholder="搜索选手姓名..."
+            class="switch-search-input"
+          />
+        </div>
+        <div class="switch-list" ref="switchListRef">
+          <div
+            v-for="player in filteredPlayers"
+            :key="player.id"
+            class="switch-item"
+            :class="{ active: player.id === currentUser?.id, switching: switchingUserId === player.id }"
+            @click="handleSwitchPlayer(player)"
+          >
+            <div class="switch-item-avatar">
+              <img
+                v-if="getAvatarUrl(player.avatar)"
+                :src="getAvatarUrl(player.avatar)"
+                alt=""
+                class="switch-avatar-img"
+              />
+              <span v-else class="switch-avatar-placeholder">{{ player.name?.[0] || '?' }}</span>
+            </div>
+            <div class="switch-item-info">
+              <span class="switch-item-name">{{ player.name }}</span>
+              <span class="switch-item-code">{{ player.loginCode }}</span>
+            </div>
+            <div v-if="player.id === currentUser?.id" class="switch-item-current">当前</div>
+            <div v-if="switchingUserId === player.id" class="switch-item-loading">切换中...</div>
+          </div>
+          <div v-if="filteredPlayers.length === 0" class="switch-empty">
+            {{ loggedPlayers.length === 0 ? '暂无历史登录记录' : '没有找到匹配的选手' }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -101,13 +162,72 @@ import { useAuthStore } from '../stores/authStore'
 import { useSeasonStore } from '../stores/seasonStore'
 import { STAGE_ORDER, STAGE_NAMES } from '../types/season'
 import type { StageType } from '../types/season'
+import type { User } from '../types/user'
 import { MessagePlugin } from 'tdesign-vue-next'
+import { getAvatarUrl } from '../services/api'
 
 const authStore = useAuthStore()
 const seasonStore = useSeasonStore()
 const route = useRoute()
 const router = useRouter()
 const mobileMenuOpen = ref(false)
+
+import { GAMES, getGameById } from '../config/games'
+
+const gamePrefix = computed(() => `/games/${authStore.currentGameId}`)
+const gameName = computed(() => {
+  const game = getGameById(authStore.currentGameId)
+  return game?.name || '模拟游戏'
+})
+
+// 切换选手（仅展示本设备已登录过的选手）
+const showSwitchModal = ref(false)
+const switchKeyword = ref('')
+const switchingUserId = ref<string | null>(null)
+const loggedPlayers = ref<User[]>([])
+
+const filteredPlayers = computed(() => {
+  let list = loggedPlayers.value
+  const kw = switchKeyword.value.trim()
+  if (kw) {
+    list = list.filter(u => u.name.includes(kw) || u.loginCode?.includes(kw))
+  }
+  return list
+})
+
+function openSwitchModal() {
+  showSwitchModal.value = true
+  switchKeyword.value = ''
+  // 从 localStorage 读取历史登录记录
+  loggedPlayers.value = authStore.getLoggedPlayers()
+}
+
+async function handleSwitchPlayer(player: User) {
+  if (player.id === authStore.currentUser?.id) return
+  switchingUserId.value = player.id
+  try {
+    await authStore.switchToPlayer(player)
+    showSwitchModal.value = false
+    MessagePlugin.success(`已切换到 ${player.name}`)
+    // 整页刷新确保所有数据干净
+    window.location.reload()
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '切换失败')
+  } finally {
+    switchingUserId.value = null
+  }
+}
+
+// 每轮公演的折叠状态，默认所有轮次都展开
+const collapsedRounds = ref<Record<number, boolean>>({})
+
+function toggleRound(round: number) {
+  collapsedRounds.value[round] = !collapsedRounds.value[round]
+}
+
+function isRoundCollapsed(round: number): boolean {
+  return collapsedRounds.value[round] === true
+}
 
 const currentUser = computed(() => authStore.currentUser)
 const stageName = computed(() => seasonStore.stageName)
@@ -129,12 +249,12 @@ const stageClass = computed(() => {
 })
 
 // 固定菜单项
-const fixedItems = [
-  { path: '/player/home', icon: '🏠', text: '首页' },
-  { path: '/player/profile', icon: '✨', text: '我的属性' },
-  { path: '/player/chat', icon: '💬', text: '聊天室' },
-  { path: '/player/history', icon: '📝', text: '我的记录' }
-]
+const fixedItems = computed(() => [
+  { path: `${gamePrefix.value}/player/home`, icon: '🏠', text: '首页' },
+  { path: `${gamePrefix.value}/player/profile`, icon: '✨', text: '我的属性' },
+  { path: `${gamePrefix.value}/player/chat`, icon: '💬', text: '聊天室' },
+  { path: `${gamePrefix.value}/player/history`, icon: '📝', text: '我的记录' }
+])
 
 // 阶段配置
 const stageConfig: Record<StageType, { icon: string; name: string }> = {
@@ -159,9 +279,10 @@ const roundStages = computed(() => {
 
 // 移动端底部导航
 const tabItems = computed(() => {
+  const prefix = gamePrefix.value
   const items = [
-    { path: '/player/home', icon: '🏠', text: '首页' },
-    { path: '/player/profile', icon: '✨', text: '我的' }
+    { path: `${prefix}/player/home`, icon: '🏠', text: '首页' },
+    { path: `${prefix}/player/profile`, icon: '✨', text: '我的' }
   ]
 
   // 添加当前轮次的当前阶段（排除已删除的彩排）
@@ -184,15 +305,16 @@ const tabItems = computed(() => {
 
 // 获取阶段路径
 function getStagePath(round: number, stage: StageType): string {
+  const prefix = gamePrefix.value
   const pathMap: Record<StageType, string> = {
-    preparation: `/player/round/${round}/preparation`,
-    captain_vote: `/player/round/${round}/captain`,
-    teaming: `/player/round/${round}/team`,
-    song_select: `/player/round/${round}/song-selection`,
-    training: `/player/round/${round}/training`,
+    preparation: `${prefix}/player/round/${round}/preparation`,
+    captain_vote: `${prefix}/player/round/${round}/captain`,
+    teaming: `${prefix}/player/round/${round}/team`,
+    song_select: `${prefix}/player/round/${round}/song-selection`,
+    training: `${prefix}/player/round/${round}/training`,
     rehearsal: '',
-    performance: `/player/round/${round}/performance`,
-    elimination: `/player/round/${round}/elimination`
+    performance: `${prefix}/player/round/${round}/performance`,
+    elimination: `${prefix}/player/round/${round}/elimination`
   }
   return pathMap[stage]
 }
@@ -247,10 +369,9 @@ function handleStageClick(event: Event, round: number, stage: StageType) {
 
 // 退出登录
 async function handleLogout() {
-  // 先清除所有持久化数据，再跳转，避免与新登录产生竞态
   await authStore.logout()
   authStore.clearAuth()
-  await router.replace('/login')
+  await router.replace(`${gamePrefix.value}/login`)
 }
 
 // 初始化：加载赛季进度和菜单
@@ -263,16 +384,63 @@ onMounted(async () => {
   } catch (e) {
     console.error('[PlayerLayout] 初始化加载失败:', e)
   }
+  // 初始化主题
+  authStore.initTheme()
 })
 </script>
 
 <style lang="scss" scoped>
+/* ===================== CSS 变量（主题切换） ===================== */
+.player-layout {
+  // 浅色模式（默认）
+  --bg-primary: #f5f7fa;
+  --bg-secondary: #ffffff;
+  --card-bg: #ffffff;
+  --card-border: #e8e8e8;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-tertiary: #999999;
+  --text-muted: #bbbbbb;
+  --border-color: #e8e8e8;
+  --sidebar-bg: #ffffff;
+  --sidebar-hover: #f0f0f5;
+  --hover-bg: #f5f5f8;
+  --progress-bg: #f0f0f0;
+  --switch-modal-bg: #ffffff;
+  --switch-modal-text: #1a1a1a;
+  --switch-input-border: #e0e0e0;
+  --switch-input-placeholder: #bbb;
+  --switch-hover: #f5f5f8;
+
+  // 深色模式
+  &[data-theme="dark"] {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --card-bg: rgba(255, 255, 255, 0.05);
+    --card-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --text-tertiary: rgba(255, 255, 255, 0.45);
+    --text-muted: rgba(255, 255, 255, 0.35);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --sidebar-bg: #2a2a4a;
+    --sidebar-hover: rgba(255, 255, 255, 0.06);
+    --hover-bg: rgba(255, 255, 255, 0.06);
+    --progress-bg: rgba(255, 255, 255, 0.15);
+    --switch-modal-bg: #2a2a4a;
+    --switch-modal-text: #ffffff;
+    --switch-input-border: rgba(255, 255, 255, 0.15);
+    --switch-input-placeholder: rgba(255, 255, 255, 0.35);
+    --switch-hover: rgba(255, 255, 255, 0.06);
+  }
+}
+
 .player-layout {
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  background: #f5f7fa;
+  background: var(--bg-primary);
 }
 
 .player-header {
@@ -314,6 +482,26 @@ onMounted(async () => {
   gap: 16px;
 }
 
+.theme-toggle-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+  padding: 0;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+  }
+}
+
 .stage-tag {
   padding: 5px 14px;
   border-radius: 20px;
@@ -347,8 +535,8 @@ onMounted(async () => {
   flex: 1;
   overflow-y: auto;
   padding: 20px;
-  background: #f5f7fa;
-  color: #333;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .logout-btn {
@@ -418,8 +606,8 @@ onMounted(async () => {
 .player-sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: #fff;
-  border-right: 1px solid #e8e8e8;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-color);
   overflow-y: auto;
   padding: 12px 0;
 }
@@ -439,14 +627,32 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  color: #999;
+  color: var(--text-tertiary);
   font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    background: var(--sidebar-hover);
+  }
 
   &.current {
     color: #667eea;
     background: rgba(102, 126, 234, 0.08);
     border-radius: 8px;
+  }
+
+  .collapse-icon {
+    font-size: 10px;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+    width: 12px;
+    text-align: center;
+
+    &.collapsed {
+      transform: rotate(-90deg);
+    }
   }
 
   .section-icon {
@@ -479,20 +685,36 @@ onMounted(async () => {
   }
 }
 
+// 折叠展开动画
+.collapse-content {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.3s ease;
+
+  &.collapsed {
+    grid-template-rows: 0fr;
+  }
+
+  .collapse-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+}
+
 .nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  color: #666;
+  color: var(--text-secondary);
   text-decoration: none;
   font-size: 14px;
   transition: all 0.2s;
   border-radius: 0;
 
   &:hover {
-    color: #333;
-    background: #f0f0f5;
+    color: var(--text-primary);
+    background: var(--sidebar-hover);
   }
 
   &.active {
@@ -553,12 +775,6 @@ onMounted(async () => {
   50% { opacity: 0.3; }
 }
 
-.player-main {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-}
-
 .overlay {
   display: none;
   position: fixed;
@@ -617,7 +833,7 @@ onMounted(async () => {
     z-index: 101;
     transition: left 0.3s ease;
     width: 200px;
-    background: #fff;
+    background: var(--sidebar-bg);
     padding-top: 56px;
 
     &.open {
@@ -649,9 +865,9 @@ onMounted(async () => {
     bottom: 0;
     left: 0;
     right: 0;
-    background: #fff;
+    background: var(--sidebar-bg);
     box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
-    border-top: 1px solid #e8e8e8;
+    border-top: 1px solid var(--border-color);
     z-index: 98;
     padding: 6px 2px;
     padding-bottom: calc(6px + env(safe-area-inset-bottom));
@@ -665,7 +881,7 @@ onMounted(async () => {
     justify-content: center;
     padding: 6px 2px;
     text-decoration: none;
-    color: #999;
+    color: var(--text-tertiary);
     transition: all 0.2s;
     border-radius: 10px;
     gap: 3px;
@@ -730,5 +946,186 @@ onMounted(async () => {
   .tab-text {
     font-size: 9px;
   }
+}
+
+/* ===================== 切换选手弹窗 ===================== */
+.switch-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.switch-modal {
+  background: var(--switch-modal-bg);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.switch-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 12px;
+
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--switch-modal-text);
+  }
+}
+
+.switch-close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+  }
+}
+
+.switch-search {
+  padding: 8px 24px 12px;
+
+  .switch-search-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--switch-input-border);
+    border-radius: 10px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+    background: transparent;
+    color: var(--switch-modal-text);
+
+    &:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+    }
+
+    &::placeholder {
+      color: var(--switch-input-placeholder);
+    }
+  }
+}
+
+.switch-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 12px 16px;
+}
+
+.switch-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+
+  &:hover {
+    background: var(--switch-hover);
+  }
+
+  &.active {
+    background: rgba(102, 126, 234, 0.08);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+  }
+
+  &.switching {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+}
+
+.switch-item-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.switch-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.switch-avatar-placeholder {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.switch-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.switch-item-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--switch-modal-text);
+}
+
+.switch-item-code {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.switch-item-current {
+  font-size: 12px;
+  color: #667eea;
+  font-weight: 500;
+  padding: 2px 10px;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+
+.switch-item-loading {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.switch-empty,
+.switch-loading {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-tertiary);
+  font-size: 14px;
 }
 </style>
