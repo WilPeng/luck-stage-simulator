@@ -3,12 +3,19 @@
     <div class="page-header">
       <h1>赛程矩阵</h1>
       <div class="header-actions">
+        <button v-if="isWaiting" class="lv-btn lv-btn-start" @click="handleStartGame">▶ 开始游戏</button>
         <button class="lv-btn lv-btn-danger" @click="handleResetSeason">全部重新开始</button>
         <button class="lv-btn" @click="fetchData">刷新</button>
       </div>
     </div>
 
-    <div class="current-status">
+    <div v-if="isWaiting" class="waiting-banner">
+      <div class="waiting-icon">⏸</div>
+      <div class="waiting-text">游戏已重置，等待管理员开始</div>
+      <div class="waiting-hint">点击"开始游戏"按钮后，选手端才能看到其他选手并开始游戏</div>
+    </div>
+
+    <div v-else class="current-status">
       <div class="status-item">
         <span class="label">当前轮次</span>
         <span class="value">{{ seasonStore.currentRoundNumber }}</span>
@@ -80,6 +87,7 @@ import { LV_STAGE_NAME, type LVStageType } from '../../../types/lovevariety'
 const router = useRouter()
 const seasonStore = useLvSeasonStore()
 
+const isWaiting = computed(() => seasonStore.currentStage === 'waiting')
 const setRound = ref(1)
 const setStage = ref<LVStageType>('love_vote')
 
@@ -98,21 +106,31 @@ async function fetchData() {
 }
 
 function getCellClass(round: number, stage: string) {
+  if (isWaiting.value) return 'waiting'
   return seasonStore.getStageStatus(round, stage as LVStageType)
 }
 
 function getCellText(round: number, stage: string) {
+  if (isWaiting.value) return '等待'
   const status = seasonStore.getStageStatus(round, stage as LVStageType)
   const map: Record<string, string> = { completed: '已完成', current: '当前', future: '未开始' }
   return map[status] || ''
 }
 
 function navigateToStage(round: number, stage: string) {
+  if (isWaiting.value) return
   if (seasonStore.getStageStatus(round, stage as LVStageType) === 'future') return
   const stageRoutes: Record<string, string> = {
     love_vote: 'votes', pairing: 'pairing', elimination: 'elimination'
   }
   router.push(`/games/lovevariety/admin/round/${round}/${stageRoutes[stage] || 'votes'}`)
+}
+
+async function handleStartGame() {
+  try {
+    await seasonStore.setStage(1, 'love_vote')
+    await fetchData()
+  } catch (e: any) { alert(e.message) }
 }
 
 async function handleSetStage() {
@@ -154,6 +172,8 @@ onMounted(fetchData)
 .lv-btn-sm { padding: 6px 16px; font-size: 13px; }
 .lv-btn-danger { border-color: #ff4444; color: #ff4444; }
 .lv-btn-danger:hover { background: #ff444422; }
+.lv-btn-start { border-color: #00ff88; color: #00ff88; font-weight: 600; }
+.lv-btn-start:hover { background: #00ff8822; }
 .lv-input {
   background: #1a0f2e; border: 1px solid #ff69b422; color: #e0e0e0;
   padding: 8px 12px; border-radius: 6px; font-size: 14px; outline: none; width: 100%;
@@ -162,6 +182,14 @@ onMounted(fetchData)
   background: #1a0f2e; border: 1px solid #ff69b422; color: #e0e0e0;
   padding: 8px 12px; border-radius: 6px; font-size: 14px; outline: none; cursor: pointer; width: 100%;
 }
+.waiting-banner {
+  text-align: center; padding: 40px 20px;
+  background: linear-gradient(135deg, #1a0f2e, #2d1b4e);
+  border: 1px dashed #ffaa0044; border-radius: 12px; margin-bottom: 20px;
+}
+.waiting-icon { font-size: 40px; margin-bottom: 12px; }
+.waiting-text { font-size: 18px; font-weight: 600; color: #ffaa00; margin-bottom: 8px; }
+.waiting-hint { font-size: 13px; color: #888; }
 .current-status {
   display: flex; align-items: center; gap: 24px;
   background: #1a0f2e; border: 1px solid #ff69b422; border-radius: 10px;
@@ -194,10 +222,12 @@ onMounted(fetchData)
 .stage-cell.completed { color: #ff69b4; }
 .stage-cell.current { color: #ffaa00; background: #ffaa0008; }
 .stage-cell.future { color: #444; cursor: not-allowed; }
+.stage-cell.waiting { color: #666; cursor: not-allowed; }
 .cell-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .cell-dot.completed { background: #ff69b4; }
 .cell-dot.current { background: #ffaa00; animation: pulse 2s infinite; }
 .cell-dot.future { background: #333; }
-.cell-status { vertical-align: middle; }
+.cell-dot.waiting { background: #555; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.cell-status { vertical-align: middle; }
 </style>

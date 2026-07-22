@@ -34,10 +34,13 @@ router.get('/round/:roundId', async (req, res) => {
 // POST /eliminate - 淘汰选手
 router.post('/eliminate', async (req, res) => {
   try {
+    const season = await getCurrentSeason()
+    if (!season || season.currentStage === 'waiting') {
+      return res.status(400).json({ success: false, error: '游戏尚未开始', code: 'WAITING' })
+    }
     const { playerId, playerName } = req.body
     if (!playerId) return res.status(400).json({ success: false, error: '选手ID不能为空', code: 'INVALID_ID' })
 
-    const season = await getCurrentSeason()
     const roundId = `round-${season.currentRound}`
 
     const player = await LVPlayer.findOne({ id: playerId })

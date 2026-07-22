@@ -132,7 +132,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     currentUser, currentGameId, isLoggedIn, isAdmin, isPlayer, isCaptain,
     setCurrentGameId, gameKey,
-    login: loginUser, logout, restoreSession, clearAuth, setUser,
+    login: loginUser, loginUser, logout, restoreSession, clearAuth, setUser,
     updateUser, getDefaultRedirectPath, switchToPlayer, getLoggedPlayers,
     theme, toggleTheme, initTheme
   }

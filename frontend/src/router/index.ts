@@ -112,6 +112,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'home', name: 'LVPlayerHome', component: () => import('../views/lovevariety/player/LVHomeView.vue') },
       { path: 'round/:round/vote', name: 'LVPlayerVote', component: () => import('../views/lovevariety/player/LVVoteView.vue') },
       { path: 'round/:round/result', name: 'LVPlayerResult', component: () => import('../views/lovevariety/player/LVResultView.vue') },
+      { path: 'letter/send', name: 'LVPlayerLetterSend', component: () => import('../views/lovevariety/player/LVLetterSendView.vue') },
+      { path: 'letter/inbox', name: 'LVPlayerInbox', component: () => import('../views/lovevariety/player/LVInboxView.vue') },
     ]
   },
   // ===== 恋综管理端 =====
@@ -127,7 +129,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'stage', name: 'LVAdminStage', component: () => import('../views/lovevariety/admin/LVStageView.vue') },
       { path: 'round/:round/votes', name: 'LVAdminRoundVotes', component: () => import('../views/lovevariety/admin/LVVotesView.vue') },
       { path: 'round/:round/pairing', name: 'LVAdminRoundPairing', component: () => import('../views/lovevariety/admin/LVPairingView.vue') },
-      { path: 'round/:round/elimination', name: 'LVAdminRoundElimination', component: () => import('../views/lovevariety/admin/LVEliminationView.vue') }
+      { path: 'round/:round/elimination', name: 'LVAdminRoundElimination', component: () => import('../views/lovevariety/admin/LVEliminationView.vue') },
+      { path: 'letters', name: 'LVAdminLetters', component: () => import('../views/lovevariety/admin/LVLetterView.vue') }
     ]
   },
   // ===== 默认重定向 =====

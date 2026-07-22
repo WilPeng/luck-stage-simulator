@@ -11,6 +11,9 @@ class LVPlayer extends BaseModel {
     this.role = data?.role || 'player'
     this.status = data?.status || 'active'
     this.hasLogin = data?.hasLogin || false
+    this.letterPublicCount = data?.letterPublicCount ?? 0
+    this.letterAnonymousCount = data?.letterAnonymousCount ?? 0
+    this.voteBudget = data?.voteBudget ?? 0
     this.avatar = data?.avatar || null
     this.gameId = data?.gameId || 'lovevariety'
     this.createdAt = data?.createdAt || new Date().toISOString()

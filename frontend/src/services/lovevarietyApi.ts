@@ -1,7 +1,8 @@
 import type {
   LVSeason, LVSeasonProgress, LVMenuData, LVPlayer,
   LVPlayerListResponse, LVPlayerStats,
-  LVLoveVote, LVPairingResult, LVElimination, LVStageType
+  LVLoveVote, LVPairingResult, LVElimination, LVStageType,
+  LVLetter, LVLetterListResponse
 } from '../types/lovevariety'
 
 const API_BASE = 'https://luck-stage-simulator.onrender.com/api/lovevariety'
@@ -147,10 +148,54 @@ export async function lvGetMyVotes(roundId: string): Promise<LVLoveVote[]> {
   return doRequest<LVLoveVote[]>(`/votes/my-votes/${roundId}`)
 }
 
+export async function lvGetMyBudget(roundId: string): Promise<{ budget: number }> {
+  return doRequest<{ budget: number }>(`/votes/my-budget/${roundId}`)
+}
+
 export async function lvSubmitVotes(roundId: string, votes: { targetId: string; targetName: string; value: number }[], totalValue: number): Promise<{ count: number }> {
   return doRequest<{ count: number }>('/votes/submit', {
     method: 'POST',
     body: JSON.stringify({ roundId, votes, totalValue })
+  })
+}
+
+// 管理员代选手投送喜爱值
+export async function lvAdminSubmitVotes(roundId: string, voterId: string, votes: { targetId: string; targetName: string; value: number }[], totalValue: number): Promise<{ count: number; voterName: string }> {
+  return doRequest<{ count: number; voterName: string }>('/votes/admin-submit', {
+    method: 'POST',
+    body: JSON.stringify({ roundId, voterId, votes, totalValue })
+  })
+}
+
+// 管理员设置选手喜爱值预算（不传 budget 则重新随机）
+export async function lvAdminSetBudget(playerId: string, budget?: number): Promise<{ playerId: string; playerName: string; voteBudget: number }> {
+  return doRequest<{ playerId: string; playerName: string; voteBudget: number }>('/votes/admin-set-budget', {
+    method: 'POST',
+    body: JSON.stringify({ playerId, budget })
+  })
+}
+
+// 管理员批量设置选手预算（不传 budget 则每人随机）
+export async function lvAdminBatchSetBudget(playerIds: string[], budget?: number): Promise<{ playerId: string; playerName: string; voteBudget: number }[]> {
+  return doRequest<{ playerId: string; playerName: string; voteBudget: number }[]>('/votes/admin-batch-set-budget', {
+    method: 'POST',
+    body: JSON.stringify({ playerIds, budget })
+  })
+}
+
+// 管理员一键自动代投（随机分配所有目标并提交）
+export async function lvAdminAutoSubmit(roundId: string, voterId: string): Promise<{ count: number; voterName: string; votes: { targetName: string; value: number }[] }> {
+  return doRequest<{ count: number; voterName: string; votes: { targetName: string; value: number }[] }>('/votes/admin-auto-submit', {
+    method: 'POST',
+    body: JSON.stringify({ roundId, voterId })
+  })
+}
+
+// 管理员撤回选手的投送
+export async function lvAdminRevokeVotes(roundId: string, voterId: string): Promise<{ deletedCount: number; voterName: string }> {
+  return doRequest<{ deletedCount: number; voterName: string }>('/votes/admin-revoke', {
+    method: 'POST',
+    body: JSON.stringify({ roundId, voterId })
   })
 }
 
@@ -163,8 +208,12 @@ export async function lvGetRoundPairing(roundId: string): Promise<any> {
   return doRequest<any>(`/pairing/round/${roundId}`)
 }
 
-export async function lvCalculatePairing(): Promise<LVPairingResult> {
-  return doRequest<LVPairingResult>('/pairing/calculate', { method: 'POST' })
+export async function lvCalculatePairing(roundId?: string): Promise<LVPairingResult> {
+  const body = roundId ? JSON.stringify({ roundId }) : undefined
+  return doRequest<LVPairingResult>('/pairing/calculate', {
+    method: 'POST',
+    ...(body ? { body } : {})
+  })
 }
 
 // ===== 淘汰管理 =====
@@ -185,4 +234,91 @@ export async function lvEliminatePlayer(playerId: string, playerName: string): P
 
 export async function lvRestorePlayer(id: string): Promise<LVPlayer> {
   return doRequest<LVPlayer>(`/elimination/restore/${id}`, { method: 'POST' })
+}
+
+// ===== 信件 =====
+export async function lvGetAllLetters(params?: { senderId?: string; receiverId?: string; keyword?: string; page?: number; pageSize?: number }): Promise<LVLetterListResponse> {
+  const query = new URLSearchParams()
+  if (params?.senderId) query.append('senderId', params.senderId)
+  if (params?.receiverId) query.append('receiverId', params.receiverId)
+  if (params?.keyword) query.append('keyword', params.keyword)
+  if (params?.page) query.append('page', String(params.page))
+  if (params?.pageSize) query.append('pageSize', String(params.pageSize))
+  const qs = query.toString()
+  return doRequest<LVLetterListResponse>(`/letters/list${qs ? '?' + qs : ''}`)
+}
+
+export async function lvGetInbox(): Promise<LVLetter[]> {
+  return doRequest<LVLetter[]>('/letters/inbox')
+}
+
+export async function lvGetSentLetters(): Promise<LVLetter[]> {
+  return doRequest<LVLetter[]>('/letters/sent')
+}
+
+export async function lvSendLetter(data: { receiverId: string; content: string; isAnonymous: boolean }): Promise<LVLetter> {
+  return doRequest<LVLetter>('/letters/send', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  })
+}
+
+export async function lvDeleteLetter(id: string): Promise<void> {
+  return doRequest<void>(`/letters/${id}`, { method: 'DELETE' })
+}
+
+export async function lvAddLetterCount(data: { playerIds?: string[]; amount: number; letterType?: 'public' | 'anonymous' }): Promise<{ modifiedCount: number }> {
+  return doRequest<{ modifiedCount: number }>('/letters/add-count', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  })
+}
+
+// ===== 头像 =====
+export async function lvUploadMyAvatar(file: File): Promise<{ avatar: string; playerId: string }> {
+  const token = getToken()
+  const formData = new FormData()
+  formData.append('avatar', file)
+  const res = await fetch(`${API_BASE}/players/me/avatar`, {
+    method: 'POST',
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    body: formData
+  })
+  const json = await res.json()
+  if (!res.ok || json.success === false) throw new Error(json.error || '上传头像失败')
+  return json.data
+}
+
+export async function lvDeleteMyAvatar(): Promise<void> {
+  await fetch(`${API_BASE}/players/me/avatar`, {
+    method: 'DELETE',
+    headers: buildHeaders()
+  })
+}
+
+export async function lvUploadPlayerAvatar(playerId: string, file: File): Promise<{ avatar: string; playerId: string }> {
+  const token = getToken()
+  const formData = new FormData()
+  formData.append('avatar', file)
+  const res = await fetch(`${API_BASE}/players/${playerId}/avatar`, {
+    method: 'POST',
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    body: formData
+  })
+  const json = await res.json()
+  if (!res.ok || json.success === false) throw new Error(json.error || '上传头像失败')
+  return json.data
+}
+
+export async function lvDeletePlayerAvatar(playerId: string): Promise<void> {
+  await fetch(`${API_BASE}/players/${playerId}/avatar`, {
+    method: 'DELETE',
+    headers: buildHeaders()
+  })
+}
+
+export function lvGetAvatarUrl(avatar: string | null | undefined): string | undefined {
+  if (!avatar) return undefined
+  if (avatar.startsWith('http')) return avatar
+  return avatar
 }

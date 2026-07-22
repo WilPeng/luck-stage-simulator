@@ -28,6 +28,10 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 }
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 
+// 确保恋综头像上传目录存在
+const LV_AVATAR_DIR = path.join(__dirname, '..', 'uploads', 'lvavatars')
+if (!fs.existsSync(LV_AVATAR_DIR)) fs.mkdirSync(LV_AVATAR_DIR, { recursive: true })
+
 const initData = async () => {
   const User = require('./models/User')
   const Season = require('./models/Season')
@@ -230,6 +234,7 @@ app.use('/api/lovevariety/players', lvGameIdMiddleware, require('./games/lovevar
 app.use('/api/lovevariety/votes', lvGameIdMiddleware, require('./games/lovevariety/routes/lvVotes'))
 app.use('/api/lovevariety/pairing', lvGameIdMiddleware, require('./games/lovevariety/routes/lvPairing'))
 app.use('/api/lovevariety/elimination', lvGameIdMiddleware, require('./games/lovevariety/routes/lvElimination'))
+app.use('/api/lovevariety/letters', lvGameIdMiddleware, require('./games/lovevariety/routes/lvLetter'))
 
 app.use('/api/:gameId/auth', require('./routes/auth'))
 app.use('/api/:gameId/season', require('./routes/season'))

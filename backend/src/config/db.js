@@ -51,7 +51,8 @@ const COLLECTIONS = [
   'LVLoveVote',
   'LVPairingResult',
   'LVElimination',
-  'LVOperationLog'
+  'LVOperationLog',
+  'LVLetter'
 ]
 
 let connected = false

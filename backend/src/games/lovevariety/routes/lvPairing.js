@@ -32,11 +32,14 @@ router.get('/round/:roundId', async (req, res) => {
   }
 })
 
-// POST /calculate - 计算配对结果
+// POST /calculate - 计算配对结果（可指定 roundId，不指定则使用当前轮次）
 router.post('/calculate', async (req, res) => {
   try {
     const season = await getCurrentSeason()
-    const roundId = `round-${season.currentRound}`
+    if (!season || season.currentStage === 'waiting') {
+      return res.status(400).json({ success: false, error: '游戏尚未开始', code: 'WAITING' })
+    }
+    const roundId = req.body.roundId || `round-${season.currentRound}`
 
     // 获取本轮所有投送记录
     const { getCollection } = require('../../../config/db')

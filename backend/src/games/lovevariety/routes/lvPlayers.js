@@ -1,7 +1,30 @@
 const express = require('express')
 const router = express.Router()
+const path = require('path')
+const fs = require('fs')
+const multer = require('multer')
 const LVPlayer = require('../models/LVPlayer')
 const { generateId, logAction, LV_ACTION_TYPES } = require('../helpers')
+
+// 头像上传配置
+const AVATAR_DIR = path.join(__dirname, '..', '..', '..', '..', 'uploads', 'lvavatars')
+if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true })
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, AVATAR_DIR),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.jpg'
+    cb(null, `lv-avatar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`)
+  }
+})
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) return cb(new Error('仅支持图片文件'))
+    cb(null, true)
+  }
+})
 
 // GET / - 获取所有选手
 router.get('/', async (req, res) => {
@@ -39,13 +62,24 @@ router.get('/', async (req, res) => {
   }
 })
 
-// GET /active - 获取活跃选手
+// GET /active - 获取活跃选手（waiting 阶段返回空列表）
 router.get('/active', async (req, res) => {
   try {
+    const { getCurrentSeason } = require('../helpers')
+    const season = await getCurrentSeason()
+    // waiting 阶段不暴露选手信息
+    if (season && season.currentStage === 'waiting') {
+      return res.json({ success: true, data: [] })
+    }
     const { getCollection } = require('../../../config/db')
     const col = getCollection('LVPlayer')
     const docs = await col.find({ gameId: 'lovevariety', status: 'active', role: 'player' }).toArray()
-    const list = docs.map(d => ({ id: d.id, name: d.name, avatar: d.avatar || null, status: d.status }))
+    const list = docs.map(d => ({
+      id: d.id, name: d.name, avatar: d.avatar || null, status: d.status,
+      letterPublicCount: d.letterPublicCount ?? 0,
+      letterAnonymousCount: d.letterAnonymousCount ?? 0,
+      voteBudget: d.voteBudget ?? 0
+    }))
     res.json({ success: true, data: list })
   } catch (e) {
     console.error(e)
@@ -104,10 +138,11 @@ router.put('/:id', async (req, res) => {
   try {
     const player = await LVPlayer.findOne({ id: req.params.id, gameId: 'lovevariety' })
     if (!player) return res.status(404).json({ success: false, error: '选手不存在', code: 'NOT_FOUND' })
-    const { name, loginCode, status } = req.body
+    const { name, loginCode, status, avatar } = req.body
     if (name) player.name = name
     if (loginCode) player.loginCode = loginCode
     if (status) player.status = status
+    if (avatar !== undefined) player.avatar = avatar
     player.updatedAt = new Date().toISOString()
     await player.save()
     await logAction(req.user?.userId || 'system', req.user?.name || 'system', 'admin',
@@ -131,6 +166,111 @@ router.delete('/:id', async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '删除选手失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /:id/avatar - 管理员上传选手头像
+router.post('/:id/avatar', upload.single('avatar'), async (req, res) => {
+  try {
+    const player = await LVPlayer.findOne({ id: req.params.id, gameId: 'lovevariety' })
+    if (!player) return res.status(404).json({ success: false, error: '选手不存在', code: 'NOT_FOUND' })
+    if (!req.file) return res.status(400).json({ success: false, error: '未上传图片文件', code: 'MISSING_FILE' })
+
+    const oldAvatar = player.avatar
+    const avatarUrl = `/uploads/lvavatars/${req.file.filename}`
+    player.avatar = avatarUrl
+    player.updatedAt = new Date().toISOString()
+    await player.save()
+
+    if (oldAvatar && oldAvatar.startsWith('/uploads/lvavatars/')) {
+      const oldPath = path.join(__dirname, '..', '..', '..', '..', oldAvatar)
+      if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {})
+    }
+
+    res.json({ success: true, data: { avatar: avatarUrl, playerId: player.id } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '上传头像失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// DELETE /:id/avatar - 管理员删除选手头像
+router.delete('/:id/avatar', async (req, res) => {
+  try {
+    const player = await LVPlayer.findOne({ id: req.params.id, gameId: 'lovevariety' })
+    if (!player) return res.status(404).json({ success: false, error: '选手不存在', code: 'NOT_FOUND' })
+    const oldAvatar = player.avatar
+    player.avatar = null
+    player.updatedAt = new Date().toISOString()
+    await player.save()
+
+    if (oldAvatar && oldAvatar.startsWith('/uploads/lvavatars/')) {
+      const oldPath = path.join(__dirname, '..', '..', '..', '..', oldAvatar)
+      if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {})
+    }
+    res.json({ success: true, data: null })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '删除头像失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /me/avatar - 选手自行上传头像
+router.post('/me/avatar', upload.single('avatar'), async (req, res) => {
+  try {
+    const authHeader = req.header('Authorization')
+    if (!authHeader) return res.status(401).json({ success: false, error: '未认证', code: 'NO_TOKEN' })
+    const token = authHeader.replace('Bearer ', '')
+    const jwt = require('jsonwebtoken')
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+
+    const player = await LVPlayer.findOne({ id: decoded.userId, gameId: 'lovevariety' })
+    if (!player) return res.status(404).json({ success: false, error: '选手不存在', code: 'NOT_FOUND' })
+    if (!req.file) return res.status(400).json({ success: false, error: '未上传图片文件', code: 'MISSING_FILE' })
+
+    const oldAvatar = player.avatar
+    const avatarUrl = `/uploads/lvavatars/${req.file.filename}`
+    player.avatar = avatarUrl
+    player.updatedAt = new Date().toISOString()
+    await player.save()
+
+    if (oldAvatar && oldAvatar.startsWith('/uploads/lvavatars/')) {
+      const oldPath = path.join(__dirname, '..', '..', '..', '..', oldAvatar)
+      if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {})
+    }
+
+    res.json({ success: true, data: { avatar: avatarUrl, playerId: player.id } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '上传头像失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// DELETE /me/avatar - 选手自行删除头像
+router.delete('/me/avatar', async (req, res) => {
+  try {
+    const authHeader = req.header('Authorization')
+    if (!authHeader) return res.status(401).json({ success: false, error: '未认证', code: 'NO_TOKEN' })
+    const token = authHeader.replace('Bearer ', '')
+    const jwt = require('jsonwebtoken')
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+
+    const player = await LVPlayer.findOne({ id: decoded.userId, gameId: 'lovevariety' })
+    if (!player) return res.status(404).json({ success: false, error: '选手不存在', code: 'NOT_FOUND' })
+
+    const oldAvatar = player.avatar
+    player.avatar = null
+    player.updatedAt = new Date().toISOString()
+    await player.save()
+
+    if (oldAvatar && oldAvatar.startsWith('/uploads/lvavatars/')) {
+      const oldPath = path.join(__dirname, '..', '..', '..', '..', oldAvatar)
+      if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {})
+    }
+    res.json({ success: true, data: null })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '删除头像失败', code: 'SERVER_ERROR' })
   }
 })
 

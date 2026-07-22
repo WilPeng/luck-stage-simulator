@@ -10,7 +10,7 @@ const LVOperationLog = require('../models/LVOperationLog')
 const {
   generateId, logAction, getCurrentSeason,
   LV_STAGE_ORDER, LV_STAGE_NAME, getStageStatus, getStageName, getStageIndex, getNextStage,
-  LV_ACTION_TYPES, randomInt
+  LV_ACTION_TYPES, randomVoteBudget
 } = require('../helpers')
 
 async function ensureSeason() {
@@ -32,11 +32,16 @@ async function ensureSeason() {
 
 async function clearRoundData(roundIndex) {
   const filter = { roundId: `round-${roundIndex}` }
-  await Promise.all([
-    LVLoveVote.deleteMany(filter),
-    LVPairingResult.deleteMany(filter),
-    LVElimination.deleteMany(filter)
-  ])
+  await LVLoveVote.deleteMany(filter)
+}
+
+// 为所有活跃选手生成本轮喜爱值预算
+async function generateVoteBudgets() {
+  const players = await LVPlayer.find({ gameId: 'lovevariety', status: 'active', role: 'player' })
+  for (const p of players) {
+    p.voteBudget = randomVoteBudget()
+    await p.save()
+  }
 }
 
 // GET / - 获取赛季信息
@@ -140,6 +145,8 @@ router.post('/set', auth, requireAdmin, async (req, res) => {
     season.currentStage = stage
     season.updatedAt = new Date().toISOString()
     await season.save()
+    // 进入 love_vote 阶段时生成预算
+    if (stage === 'love_vote') await generateVoteBudgets()
     await logAction(req.user.userId, req.user.name || 'admin', 'admin',
       LV_ACTION_TYPES.PROGRESS_SET, 'season', season.id,
       `进度设置: 第${prevRound}周 ${getStageName(prevStage)} → 第${round}周 ${getStageName(stage)}`)
@@ -157,6 +164,7 @@ router.post('/next', auth, requireAdmin, async (req, res) => {
     let targetStage = getNextStage(season.currentStage)
     const prevRound = season.currentRound
     const prevStage = season.currentStage
+    let isNewVoteStage = false
     if (targetStage === null) {
       const newRound = season.currentRound + 1
       if (newRound > season.totalRounds) {
@@ -165,11 +173,14 @@ router.post('/next', auth, requireAdmin, async (req, res) => {
       await clearRoundData(prevRound)
       season.currentRound = newRound
       season.currentStage = 'love_vote'
+      isNewVoteStage = true
     } else {
       season.currentStage = targetStage
+      if (targetStage === 'love_vote') isNewVoteStage = true
     }
     season.updatedAt = new Date().toISOString()
     await season.save()
+    if (isNewVoteStage) await generateVoteBudgets()
     await logAction(req.user.userId, req.user.name || 'admin', 'admin',
       LV_ACTION_TYPES.PROGRESS_NEXT, 'season', season.id,
       `自动推进: 第${prevRound}周 ${getStageName(prevStage)} → 第${season.currentRound}周 ${getStageName(season.currentStage)}`)
@@ -199,12 +210,12 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
     }
     const season = await ensureSeason()
     season.currentRound = 1
-    season.currentStage = 'love_vote'
+    season.currentStage = 'waiting'
     season.updatedAt = new Date().toISOString()
     await season.save()
     await logAction(req.user.userId, req.user.name || 'admin', 'admin',
-      LV_ACTION_TYPES.SEASON_RESET, 'season', season.id, '完全重置')
-    res.json({ success: true, data: { currentRound: 1, currentStage: 'love_vote' } })
+      LV_ACTION_TYPES.SEASON_RESET, 'season', season.id, '完全重置（等待开始）')
+    res.json({ success: true, data: { currentRound: 1, currentStage: 'waiting' } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '重置失败', code: 'SERVER_ERROR' })

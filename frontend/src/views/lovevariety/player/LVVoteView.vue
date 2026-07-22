@@ -16,7 +16,10 @@
       <h3 class="result-title">投送详情</h3>
       <div class="votes-list">
         <div v-for="v in myVotes" :key="v.id" class="vote-item">
-          <span class="vote-target">{{ v.targetName }}</span>
+          <div class="vote-target-row">
+            <LvAvatar :name="v.targetName" :avatar="getTargetAvatar(v.targetId)" size="sm" />
+            <span class="vote-target">{{ v.targetName }}</span>
+          </div>
           <span class="vote-value">{{ v.value }}</span>
         </div>
       </div>
@@ -31,7 +34,7 @@
       <div class="total-banner">
         <div class="total-label">你可投送的喜爱值总额</div>
         <div class="total-value">{{ totalBudget }}</div>
-        <div class="total-hint">随机抽取 40-70</div>
+        <div class="total-hint">系统分配预算</div>
       </div>
 
       <div class="remaining-info" :class="{ error: remaining < 0 || !allDifferent }">
@@ -42,7 +45,10 @@
 
       <div class="players-list">
         <div v-for="p in targets" :key="p.id" class="player-row">
-          <span class="player-name">{{ p.name }}</span>
+          <div class="player-name-row">
+            <LvAvatar :name="p.name" :avatar="getTargetAvatar(p.id)" size="sm" />
+            <span class="player-name">{{ p.name }}</span>
+          </div>
           <input v-model.number="voteValues[p.id]" type="number" class="vote-input"
             min="1" :max="totalBudget" placeholder="0"
             @input="onValueChange" />
@@ -65,7 +71,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLvAuthStore } from '../../../stores/lovevarietyAuthStore'
 import { useLvSeasonStore } from '../../../stores/lovevarietySeasonStore'
-import { lvGetActivePlayers, lvGetMyVotes, lvSubmitVotes } from '../../../services/lovevarietyApi'
+import { lvGetActivePlayers, lvGetMyVotes, lvGetMyBudget, lvSubmitVotes } from '../../../services/lovevarietyApi'
+import LvAvatar from '../../../components/lovevariety/LvAvatar.vue'
 
 const route = useRoute()
 const authStore = useLvAuthStore()
@@ -83,7 +90,7 @@ const hasSubmitted = ref(false)
 // 随机抽取 40-70
 const totalBudget = ref(0)
 
-const targets = ref<{ id: string; name: string }[]>([])
+const targets = ref<{ id: string; name: string; avatar?: string | null }[]>([])
 const voteValues = ref<Record<string, number>>({})
 const myVotes = ref<any[]>([])
 const submitting = ref(false)
@@ -105,6 +112,12 @@ const allDifferent = computed(() => {
 const canSubmit = computed(() => {
   return remaining.value === 0 && allDifferent.value && Object.keys(voteValues.value).length > 0
 })
+
+const targetAvatarMap = ref<Record<string, string | null>>({})
+
+function getTargetAvatar(id: string): string | null {
+  return targetAvatarMap.value[id] || null
+}
 
 function onValueChange() {
   submitError.value = ''
@@ -147,13 +160,22 @@ onMounted(async () => {
   } catch {}
 
   try {
+    // 从后端获取系统分配的预算
+    const budgetData = await lvGetMyBudget(roundId.value)
+    totalBudget.value = budgetData.budget
+  } catch {
+    // 降级：本地随机（正常情况下不应走到这里）
+    totalBudget.value = 100 + Math.floor(Math.random() * 61)
+  }
+
+  try {
     // 加载活跃选手（排除自己）
     const all = await lvGetActivePlayers()
     targets.value = all.filter(p => p.id !== authStore.currentUser?.id)
+    // 记录头像
+    all.forEach(p => { targetAvatarMap.value[p.id] = p.avatar || null })
     // 初始化投送值
     targets.value.forEach(p => { voteValues.value[p.id] = 0 })
-    // 随机抽取 40-70
-    totalBudget.value = Math.floor(Math.random() * 31) + 40
   } catch {}
 })
 </script>
@@ -169,7 +191,8 @@ onMounted(async () => {
 .not-current, .history-view, .result-view { text-align: center; padding: 40px 0; color: #888; }
 .result-title { font-size: 16px; color: #e0e0e0; margin: 24px 0 12px; }
 .votes-list { max-width: 400px; margin: 0 auto; }
-.vote-item { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #ff69b411; }
+.vote-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #ff69b411; }
+.vote-target-row { display: flex; align-items: center; gap: 8px; }
 .vote-target { color: #e0e0e0; }
 .vote-value { color: #ff69b4; font-weight: 600; }
 .empty-tip { color: #666; padding: 20px; }
@@ -191,6 +214,7 @@ onMounted(async () => {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 12px; border-bottom: 1px solid #ff69b411;
 }
+.player-name-row { display: flex; align-items: center; gap: 8px; }
 .player-name { font-size: 15px; font-weight: 500; color: #e0e0e0; }
 .vote-input {
   width: 80px; background: #1a0f2e; border: 1px solid #ff69b422; color: #e0e0e0;

@@ -18,6 +18,7 @@
       <div class="single-section">
         <h3>❤️ 单身汉</h3>
         <div class="single-card" :class="{ 'is-me': isMe(result.singlePlayerName) }">
+          <LvAvatar :name="result.singlePlayerName" :avatar="getPlayerAvatar(result.singlePlayerId)" size="lg" />
           <span class="single-name">{{ result.singlePlayerName }}</span>
           <span v-if="isMe(result.singlePlayerName)" class="me-badge">我</span>
           <span class="single-desc">收获喜爱值最少，本轮落单</span>
@@ -32,15 +33,21 @@
             :class="{ 'involves-me': isMe(pair.player1Name) || isMe(pair.player2Name) }">
             <div class="pair-rank">#{{ i + 1 }}</div>
             <div class="pair-players">
-              <span class="pair-player" :class="{ 'is-me': isMe(pair.player1Name) }">
-                {{ pair.player1Name }}
-                <span v-if="isMe(pair.player1Name)" class="mini-badge">我</span>
-              </span>
+              <div class="pair-player-col">
+                <LvAvatar :name="pair.player1Name" :avatar="getPlayerAvatar(pair.player1Id)" size="sm" />
+                <span class="pair-player" :class="{ 'is-me': isMe(pair.player1Name) }">
+                  {{ pair.player1Name }}
+                  <span v-if="isMe(pair.player1Name)" class="mini-badge">我</span>
+                </span>
+              </div>
               <span class="pair-heart">💕</span>
-              <span class="pair-player" :class="{ 'is-me': isMe(pair.player2Name) }">
-                {{ pair.player2Name }}
-                <span v-if="isMe(pair.player2Name)" class="mini-badge">我</span>
-              </span>
+              <div class="pair-player-col">
+                <LvAvatar :name="pair.player2Name" :avatar="getPlayerAvatar(pair.player2Id)" size="sm" />
+                <span class="pair-player" :class="{ 'is-me': isMe(pair.player2Name) }">
+                  {{ pair.player2Name }}
+                  <span v-if="isMe(pair.player2Name)" class="mini-badge">我</span>
+                </span>
+              </div>
             </div>
             <div class="pair-detail">
               互相投送值: {{ pair.p1toP2 }} + {{ pair.p2toP1 }} = <strong>{{ pair.mutualValue }}</strong>
@@ -57,7 +64,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLvAuthStore } from '../../../stores/lovevarietyAuthStore'
 import { useLvSeasonStore } from '../../../stores/lovevarietySeasonStore'
-import { lvGetRoundPairing } from '../../../services/lovevarietyApi'
+import { lvGetRoundPairing, lvGetActivePlayers } from '../../../services/lovevarietyApi'
+import LvAvatar from '../../../components/lovevariety/LvAvatar.vue'
 
 const route = useRoute()
 const authStore = useLvAuthStore()
@@ -65,6 +73,7 @@ const seasonStore = useLvSeasonStore()
 
 const result = ref<any>(null)
 const loading = ref(true)
+const playerMap = ref<Record<string, string>>({})
 
 const roundNum = computed(() => Number(route.params.round) || 1)
 const roundId = computed(() => `round-${roundNum.value}`)
@@ -75,9 +84,15 @@ function isMe(name: string): boolean {
   return name === authStore.currentUser?.name
 }
 
+function getPlayerAvatar(playerId: string): string | null {
+  return playerMap.value[playerId] || null
+}
+
 onMounted(async () => {
   try {
     result.value = await lvGetRoundPairing(roundId.value)
+    const players = await lvGetActivePlayers()
+    players.forEach(p => { playerMap.value[p.id] = p.avatar || '' })
   } catch {}
   loading.value = false
 })
@@ -112,7 +127,8 @@ onMounted(async () => {
 }
 .pair-card.involves-me { border-color: #ffd700; background: #ffd70008; }
 .pair-rank { position: absolute; top: 8px; right: 12px; font-size: 12px; color: #888; }
-.pair-players { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 8px; }
+.pair-players { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 8px; }
+.pair-player-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .pair-player { font-size: 16px; font-weight: 600; color: #e0e0e0; }
 .pair-player.is-me { color: #ffd700; }
 .mini-badge { background: #ffd700; color: #1a0f2e; font-size: 10px; padding: 1px 6px; border-radius: 8px; font-weight: 600; margin-left: 4px; }

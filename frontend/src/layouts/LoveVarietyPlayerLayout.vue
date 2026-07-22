@@ -32,7 +32,7 @@
             </router-link>
           </div>
 
-          <div v-for="round in totalRounds" :key="round" class="nav-section">
+          <div v-for="round in totalRounds" :key="round" v-show="!isWaiting" class="nav-section">
             <div class="nav-section-header" :class="{ current: round === seasonStore.currentRoundNumber }"
               @click="toggleRound(round)">
               <span class="collapse-icon" :class="{ collapsed: isRoundCollapsed(round) }">▾</span>
@@ -101,9 +101,12 @@ const collapsedRounds = ref<Set<number>>(new Set())
 
 const currentUser = computed(() => authStore.currentUser)
 const totalRounds = computed(() => seasonStore.totalRounds)
+const isWaiting = computed(() => seasonStore.currentStage === 'waiting')
 
 const fixedItems = [
   { icon: '🏠', text: '首页', path: '/games/lovevariety/player/home' },
+  { icon: '✉️', text: '寄信', path: '/games/lovevariety/player/letter/send' },
+  { icon: '📪', text: '收件箱', path: '/games/lovevariety/player/letter/inbox' },
 ]
 
 const roundStages = [
@@ -140,6 +143,7 @@ function getRoundStatusText(round: number): string {
 }
 
 function isStageAccessible(round: number, stage: string): boolean {
+  if (isWaiting.value) return false
   return seasonStore.isStageAccessible(round, stage as any)
 }
 

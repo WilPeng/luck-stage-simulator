@@ -95,6 +95,7 @@ function initCollapsed() {
 const fixedItems = [
   { icon: '📊', text: '总览', path: '/games/lovevariety/admin/dashboard' },
   { icon: '👥', text: '选手管理', path: '/games/lovevariety/admin/players' },
+  { icon: '✉️', text: '信件管理', path: '/games/lovevariety/admin/letters' },
 ]
 
 const stageItems = [

@@ -2,7 +2,7 @@
   <div class="lv-players">
     <div class="page-header">
       <h1>选手管理</h1>
-      <button class="lv-btn" @click="showCreateModal = true">+ 新建选手</button>
+      <button class="lv-btn" @click="openCreate">+ 新建选手</button>
     </div>
 
     <div class="toolbar">
@@ -18,21 +18,23 @@
       <table class="lv-table">
         <thead>
           <tr>
+            <th>头像</th>
             <th>名称</th>
             <th>登录码</th>
             <th>角色</th>
             <th>状态</th>
-            <th>已登录</th>
             <th>操作</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="p in list" :key="p.id">
+            <td class="avatar-cell">
+              <LvAvatar :name="p.name" :avatar="p.avatar" size="sm" />
+            </td>
             <td class="name-cell">{{ p.name }}</td>
             <td><code class="code-tag">{{ p.loginCode }}</code></td>
             <td>{{ p.role === 'admin' ? '管理员' : '选手' }}</td>
             <td><span class="status-tag" :class="p.status">{{ statusText(p.status) }}</span></td>
-            <td>{{ p.hasLogin ? '是' : '否' }}</td>
             <td class="actions">
               <button class="lv-btn lv-btn-xs" @click="editPlayer(p)">编辑</button>
               <button v-if="p.role !== 'admin'" class="lv-btn lv-btn-xs lv-btn-danger" @click="confirmDelete(p)">删除</button>
@@ -58,6 +60,19 @@
             <button class="close-btn" @click="showCreateModal = false">✕</button>
           </div>
           <div class="lv-modal-body">
+            <!-- 头像 -->
+            <div v-if="editingId" class="form-group avatar-upload-group">
+              <label>头像</label>
+              <div class="avatar-upload-row">
+                <LvAvatar :name="formName || '?'" :avatar="formAvatar" size="lg" />
+                <div class="avatar-actions">
+                  <button class="lv-btn lv-btn-xs" @click="triggerFileInput">上传头像</button>
+                  <button v-if="formAvatar" class="lv-btn lv-btn-xs lv-btn-danger" @click="removeAvatar">删除</button>
+                </div>
+              </div>
+              <input ref="fileInputRef" type="file" accept="image/*" class="hidden-input" @change="onFileChange" />
+            </div>
+
             <div class="form-group">
               <label>名称</label>
               <input v-model="formName" class="lv-input" placeholder="选手名称" />
@@ -75,7 +90,7 @@
             </div>
             <div class="form-actions">
               <button class="lv-btn" @click="showCreateModal = false">取消</button>
-              <button class="lv-btn lv-btn-primary" @click="savePlayer">{{ editingId ? '保存' : '创建' }}</button>
+              <button class="lv-btn lv-btn-primary" @click="savePlayer" :disabled="saving">{{ saving ? '保存中...' : (editingId ? '保存' : '创建') }}</button>
             </div>
           </div>
         </div>
@@ -86,8 +101,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { lvGetPlayers, lvCreatePlayer, lvUpdatePlayer, lvDeletePlayer } from '../../../services/lovevarietyApi'
+import { lvGetPlayers, lvCreatePlayer, lvUpdatePlayer, lvDeletePlayer, lvUploadPlayerAvatar, lvDeletePlayerAvatar } from '../../../services/lovevarietyApi'
 import type { LVPlayer } from '../../../types/lovevariety'
+import LvAvatar from '../../../components/lovevariety/LvAvatar.vue'
 
 const list = ref<LVPlayer[]>([])
 const page = ref(1)
@@ -99,6 +115,9 @@ const editingId = ref<string | null>(null)
 const formName = ref('')
 const formCode = ref('')
 const formStatus = ref('active')
+const formAvatar = ref<string | null>(null)
+const saving = ref(false)
+const fileInputRef = ref<HTMLInputElement>()
 
 async function fetchData() {
   try {
@@ -121,15 +140,53 @@ function statusText(status: string): string {
   return map[status] || status
 }
 
+function openCreate() {
+  editingId.value = null
+  formName.value = ''
+  formCode.value = ''
+  formStatus.value = 'active'
+  formAvatar.value = null
+  showCreateModal.value = true
+}
+
 function editPlayer(p: LVPlayer) {
   editingId.value = p.id
   formName.value = p.name
   formCode.value = p.loginCode
   formStatus.value = p.status
+  formAvatar.value = p.avatar || null
   showCreateModal.value = true
 }
 
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
+
+async function onFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || !editingId.value) return
+  try {
+    const result = await lvUploadPlayerAvatar(editingId.value, file)
+    formAvatar.value = result.avatar
+  } catch (err: any) {
+    alert(err.message)
+  }
+  input.value = ''
+}
+
+async function removeAvatar() {
+  if (!editingId.value) return
+  try {
+    await lvDeletePlayerAvatar(editingId.value)
+    formAvatar.value = null
+  } catch (err: any) {
+    alert(err.message)
+  }
+}
+
 async function savePlayer() {
+  saving.value = true
   try {
     if (editingId.value) {
       await lvUpdatePlayer(editingId.value, { name: formName.value, status: formStatus.value })
@@ -142,6 +199,7 @@ async function savePlayer() {
     formCode.value = ''
     await fetchData()
   } catch (e: any) { alert(e.message) }
+  finally { saving.value = false }
 }
 
 function confirmDelete(p: LVPlayer) {
@@ -183,6 +241,7 @@ onMounted(fetchData)
 }
 .lv-table th { color: #888; font-weight: 500; font-size: 12px; text-transform: uppercase; }
 .lv-table tr:hover td { background: #ff69b405; }
+.avatar-cell { width: 50px; }
 .name-cell { color: #e0e0e0; font-weight: 500; }
 .code-tag { background: #ff69b415; color: #ff69b4; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
 .status-tag { padding: 2px 10px; border-radius: 10px; font-size: 12px; }
@@ -198,7 +257,7 @@ onMounted(fetchData)
 }
 .lv-modal {
   background: #2d1b4e; border: 1px solid #ff69b444;
-  border-radius: 12px; width: 400px; max-width: 90vw;
+  border-radius: 12px; width: 420px; max-width: 90vw;
 }
 .lv-modal-header {
   display: flex; justify-content: space-between; align-items: center;
@@ -211,4 +270,7 @@ onMounted(fetchData)
 .form-group label { display: block; font-size: 13px; color: #aaa; margin-bottom: 6px; }
 .form-group .lv-input, .form-group .lv-select { width: 100%; }
 .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
+.avatar-upload-group .avatar-upload-row { display: flex; align-items: center; gap: 12px; }
+.avatar-actions { display: flex; gap: 6px; flex-direction: column; }
+.hidden-input { display: none; }
 </style>

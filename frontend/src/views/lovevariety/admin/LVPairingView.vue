@@ -20,6 +20,7 @@
       <div class="single-section">
         <h3>❤️ 本轮单身汉</h3>
         <div class="single-card">
+          <LvAvatar :name="result.singlePlayerName" :avatar="getPlayerAvatar(result.singlePlayerId)" size="lg" />
           <span class="single-name">{{ result.singlePlayerName }}</span>
           <span class="single-desc">收获喜爱值最少，本轮落单</span>
         </div>
@@ -33,11 +34,13 @@
             <div class="pair-rank">#{{ i + 1 }}</div>
             <div class="pair-players">
               <div class="player-col">
+                <LvAvatar :name="pair.player1Name" :avatar="getPlayerAvatar(pair.player1Id)" size="sm" />
                 <span class="pair-player">{{ pair.player1Name }}</span>
                 <span class="pair-value">→ {{ pair.p1toP2 }}</span>
               </div>
               <div class="pair-heart">💕</div>
               <div class="player-col">
+                <LvAvatar :name="pair.player2Name" :avatar="getPlayerAvatar(pair.player2Id)" size="sm" />
                 <span class="pair-player">{{ pair.player2Name }}</span>
                 <span class="pair-value">→ {{ pair.p2toP1 }}</span>
               </div>
@@ -53,19 +56,25 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { lvGetRoundPairing, lvCalculatePairing } from '../../../services/lovevarietyApi'
+import { lvGetRoundPairing, lvCalculatePairing, lvGetActivePlayers } from '../../../services/lovevarietyApi'
+import LvAvatar from '../../../components/lovevariety/LvAvatar.vue'
 
 const route = useRoute()
 const result = ref<any>(null)
 const loading = ref(true)
 const calculating = ref(false)
+const playerMap = ref<Record<string, string>>({})
 
 const roundId = computed(() => `round-${route.params.round}`)
+
+function getPlayerAvatar(playerId: string): string | null {
+  return playerMap.value[playerId] || null
+}
 
 async function calculatePairing() {
   calculating.value = true
   try {
-    const res = await lvCalculatePairing()
+    const res = await lvCalculatePairing(roundId.value)
     result.value = res
     alert(`配对结算完成！${res.singlePlayerName} 成为单身汉，共 ${res.pairs.length} 对组合`)
   } catch (e: any) {
@@ -78,6 +87,8 @@ async function calculatePairing() {
 onMounted(async () => {
   try {
     result.value = await lvGetRoundPairing(roundId.value)
+    const players = await lvGetActivePlayers()
+    players.forEach(p => { playerMap.value[p.id] = p.avatar || '' })
   } catch {}
   loading.value = false
 })
@@ -110,19 +121,16 @@ onMounted(async () => {
 .single-name { font-size: 22px; font-weight: 700; color: #ff69b4; }
 .single-desc { font-size: 14px; color: #aaa; }
 .pairs-section h3 { font-size: 16px; color: #e0e0e0; margin: 0 0 12px; }
-.pairs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.pairs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
 .pair-card {
   background: #1a0f2e; border: 1px solid #ff69b422; border-radius: 10px;
   padding: 16px; position: relative;
 }
-.pair-rank {
-  position: absolute; top: 8px; right: 12px;
-  font-size: 12px; color: #888;
-}
+.pair-rank { position: absolute; top: 8px; right: 12px; font-size: 12px; color: #888; }
 .pair-players { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.player-col { text-align: center; }
-.pair-player { display: block; font-size: 16px; font-weight: 600; color: #e0e0e0; }
-.pair-value { display: block; font-size: 12px; color: #ff69b4; margin-top: 4px; }
+.player-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pair-player { font-size: 16px; font-weight: 600; color: #e0e0e0; }
+.pair-value { font-size: 12px; color: #ff69b4; }
 .pair-heart { font-size: 24px; }
 .pair-total { text-align: center; font-size: 13px; color: #888; border-top: 1px solid #ff69b411; padding-top: 8px; }
 .pair-total strong { color: #ff69b4; }

@@ -10,13 +10,14 @@ export const LV_STAGE_ORDER: LVStageType[] = [
   'elimination'
 ]
 
-export const LV_STAGE_NAME: Record<LVStageType, string> = {
+export const LV_STAGE_NAME: Record<string, string> = {
   love_vote: '喜爱值投送',
   pairing: '配对结算',
-  elimination: '淘汰'
+  elimination: '淘汰',
+  waiting: '等待开始'
 }
 
-export type LVStageStatus = 'completed' | 'current' | 'future'
+export type LVStageStatus = 'completed' | 'current' | 'future' | 'waiting'
 
 export interface LVSeason {
   id: string
@@ -74,6 +75,8 @@ export interface LVPlayer {
   role: 'admin' | 'player'
   status: 'active' | 'eliminated'
   hasLogin: boolean
+  letterPublicCount: number
+  letterAnonymousCount: number
   avatar: string | null
   gameId: string
   createdAt: string
@@ -139,15 +142,40 @@ export interface LVElimination {
 }
 
 // 阶段状态计算工具
+// ===== 信件 =====
+export interface LVLetter {
+  id: string
+  roundId: string
+  senderId: string
+  senderName: string
+  senderAvatar: string | null
+  receiverId: string
+  receiverName: string
+  receiverAvatar: string | null
+  content: string
+  isAnonymous: boolean
+  gameId: string
+  createdAt: string
+}
+
+export interface LVLetterListResponse {
+  list: LVLetter[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
 export function calculateLVStageStatus(
   currentRound: number,
-  currentStage: LVStageType,
+  currentStage: LVStageType | 'waiting',
   targetRound: number,
   targetStage: LVStageType
 ): LVStageStatus {
+  if (currentStage === 'waiting') return 'waiting'
   if (targetRound < currentRound) return 'completed'
   if (targetRound > currentRound) return 'future'
-  const curIdx = LV_STAGE_ORDER.indexOf(currentStage)
+  const curIdx = LV_STAGE_ORDER.indexOf(currentStage as LVStageType)
   const tgtIdx = LV_STAGE_ORDER.indexOf(targetStage)
   if (tgtIdx < curIdx) return 'completed'
   if (tgtIdx === curIdx) return 'current'
