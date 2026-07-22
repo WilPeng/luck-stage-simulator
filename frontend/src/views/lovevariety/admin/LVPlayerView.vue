@@ -12,6 +12,9 @@
         <option value="active">活跃</option>
         <option value="eliminated">已淘汰</option>
       </select>
+      <button class="lv-btn lv-btn-xs" @click="downloadAvatars" :disabled="downloading">{{ downloading ? '下载中...' : '下载头像备份' }}</button>
+      <button class="lv-btn lv-btn-xs" @click="triggerZipInput" :disabled="restoring">{{ restoring ? '恢复中...' : '恢复头像备份' }}</button>
+      <input ref="zipInputRef" type="file" accept=".zip" class="hidden-input" @change="onZipRestore" />
     </div>
 
     <div class="table-container">
@@ -101,7 +104,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { lvGetPlayers, lvCreatePlayer, lvUpdatePlayer, lvDeletePlayer, lvUploadPlayerAvatar, lvDeletePlayerAvatar } from '../../../services/lovevarietyApi'
+import { lvGetPlayers, lvCreatePlayer, lvUpdatePlayer, lvDeletePlayer, lvUploadPlayerAvatar, lvDeletePlayerAvatar, lvDownloadAvatarsZip, lvRestoreAvatarsFromZip } from '../../../services/lovevarietyApi'
 import type { LVPlayer } from '../../../types/lovevariety'
 import LvAvatar from '../../../components/lovevariety/LvAvatar.vue'
 
@@ -118,6 +121,9 @@ const formStatus = ref('active')
 const formAvatar = ref<string | null>(null)
 const saving = ref(false)
 const fileInputRef = ref<HTMLInputElement>()
+const zipInputRef = ref<HTMLInputElement>()
+const downloading = ref(false)
+const restoring = ref(false)
 
 async function fetchData() {
   try {
@@ -205,6 +211,38 @@ async function savePlayer() {
 function confirmDelete(p: LVPlayer) {
   if (!confirm(`确定删除选手 ${p.name} 吗？`)) return
   lvDeletePlayer(p.id).then(fetchData).catch((e: any) => alert(e.message))
+}
+
+async function downloadAvatars() {
+  downloading.value = true
+  try {
+    await lvDownloadAvatarsZip()
+  } catch (err: any) {
+    alert(err.message || '下载头像备份失败')
+  } finally {
+    downloading.value = false
+  }
+}
+
+function triggerZipInput() {
+  zipInputRef.value?.click()
+}
+
+async function onZipRestore(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  restoring.value = true
+  try {
+    const result = await lvRestoreAvatarsFromZip(file)
+    alert(`恢复完成：${result.success} 成功，${result.failed} 失败`)
+    await fetchData()
+  } catch (err: any) {
+    alert(err.message || '恢复头像备份失败')
+  } finally {
+    restoring.value = false
+    input.value = ''
+  }
 }
 
 onMounted(fetchData)
