@@ -275,10 +275,11 @@ export async function lvAddLetterCount(data: { playerIds?: string[]; amount: num
 }
 
 // ===== 头像 =====
-export async function lvUploadMyAvatar(file: File): Promise<{ avatar: string; playerId: string }> {
+export async function lvUploadMyAvatar(file: File, playerId?: string): Promise<{ avatar: string; playerId: string }> {
   const token = getToken()
   const formData = new FormData()
   formData.append('avatar', file)
+  if (playerId) formData.append('playerId', playerId)
   const res = await fetch(`${API_BASE}/players/me/avatar`, {
     method: 'POST',
     headers: token ? { 'Authorization': `Bearer ${token}` } : {},

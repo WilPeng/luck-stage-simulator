@@ -19,7 +19,7 @@ const storage = multer.diskStorage({
 })
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (!file.mimetype.startsWith('image/')) return cb(new Error('仅支持图片文件'))
     cb(null, true)
@@ -169,6 +169,73 @@ router.delete('/:id', async (req, res) => {
   }
 })
 
+// POST /me/avatar - 选手自行上传头像（必须在 /:id/avatar 之前，避免被 /:id 匹配）
+router.post('/me/avatar', upload.single('avatar'), async (req, res) => {
+  try {
+    const authHeader = req.header('Authorization')
+    if (!authHeader) return res.status(401).json({ success: false, error: '未认证', code: 'NO_TOKEN' })
+    const token = authHeader.replace('Bearer ', '')
+    const jwt = require('jsonwebtoken')
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+
+    let player = await LVPlayer.findOne({ id: decoded.userId })
+    // 降级查找：如果 token 中的 userId 找不到，尝试用请求体中的 playerId 查找
+    if (!player && req.body.playerId) {
+      player = await LVPlayer.findOne({ id: req.body.playerId })
+    }
+    if (!player) return res.status(404).json({ success: false, error: '选手不存在', code: 'NOT_FOUND' })
+    if (!req.file) return res.status(400).json({ success: false, error: '未上传图片文件', code: 'MISSING_FILE' })
+
+    const oldAvatar = player.avatar
+    const avatarUrl = `/uploads/lvavatars/${req.file.filename}`
+    player.avatar = avatarUrl
+    player.updatedAt = new Date().toISOString()
+    await player.save()
+
+    if (oldAvatar && oldAvatar.startsWith('/uploads/lvavatars/')) {
+      const oldPath = path.join(__dirname, '..', '..', '..', '..', oldAvatar)
+      if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {})
+    }
+
+    res.json({ success: true, data: { avatar: avatarUrl, playerId: player.id } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '上传头像失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// DELETE /me/avatar - 选手自行删除头像（必须在 /:id/avatar 之前）
+router.delete('/me/avatar', async (req, res) => {
+  try {
+    const authHeader = req.header('Authorization')
+    if (!authHeader) return res.status(401).json({ success: false, error: '未认证', code: 'NO_TOKEN' })
+    const token = authHeader.replace('Bearer ', '')
+    const jwt = require('jsonwebtoken')
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+
+    let player = await LVPlayer.findOne({ id: decoded.userId })
+    // 降级查找：如果 token 中的 userId 找不到，尝试用请求体中的 playerId 查找
+    if (!player && req.body.playerId) {
+      player = await LVPlayer.findOne({ id: req.body.playerId })
+    }
+    if (!player) return res.status(404).json({ success: false, error: '选手不存在', code: 'NOT_FOUND' })
+
+    const oldAvatar = player.avatar
+    player.avatar = null
+    player.updatedAt = new Date().toISOString()
+    await player.save()
+
+    if (oldAvatar && oldAvatar.startsWith('/uploads/lvavatars/')) {
+      const oldPath = path.join(__dirname, '..', '..', '..', '..', oldAvatar)
+      if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {})
+    }
+    res.json({ success: true, data: null })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '删除头像失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // POST /:id/avatar - 管理员上传选手头像
 router.post('/:id/avatar', upload.single('avatar'), async (req, res) => {
   try {
@@ -199,65 +266,6 @@ router.delete('/:id/avatar', async (req, res) => {
   try {
     const player = await LVPlayer.findOne({ id: req.params.id, gameId: 'lovevariety' })
     if (!player) return res.status(404).json({ success: false, error: '选手不存在', code: 'NOT_FOUND' })
-    const oldAvatar = player.avatar
-    player.avatar = null
-    player.updatedAt = new Date().toISOString()
-    await player.save()
-
-    if (oldAvatar && oldAvatar.startsWith('/uploads/lvavatars/')) {
-      const oldPath = path.join(__dirname, '..', '..', '..', '..', oldAvatar)
-      if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {})
-    }
-    res.json({ success: true, data: null })
-  } catch (e) {
-    console.error(e)
-    res.status(500).json({ success: false, error: '删除头像失败', code: 'SERVER_ERROR' })
-  }
-})
-
-// POST /me/avatar - 选手自行上传头像
-router.post('/me/avatar', upload.single('avatar'), async (req, res) => {
-  try {
-    const authHeader = req.header('Authorization')
-    if (!authHeader) return res.status(401).json({ success: false, error: '未认证', code: 'NO_TOKEN' })
-    const token = authHeader.replace('Bearer ', '')
-    const jwt = require('jsonwebtoken')
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-
-    const player = await LVPlayer.findOne({ id: decoded.userId, gameId: 'lovevariety' })
-    if (!player) return res.status(404).json({ success: false, error: '选手不存在', code: 'NOT_FOUND' })
-    if (!req.file) return res.status(400).json({ success: false, error: '未上传图片文件', code: 'MISSING_FILE' })
-
-    const oldAvatar = player.avatar
-    const avatarUrl = `/uploads/lvavatars/${req.file.filename}`
-    player.avatar = avatarUrl
-    player.updatedAt = new Date().toISOString()
-    await player.save()
-
-    if (oldAvatar && oldAvatar.startsWith('/uploads/lvavatars/')) {
-      const oldPath = path.join(__dirname, '..', '..', '..', '..', oldAvatar)
-      if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {})
-    }
-
-    res.json({ success: true, data: { avatar: avatarUrl, playerId: player.id } })
-  } catch (e) {
-    console.error(e)
-    res.status(500).json({ success: false, error: '上传头像失败', code: 'SERVER_ERROR' })
-  }
-})
-
-// DELETE /me/avatar - 选手自行删除头像
-router.delete('/me/avatar', async (req, res) => {
-  try {
-    const authHeader = req.header('Authorization')
-    if (!authHeader) return res.status(401).json({ success: false, error: '未认证', code: 'NO_TOKEN' })
-    const token = authHeader.replace('Bearer ', '')
-    const jwt = require('jsonwebtoken')
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-
-    const player = await LVPlayer.findOne({ id: decoded.userId, gameId: 'lovevariety' })
-    if (!player) return res.status(404).json({ success: false, error: '选手不存在', code: 'NOT_FOUND' })
-
     const oldAvatar = player.avatar
     player.avatar = null
     player.updatedAt = new Date().toISOString()

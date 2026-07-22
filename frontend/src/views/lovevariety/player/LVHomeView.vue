@@ -145,12 +145,23 @@ async function onAvatarChange(e: Event) {
   const file = input.files?.[0]
   if (!file) return
   try {
-    const result = await lvUploadMyAvatar(file)
+    const result = await lvUploadMyAvatar(file, authStore.currentUser?.id)
+    // 上传成功后直接更新本地状态（不依赖后端重新查询）
     if (authStore.currentUser) {
       authStore.currentUser.avatar = result.avatar
     }
+    // 同步更新 sessionStorage 中的用户信息缓存
+    try {
+      const userKey = authStore.gameKey('user')
+      const cached = sessionStorage.getItem(userKey)
+      if (cached) {
+        const userData = JSON.parse(cached)
+        userData.avatar = result.avatar
+        sessionStorage.setItem(userKey, JSON.stringify(userData))
+      }
+    } catch {}
   } catch (err: any) {
-    alert(err.message)
+    alert(err.message || '上传头像失败')
   }
   input.value = ''
 }
