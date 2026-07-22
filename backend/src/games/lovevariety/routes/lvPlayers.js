@@ -122,6 +122,187 @@ router.get('/active', async (req, res) => {
   }
 })
 
+// ===== 头像备份与恢复 =====
+// GET /avatars/download - 下载所有选手头像备份 ZIP
+router.get('/avatars/download', async (req, res) => {
+  try {
+    const archiver = require('archiver')
+    const https = require('https')
+    const players = await new LVPlayer()._getCollection()
+      .find({ gameId: 'lovevariety', avatar: { $ne: null, $ne: '' } })
+      .toArray()
+
+    if (players.length === 0) {
+      return res.status(404).json({ success: false, error: '没有选手头像可供备份', code: 'NO_AVATARS' })
+    }
+
+    const archive = archiver('zip', { zlib: { level: 6 } })
+
+    // 监听 archive 错误，防止未捕获异常
+    archive.on('error', (err) => {
+      console.error('[AvatarBackup] archive 错误:', err.message)
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: '打包头像失败', code: 'ARCHIVE_ERROR' })
+      }
+    })
+
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', 'attachment; filename="lv-avatars-backup.zip"')
+    archive.pipe(res)
+
+    let processedCount = 0
+    const total = players.length
+    const uploadsBase = path.resolve(__dirname, '..', '..', '..', '..')
+
+    for (const player of players) {
+      const avatar = player.avatar
+      if (!avatar) continue
+
+      try {
+        let imageBuffer = null
+        let ext = 'jpg'
+
+        if (useCloudinary && avatar.includes('cloudinary')) {
+          // 从 Cloudinary URL 下载
+          const urlPath = new URL(avatar).pathname
+          ext = path.extname(urlPath).replace('.', '') || 'jpg'
+          imageBuffer = await new Promise((resolve, reject) => {
+            https.get(avatar, (resp) => {
+              if (resp.statusCode !== 200) {
+                reject(new Error(`HTTP ${resp.statusCode}`))
+                return
+              }
+              const chunks = []
+              resp.on('data', (chunk) => chunks.push(chunk))
+              resp.on('end', () => resolve(Buffer.concat(chunks)))
+            }).on('error', (e) => reject(e))
+          })
+        } else if (typeof avatar === 'string' && avatar.startsWith('/uploads/')) {
+          // 从本地文件系统读取
+          const filePath = path.join(uploadsBase, avatar)
+          if (fs.existsSync(filePath)) {
+            ext = path.extname(avatar).replace('.', '') || 'jpg'
+            imageBuffer = fs.readFileSync(filePath)
+          }
+        } else if (typeof avatar === 'string' && avatar.startsWith('http')) {
+          // 其他 HTTP URL（可能是其他云存储）
+          ext = path.extname(new URL(avatar).pathname).replace('.', '') || 'jpg'
+          imageBuffer = await new Promise((resolve, reject) => {
+            https.get(avatar, (resp) => {
+              if (resp.statusCode !== 200) {
+                reject(new Error(`HTTP ${resp.statusCode}`))
+                return
+              }
+              const chunks = []
+              resp.on('data', (chunk) => chunks.push(chunk))
+              resp.on('end', () => resolve(Buffer.concat(chunks)))
+            }).on('error', (e) => reject(e))
+          })
+        }
+
+        if (imageBuffer) {
+          archive.append(imageBuffer, { name: `${player.id}.${ext}` })
+          processedCount++
+        }
+      } catch (err) {
+        console.error(`[AvatarBackup] 下载头像失败 ${player.id}:`, err.message)
+      }
+    }
+
+    archive.on('finish', () => {
+      console.log(`[AvatarBackup] 备份完成: ${processedCount}/${total} 个头像已打包`)
+    })
+
+    archive.finalize()
+  } catch (e) {
+    console.error('[AvatarBackup] 备份失败:', e)
+    console.error('[AvatarBackup] 堆栈:', e.stack)
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: '下载头像备份失败:' + e.message, code: 'SERVER_ERROR' })
+    }
+  }
+})
+
+// POST /avatars/restore - 上传 ZIP 恢复头像备份
+const zipUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype !== 'application/zip' && !file.originalname.endsWith('.zip')) {
+      return cb(new Error('仅支持 ZIP 文件'))
+    }
+    cb(null, true)
+  }
+})
+
+router.post('/avatars/restore', zipUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, error: '未上传 ZIP 文件', code: 'MISSING_FILE' })
+
+    const unzipper = require('unzipper')
+    const results = { success: 0, failed: 0, errors: [] }
+    const directory = await unzipper.Open.buffer(req.file.buffer)
+
+    for (const file of directory.files) {
+      if (file.path.startsWith('__MACOSX') || file.path.startsWith('.')) continue
+      if (!file.type || file.type === 'Directory') continue
+
+      try {
+        const parsedPath = path.parse(file.path)
+        const playerId = parsedPath.name  // 文件名不含扩展名 = playerId
+        const ext = parsedPath.ext.replace('.', '') || 'jpg'
+
+        const player = await LVPlayer.findOne({ id: playerId, gameId: 'lovevariety' })
+        if (!player) {
+          results.failed++
+          results.errors.push(`选手不存在: ${file.path}`)
+          continue
+        }
+
+        const content = await file.buffer()
+
+        if (useCloudinary) {
+          // Cloudinary 模式：上传到 Cloudinary
+          const result = await new Promise((resolve, reject) => {
+            const uploadStream = cloudinary.uploader.upload_stream(
+              {
+                folder: 'luck-stage/lvavatars',
+                public_id: `lv-avatar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                format: ext
+              },
+              (err, result) => {
+                if (err) reject(err)
+                else resolve(result)
+              }
+            )
+            uploadStream.end(content)
+          })
+          player.avatar = result.secure_url
+        } else {
+          // 本地模式：保存到文件系统
+          const fileName = `lv-avatar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+          const filePath = path.join(__dirname, '..', '..', '..', '..', 'uploads', 'lvavatars', fileName)
+          fs.writeFileSync(filePath, content)
+          player.avatar = `/uploads/lvavatars/${fileName}`
+        }
+
+        player.updatedAt = new Date().toISOString()
+        await player.save()
+        results.success++
+      } catch (err) {
+        results.failed++
+        results.errors.push(`${file.path}: ${err.message}`)
+      }
+    }
+
+    console.log(`[AvatarRestore] 恢复完成: ${results.success} 成功, ${results.failed} 失败`)
+    res.json({ success: true, data: results })
+  } catch (e) {
+    console.error('[AvatarRestore] 恢复失败:', e)
+    res.status(500).json({ success: false, error: '恢复头像失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // GET /stats - 选手统计
 router.get('/stats', async (req, res) => {
   try {

@@ -5,7 +5,7 @@ import type {
   BBChatMessage, BBVoteResult, BBStageType
 } from '../types/bigbrother'
 
-const API_BASE = '/api/bigbrother'
+const API_BASE = (import.meta as any).env?.VITE_API_BIGBROTHER || '/api/bigbrother'
 
 function getToken(): string | null {
   const key = 'bigbrother_token'

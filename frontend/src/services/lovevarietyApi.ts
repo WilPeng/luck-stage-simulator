@@ -5,7 +5,7 @@ import type {
   LVLetter, LVLetterListResponse
 } from '../types/lovevariety'
 
-const API_BASE = 'https://luck-stage-simulator.onrender.com/api/lovevariety'
+const API_BASE = (import.meta as any).env?.VITE_API_LOVEVARIETY || '/api/lovevariety'
 
 function getToken(): string | null {
   const key = 'lovevariety_token'
@@ -316,6 +316,53 @@ export async function lvDeletePlayerAvatar(playerId: string): Promise<void> {
     method: 'DELETE',
     headers: buildHeaders()
   })
+}
+
+// ===== 头像备份与恢复 =====
+export async function lvDownloadAvatarsZip(): Promise<void> {
+  const token = getToken()
+  const res = await fetch(`${API_BASE}/players/avatars/download`, {
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    try {
+      const json = JSON.parse(text)
+      throw new Error(json.error || `下载头像备份失败 (HTTP ${res.status})`)
+    } catch (e: any) {
+      if (e.message && !e.message.startsWith('JSON')) throw e
+      throw new Error(`下载头像备份失败 (HTTP ${res.status}${text ? ': ' + text.slice(0, 100) : ''})`)
+    }
+  }
+  const contentType = res.headers.get('content-type') || ''
+  if (!contentType.includes('zip') && !contentType.includes('octet-stream')) {
+    console.warn('[lvDownloadAvatarsZip] 非预期的 Content-Type:', contentType)
+  }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'lv-avatars-backup.zip'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export async function lvRestoreAvatarsFromZip(
+  file: File
+): Promise<{ success: number; failed: number; errors: string[] }> {
+  const token = getToken()
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(`${API_BASE}/players/avatars/restore`, {
+    method: 'POST',
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    body: formData
+  })
+  const json = await res.json()
+  if (!res.ok || json.success === false) throw new Error(json.error || '恢复头像失败')
+  return json.data
 }
 
 export function lvGetAvatarUrl(avatar: string | null | undefined): string | undefined {
