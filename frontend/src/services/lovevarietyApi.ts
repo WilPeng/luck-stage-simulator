@@ -321,5 +321,8 @@ export async function lvDeletePlayerAvatar(playerId: string): Promise<void> {
 export function lvGetAvatarUrl(avatar: string | null | undefined): string | undefined {
   if (!avatar) return undefined
   if (avatar.startsWith('http')) return avatar
-  return avatar
+  // 如果是相对路径，需要补全为完整 URL
+  // 云端（Render）时拼接完整地址，本地开发时直接使用相对路径走 Vite proxy
+  const base = API_BASE.startsWith('http') ? API_BASE.replace('/api/lovevariety', '') : ''
+  return `${base}${avatar}`
 }
