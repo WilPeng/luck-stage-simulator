@@ -88,7 +88,7 @@ const STATIC_API_BASE: string = (import.meta as any).env?.VITE_API_BASE || ''
 function getApiBase(): string {
   if (STATIC_API_BASE) return STATIC_API_BASE
   const gameId = sessionStorage.getItem('luck_sim_current_game') || 'shengfeng2026'
-  return `/api/${gameId}`
+  return `https://luck-stage-simulator.onrender.com/api/${gameId}`
 }
 
 function getToken(): string | null {
@@ -120,7 +120,13 @@ export async function doRequest<T>(path: string, options: RequestInit = {}): Pro
       ...(options.headers || {})
     }
   })
-  const json = await res.json()
+  const text = await res.text()
+  let json: any = {}
+  try {
+    json = text ? JSON.parse(text) : {}
+  } catch {
+    throw new Error(`服务器返回了无效响应 (HTTP ${res.status})`)
+  }
   if (!res.ok || (json && json.success === false)) {
     const errMsg = json?.error || json?.message || `HTTP ${res.status}`
     const err = new Error(errMsg)
@@ -167,7 +173,8 @@ export async function login(loginCode: string): Promise<{ token: string; user: U
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: loginCode })
     })
-    const json = await res.json()
+    const text = await res.text()
+    const json = text ? JSON.parse(text) : {}
     if (res.ok && json.success !== false) {
       return { token: json.token, user: json.data }
     }
@@ -476,7 +483,9 @@ export async function uploadAvatar(userId: string, file: File): Promise<{ avatar
     headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     body: formData
   })
-  const json = await res.json()
+  const text = await res.text()
+  let json: any = {}
+  try { json = text ? JSON.parse(text) : {} } catch { throw new Error('服务器返回了无效响应') }
   if (!res.ok) throw new Error(json.error || json.message || `HTTP ${res.status}`)
   return json.data || json
 }
@@ -491,7 +500,9 @@ export async function uploadMyAvatar(file: File): Promise<{ avatar: string; user
     headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     body: formData
   })
-  const json = await res.json()
+  const text = await res.text()
+  let json: any = {}
+  try { json = text ? JSON.parse(text) : {} } catch { throw new Error('服务器返回了无效响应') }
   if (!res.ok) throw new Error(json.error || json.message || `HTTP ${res.status}`)
   return json.data || json
 }
@@ -1397,7 +1408,8 @@ export async function getPerformanceStarted(round: number): Promise<boolean> {
     const res = await fetch(`${getApiBase()}/performance?round=${round}`, {
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
     })
-    const json = await res.json()
+    const text = await res.text()
+    const json = text ? JSON.parse(text) : {}
     // 兼容两种响应格式：{ started } 或 { data: { started } }
     return !!(json?.started || json?.data?.started)
   } catch {

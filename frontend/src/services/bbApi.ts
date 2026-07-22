@@ -5,7 +5,7 @@ import type {
   BBChatMessage, BBVoteResult, BBStageType
 } from '../types/bigbrother'
 
-const API_BASE = '/api/bigbrother'
+const API_BASE = 'https://luck-stage-simulator.onrender.com/api/bigbrother'
 
 function getToken(): string | null {
   const key = 'bigbrother_token'
@@ -25,7 +25,13 @@ async function doRequest<T>(path: string, options: RequestInit = {}): Promise<T>
     ...options,
     headers: { ...buildHeaders(), ...(options.headers || {}) }
   })
-  const json = await res.json()
+  const text = await res.text()
+  let json: any = {}
+  try {
+    json = text ? JSON.parse(text) : {}
+  } catch {
+    throw new Error(`服务器返回了无效响应 (HTTP ${res.status})`)
+  }
   if (!res.ok || json.success === false) {
     const errMsg = json?.error || json?.message || `HTTP ${res.status}`
     const err = new Error(errMsg)
@@ -43,7 +49,9 @@ export async function bbLogin(loginCode: string): Promise<{ token: string; user:
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code: loginCode })
   })
-  const json = await res.json()
+  const text = await res.text()
+  let json: any = {}
+  try { json = text ? JSON.parse(text) : {} } catch { throw new Error('服务器返回了无效响应') }
   if (res.ok && json.success !== false) {
     return { token: json.token, user: json.data }
   }

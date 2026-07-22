@@ -5,7 +5,7 @@ import type {
   LVLetter, LVLetterListResponse
 } from '../types/lovevariety'
 
-const API_BASE = '/api/lovevariety'
+const API_BASE = 'https://luck-stage-simulator.onrender.com/api/lovevariety'
 
 function getToken(): string | null {
   const key = 'lovevariety_token'
@@ -25,7 +25,13 @@ async function doRequest<T>(path: string, options: RequestInit = {}): Promise<T>
     ...options,
     headers: { ...buildHeaders(), ...(options.headers || {}) }
   })
-  const json = await res.json()
+  const text = await res.text()
+  let json: any = {}
+  try {
+    json = text ? JSON.parse(text) : {}
+  } catch {
+    throw new Error(`服务器返回了无效响应 (HTTP ${res.status})`)
+  }
   if (!res.ok || json.success === false) {
     const errMsg = json?.error || json?.message || `HTTP ${res.status}`
     const err = new Error(errMsg)
@@ -43,7 +49,9 @@ export async function lvLogin(loginCode: string): Promise<{ token: string; user:
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code: loginCode })
   })
-  const json = await res.json()
+  const text = await res.text()
+  let json: any = {}
+  try { json = text ? JSON.parse(text) : {} } catch { throw new Error('服务器返回了无效响应') }
   if (res.ok && json.success !== false) {
     return { token: json.token, user: json.data }
   }
@@ -285,7 +293,9 @@ export async function lvUploadMyAvatar(file: File, playerId?: string): Promise<{
     headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     body: formData
   })
-  const json = await res.json()
+  const text = await res.text()
+  let json: any = {}
+  try { json = text ? JSON.parse(text) : {} } catch { throw new Error('服务器返回了无效响应') }
   if (!res.ok || json.success === false) throw new Error(json.error || '上传头像失败')
   return json.data
 }
@@ -306,7 +316,9 @@ export async function lvUploadPlayerAvatar(playerId: string, file: File): Promis
     headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     body: formData
   })
-  const json = await res.json()
+  const text = await res.text()
+  let json: any = {}
+  try { json = text ? JSON.parse(text) : {} } catch { throw new Error('服务器返回了无效响应') }
   if (!res.ok || json.success === false) throw new Error(json.error || '上传头像失败')
   return json.data
 }
@@ -360,7 +372,9 @@ export async function lvRestoreAvatarsFromZip(
     headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     body: formData
   })
-  const json = await res.json()
+  const text = await res.text()
+  let json: any = {}
+  try { json = text ? JSON.parse(text) : {} } catch { throw new Error('服务器返回了无效响应') }
   if (!res.ok || json.success === false) throw new Error(json.error || '恢复头像失败')
   return json.data
 }
