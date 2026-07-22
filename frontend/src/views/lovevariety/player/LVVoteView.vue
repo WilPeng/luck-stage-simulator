@@ -37,14 +37,15 @@
         <div class="total-hint">系统分配预算</div>
       </div>
 
-      <div class="remaining-info" :class="{ error: remaining < 0 || !allDifferent }">
+      <div class="remaining-info" :class="{ error: remaining < 0 || !allDifferent || !allTargetsFilled }">
         <span>剩余可分配: {{ remaining }}</span>
-        <span v-if="!allDifferent" class="error-text">每个选手的喜爱值必须不同！</span>
+        <span v-if="!allTargetsFilled" class="error-text">还有 {{ unfilledCount }} 位选手未分配值</span>
+        <span v-else-if="!allDifferent" class="error-text">每个选手的喜爱值必须不同！</span>
         <span v-else-if="remaining === 0" class="ok-text">✅ 分配完成</span>
       </div>
 
       <div class="players-list">
-        <div v-for="p in targets" :key="p.id" class="player-row">
+        <div v-for="p in targets" :key="p.id" class="player-row" :class="{ missing: (voteValues[p.id] || 0) <= 0 }">
           <div class="player-name-row">
             <LvAvatar :name="p.name" :avatar="getTargetAvatar(p.id)" size="sm" />
             <span class="player-name">{{ p.name }}</span>
@@ -55,10 +56,15 @@
         </div>
       </div>
 
-      <button class="lv-btn lv-btn-primary submit-btn" @click="submitVotes"
-        :disabled="!canSubmit || submitting">
-        {{ submitting ? '提交中...' : '提交投送' }}
-      </button>
+      <div class="actions-row">
+        <button class="lv-btn lv-btn-secondary random-btn" @click="randomFill" type="button">
+          🎲 随机一下
+        </button>
+        <button class="lv-btn lv-btn-primary submit-btn" @click="submitVotes"
+          :disabled="!canSubmit || submitting">
+          {{ submitting ? '提交中...' : '提交投送' }}
+        </button>
+      </div>
 
       <div v-if="submitSuccess" class="success-toast">✅ 投送提交成功！</div>
       <div v-if="submitError" class="error-toast">{{ submitError }}</div>
@@ -109,8 +115,16 @@ const allDifferent = computed(() => {
   return unique.size === values.length
 })
 
+const allTargetsFilled = computed(() => {
+  return targets.value.length > 0 && targets.value.every(p => (voteValues.value[p.id] || 0) > 0)
+})
+
+const unfilledCount = computed(() => {
+  return targets.value.filter(p => (voteValues.value[p.id] || 0) <= 0).length
+})
+
 const canSubmit = computed(() => {
-  return remaining.value === 0 && allDifferent.value && Object.keys(voteValues.value).length > 0
+  return remaining.value === 0 && allDifferent.value && allTargetsFilled.value
 })
 
 const targetAvatarMap = ref<Record<string, string | null>>({})
@@ -121,6 +135,54 @@ function getTargetAvatar(id: string): string | null {
 
 function onValueChange() {
   submitError.value = ''
+}
+
+function randomFill(): void {
+  const n = targets.value.length
+  const budget = totalBudget.value
+  if (n === 0 || budget < n) return
+  submitError.value = ''
+
+  // 每人至少 1
+  const values = new Array(n).fill(1)
+  let remainingBudget = budget - n
+
+  if (remainingBudget > 0) {
+    // 生成 n 个随机增量
+    const increments = Array.from({ length: n }, () => Math.random() * remainingBudget)
+    const incSum = increments.reduce((a, b) => a + b, 0)
+
+    let adjRemaining = remainingBudget
+    for (let i = 0; i < n - 1; i++) {
+      const inc = Math.round(increments[i] / incSum * remainingBudget)
+      values[i] += inc
+      adjRemaining -= inc
+    }
+    // 最后一人拿剩余部分
+    values[n - 1] += adjRemaining
+  }
+
+  // 确保值互不相同：排序后微调
+  const sorted = values.map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v)
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].v <= sorted[i - 1].v) {
+      sorted[i].v = sorted[i - 1].v + 1
+    }
+  }
+
+  // 修正总和（从大值减去超出部分）
+  const currentSum = sorted.reduce((a, b) => a + b.v, 0)
+  let diff = currentSum - budget
+  for (let i = sorted.length - 1; i >= 0 && diff > 0; i--) {
+    const adjust = Math.min(diff, sorted[i].v - 1)
+    sorted[i].v -= adjust
+    diff -= adjust
+  }
+
+  // 填入 voteValues
+  sorted.forEach(s => {
+    voteValues.value[targets.value[s.i].id] = s.v
+  })
 }
 
 async function submitVotes() {
@@ -213,6 +275,14 @@ onMounted(async () => {
 .player-row {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 12px; border-bottom: 1px solid #ff69b411;
+  transition: all 0.2s;
+}
+.player-row.missing {
+  border-left: 3px solid #ff4444;
+  background: #ff000010;
+}
+.player-row.missing .vote-input {
+  border-color: #ff444466;
 }
 .player-name-row { display: flex; align-items: center; gap: 8px; }
 .player-name { font-size: 15px; font-weight: 500; color: #e0e0e0; }
@@ -228,7 +298,11 @@ onMounted(async () => {
 .lv-btn:hover { background: #ff69b422; }
 .lv-btn-primary { background: #ff69b422; border-color: #ff69b4; }
 .lv-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.submit-btn { display: block; width: 100%; padding: 12px; font-size: 16px; }
+.actions-row { display: flex; gap: 12px; }
+.actions-row .submit-btn { flex: 1; }
+.random-btn { background: #1a0f2e; border-color: #888844; color: #ffcc00; white-space: nowrap; padding: 12px 16px; }
+.random-btn:hover { background: #88888822; }
+.submit-btn { padding: 12px 20px; font-size: 16px; }
 .success-toast { text-align: center; color: #00ff88; margin-top: 12px; font-size: 14px; }
 .error-toast { text-align: center; color: #ff4444; margin-top: 12px; font-size: 14px; }
 </style>

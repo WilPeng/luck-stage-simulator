@@ -101,6 +101,22 @@ router.post('/submit', async (req, res) => {
       }
     }
 
+    // 校验：必须投送给所有活跃选手（排除自己和管理员）
+    const allActiveTargets = await LVPlayer.find({ status: 'active', role: { $ne: 'admin' }, id: { $ne: decoded.userId } })
+    if (votes.length !== allActiveTargets.length) {
+      return res.status(400).json({
+        success: false,
+        error: `必须给所有 ${allActiveTargets.length} 位活跃选手投送喜爱值（当前仅投送了 ${votes.length} 位）`,
+        code: 'MISSING_TARGETS'
+      })
+    }
+    const activeTargetIds = new Set(allActiveTargets.map(p => p.id))
+    for (const v of votes) {
+      if (!activeTargetIds.has(v.targetId)) {
+        return res.status(400).json({ success: false, error: `选手 ${v.targetName || v.targetId} 不是活跃状态`, code: 'INVALID_TARGET' })
+      }
+    }
+
     // 校验：所有目标值必须不重复
     const values = votes.map(v => v.value)
     const uniqueValues = new Set(values)

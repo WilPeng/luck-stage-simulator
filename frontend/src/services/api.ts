@@ -88,7 +88,7 @@ const STATIC_API_BASE: string = (import.meta as any).env?.VITE_API_BASE || ''
 function getApiBase(): string {
   if (STATIC_API_BASE) return STATIC_API_BASE
   const gameId = sessionStorage.getItem('luck_sim_current_game') || 'shengfeng2026'
-  return `/api/${gameId}`
+  return `https://luck-stage-simulator.onrender.com/api/${gameId}`
 }
 
 function getToken(): string | null {
