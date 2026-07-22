@@ -5,7 +5,11 @@ import type {
   BBChatMessage, BBVoteResult, BBStageType
 } from '../types/bigbrother'
 
-const API_BASE = '/api/bigbrother'
+function getApiRoot(): string {
+  return 'https://luck-stage-simulator.onrender.com/api'
+}
+
+const API_BASE = `${getApiRoot()}/bigbrother`
 
 function getToken(): string | null {
   const key = 'bigbrother_token'

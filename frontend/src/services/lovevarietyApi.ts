@@ -5,7 +5,11 @@ import type {
   LVLetter, LVLetterListResponse
 } from '../types/lovevariety'
 
-const API_BASE = '/api/lovevariety'
+function getApiRoot(): string {
+  return 'https://luck-stage-simulator.onrender.com/api'
+}
+
+const API_BASE = `${getApiRoot()}/lovevariety`
 
 function getToken(): string | null {
   const key = 'lovevariety_token'

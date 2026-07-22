@@ -83,12 +83,12 @@ import {
 
 initStorage()
 
-const STATIC_API_BASE: string = (import.meta as any).env?.VITE_API_BASE || ''
+const STATIC_API_BASE: string = ((import.meta as any).env?.VITE_API_BASE || '').replace(/\/$/, '')
 
 function getApiBase(): string {
-  if (STATIC_API_BASE) return STATIC_API_BASE
+  const base = 'https://luck-stage-simulator.onrender.com/api'
   const gameId = sessionStorage.getItem('luck_sim_current_game') || 'shengfeng2026'
-  return `/api/${gameId}`
+  return `${base}/${gameId}`
 }
 
 function getToken(): string | null {
