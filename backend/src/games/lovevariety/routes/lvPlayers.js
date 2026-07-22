@@ -3,28 +3,63 @@ const router = express.Router()
 const path = require('path')
 const fs = require('fs')
 const multer = require('multer')
+const cloudinary = require('cloudinary').v2
+const { CloudinaryStorage } = require('multer-storage-cloudinary')
 const LVPlayer = require('../models/LVPlayer')
 const { generateId, logAction, LV_ACTION_TYPES } = require('../helpers')
 
-// 头像上传配置
-const AVATAR_DIR = path.join(__dirname, '..', '..', '..', '..', 'uploads', 'lvavatars')
-if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true })
+// Cloudinary 配置（优先使用云端存储，否则回退到本地）
+let upload
+let useCloudinary = false
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, AVATAR_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.jpg'
-    cb(null, `lv-avatar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`)
-  }
-})
-const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!file.mimetype.startsWith('image/')) return cb(new Error('仅支持图片文件'))
-    cb(null, true)
-  }
-})
+if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+  })
+
+  const cloudStorage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+      folder: 'luck-stage/lvavatars',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+      public_id: () => `lv-avatar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    }
+  })
+
+  upload = multer({
+    storage: cloudStorage,
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (!file.mimetype.startsWith('image/')) return cb(new Error('仅支持图片文件'))
+      cb(null, true)
+    }
+  })
+  useCloudinary = true
+  console.log('[LVPlayers] 使用 Cloudinary 云端存储头像')
+} else {
+  // 本地文件存储（开发环境 fallback）
+  const AVATAR_DIR = path.join(__dirname, '..', '..', '..', '..', 'uploads', 'lvavatars')
+  if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true })
+
+  const localStorage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, AVATAR_DIR),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.jpg'
+      cb(null, `lv-avatar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`)
+    }
+  })
+  upload = multer({
+    storage: localStorage,
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (!file.mimetype.startsWith('image/')) return cb(new Error('仅支持图片文件'))
+      cb(null, true)
+    }
+  })
+  console.log('[LVPlayers] 使用本地文件存储头像')
+}
 
 // GET / - 获取所有选手
 router.get('/', async (req, res) => {
@@ -187,14 +222,23 @@ router.post('/me/avatar', upload.single('avatar'), async (req, res) => {
     if (!req.file) return res.status(400).json({ success: false, error: '未上传图片文件', code: 'MISSING_FILE' })
 
     const oldAvatar = player.avatar
-    const avatarUrl = `/uploads/lvavatars/${req.file.filename}`
+    // Cloudinary 返回完整 URL，本地返回相对路径
+    const avatarUrl = useCloudinary ? req.file.path : `/uploads/lvavatars/${req.file.filename}`
     player.avatar = avatarUrl
     player.updatedAt = new Date().toISOString()
     await player.save()
 
-    if (oldAvatar && oldAvatar.startsWith('/uploads/lvavatars/')) {
-      const oldPath = path.join(__dirname, '..', '..', '..', '..', oldAvatar)
-      if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {})
+    // 删除旧头像（Cloudinary 上删除旧文件）
+    if (oldAvatar) {
+      if (useCloudinary && oldAvatar.includes('cloudinary')) {
+        const publicId = oldAvatar.split('/').pop()?.split('.')[0]
+        if (publicId) {
+          cloudinary.uploader.destroy(`luck-stage/lvavatars/${publicId}`, () => {})
+        }
+      } else if (oldAvatar.startsWith('/uploads/lvavatars/')) {
+        const oldPath = path.join(__dirname, '..', '..', '..', '..', oldAvatar)
+        if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {})
+      }
     }
 
     res.json({ success: true, data: { avatar: avatarUrl, playerId: player.id } })
@@ -244,14 +288,23 @@ router.post('/:id/avatar', upload.single('avatar'), async (req, res) => {
     if (!req.file) return res.status(400).json({ success: false, error: '未上传图片文件', code: 'MISSING_FILE' })
 
     const oldAvatar = player.avatar
-    const avatarUrl = `/uploads/lvavatars/${req.file.filename}`
+    // Cloudinary 返回完整 URL，本地返回相对路径
+    const avatarUrl = useCloudinary ? req.file.path : `/uploads/lvavatars/${req.file.filename}`
     player.avatar = avatarUrl
     player.updatedAt = new Date().toISOString()
     await player.save()
 
-    if (oldAvatar && oldAvatar.startsWith('/uploads/lvavatars/')) {
-      const oldPath = path.join(__dirname, '..', '..', '..', '..', oldAvatar)
-      if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {})
+    // 删除旧头像（Cloudinary 上删除旧文件）
+    if (oldAvatar) {
+      if (useCloudinary && oldAvatar.includes('cloudinary')) {
+        const publicId = oldAvatar.split('/').pop()?.split('.')[0]
+        if (publicId) {
+          cloudinary.uploader.destroy(`luck-stage/lvavatars/${publicId}`, () => {})
+        }
+      } else if (oldAvatar.startsWith('/uploads/lvavatars/')) {
+        const oldPath = path.join(__dirname, '..', '..', '..', '..', oldAvatar)
+        if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {})
+      }
     }
 
     res.json({ success: true, data: { avatar: avatarUrl, playerId: player.id } })
