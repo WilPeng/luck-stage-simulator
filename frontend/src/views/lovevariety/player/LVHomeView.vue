@@ -6,10 +6,25 @@
       <p v-else class="subtitle">第{{ seasonStore.currentRoundNumber }}轮 · {{ seasonStore.stageName }}</p>
     </div>
 
-    <div v-if="isWaiting" class="waiting-banner">
-      <div class="waiting-icon">💕</div>
-      <div class="waiting-text">游戏尚未开始</div>
-      <div class="waiting-hint">请等待管理员点击"开始游戏"</div>
+    <div v-if="isWaiting">
+      <div class="waiting-banner">
+        <div class="waiting-icon">💕</div>
+        <div class="waiting-text">游戏尚未开始</div>
+        <div class="waiting-hint">请等待管理员点击"开始游戏"</div>
+      </div>
+      <div class="status-section">
+        <div class="status-card">
+          <LvAvatar :name="authStore.currentUser?.name || '?'" :avatar="authStore.currentUser?.avatar" size="lg" class="card-avatar" />
+          <div class="card-info">
+            <div class="card-label">当前选手</div>
+            <div class="card-value">{{ authStore.currentUser?.name }}</div>
+          </div>
+          <div class="avatar-actions">
+            <button class="lv-btn lv-btn-xs" @click="triggerAvatarUpload">换头像</button>
+            <input ref="avatarInputRef" type="file" accept="image/*" class="hidden-input" @change="onAvatarChange" />
+          </div>
+        </div>
+      </div>
     </div>
 
     <div v-else>
