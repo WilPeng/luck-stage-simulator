@@ -37,9 +37,10 @@
         <div class="total-hint">系统分配预算</div>
       </div>
 
-      <div class="remaining-info" :class="{ error: remaining < 0 || !allDifferent || !allTargetsFilled }">
+      <div class="remaining-info" :class="{ error: remaining < 0 || !allDifferent || !allTargetsFilled || !allIntegers }">
         <span>剩余可分配: {{ remaining }}</span>
         <span v-if="!allTargetsFilled" class="error-text">还有 {{ unfilledCount }} 位选手未分配值</span>
+        <span v-else-if="!allIntegers" class="error-text">喜爱值必须是整数！</span>
         <span v-else-if="!allDifferent" class="error-text">每个选手的喜爱值必须不同！</span>
         <span v-else-if="remaining === 0" class="ok-text">✅ 分配完成</span>
       </div>
@@ -51,8 +52,8 @@
             <span class="player-name">{{ p.name }}</span>
           </div>
           <input v-model.number="voteValues[p.id]" type="number" class="vote-input"
-            min="1" :max="totalBudget" placeholder="0"
-            @input="onValueChange" />
+            min="1" :max="totalBudget" placeholder="0" step="1"
+            @input="onValueChange(p.id)" />
         </div>
       </div>
 
@@ -115,6 +116,11 @@ const allDifferent = computed(() => {
   return unique.size === values.length
 })
 
+const allIntegers = computed(() => {
+  const values = Object.values(voteValues.value).filter(v => v > 0)
+  return values.every(v => Number.isInteger(v))
+})
+
 const allTargetsFilled = computed(() => {
   return targets.value.length > 0 && targets.value.every(p => (voteValues.value[p.id] || 0) > 0)
 })
@@ -124,7 +130,7 @@ const unfilledCount = computed(() => {
 })
 
 const canSubmit = computed(() => {
-  return remaining.value === 0 && allDifferent.value && allTargetsFilled.value
+  return remaining.value === 0 && allDifferent.value && allTargetsFilled.value && allIntegers.value
 })
 
 const targetAvatarMap = ref<Record<string, string | null>>({})
@@ -133,8 +139,15 @@ function getTargetAvatar(id: string): string | null {
   return targetAvatarMap.value[id] || null
 }
 
-function onValueChange() {
+function onValueChange(playerId?: string) {
   submitError.value = ''
+  // 取整：确保输入值始终为整数
+  if (playerId !== undefined) {
+    const val = voteValues.value[playerId]
+    if (val !== undefined && !Number.isNaN(val)) {
+      voteValues.value[playerId] = Math.round(val)
+    }
+  }
 }
 
 function randomFill(): void {

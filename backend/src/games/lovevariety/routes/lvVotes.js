@@ -117,6 +117,13 @@ router.post('/submit', async (req, res) => {
       }
     }
 
+    // 校验：所有值必须为整数
+    for (const v of votes) {
+      if (!Number.isInteger(v.value)) {
+        return res.status(400).json({ success: false, error: '喜爱值必须是整数', code: 'INVALID_VALUE_TYPE' })
+      }
+    }
+
     // 校验：所有目标值必须不重复
     const values = votes.map(v => v.value)
     const uniqueValues = new Set(values)
@@ -539,6 +546,13 @@ router.post('/admin-submit', async (req, res) => {
     for (const v of votes) {
       if (v.targetId === voterId) {
         return res.status(400).json({ success: false, error: '不能给自己投送喜爱值', code: 'SELF_VOTE' })
+      }
+    }
+
+    // 校验：所有值必须为整数
+    for (const v of votes) {
+      if (!Number.isInteger(v.value)) {
+        return res.status(400).json({ success: false, error: '喜爱值必须是整数', code: 'INVALID_VALUE_TYPE' })
       }
     }
 
