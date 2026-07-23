@@ -86,7 +86,7 @@ initStorage()
 const STATIC_API_BASE: string = ((import.meta as any).env?.VITE_API_BASE || '').replace(/\/$/, '')
 
 function getApiBase(): string {
-  const base = STATIC_API_BASE || '/api'
+  const base = STATIC_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
   const gameId = sessionStorage.getItem('luck_sim_current_game') || 'shengfeng2026'
   return `${base}/${gameId}`
 }
