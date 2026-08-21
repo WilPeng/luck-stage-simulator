@@ -47,6 +47,43 @@
             </div>
             <t-empty v-if="pkQueue.length === 0" description="危险队列已清空" />
           </div>
+
+          <!-- PK 历史记录 -->
+          <div v-if="pkHistory.length > 0" class="pk-history">
+            <div class="card-title" style="margin-top: 20px">
+              <span>📋 PK 历史（{{ pkHistory.length }}场）</span>
+            </div>
+            <div class="pk-history-list">
+              <div v-for="pk in pkHistory" :key="pk.id" class="pk-history-item">
+                <div class="pk-history-head">
+                  <span class="pk-index">第 {{ pk.pkIndex }} 场</span>
+                  <span class="pk-attribute">{{ attributeName(pk.attribute) }}</span>
+                  <span class="pk-status" :class="pk.status">{{ pk.status === 'resolved' ? '已裁定' : '进行中' }}</span>
+                </div>
+                <div class="pk-history-players">
+                  <div v-for="p in pk.players" :key="p.playerId" class="pk-history-player">
+                    <span class="pk-history-name">{{ p.playerName }}</span>
+                    <span v-if="p.votes > 0" class="pk-history-votes">{{ p.votes }}票</span>
+                    <span v-if="p.decision" class="pk-history-decision" :class="p.decision">{{ decisionText(p.decision) }}</span>
+                  </div>
+                </div>
+                <div v-if="pk.voteDetails?.length" class="pk-check-votes">
+                  <span class="check-title">评审查票（{{ pk.voteDetails.length }}人）</span>
+                  <div class="check-seats">
+                    <span
+                      v-for="seat in pk.voteDetails"
+                      :key="seat.seatNumber"
+                      class="check-seat"
+                      :style="{ background: pkPlayerColor(seat.playerId) }"
+                      :title="`${seat.seatNumber}号评审 → ${pkPlayerNameById(seat.playerId)}`"
+                    >
+                      {{ seat.seatNumber }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 右：PK 操作区 -->
@@ -113,7 +150,12 @@
 
             <!-- 3 名选手 -->
             <div class="pk-players">
-              <div v-for="p in currentPk.players" :key="p.playerId" class="pk-player">
+              <div
+                v-for="p in currentPk.players"
+                :key="p.playerId"
+                class="pk-player"
+                :style="{ borderColor: pkPlayerColor(p.playerId) }"
+              >
                 <span class="pk-player-name">{{ p.playerName }}</span>
                 <span class="pk-player-team">{{ p.teamName || '未组队' }}</span>
                 <span class="pk-player-weight">
@@ -135,6 +177,24 @@
                 >
                   {{ p.playerName }} {{ p.votes }}
                 </div>
+              </div>
+            </div>
+
+            <!-- 查票区（每位评审投给谁，危险区颜色） -->
+            <div v-if="hasPkVotes && currentPk.voteDetails?.length" class="pk-vote-details">
+              <div class="vote-details-title">
+                🗳️ 评审查票（{{ currentPk.voteDetails.length }}人投票）
+              </div>
+              <div class="vote-details-seats">
+                <span
+                  v-for="seat in currentPk.voteDetails"
+                  :key="seat.seatNumber"
+                  class="vote-detail-seat"
+                  :style="{ background: pkPlayerColor(seat.playerId) }"
+                  :title="`${seat.seatNumber}号评审 → ${pkPlayerNameById(seat.playerId)}`"
+                >
+                  {{ seat.seatNumber }}
+                </span>
               </div>
             </div>
 
@@ -621,6 +681,7 @@ async function loadAll() {
     // 加载危险名单与 PK 状态
     await store.fetchDangerStatus(currentRound.value)
     await store.fetchPkQueue(currentRound.value)
+    await store.fetchPkHistory(currentRound.value)
     currentPk.value = store.currentPk
     // 初始化裁定选择
     if (currentPk.value) {
@@ -684,6 +745,7 @@ async function handleRestore(userId: string) {
 
 const dangerConfirmed = computed(() => !!store.dangerStatus?.confirmed)
 const pkQueue = computed(() => store.pkQueue)
+const pkHistory = computed(() => store.pkHistory)
 const currentPk = ref(store.currentPk)
 const opponentId1 = ref<string>('')
 const opponentId2 = ref<string>('')
@@ -720,10 +782,38 @@ function attributeName(attr: string): string {
   return map[attr] || attr
 }
 
+function decisionText(d: string): string {
+  const map: Record<string, string> = { safe: '🟢 安全', pending: '🟡 待定', eliminated: '🔴 淘汰' }
+  return map[d] || d
+}
+
 function segmentColor(playerId: string): string {
   const colors = ['#e74c3c', '#f39c12', '#27ae60']
   const idx = currentPk.value?.players.findIndex(p => p.playerId === playerId) ?? 0
   return colors[Math.max(idx, 0) % colors.length]
+}
+
+// 危险区选手颜色（按队列顺序固定色板，三选一投票/查票区用）
+const PK_COLOR_PALETTE = ['#e74c3c', '#f39c12', '#27ae60', '#2980b9', '#8e44ad', '#16a085', '#c0392b', '#d35400', '#2c3e50', '#7f8c8d']
+const pkColorMap = new Map<string, string>()
+
+function pkPlayerColor(playerId: string): string {
+  if (!pkColorMap.has(playerId)) {
+    const idx = pkQueue.value.findIndex(e => e.playerId === playerId)
+    pkColorMap.set(playerId, PK_COLOR_PALETTE[(idx >= 0 ? idx : pkColorMap.size) % PK_COLOR_PALETTE.length])
+  }
+  return pkColorMap.get(playerId) || '#95a5a6'
+}
+
+function pkPlayerNameById(playerId: string): string {
+  const entry = pkQueue.value.find(e => e.playerId === playerId)
+  if (entry) return entry.playerName
+  const pk = currentPk.value
+  if (pk) {
+    const p = pk.players.find(x => x.playerId === playerId)
+    if (p) return p.playerName
+  }
+  return playerId
 }
 
 function votesPercent(p: { playerId: string; votes: number }): number {
@@ -753,6 +843,7 @@ async function handleStartPk() {
     opponentId1.value = ''
     opponentId2.value = ''
     MessagePlugin.success('PK 已发起')
+    await store.fetchPkHistory(currentRound.value)
   } catch (e: any) {
     MessagePlugin.error(e.message || '发起 PK 失败')
   } finally {
@@ -783,6 +874,7 @@ async function handleResolve() {
     decisions.value = {}
     await store.fetchDangerStatus(currentRound.value)
     await store.fetchPkQueue(currentRound.value)
+    await store.fetchPkHistory(currentRound.value)
     MessagePlugin.success('PK 裁定完成')
   } catch (e: any) {
     MessagePlugin.error(e.message || '裁定失败')
@@ -1263,6 +1355,7 @@ onMounted(async () => {
     padding: 14px 8px;
     background: var(--table-hover-bg);
     border-radius: 10px;
+    border: 2px solid transparent;
     text-align: center;
 
     .pk-player-name {
@@ -1307,6 +1400,151 @@ onMounted(async () => {
       font-weight: 700;
       white-space: nowrap;
       overflow: hidden;
+    }
+  }
+}
+
+// PK 查票区
+.pk-vote-details {
+  margin-bottom: 16px;
+
+  .vote-details-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .vote-details-seats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    max-height: 140px;
+    overflow-y: auto;
+  }
+
+  .vote-detail-seat {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+}
+
+// PK 历史记录
+.pk-history {
+  margin-top: 8px;
+
+  .pk-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 420px;
+    overflow-y: auto;
+  }
+
+  .pk-history-item {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px;
+
+    .pk-history-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+
+      .pk-index {
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .pk-attribute {
+        font-size: 11px;
+        color: var(--text-secondary);
+      }
+
+      .pk-status {
+        font-size: 10px;
+        padding: 1px 8px;
+        border-radius: 8px;
+        margin-left: auto;
+
+        &.resolved { background: rgba(39, 174, 96, 0.15); color: #27ae60; }
+        &.voting { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
+      }
+    }
+
+    .pk-history-players {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .pk-history-player {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 8px;
+      background: var(--table-hover-bg);
+      border-radius: 8px;
+
+      .pk-history-name {
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .pk-history-votes {
+        font-size: 14px;
+        font-weight: 800;
+        color: #0052d9;
+      }
+
+      .pk-history-decision {
+        font-size: 10px;
+        padding: 1px 6px;
+        border-radius: 8px;
+
+        &.safe { background: rgba(39, 174, 96, 0.15); color: #27ae60; }
+        &.pending { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
+        &.eliminated { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
+      }
+    }
+
+    .pk-check-votes {
+      .check-title {
+        display: block;
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+
+      .check-seats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px;
+        max-height: 90px;
+        overflow-y: auto;
+      }
+
+      .check-seat {
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        color: #fff;
+        font-size: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
     }
   }
 }

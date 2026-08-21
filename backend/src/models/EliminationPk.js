@@ -4,6 +4,7 @@ const BaseModel = require('./BaseModel')
  * PK 淘汰记录（每轮可有多场，每场 3 人 PK）
  * 字段: id / roundId / roundIndex / pkIndex / attribute / challengerId
  *       / players[{ playerId, playerName, teamName, teamId, weight, votes, decision }]
+ *       / voteDetails[{ seatNumber, audienceName, playerId }]  // 每位评审投给谁（用于查票）
  *       / queueBefore[] / queueAfter[] / status(voting|resolved)
  *       / createdAt / updatedAt
  */
@@ -16,6 +17,7 @@ class EliminationPk extends BaseModel {
     this.attribute = 'vocal'            // vocal | dance | charm
     this.challengerId = null            // 队首发起人
     this.players = []                   // 3 人，含 weight/votes/decision
+    this.voteDetails = []               // 每评审投票明细 [{ seatNumber, audienceName, playerId }]
     this.queueBefore = []               // 本场开始前的队列快照
     this.queueAfter = []                // 裁定后的新队列
     this.status = 'voting'              // voting | resolved

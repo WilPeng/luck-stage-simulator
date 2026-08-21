@@ -26,6 +26,7 @@ import {
   getPkQueue as apiGetPkQueue,
   startPk as apiStartPk,
   generatePkVotes as apiGeneratePkVotes,
+  getPkHistory as apiGetPkHistory,
   resolvePk as apiResolvePk,
   stopElimination as apiStopElimination
 } from '../services/api'
@@ -167,6 +168,14 @@ export const useEliminationStore = defineStore('elimination', () => {
     }
   }
 
+  async function fetchPkHistory(round?: number): Promise<void> {
+    try {
+      pkHistory.value = await apiGetPkHistory(round)
+    } catch (e) {
+      pkHistory.value = []
+    }
+  }
+
   async function doConfirmDanger(params: ConfirmDangerParams): Promise<void> {
     loading.value = true
     try {
@@ -266,6 +275,7 @@ export const useEliminationStore = defineStore('elimination', () => {
     fetchAll,
     fetchDangerStatus,
     fetchPkQueue,
+    fetchPkHistory,
     doConfirmDanger,
     doStartPk,
     doGeneratePkVotes,

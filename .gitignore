@@ -1,3 +1,6 @@
 node_modules/
 backend/npm-start.log
+backend/dev-server*.log
+backend/*.log
+frontend/*.log
 .codebuddy/plans/

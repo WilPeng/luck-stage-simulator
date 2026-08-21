@@ -119,7 +119,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, reactive, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { useTrainingCardStore } from '../../stores/trainingCardStore'
@@ -383,10 +383,24 @@ onMounted(async () => {
         charm: r.effect.charm || 0
       })
     }
+
+    // 5. 启动释放状态轮询
+    startReleasePolling()
   } catch (e) {
     console.warn('[Training] 加载失败:', e)
   }
 })
+
+let releaseTimer: number | undefined
+
+onBeforeUnmount(() => {
+  if (releaseTimer) window.clearInterval(releaseTimer)
+})
+
+// 轮询释放状态：管理员开放后选手端自动解锁
+async function startReleasePolling() {
+  releaseTimer = window.setInterval(loadReleaseStatus, 8000)
+}
 </script>
 
 <style lang="scss" scoped>

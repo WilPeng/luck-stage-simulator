@@ -1132,8 +1132,7 @@ router.post('/start', auth, requireAdmin, async (req, res) => {
 
     await logAction(req.user.userId, req.user.name || 'admin', 'admin', 'PERFORMANCE_START', 'round', round.id, `开启第 ${round.index} 轮公演`)
 
-    // 清除该轮旧发挥值（如有）
-    await PerformanceValue.deleteMany({ roundId: round.id })
+    // 发挥值已在并发阶段抽取，公演开启时不再清空（保留选手已抽取的值）
 
     res.json({ success: true, message: '公演已开启，选手端可开始生成发挥值', roundId: round.id, roundIndex: round.index, generationMode: mode })
   } catch (e) {

@@ -818,11 +818,12 @@ async function getPkQueue(roundIndex) {
 }
 
 /**
- * 发起一场 PK：队首（挑战者）+ 管理员选择 2 名对手，选择 PK 属性
+ * 发起一场 PK：队首（挑战者）+ 2 名对手，选择 PK 属性
  * @param {number} roundIndex
- * @param {object} params { challengerId, opponentIds, attribute }
+ * @param {object} params { challengerId, opponentIds, attribute, initiatorId }
+ *        initiatorId：发起人（管理员可代发；选手本人发起时须为队首挑战者）
  */
-async function startPk(roundIndex, { challengerId, opponentIds, attribute }) {
+async function startPk(roundIndex, { challengerId, opponentIds, attribute, initiatorId }) {
   const roundDetail = await resolveRoundDetail(roundIndex)
   if (!roundDetail) throw new Error('无效的轮次参数')
   const { round, frontRoundId } = roundDetail
@@ -843,6 +844,11 @@ async function startPk(roundIndex, { challengerId, opponentIds, attribute }) {
   if (queue.length === 0) throw new Error('危险队列已为空')
   if (queue[0].playerId !== challengerId) {
     throw new Error('只能由队列第一人发起 PK')
+  }
+
+  // 发起人校验：管理员可代发；选手本人必须是队首挑战者
+  if (initiatorId && initiatorId !== challengerId) {
+    throw new Error('只有队首本人可以发起 PK')
   }
 
   // 对手必须来自队列中（不能是挑战者自己，不能重复）
@@ -930,6 +936,7 @@ async function generatePkVotes(pkId) {
 
   // 每位评审按权重三选一
   const votes = { [pk.players[0].playerId]: 0, [pk.players[1].playerId]: 0, [pk.players[2].playerId]: 0 }
+  const voteDetails = []
   for (let i = 0; i < members.length; i++) {
     let rand = Math.random() * totalWeight
     let chosen = pk.players[0].playerId
@@ -939,9 +946,16 @@ async function generatePkVotes(pkId) {
       rand -= w
     }
     votes[chosen] = (votes[chosen] || 0) + 1
+    const m = members[i]
+    voteDetails.push({
+      seatNumber: m.seatNumber,
+      audienceName: m.name,
+      playerId: chosen
+    })
   }
 
   pk.players = pk.players.map(p => ({ ...p, votes: votes[p.playerId] || 0 }))
+  pk.voteDetails = voteDetails
   await pk.save()
 
   return pk.toObject()
@@ -954,6 +968,39 @@ async function getPkDetail(pkId) {
   const pk = await EliminationPk.findOne({ id: pkId })
   if (!pk) throw new Error('PK 记录不存在')
   return pk.toObject()
+}
+
+/**
+ * 获取该轮全部 PK 记录（选手端可见，脱敏 weight 属性值）
+ * @param {number} roundIndex
+ */
+async function getPkHistory(roundIndex) {
+  const roundDetail = await resolveRoundDetail(roundIndex)
+  if (!roundDetail) throw new Error('无效的轮次参数')
+  const { round } = roundDetail
+
+  const pks = await EliminationPk.find({ roundId: round.id })
+  pks.sort((a, b) => (a.pkIndex || 0) - (b.pkIndex || 0))
+
+  return pks.map(pk => {
+    const obj = pk.toObject ? pk.toObject() : { ...pk }
+    // 脱敏：不向选手暴露属性权重，只保留票数与裁定
+    obj.players = obj.players.map(p => ({
+      playerId: p.playerId,
+      playerName: p.playerName,
+      teamId: p.teamId || null,
+      teamName: p.teamName || null,
+      votes: p.votes || 0,
+      decision: p.decision || null
+    }))
+    // 查票区（每位评审投给谁）
+    obj.voteDetails = (obj.voteDetails || []).map(v => ({
+      seatNumber: v.seatNumber,
+      audienceName: v.audienceName,
+      playerId: v.playerId
+    }))
+    return obj
+  })
 }
 
 /**
@@ -1099,6 +1146,7 @@ module.exports = {
   startPk,
   generatePkVotes,
   getPkDetail,
+  getPkHistory,
   resolvePk,
   stopElimination
 }

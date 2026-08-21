@@ -131,6 +131,11 @@ export interface EliminationPk {
   attribute: 'vocal' | 'dance' | 'charm'
   challengerId: string
   players: PkPlayer[]
+  voteDetails?: {
+    seatNumber: number
+    audienceName: string
+    playerId: string
+  }[]
   queueBefore: DangerQueueEntry[]
   queueAfter: DangerQueueEntry[]
   status: 'voting' | 'resolved'

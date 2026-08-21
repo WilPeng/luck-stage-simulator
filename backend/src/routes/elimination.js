@@ -179,14 +179,20 @@ router.get('/pk/queue', auth, async (req, res) => {
   }
 })
 
-// POST /api/elimination/pk/start - 发起一场 PK（队首挑战者 + 2 对手 + 属性）
-router.post('/pk/start', auth, requireAdmin, async (req, res) => {
+// POST /api/elimination/pk/start - 发起一场 PK（队首挑战者 + 2 对手 + 属性；管理员或队首本人）
+router.post('/pk/start', auth, async (req, res) => {
   try {
     const { round, challengerId, opponentIds, attribute } = req.body
     if (typeof round !== 'number' || round < 1) {
       return res.status(400).json({ success: false, error: 'round 必填', code: 'INVALID_ROUND' })
     }
-    const pk = await eliminationService.startPk(round, { challengerId, opponentIds, attribute })
+    const isAdmin = req.user.role === 'admin'
+    const pk = await eliminationService.startPk(round, {
+      challengerId,
+      opponentIds,
+      attribute,
+      initiatorId: isAdmin ? null : req.user.userId
+    })
     try {
       await logAction(req.user.userId, req.user.name, req.user.role,
         ACTION_TYPES.ELIMINATION || 'ELIMINATION', 'elimination', `round-${round}`,
@@ -196,6 +202,19 @@ router.post('/pk/start', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error('Start PK error:', e)
     res.status(400).json({ success: false, error: e.message || '发起 PK 失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// GET /api/elimination/pk/history?round= - 获取该轮全部 PK 记录（选手/管理员可见，脱敏属性值）
+router.get('/pk/history', auth, async (req, res) => {
+  try {
+    const roundIndex = req.query.round !== undefined ? parseInt(req.query.round) : undefined
+    if (!roundIndex) return res.status(400).json({ success: false, error: '缺少 round 参数', code: 'MISSING_PARAM' })
+    const history = await eliminationService.getPkHistory(roundIndex)
+    res.json({ success: true, data: history })
+  } catch (e) {
+    console.error('Get PK history error:', e)
+    res.status(500).json({ success: false, error: '获取 PK 记录失败', code: 'SERVER_ERROR' })
   }
 })
 

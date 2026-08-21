@@ -27,6 +27,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'round/:round/preparation', name: 'PlayerPreparation', component: () => import('../views/player/PlayerPlaceholderView.vue') },
       { path: 'round/:round/captain', name: 'PlayerCaptain', component: () => import('../views/player/PlayerCaptainView.vue') },
       { path: 'round/:round/concurrent', name: 'PlayerConcurrent', component: () => import('../views/player/PlayerConcurrentView.vue') },
+      { path: 'round/:round/performance-draw', name: 'PlayerPerformanceDraw', component: () => import('../views/player/PlayerPerformanceDrawView.vue') },
       { path: 'round/:round/team', name: 'PlayerTeam', component: () => import('../views/player/PlayerTeamView.vue') },
       { path: 'round/:round/song-selection', name: 'PlayerSongSelection', component: () => import('../views/player/PlayerSongSelectionView.vue') },
       { path: 'round/:round/training', name: 'PlayerTraining', component: () => import('../views/player/PlayerTrainingView.vue') },

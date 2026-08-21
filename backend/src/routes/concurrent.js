@@ -16,7 +16,13 @@ async function getRound(roundId) {
     const byId = await Round.findOne({ id: roundId })
     if (byId) return byId
     const match = typeof roundId === 'string' ? roundId.match(/^round[_-](\d+)$/) : null
-    if (match) return await Round.findOne({ index: parseInt(match[1]) })
+    if (match) {
+      const season = await getCurrentSeason()
+      const query = { index: parseInt(match[1]) }
+      if (season) query.seasonId = season.id
+      const byIndex = await Round.findOne(query)
+      if (byIndex) return byIndex
+    }
   }
   const season = await getCurrentSeason()
   if (!season) return null

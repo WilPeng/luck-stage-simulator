@@ -406,10 +406,15 @@ export async function setConcurrentRelease(
       body: JSON.stringify({ roundId, action, released })
     }),
     async () => {
-      // mock 模式：写入 localStorage 保证刷新后状态不丢失
-      const patchKey = `${action}Released` as keyof ConcurrentReleaseStatusResponse
-      saveLocalRelease(roundId, { [patchKey]: released } as Partial<ConcurrentReleaseStatusResponse>)
-      return getConcurrentStatus(roundId)
+      // mock 降级仅本地调试时可用：真实后端不可达则抛出错误，避免管理员误以为已写入服务器
+      const status = await getConcurrentStatus(roundId)
+      if (status.roundId) {
+        // 尝试写 localStorage（仅 mock 演示）
+        const patchKey = `${action}Released` as keyof ConcurrentReleaseStatusResponse
+        saveLocalRelease(roundId, { [patchKey]: released } as Partial<ConcurrentReleaseStatusResponse>)
+        return getConcurrentStatus(roundId)
+      }
+      throw new Error('后端不可用，无法开放并发行动')
     },
     'setConcurrentRelease'
   )
@@ -1988,6 +1993,17 @@ export async function getPkDetail(pkId: string): Promise<EliminationPk> {
     () => doRequest<EliminationPk>(`/elimination/pk/${pkId}`),
     async () => { throw new Error('PK 详情仅在连接后端时可用') },
     'getPkDetail'
+  )
+}
+
+export async function getPkHistory(round?: number): Promise<EliminationPk[]> {
+  return safeCall(
+    () => {
+      const query = round !== undefined ? `?round=${round}` : ''
+      return doRequest<EliminationPk[]>(`/elimination/pk/history${query}`)
+    },
+    async () => [],
+    'getPkHistory'
   )
 }
 

@@ -179,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useSeasonStore } from '../../stores/seasonStore'
@@ -440,6 +440,8 @@ async function loadAll() {
   await loadInvites()
 }
 
+let releaseTimer: number | undefined
+
 onMounted(async () => {
   await Promise.all([
     playerStore.fetchUsers({ pageSize: 1000 }),
@@ -447,6 +449,12 @@ onMounted(async () => {
     loadReleaseStatus()
   ])
   await loadAll()
+  // 轮询释放状态：管理员开放后选手端自动解锁
+  releaseTimer = window.setInterval(loadReleaseStatus, 8000)
+})
+
+onBeforeUnmount(() => {
+  if (releaseTimer) window.clearInterval(releaseTimer)
 })
 </script>
 

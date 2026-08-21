@@ -201,7 +201,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, onBeforeUnmount, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useSeasonStore } from '../../stores/seasonStore'
@@ -323,6 +323,8 @@ async function loadReleaseStatus() {
   }
 }
 
+let releaseTimer: number | undefined
+
 onMounted(async () => {
   const roundId = `round-${round.value}`
   console.log('[选歌] 加载 roundId:', roundId)
@@ -341,6 +343,12 @@ onMounted(async () => {
     'released:', songStore.roundSongs.filter(r => r.released).length,
     'teamSongs:', songStore.teamSongs.length,
     'teams:', teamStore.teams.length)
+  // 轮询释放状态：管理员开放后选手端自动解锁
+  releaseTimer = window.setInterval(loadReleaseStatus, 8000)
+})
+
+onBeforeUnmount(() => {
+  if (releaseTimer) window.clearInterval(releaseTimer)
 })
 </script>
 

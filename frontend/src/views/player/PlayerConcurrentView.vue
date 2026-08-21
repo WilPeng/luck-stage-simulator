@@ -35,6 +35,16 @@
         <span class="action-desc">翻开卡牌提升属性</span>
         <span class="action-arrow">→</span>
       </router-link>
+
+      <router-link
+        :to="`${gamePrefix}/player/round/${currentRound}/performance-draw`"
+        class="action-card"
+      >
+        <span class="action-icon">🎲</span>
+        <span class="action-title">抽取发挥值</span>
+        <span class="action-desc">提前抽取公演发挥值</span>
+        <span class="action-arrow">→</span>
+      </router-link>
     </div>
 
     <div class="progress-section">
@@ -52,17 +62,22 @@
           <span class="progress-icon">{{ trainingCompleted ? '✓' : '○' }}</span>
           <span class="progress-label">个人训练完成</span>
         </div>
+        <div class="progress-item" :class="{ done: perfValueDrawn }">
+          <span class="progress-icon">{{ perfValueDrawn ? '✓' : '○' }}</span>
+          <span class="progress-label">已抽取发挥值</span>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { useSongStore } from '../../stores/songStore'
+import { getPlayerPerformanceStatus } from '../../services/api'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -89,11 +104,25 @@ const trainingCompleted = computed(() => {
   const drawsPerPlayer = 3 // 默认值，实际可从赛季配置读取
   return (user.trainingCount || 0) >= drawsPerPlayer
 })
+const perfValueDrawn = ref(false)
 
 onMounted(() => {
   teamStore.fetchTeams(String(currentRound.value))
   songStore.fetchRoundSongs(String(currentRound.value))
+  checkPerfValueDrawn()
 })
+
+async function checkPerfValueDrawn() {
+  try {
+    const uid = authStore.currentUser?.id
+    if (!uid) return
+    const status = await getPlayerPerformanceStatus(`round-${currentRound.value}`)
+    const me = status?.players?.find(p => p.playerId === uid)
+    perfValueDrawn.value = !!me?.generated
+  } catch {
+    perfValueDrawn.value = false
+  }
+}
 </script>
 
 <style lang="scss" scoped>
