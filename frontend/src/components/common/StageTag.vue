@@ -60,6 +60,11 @@ const stageClass = computed(() => props.stage)
     color: #fff;
   }
   
+  &.danger_confirm {
+    background: #e67e22;
+    color: #fff;
+  }
+  
   &.elimination {
     background: #e74c3c;
     color: #fff;

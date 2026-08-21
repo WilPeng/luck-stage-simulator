@@ -23,6 +23,8 @@ const COLLECTIONS = [
   'AudienceVoteFinalRanking', // 大众评审最终排名（管理员释放后保存）
   'PerformanceValue',// 选手公演发挥值
   'Elimination',     // 淘汰记录（每轮）
+  'DangerConfirm',   // 危险名单（淘汰环节前确认）
+  'EliminationPk',   // PK 淘汰记录（3人PK）
   'ChatMessage',     // 聊天消息
   'ChatConfig',      // 聊天室配置
   'OperationLog',    // 操作日志

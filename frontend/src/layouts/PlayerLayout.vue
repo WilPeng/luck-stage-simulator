@@ -266,6 +266,7 @@ const stageConfig: Record<StageType, { icon: string; name: string }> = {
   song_select: { icon: '🎵', name: '选歌' },
   training: { icon: '💪', name: '训练' },
   performance: { icon: '🌟', name: '公演结果' },
+  danger_confirm: { icon: '⚠️', name: '危险名单' },
   elimination: { icon: '📊', name: '淘汰结果' }
 }
 
@@ -336,6 +337,7 @@ function getStagePath(round: number, stage: StageType): string {
     song_select: `${prefix}/player/round/${round}/song-selection`,
     training: `${prefix}/player/round/${round}/training`,
     performance: `${prefix}/player/round/${round}/performance`,
+    danger_confirm: `${prefix}/player/round/${round}/elimination`,
     elimination: `${prefix}/player/round/${round}/elimination`
   }
   return pathMap[stage]

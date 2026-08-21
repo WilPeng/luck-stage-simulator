@@ -8,6 +8,7 @@ export const STAGE_LIST: StageType[] = [
   'song',
   'training',
   'performance',
+  'danger_confirm',
   'elimination',
   'completed'
 ]
@@ -22,6 +23,7 @@ export const STAGE_INFO_MAP: Record<StageType, Omit<StageInfo, 'status'>> = {
   song: { type: 'song', name: '选歌阶段', description: '选择公演歌曲' },
   training: { type: 'training', name: '训练阶段', description: '训练翻牌提升属性' },
   performance: { type: 'performance', name: '公演阶段', description: '公演比拼' },
+  danger_confirm: { type: 'danger_confirm', name: '确认危险名单', description: '管理员圈定危险选手' },
   elimination: { type: 'elimination', name: '淘汰阶段', description: '公布淘汰结果' },
   completed: { type: 'completed', name: '本轮完成', description: '当前公演轮次已完成' },
   review: { type: 'review', name: '复盘阶段', description: '本季总结复盘' }

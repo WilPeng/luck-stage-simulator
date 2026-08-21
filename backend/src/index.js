@@ -214,7 +214,8 @@ async function migrateRoundIndex() {
     require('./models/PerformanceValue'), require('./models/PerformanceRoundState'),
     require('./models/TeamInvite'), require('./models/TeamApplication'),
     require('./models/TeamPerformance'), require('./models/PlayerPerformance'),
-    require('./models/AudienceVote'), require('./models/SafeTeam')
+    require('./models/AudienceVote'), require('./models/SafeTeam'),
+    require('./models/DangerConfirm'), require('./models/EliminationPk')
   ]
 
   const oldRounds = await Round.find({})

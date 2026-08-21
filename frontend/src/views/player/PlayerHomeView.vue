@@ -162,6 +162,7 @@ const currentTask = computed(() => {
     case 'song_select': return '请查看歌曲池并选择公演歌曲'
     case 'training': return `你还有 ${remainingTraining.value} 次训练机会，请前往训练页面完成翻牌`
     case 'performance': return '公演即将开始，请做好准备'
+    case 'danger_confirm': return '等待管理员确认危险名单'
     case 'elimination': return '查看淘汰结果'
     default: return '当前阶段暂无任务'
   }
@@ -186,6 +187,7 @@ const taskLink = computed(() => {
     case 'song_select': return `${prefix}/round/${round}/song-selection`
     case 'training': return `${prefix}/round/${round}/training`
     case 'performance': return `${prefix}/round/${round}/performance`
+    case 'danger_confirm': return `${prefix}/round/${round}/elimination`
     case 'elimination': return `${prefix}/round/${round}/elimination`
     default: return `${prefix}/home`
   }

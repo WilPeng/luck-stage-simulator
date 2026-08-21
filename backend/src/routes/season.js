@@ -546,6 +546,9 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
       // 淘汰记录 (8)
       { name: 'Elimination', model: require('../models/Elimination') },
       { name: 'SafeTeam', model: require('../models/SafeTeam') },
+      // 危险名单与 PK 淘汰 (8.1)
+      { name: 'DangerConfirm', model: require('../models/DangerConfirm') },
+      { name: 'EliminationPk', model: require('../models/EliminationPk') },
       // 邀请/申请 (14)
       { name: 'TeamInvite', model: require('../models/TeamInvite') },
       { name: 'TeamApplication', model: require('../models/TeamApplication') },

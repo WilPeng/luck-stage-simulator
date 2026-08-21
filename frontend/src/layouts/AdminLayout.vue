@@ -201,6 +201,7 @@ const stageConfig: Record<StageType, { icon: string; text: string }> = {
   captain_vote: { icon: '👑', text: '队长选举' },
   concurrent: { icon: '⚡', text: '并发行动' },
   performance: { icon: '🌟', text: '公演' },
+  danger_confirm: { icon: '⚠️', text: '危险名单' },
   elimination: { icon: '📝', text: '淘汰' },
   teaming: { icon: '👥', text: '组队' },
   song_select: { icon: '🎵', text: '选歌' },

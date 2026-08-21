@@ -39,7 +39,8 @@ const STAGE_ORDER = [
   'captain_vote',    // 1  队长选举
   'concurrent',      // 2  并发行动（组队/选歌/训练）
   'performance',     // 3  公演结算与结果展示
-  'elimination'      // 4  淘汰
+  'danger_confirm',  // 4  确认危险名单
+  'elimination'      // 5  淘汰（PK淘汰）
 ]
 
 const STAGE_NAME = {
@@ -47,6 +48,7 @@ const STAGE_NAME = {
   captain_vote: '队长选举',
   concurrent: '并发行动',
   performance: '公演',
+  danger_confirm: '确认危险名单',
   elimination: '淘汰'
 }
 

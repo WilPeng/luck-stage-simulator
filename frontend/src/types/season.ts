@@ -7,7 +7,8 @@ export type StageType =
   | 'captain_vote'    // 队长选举
   | 'concurrent'      // 并发行动（组队/选歌/训练）
   | 'performance'     // 公演结算与结果展示
-  | 'elimination'     // 淘汰
+  | 'danger_confirm'  // 确认危险名单
+  | 'elimination'     // 淘汰（PK淘汰）
   | 'teaming'         // 组队（并发子行动，兼容页面）
   | 'song_select'     // 选歌（并发子行动，兼容页面）
   | 'training'        // 训练（并发子行动，兼容页面）
@@ -18,6 +19,7 @@ export const STAGE_ORDER: StageType[] = [
   'captain_vote',
   'concurrent',
   'performance',
+  'danger_confirm',
   'elimination'
 ]
 
@@ -30,6 +32,7 @@ export const STAGE_NAMES: Record<StageType, string> = {
   captain_vote: '队长选举',
   concurrent: '并发行动',
   performance: '公演',
+  danger_confirm: '确认危险名单',
   elimination: '淘汰',
   teaming: '组队',
   song_select: '选歌',

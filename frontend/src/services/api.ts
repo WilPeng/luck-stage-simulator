@@ -29,7 +29,13 @@ import type {
   ManualEliminateParams,
   ManualEliminateResult,
   RestoreResult,
-  EliminationConfig
+  EliminationConfig,
+  ConfirmDangerParams,
+  DangerStatus,
+  DangerQueueEntry,
+  StartPkParams,
+  EliminationPk,
+  ResolvePkResult
 } from '../types/elimination'
 import type { OperationLog } from '../types/log'
 import type { Round, RoundTeam, RoundTeamMember, TeamSong, PlayerPerformance, TeamPerformance, Elimination as RoundElimination, EliminationCandidate as RoundEliminationCandidate, TrainingRecord as RoundTrainingRecord } from '../types/round'
@@ -1920,6 +1926,90 @@ export async function restorePlayer(userId: string): Promise<RestoreResult> {
     () => doRequest<RestoreResult>(`/elimination/restore/${userId}`, { method: 'POST' }),
     async () => ({ userId, name: '', status: 'active' }),
     'restorePlayer'
+  )
+}
+
+// ================== 危险名单与 PK 淘汰 ==================
+
+export async function confirmDangerList(params: ConfirmDangerParams): Promise<{ roundIndex: number; confirmedPlayerIds: string[]; queue: DangerQueueEntry[] }> {
+  return safeCall(
+    () => doRequest('/elimination/danger/confirm', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    }),
+    async () => ({ roundIndex: params.round, confirmedPlayerIds: params.playerIds, queue: [] }),
+    'confirmDangerList'
+  )
+}
+
+export async function getDangerStatus(round?: number): Promise<DangerStatus> {
+  return safeCall(
+    () => {
+      const query = round !== undefined ? `?round=${round}` : ''
+      return doRequest<DangerStatus>(`/elimination/danger${query}`)
+    },
+    async () => ({ roundIndex: round || 1, confirmed: false, playerIds: [], queue: [] }),
+    'getDangerStatus'
+  )
+}
+
+export async function getPkQueue(round?: number): Promise<DangerQueueEntry[]> {
+  return safeCall(
+    () => {
+      const query = round !== undefined ? `?round=${round}` : ''
+      return doRequest<DangerQueueEntry[]>(`/elimination/pk/queue${query}`)
+    },
+    async () => [],
+    'getPkQueue'
+  )
+}
+
+export async function startPk(params: StartPkParams): Promise<EliminationPk> {
+  return safeCall(
+    () => doRequest<EliminationPk>('/elimination/pk/start', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    }),
+    async () => ({ id: '', roundId: '', roundIndex: params.round, pkIndex: 1, attribute: params.attribute, challengerId: params.challengerId, players: [], queueBefore: [], queueAfter: [], status: 'voting', createdAt: '', updatedAt: '' }),
+    'startPk'
+  )
+}
+
+export async function generatePkVotes(pkId: string): Promise<EliminationPk> {
+  return safeCall(
+    () => doRequest<EliminationPk>(`/elimination/pk/${pkId}/vote`, { method: 'POST' }),
+    async () => { throw new Error('PK 投票仅在连接后端时可用') },
+    'generatePkVotes'
+  )
+}
+
+export async function getPkDetail(pkId: string): Promise<EliminationPk> {
+  return safeCall(
+    () => doRequest<EliminationPk>(`/elimination/pk/${pkId}`),
+    async () => { throw new Error('PK 详情仅在连接后端时可用') },
+    'getPkDetail'
+  )
+}
+
+export async function resolvePk(pkId: string, decisions: Record<string, 'safe' | 'pending' | 'eliminated'>): Promise<ResolvePkResult> {
+  return safeCall(
+    () => doRequest<ResolvePkResult>(`/elimination/pk/${pkId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ decisions })
+    }),
+    async () => { throw new Error('PK 裁定仅在连接后端时可用') },
+    'resolvePk'
+  )
+}
+
+export async function stopElimination(round: number): Promise<{ roundIndex: number; stopped: boolean; message: string }> {
+  return safeCall(
+    () => doRequest('/elimination/stop', {
+      method: 'POST',
+      body: JSON.stringify({ round })
+    }),
+    async () => ({ roundIndex: round, stopped: true, message: '淘汰环节已结束' }),
+    'stopElimination'
   )
 }
 

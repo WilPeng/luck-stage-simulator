@@ -63,6 +63,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'round/:round/song_select', name: 'AdminRoundSong', component: () => import('../views/admin/AdminSongView.vue') },
       { path: 'round/:round/training', name: 'AdminRoundTraining', component: () => import('../views/admin/AdminTrainingCardView.vue') },
       { path: 'round/:round/performance', name: 'AdminRoundPerformance', component: () => import('../views/admin/AdminPerformanceView.vue') },
+      { path: 'round/:round/danger_confirm', name: 'AdminRoundDangerConfirm', component: () => import('../views/admin/AdminDangerConfirmView.vue') },
       { path: 'round/:round/elimination', name: 'AdminRoundElimination', component: () => import('../views/admin/AdminEliminationView.vue') }
     ]
   },
