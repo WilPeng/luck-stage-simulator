@@ -72,7 +72,7 @@
             <div class="collapse-content" :class="{ collapsed: isRoundCollapsed(round) }">
               <div class="collapse-inner">
                 <div
-                  v-for="stage in stageList"
+                  v-for="stage in getRoundStageList(round)"
                   :key="`${round}-${stage.key}`"
                   v-show="isStageVisible(round, stage.key)"
                   class="nav-item"
@@ -154,7 +154,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { useSeasonStore } from '../stores/seasonStore'
-import { STAGE_ORDER } from '../types/season'
+import { STAGE_ORDER, CONCURRENT_ACTIONS } from '../types/season'
 import type { StageType, StageStatus } from '../types/season'
 
 const authStore = useAuthStore()
@@ -213,6 +213,38 @@ const stageList = computed(() => {
   return STAGE_ORDER.map(key => ({ key: key as StageType, ...stageConfig[key as StageType] }))
 })
 
+// 并发子行动 → 菜单阶段 key 的映射（与管理端路由段保持一致）
+const ACTION_TO_STAGE_KEY: Record<string, StageType> = {
+  team: 'teaming',
+  song: 'song_select',
+  training: 'training',
+  rehearsal: 'rehearsal'
+}
+
+// 菜单阶段 key → 并发子行动的反向映射
+const STAGE_TO_ACTION: Record<string, 'team' | 'song' | 'training' | 'rehearsal'> = {
+  teaming: 'team',
+  song_select: 'song',
+  training: 'training',
+  rehearsal: 'rehearsal'
+}
+
+// 某轮的菜单列表：主阶段 + 该轮已开放的并发子行动（插在"并发行动"之后）
+function getRoundStageList(round: number): { key: StageType; icon: string; text: string }[] {
+  const released = seasonStore.getReleasedConcurrentActions(round)
+  const releasedKeys: StageType[] = released
+    .map(action => ACTION_TO_STAGE_KEY[action])
+    .filter(Boolean)
+  const ordered: StageType[] = []
+  for (const stage of stageList.value) {
+    ordered.push(stage.key)
+    if (stage.key === 'concurrent') {
+      ordered.push(...releasedKeys)
+    }
+  }
+  return ordered.map(key => ({ key, ...stageConfig[key] }))
+}
+
 // 其他管理菜单
 const otherItems = computed(() => [
   { path: `${gamePrefix.value}/admin/songs`, icon: '🎵', text: '歌曲管理' },
@@ -250,8 +282,11 @@ function isCurrent(round: number, stage: StageType): boolean {
   return seasonStore.getStageStatus(round, stage) === 'current'
 }
 
-// 检查阶段是否可见（已完成或当前）
+// 检查阶段是否可见（已完成或当前；并发子行动由开放状态控制，进入列表即显示）
 function isStageVisible(round: number, stage: StageType): boolean {
+  if (CONCURRENT_ACTIONS.includes(stage)) {
+    return seasonStore.isConcurrentActionReleased(round, STAGE_TO_ACTION[stage])
+  }
   const status = seasonStore.getStageStatus(round, stage)
   return status === 'completed' || status === 'current'
 }

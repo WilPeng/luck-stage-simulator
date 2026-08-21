@@ -10,7 +10,12 @@ const RoundCaptain = require('../models/RoundCaptain')
 const router = express.Router()
 
 async function getRound(roundId) {
-  if (roundId) return await Round.findOne({ id: roundId })
+  if (roundId) {
+    const byId = await Round.findOne({ id: roundId })
+    if (byId) return byId
+    const match = typeof roundId === 'string' ? roundId.match(/^round[_-](\d+)$/) : null
+    if (match) return await Round.findOne({ index: parseInt(match[1]) })
+  }
   const season = await getCurrentSeason()
   if (!season) return null
   return await Round.findOne({ seasonId: season.id, index: season.currentRound })

@@ -194,7 +194,9 @@ export async function bbDeleteHouseguest(id: string): Promise<void> {
 export function bbGetAvatarUrl(avatar: string | null | undefined): string | null {
   if (!avatar) return null
   if (avatar.startsWith('http')) return avatar
-  return avatar
+  // 云端（Render）时拼接完整地址，本地开发时直接使用相对路径走 Vite proxy
+  const base = API_BASE.startsWith('http') ? API_BASE.replace('/api/bigbrother', '') : ''
+  return `${base}${avatar}`
 }
 
 /** 选手自行上传头像 */

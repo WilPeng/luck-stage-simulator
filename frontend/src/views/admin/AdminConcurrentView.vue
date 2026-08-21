@@ -102,11 +102,13 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useAuthStore } from '../../stores/authStore'
+import { useSeasonStore } from '../../stores/seasonStore'
 import { getConcurrentStatus, setConcurrentRelease } from '../../services/api'
 import type { ConcurrentStatusResponse, ConcurrentActionType } from '../../types/season'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const seasonStore = useSeasonStore()
 
 const loading = ref(false)
 const toggling = ref<ConcurrentActionType | ''>('')
@@ -175,6 +177,9 @@ async function loadData() {
   loading.value = true
   try {
     status.value = await getConcurrentStatus(roundId.value)
+    if (status.value) {
+      seasonStore.applyConcurrentStatus(roundIndex.value, status.value)
+    }
   } catch (e: any) {
     MessagePlugin.error(e.message || '加载并发状态失败')
   } finally {
@@ -186,6 +191,10 @@ async function toggleRelease(action: ConcurrentActionType, released: boolean) {
   toggling.value = action
   try {
     status.value = await setConcurrentRelease(roundId.value, action, released)
+    if (status.value) {
+      // 同步到 store，侧边栏"当轮公演"菜单立即显示/隐藏已开放的板块
+      seasonStore.applyConcurrentStatus(roundIndex.value, status.value)
+    }
     MessagePlugin.success(`${released ? '已开放' : '已关闭'} ${actionName(action)}`)
   } catch (e: any) {
     MessagePlugin.error(e.message || '设置失败')

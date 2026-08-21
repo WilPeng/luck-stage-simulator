@@ -62,7 +62,7 @@
             <div class="collapse-content" :class="{ collapsed: isRoundCollapsed(round) }">
               <div class="collapse-inner">
                 <router-link
-                  v-for="stage in roundStages"
+                  v-for="stage in getRoundStages(round)"
                   :key="`${round}-${stage.type}`"
                   :to="getStagePath(round, stage.type)"
                   class="nav-item stage-item"
@@ -270,14 +270,38 @@ const stageConfig: Record<StageType, { icon: string; name: string }> = {
   elimination: { icon: '📊', name: '淘汰结果' }
 }
 
-// 轮次阶段列表（只显示主阶段，子行动在并发行动中心内访问）
-const roundStages = computed(() => {
-  return STAGE_ORDER.filter(type => type !== 'rehearsal' && !CONCURRENT_ACTIONS.includes(type)).map(type => ({
+// 并发子行动 → 菜单阶段的映射
+const ACTION_TO_STAGE: Record<string, StageType> = {
+  team: 'teaming',
+  song: 'song_select',
+  training: 'training',
+  rehearsal: 'rehearsal'
+}
+
+// 主阶段列表（不含并发子行动）
+const MAIN_STAGES: StageType[] = STAGE_ORDER.filter(
+  type => type !== 'rehearsal' && !CONCURRENT_ACTIONS.includes(type)
+)
+
+// 某轮的阶段列表：主阶段 + 该轮已开放的并发子行动（插在"并发行动"之后）
+function getRoundStages(round: number): { type: StageType; icon: string; name: string }[] {
+  const released = seasonStore.getReleasedConcurrentActions(round)
+  const releasedStages: StageType[] = released
+    .map(action => ACTION_TO_STAGE[action])
+    .filter(Boolean)
+  const ordered: StageType[] = []
+  for (const stage of MAIN_STAGES) {
+    ordered.push(stage)
+    if (stage === 'concurrent') {
+      ordered.push(...releasedStages)
+    }
+  }
+  return ordered.map(type => ({
     type,
     icon: stageConfig[type].icon,
     name: stageConfig[type].name
   }))
-})
+}
 
 // 移动端底部导航
 const tabItems = computed(() => {
@@ -315,7 +339,7 @@ function getStagePath(round: number, stage: StageType): string {
     teaming: `${prefix}/player/round/${round}/team`,
     song_select: `${prefix}/player/round/${round}/song-selection`,
     training: `${prefix}/player/round/${round}/training`,
-    rehearsal: '',
+    rehearsal: `${prefix}/player/round/${round}/rehearsal`,
     performance: `${prefix}/player/round/${round}/performance`,
     elimination: `${prefix}/player/round/${round}/elimination`
   }
@@ -394,6 +418,8 @@ onMounted(async () => {
       seasonStore.fetchMenu()
     ])
     initCollapsedRounds()
+    // 拉取各轮并发行动开放状态（侧边栏菜单依赖），失败不影响主流程
+    seasonStore.fetchAllConcurrentRelease().catch(() => {})
   } catch (e) {
     console.error('[PlayerLayout] 初始化加载失败:', e)
   }

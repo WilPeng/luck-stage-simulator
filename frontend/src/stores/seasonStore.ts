@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { Season, StageType, StageStatus, MatrixCell, MenuItem, ResetSeasonResult, SeasonProgressResponse, RoundUpdateParams } from '../types/season'
+import type { Season, StageType, StageStatus, MatrixCell, MenuItem, ResetSeasonResult, SeasonProgressResponse, RoundUpdateParams, ConcurrentReleaseStatusResponse, ConcurrentActionType } from '../types/season'
 import type { Round } from '../types/round'
 import { STAGE_ORDER, STAGE_NAMES, calculateStageStatus, getNextStage as getNextStageUtil, getStageName } from '../types/season'
 import type { RestartResult } from '../services/api'
@@ -13,7 +13,9 @@ import {
   restartSeason as apiRestartSeason,
   getMenu as apiGetMenu,
   updateRound as apiUpdateRound,
-  getRounds as apiGetRounds
+  getRounds as apiGetRounds,
+  getConcurrentReleaseStatus as apiGetConcurrentReleaseStatus,
+  setConcurrentRelease as apiSetConcurrentRelease
 } from '../services/api'
 
 export const useSeasonStore = defineStore('season', () => {
@@ -24,6 +26,9 @@ export const useSeasonStore = defineStore('season', () => {
   const rounds = ref<Round[]>([])
   const loading = ref(false)
   const roundLoading = ref(false)
+
+  // 并发子行动开放状态（按轮次 roundId 索引），供侧边栏菜单响应式显示
+  const concurrentRelease = ref<Record<string, ConcurrentReleaseStatusResponse>>({})
 
   // 全局当前轮次状态
   const currentRoundId = ref<string>('')
@@ -249,6 +254,82 @@ export const useSeasonStore = defineStore('season', () => {
     }
   }
 
+  // ================== 并发子行动开放状态 ==================
+
+  /**
+   * 拉取指定轮次的并发行动开放状态（侧边栏菜单依赖此状态）
+   */
+  async function fetchConcurrentRelease(roundIndex: number): Promise<ConcurrentReleaseStatusResponse> {
+    const roundId = `round-${roundIndex}`
+    try {
+      const status = await apiGetConcurrentReleaseStatus(roundId)
+      concurrentRelease.value = { ...concurrentRelease.value, [roundId]: status }
+      return status
+    } catch (e) {
+      console.error('[SeasonStore] fetchConcurrentRelease error:', e)
+      throw e
+    }
+  }
+
+  /**
+   * 拉取全部轮次的并发行动开放状态
+   */
+  async function fetchAllConcurrentRelease(): Promise<void> {
+    const total = totalRounds.value
+    const indices = Array.from({ length: total }, (_, i) => i + 1)
+    await Promise.all(indices.map(i => fetchConcurrentRelease(i).catch(() => null)))
+  }
+
+  /**
+   * 设置并发行动开放状态（管理员操作），成功后同步刷新 store
+   */
+  async function setConcurrentActionReleased(
+    roundIndex: number,
+    action: ConcurrentActionType,
+    released: boolean
+  ): Promise<ConcurrentReleaseStatusResponse> {
+    const status = await apiSetConcurrentRelease(`round-${roundIndex}`, action, released)
+    return applyConcurrentStatus(roundIndex, status)
+  }
+
+  /**
+   * 从完整的并发状态响应同步 store（管理端开放/关闭后调用，侧边栏立即生效）
+   */
+  function applyConcurrentStatus(
+    roundIndex: number,
+    status: { teamReleased?: boolean; songReleased?: boolean; trainingReleased?: boolean; rehearsalReleased?: boolean }
+  ): ConcurrentReleaseStatusResponse {
+    const roundId = `round-${roundIndex}`
+    const next: ConcurrentReleaseStatusResponse = {
+      roundId,
+      roundIndex,
+      teamReleased: !!status.teamReleased,
+      songReleased: !!status.songReleased,
+      trainingReleased: !!status.trainingReleased,
+      rehearsalReleased: !!status.rehearsalReleased
+    }
+    concurrentRelease.value = { ...concurrentRelease.value, [roundId]: next }
+    return next
+  }
+
+  /**
+   * 查询某轮某个并发子行动是否已开放
+   */
+  function isConcurrentActionReleased(roundIndex: number, action: ConcurrentActionType): boolean {
+    const status = concurrentRelease.value[`round-${roundIndex}`]
+    if (!status) return false
+    const key = `${action}Released` as keyof ConcurrentReleaseStatusResponse
+    return !!status[key]
+  }
+
+  /**
+   * 获取某轮已开放的并发子行动列表
+   */
+  function getReleasedConcurrentActions(roundIndex: number): ConcurrentActionType[] {
+    const actions: ConcurrentActionType[] = ['team', 'song', 'training', 'rehearsal']
+    return actions.filter(a => isConcurrentActionReleased(roundIndex, a))
+  }
+
   // ================== 状态计算方法 ==================
 
   /**
@@ -425,6 +506,15 @@ export const useSeasonStore = defineStore('season', () => {
     updateRound,
     resetSeason,
     restartSeason,
+
+    // 并发子行动开放状态
+    concurrentRelease,
+    fetchConcurrentRelease,
+    fetchAllConcurrentRelease,
+    setConcurrentActionReleased,
+    applyConcurrentStatus,
+    isConcurrentActionReleased,
+    getReleasedConcurrentActions,
 
     // 状态计算方法
     getStageStatus,

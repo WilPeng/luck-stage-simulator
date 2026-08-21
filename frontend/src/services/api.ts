@@ -328,27 +328,60 @@ export async function updateStage(stage: StageType): Promise<Season> {
 
 // ================== 并发阶段 ==================
 
+// mock 模式下并发释放状态的 localStorage 持久化（真实后端由 Round 文档存储）
+const CONCURRENT_RELEASE_KEY = 'luck_sim_concurrent_release'
+
+function readLocalRelease(roundId: string): ConcurrentReleaseStatusResponse {
+  return {
+    roundId,
+    roundIndex: parseInt(roundId.replace(/^round[-_]/, ''), 10) || 1,
+    teamReleased: false,
+    songReleased: false,
+    trainingReleased: false,
+    rehearsalReleased: false
+  }
+}
+
+function loadAllLocalRelease(): Record<string, ConcurrentReleaseStatusResponse> {
+  try {
+    return JSON.parse(localStorage.getItem(CONCURRENT_RELEASE_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function saveLocalRelease(roundId: string, patch: Partial<ConcurrentReleaseStatusResponse>): ConcurrentReleaseStatusResponse {
+  const all = loadAllLocalRelease()
+  const merged = { ...readLocalRelease(roundId), ...all[roundId], ...patch }
+  all[roundId] = merged
+  localStorage.setItem(CONCURRENT_RELEASE_KEY, JSON.stringify(all))
+  return merged
+}
+
 export async function getConcurrentStatus(roundId: string): Promise<ConcurrentStatusResponse> {
   return safeCall(
     () => doRequest<ConcurrentStatusResponse>(`/concurrent/status?roundId=${roundId}`),
-    async () => ({
-      roundId,
-      roundIndex: 1,
-      drawsPerPlayer: 3,
-      teamReleased: false,
-      songReleased: false,
-      trainingReleased: false,
-      rehearsalReleased: false,
-      summary: {
-        totalTeams: 0,
-        teamCompleted: 0,
-        songCompleted: 0,
-        rehearsalCompleted: 0,
-        totalPlayers: 0,
-        trainingCompleted: 0,
-        allCompleted: false
+    async () => {
+      const local = loadAllLocalRelease()[roundId]
+      return {
+        roundId,
+        roundIndex: 1,
+        drawsPerPlayer: 3,
+        teamReleased: !!local?.teamReleased,
+        songReleased: !!local?.songReleased,
+        trainingReleased: !!local?.trainingReleased,
+        rehearsalReleased: !!local?.rehearsalReleased,
+        summary: {
+          totalTeams: 0,
+          teamCompleted: 0,
+          songCompleted: 0,
+          rehearsalCompleted: 0,
+          totalPlayers: 0,
+          trainingCompleted: 0,
+          allCompleted: false
+        }
       }
-    }),
+    },
     'getConcurrentStatus'
   )
 }
@@ -356,14 +389,7 @@ export async function getConcurrentStatus(roundId: string): Promise<ConcurrentSt
 export async function getConcurrentReleaseStatus(roundId: string): Promise<ConcurrentReleaseStatusResponse> {
   return safeCall(
     () => doRequest<ConcurrentReleaseStatusResponse>(`/concurrent/release-status?roundId=${roundId}`),
-    async () => ({
-      roundId,
-      roundIndex: 1,
-      teamReleased: false,
-      songReleased: false,
-      trainingReleased: false,
-      rehearsalReleased: false
-    }),
+    async () => loadAllLocalRelease()[roundId] || readLocalRelease(roundId),
     'getConcurrentReleaseStatus'
   )
 }
@@ -378,7 +404,12 @@ export async function setConcurrentRelease(
       method: 'POST',
       body: JSON.stringify({ roundId, action, released })
     }),
-    async () => getConcurrentStatus(roundId),
+    async () => {
+      // mock 模式：写入 localStorage 保证刷新后状态不丢失
+      const patchKey = `${action}Released` as keyof ConcurrentReleaseStatusResponse
+      saveLocalRelease(roundId, { [patchKey]: released } as Partial<ConcurrentReleaseStatusResponse>)
+      return getConcurrentStatus(roundId)
+    },
     'setConcurrentRelease'
   )
 }
@@ -599,7 +630,11 @@ export function getAvatarUrl(avatar: string | null | undefined): string | undefi
   if (!avatar) return undefined
   if (avatar.startsWith('http')) return avatar
   // avatar 已经是相对于后端的路径（如 /uploads/avatars/xxx.jpg）
-  // 开发时通过 Vite proxy 转发，生产时由部署服务处理
+  // 生产环境前端与后端不同域时，需要拼接后端地址
+  if (STATIC_API_BASE) {
+    const root = STATIC_API_BASE.replace(/\/api$/, '')
+    return `${root}${avatar.startsWith('/') ? avatar : `/${avatar}`}`
+  }
   return avatar
 }
 
@@ -1467,9 +1502,12 @@ export async function autoCompleteUser(userId: string, round?: number): Promise<
 
 // ================== 彩排 ==================
 
-export async function startRehearsalAPI(teamId: string): Promise<RehearsalResult> {
+export async function startRehearsalAPI(teamId: string, roundId?: string): Promise<RehearsalResult> {
   return safeCall(
-    () => doRequest<RehearsalResult>(`/rehearsal/${teamId}`, { method: 'POST' }),
+    () => doRequest<RehearsalResult[]>('/rehearsal/roll', {
+      method: 'POST',
+      body: JSON.stringify({ teamId, roundId })
+    }).then(list => (Array.isArray(list) ? list[0] : list) as RehearsalResult),
     () => mockStartRehearsal(teamId),
     'startRehearsal'
   )
@@ -1687,11 +1725,28 @@ export async function getRehearsalResultsAPI(roundId?: string): Promise<Rehearsa
   )
 }
 
-export async function startRehearsal(teamId: string): Promise<RehearsalResult> {
+export async function startRehearsal(teamId: string, roundId?: string): Promise<RehearsalResult> {
+  return startRehearsalAPI(teamId, roundId)
+}
+
+// 管理员批量为所有未彩排队伍生成彩排结果
+export async function rollAllRehearsals(roundId: string): Promise<RehearsalResult[]> {
   return safeCall(
-    () => doRequest<RehearsalResult>(`/rehearsal/${teamId}`, { method: 'POST' }),
-    () => mockStartRehearsal(teamId),
-    'startRehearsal'
+    () => doRequest<RehearsalResult[]>('/rehearsal/roll', {
+      method: 'POST',
+      body: JSON.stringify({ roundId, all: true })
+    }),
+    async () => [],
+    'rollAllRehearsals'
+  )
+}
+
+// 删除单条彩排结果（管理员）
+export async function deleteRehearsalResult(id: string): Promise<void> {
+  return safeCall(
+    () => doRequest<void>(`/rehearsal/results/${id}`, { method: 'DELETE' }),
+    async () => undefined,
+    'deleteRehearsalResult'
   )
 }
 export const getRehearsalResults = getRehearsalResultsAPI

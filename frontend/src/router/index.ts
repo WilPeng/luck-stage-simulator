@@ -30,6 +30,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'round/:round/team', name: 'PlayerTeam', component: () => import('../views/player/PlayerTeamView.vue') },
       { path: 'round/:round/song-selection', name: 'PlayerSongSelection', component: () => import('../views/player/PlayerSongSelectionView.vue') },
       { path: 'round/:round/training', name: 'PlayerTraining', component: () => import('../views/player/PlayerTrainingView.vue') },
+      { path: 'round/:round/rehearsal', name: 'PlayerRehearsal', component: () => import('../views/player/PlayerRehearsalView.vue') },
       { path: 'round/:round/performance', name: 'PlayerPerformance', component: () => import('../views/player/PlayerPerformanceView.vue') },
       { path: 'round/:round/elimination', name: 'PlayerElimination', component: () => import('../views/player/PlayerEliminationView.vue') }
     ]
@@ -62,6 +63,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'round/:round/teaming', name: 'AdminRoundTeam', component: () => import('../views/admin/AdminTeamView.vue') },
       { path: 'round/:round/song_select', name: 'AdminRoundSong', component: () => import('../views/admin/AdminSongView.vue') },
       { path: 'round/:round/training', name: 'AdminRoundTraining', component: () => import('../views/admin/AdminTrainingCardView.vue') },
+      { path: 'round/:round/rehearsal', name: 'AdminRoundRehearsal', component: () => import('../views/admin/AdminRehearsalView.vue') },
       { path: 'round/:round/performance', name: 'AdminRoundPerformance', component: () => import('../views/admin/AdminPerformanceView.vue') },
       { path: 'round/:round/elimination', name: 'AdminRoundElimination', component: () => import('../views/admin/AdminEliminationView.vue') }
     ]

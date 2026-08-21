@@ -383,16 +383,17 @@ export const usePerformanceStore = defineStore('performance', () => {
     }
   }
 
-  async function fetchRehearsals(): Promise<void> {
+  async function fetchRehearsals(round?: number): Promise<void> {
+    if (round !== undefined) currentRound.value = round
     try {
-      rehearsalResults.value = await getRehearsalResults()
+      rehearsalResults.value = await getRehearsalResults(`round-${currentRound.value}`)
     } catch (e) {
       rehearsalResults.value = []
     }
   }
 
   async function start(teamId: string): Promise<RehearsalResult> {
-    const result = await startRehearsalAPI(teamId)
+    const result = await startRehearsalAPI(teamId, `round-${currentRound.value}`)
     const index = rehearsalResults.value.findIndex(item => item.teamId === teamId)
     if (index >= 0) {
       rehearsalResults.value[index] = result
