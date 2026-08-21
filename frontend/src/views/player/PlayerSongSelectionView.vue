@@ -235,8 +235,9 @@ const claimingId = ref<string | null>(null)
 // 本轮所有轮次歌曲
 const roundSongs = computed(() => songStore.roundSongs)
 
-// 已释放的歌曲（可抢选）
+// 已释放的歌曲（可抢选）：需环节已开放 + 单曲已释放
 const releasedSongs = computed(() => {
+  if (!isSongReleased.value) return []
   const filtered = roundSongs.value.filter(rs => rs.released)
   console.log('[选歌] roundSongs:', JSON.stringify(roundSongs.value.map(r => ({ id: r.id, songId: r.songId, released: r.released, name: (r as any).song?.name }))))
   console.log('[选歌] releasedSongs:', filtered.length, filtered.map(r => (r as any).song?.name || r.id))

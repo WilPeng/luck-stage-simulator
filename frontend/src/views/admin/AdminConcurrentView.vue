@@ -76,6 +76,25 @@
       </div>
     </t-card>
 
+    <t-card title="发挥值抽取设置" :bordered="false" class="concurrent-card">
+      <div class="mode-setting">
+        <div class="mode-setting-info">
+          <span class="mode-icon">🎲</span>
+          <div>
+            <div class="mode-title">公演发挥值抽取方式</div>
+            <div class="mode-desc">设定选手抽取发挥值的方式，开放"发挥值抽取"后选手按此方式抽取</div>
+          </div>
+        </div>
+        <div class="mode-setting-actions">
+          <t-radio-group v-model="genMode" variant="default-filled" size="small">
+            <t-radio-button value="random">🎰 随机老虎机</t-radio-button>
+            <t-radio-button value="pointer">🎯 摆动指针</t-radio-button>
+          </t-radio-group>
+          <t-button theme="primary" size="small" :loading="savingMode" @click="handleSaveMode">保存设置</t-button>
+        </div>
+      </div>
+    </t-card>
+
     <t-card title="操作入口" :bordered="false" class="concurrent-card">
       <div class="link-grid">
         <router-link
@@ -99,7 +118,7 @@ import { useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useAuthStore } from '../../stores/authStore'
 import { useSeasonStore } from '../../stores/seasonStore'
-import { getConcurrentStatus, setConcurrentRelease } from '../../services/api'
+import { getConcurrentStatus, setConcurrentRelease, setPerformanceGenerationMode, getPerformanceRoundStatus } from '../../services/api'
 import type { ConcurrentStatusResponse, ConcurrentActionType } from '../../types/season'
 
 const route = useRoute()
@@ -109,6 +128,8 @@ const seasonStore = useSeasonStore()
 const loading = ref(false)
 const toggling = ref<ConcurrentActionType | ''>('')
 const status = ref<ConcurrentStatusResponse | null>(null)
+const genMode = ref<'random' | 'pointer'>('random')
+const savingMode = ref(false)
 
 const roundIndex = computed(() => {
   const val = route.params.round as string
@@ -120,7 +141,7 @@ const gamePrefix = computed(() => `/games/${authStore.currentGameId}`)
 
 const allReleased = computed(() => {
   if (!status.value) return false
-  return status.value.teamReleased && status.value.songReleased && status.value.trainingReleased
+  return status.value.teamReleased && status.value.songReleased && status.value.trainingReleased && status.value.performanceReleased
 })
 
 const releaseItems = computed(() => {
@@ -151,6 +172,14 @@ const releaseItems = computed(() => {
       released: s.trainingReleased,
       progressText: `${summary.trainingCompleted} / ${summary.totalPlayers} 选手`,
       description: '开放后选手可进行训练抽卡'
+    },
+    {
+      action: 'performance' as ConcurrentActionType,
+      icon: '🎲',
+      name: '发挥值抽取',
+      released: s.performanceReleased,
+      progressText: '抽取方式由管理员设定',
+      description: '开放后选手可抽取公演发挥值（提前到并发阶段）'
     }
   ]
 })
@@ -168,10 +197,29 @@ async function loadData() {
     if (status.value) {
       seasonStore.applyConcurrentStatus(roundIndex.value, status.value)
     }
+    // 读取发挥值抽取方式
+    try {
+      const rs = await getPerformanceRoundStatus(roundId.value)
+      if (rs?.generationMode === 'random' || rs?.generationMode === 'pointer') {
+        genMode.value = rs.generationMode
+      }
+    } catch { /* ignore */ }
   } catch (e: any) {
     MessagePlugin.error(e.message || '加载并发状态失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function handleSaveMode() {
+  savingMode.value = true
+  try {
+    await setPerformanceGenerationMode(roundId.value, genMode.value)
+    MessagePlugin.success(`抽取方式已设置为 ${genMode.value === 'random' ? '随机老虎机' : '摆动指针'}`)
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '保存失败')
+  } finally {
+    savingMode.value = false
   }
 }
 
@@ -195,7 +243,8 @@ function actionName(action: ConcurrentActionType): string {
   const map: Record<ConcurrentActionType, string> = {
     team: '组队',
     song: '选歌',
-    training: '训练'
+    training: '训练',
+    performance: '发挥值抽取'
   }
   return map[action]
 }
@@ -240,6 +289,41 @@ onMounted(loadData)
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+// 发挥值抽取方式设置
+.mode-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+
+  .mode-setting-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .mode-icon {
+      font-size: 28px;
+    }
+
+    .mode-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .mode-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+  }
+
+  .mode-setting-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
 }
 
 .overview-grid {

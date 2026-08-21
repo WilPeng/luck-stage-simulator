@@ -25,6 +25,7 @@ class Round extends BaseModel {
     this.teamReleased = false
     this.songReleased = false
     this.trainingReleased = false
+    this.performanceReleased = false
     if (data) Object.assign(this, data)
   }
 

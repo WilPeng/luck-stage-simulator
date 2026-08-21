@@ -39,10 +39,11 @@
       <router-link
         :to="`${gamePrefix}/player/round/${currentRound}/performance-draw`"
         class="action-card"
+        :class="{ 'not-released': !isPerformanceReleased }"
       >
         <span class="action-icon">🎲</span>
         <span class="action-title">抽取发挥值</span>
-        <span class="action-desc">提前抽取公演发挥值</span>
+        <span class="action-desc">{{ isPerformanceReleased ? '提前抽取公演发挥值' : '管理员尚未开放（未开放）' }}</span>
         <span class="action-arrow">→</span>
       </router-link>
     </div>
@@ -72,12 +73,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { useSongStore } from '../../stores/songStore'
-import { getPlayerPerformanceStatus } from '../../services/api'
+import { getPlayerPerformanceStatus, getConcurrentReleaseStatus } from '../../services/api'
+import type { ConcurrentReleaseStatusResponse } from '../../types/season'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -105,12 +107,29 @@ const trainingCompleted = computed(() => {
   return (user.trainingCount || 0) >= drawsPerPlayer
 })
 const perfValueDrawn = ref(false)
+const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
+const isPerformanceReleased = computed(() => !!releaseStatus.value?.performanceReleased)
+let releaseTimer: number | undefined
 
 onMounted(() => {
   teamStore.fetchTeams(String(currentRound.value))
   songStore.fetchRoundSongs(String(currentRound.value))
   checkPerfValueDrawn()
+  loadReleaseStatus()
+  releaseTimer = window.setInterval(loadReleaseStatus, 8000)
 })
+
+onBeforeUnmount(() => {
+  if (releaseTimer) window.clearInterval(releaseTimer)
+})
+
+async function loadReleaseStatus() {
+  try {
+    releaseStatus.value = await getConcurrentReleaseStatus(`round-${currentRound.value}`)
+  } catch {
+    releaseStatus.value = null
+  }
+}
 
 async function checkPerfValueDrawn() {
   try {
@@ -165,6 +184,10 @@ async function checkPerfValueDrawn() {
   text-decoration: none;
   transition: all 0.2s;
   position: relative;
+
+  &.not-released {
+    opacity: 0.55;
+  }
 
   &:hover {
     transform: translateY(-2px);

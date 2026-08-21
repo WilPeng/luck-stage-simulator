@@ -94,7 +94,7 @@ export interface MenuItem {
 
 // ================== 并发阶段相关类型 ==================
 
-export type ConcurrentActionType = 'team' | 'song' | 'training'
+export type ConcurrentActionType = 'team' | 'song' | 'training' | 'performance'
 
 export interface ConcurrentStatusResponse {
   roundId: string
@@ -103,6 +103,7 @@ export interface ConcurrentStatusResponse {
   teamReleased: boolean
   songReleased: boolean
   trainingReleased: boolean
+  performanceReleased: boolean
   summary: {
     totalTeams: number
     teamCompleted: number
@@ -125,6 +126,7 @@ export interface ConcurrentReleaseStatusResponse {
   teamReleased: boolean
   songReleased: boolean
   trainingReleased: boolean
+  performanceReleased: boolean
 }
 
 // ================== 管理员操作相关类型 ==================

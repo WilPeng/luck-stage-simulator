@@ -341,7 +341,8 @@ function readLocalRelease(roundId: string): ConcurrentReleaseStatusResponse {
     roundIndex: parseInt(roundId.replace(/^round[-_]/, ''), 10) || 1,
     teamReleased: false,
     songReleased: false,
-    trainingReleased: false
+    trainingReleased: false,
+    performanceReleased: false
   }
 }
 
@@ -373,6 +374,7 @@ export async function getConcurrentStatus(roundId: string): Promise<ConcurrentSt
         teamReleased: !!local?.teamReleased,
         songReleased: !!local?.songReleased,
         trainingReleased: !!local?.trainingReleased,
+        performanceReleased: !!local?.performanceReleased,
         summary: {
           totalTeams: 0,
           teamCompleted: 0,

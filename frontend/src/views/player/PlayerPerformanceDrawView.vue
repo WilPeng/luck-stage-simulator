@@ -5,8 +5,15 @@
       <p class="subtitle">第{{ currentRound }}公演 · 抽取你的公演发挥值（-10 ~ 20）</p>
     </div>
 
+    <!-- 未开放 -->
+    <div v-if="!isReleased" class="locked-panel">
+      <div class="locked-icon">🔒</div>
+      <h3>发挥值抽取尚未开放</h3>
+      <p>请等待管理员在并发行动中心开放"发挥值抽取"</p>
+    </div>
+
     <!-- 已抽取结果 -->
-    <div v-if="myValue !== null" class="result-card">
+    <div v-else-if="myValue !== null" class="result-card">
       <div class="result-icon">✨</div>
       <div class="result-title">你的发挥值</div>
       <div class="result-value" :class="valueClass">{{ myValue }}</div>
@@ -17,10 +24,7 @@
     <!-- 抽取面板 -->
     <div v-else class="draw-panel">
       <div class="mode-tabs">
-        <t-radio-group v-model="mode" variant="default-filled">
-          <t-radio-button value="random">🎰 老虎机</t-radio-button>
-          <t-radio-button value="pointer">🎯 指针</t-radio-button>
-        </t-radio-group>
+        <span class="mode-label">抽取方式：{{ mode === 'random' ? '🎰 随机老虎机' : '🎯 摆动指针' }}</span>
       </div>
 
       <!-- 老虎机模式 -->
@@ -53,7 +57,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useAuthStore } from '../../stores/authStore'
-import { getPlayerPerformanceStatus, savePerformancePlayerStatus } from '../../services/api'
+import { getPlayerPerformanceStatus, savePerformancePlayerStatus, getPerformanceRoundStatus, getConcurrentReleaseStatus } from '../../services/api'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -63,6 +67,7 @@ const mode = ref<'random' | 'pointer'>('random')
 const drawing = ref(false)
 const displayValue = ref(0)
 const myValue = ref<number | null>(null)
+const isReleased = ref(false)
 
 const slotValues = [-10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 const pointerValues = [-10, -5, 0, 5, 10, 15, 20]
@@ -137,7 +142,18 @@ function resetDraw() {
 
 onMounted(async () => {
   try {
-    const status = await getPlayerPerformanceStatus(`round-${currentRound.value}`)
+    const roundId = `round-${currentRound.value}`
+    // 读取释放状态与抽取方式（由管理员端设定）
+    const [release, roundStatus] = await Promise.all([
+      getConcurrentReleaseStatus(roundId).catch(() => null),
+      getPerformanceRoundStatus(roundId).catch(() => null)
+    ])
+    isReleased.value = !!release?.performanceReleased
+    if (roundStatus?.generationMode === 'random' || roundStatus?.generationMode === 'pointer') {
+      mode.value = roundStatus.generationMode
+    }
+    if (!isReleased.value) return
+    const status = await getPlayerPerformanceStatus(roundId)
     const me = status?.players?.find(p => p.playerId === authStore.currentUser?.id)
     if (me?.generated && me.performanceValue !== null) {
       myValue.value = me.performanceValue
@@ -187,6 +203,41 @@ onMounted(async () => {
   width: 100%;
   display: flex;
   justify-content: center;
+
+  .mode-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+}
+
+.locked-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 520px;
+  margin: 0 auto;
+  text-align: center;
+
+  .locked-icon {
+    font-size: 48px;
+  }
+
+  h3 {
+    font-size: 18px;
+    margin: 0;
+  }
+
+  p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+  }
 }
 
 .slot-machine {

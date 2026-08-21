@@ -44,7 +44,7 @@ function getRoundFilter(r) {
   return { $in: [r.id, front] }
 }
 
-const RELEASE_ACTIONS = ['team', 'song', 'training']
+const RELEASE_ACTIONS = ['team', 'song', 'training', 'performance']
 
 /**
  * 推断并发阶段各项行动的完成状态，并带上释放开关
@@ -80,7 +80,8 @@ async function getConcurrentStatus(roundInfo) {
 
   const teamCompletedCount = teams.filter(t => (membersByTeam[t.id] || []).length > 0).length
   const songCompletedCount = teams.filter(t => !!teamSongMap[t.id]).length
-  const trainingCompletedCount = users.filter(u => (trainingCountByPlayer[u.id] || 0) >= drawsPerPlayer).length
+  // 训练：只要开始训练过 1 次（本次公演训练次数 > 0）即视为已参与训练环节
+  const trainingCompletedCount = users.filter(u => (trainingCountByPlayer[u.id] || 0) > 0).length
 
   const allTeamCompleted = teams.length > 0 && teamCompletedCount === teams.length
   const allSongCompleted = teams.length > 0 && songCompletedCount === teams.length
@@ -93,6 +94,7 @@ async function getConcurrentStatus(roundInfo) {
     teamReleased: !!round.teamReleased,
     songReleased: !!round.songReleased,
     trainingReleased: !!round.trainingReleased,
+    performanceReleased: !!round.performanceReleased,
     summary: {
       totalTeams: teams.length,
       teamCompleted: teamCompletedCount,
@@ -119,7 +121,8 @@ router.get('/release-status', auth, async (req, res) => {
         roundIndex: round.index,
         teamReleased: !!round.teamReleased,
         songReleased: !!round.songReleased,
-        trainingReleased: !!round.trainingReleased
+        trainingReleased: !!round.trainingReleased,
+        performanceReleased: !!round.performanceReleased
       }
     })
   } catch (e) {
@@ -174,21 +177,14 @@ router.post('/release', auth, requireAdmin, async (req, res) => {
         }
         break
       case 'song':
+        // 仅控制选歌环节开关；单首歌曲的释放由管理员在歌曲管理页单独操作（POST /songs/release）
         round.songReleased = released
-        // 开放选歌时顺带释放该轮所有未分配歌曲
-        if (released) {
-          const RoundSong = require('../models/RoundSong')
-          const unreleased = await RoundSong.find({ roundId: roundFilter, released: { $ne: true }, assignedTeamId: null })
-          for (const rs of unreleased) {
-            rs.released = true
-            rs.releasedAt = new Date().toISOString()
-            rs.updatedAt = new Date().toISOString()
-            await rs.save()
-          }
-        }
         break
       case 'training':
         round.trainingReleased = released
+        break
+      case 'performance':
+        round.performanceReleased = released
         break
     }
 

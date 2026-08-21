@@ -1153,9 +1153,7 @@ router.post('/generation-mode', auth, requireAdmin, async (req, res) => {
     }
 
     let state = await PerformanceRoundState.findOne({ roundId: round.id })
-    if (state && state.started) {
-      return res.status(400).json({ success: false, error: '公演已开启，不能修改生成方式', code: 'ALREADY_STARTED' })
-    }
+    // 发挥值抽取提前到并发阶段，生成方式可随时设定（不再受公演是否已开启限制）
     if (!state) {
       state = new PerformanceRoundState({
         id: generateId(),
