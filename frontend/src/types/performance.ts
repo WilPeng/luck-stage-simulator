@@ -123,6 +123,9 @@ export interface PlayerResult {
   round?: number
 }
 
+// 发挥值生成方式
+export type PerformanceGenerationMode = 'random' | 'pointer'
+
 // 公演配置
 export interface PerformanceConfig {
   baseScore: number
@@ -261,6 +264,7 @@ export interface AudienceMember {
   id: string
   roundId: string
   seatNumber: number
+  name?: string | null     // 中文姓名，与 gender 相关
   gender?: string | null   // 男 / 女
   age?: number | null      // 18-60
   occupation?: string | null // 职业
@@ -308,17 +312,26 @@ export interface AudienceSeat {
   seatNumber: number
   voted: boolean
   votes?: string[] // 投票的选手名称列表
+  name?: string | null     // 姓名
   gender?: string | null   // 性别
   age?: number | null      // 年龄
   occupation?: string | null // 职业
 }
 
+// 评审对舞台的 yes 票
+export interface AudienceTeamVoteItem {
+  teamId: string
+  teamName: string
+}
+
 // 某评审的投票详情
 export interface AudienceVoteDetail {
   seatNumber: number
+  name?: string | null
   gender?: string | null
   age?: number | null
   occupation?: string | null
+  teamVotes?: AudienceTeamVoteItem[] // 该评审投 yes 的舞台列表
   votes: {
     voteOrder: number
     playerId: string
@@ -361,4 +374,23 @@ export interface AudienceSeatsResponse {
 export interface AudienceVoteDetailResponse {
   success: boolean
   detail: AudienceVoteDetail
+}
+
+// 某支队伍的大众评审投票矩阵座位
+export interface TeamAudienceMatrixSeat {
+  seatNumber: number
+  votedYes: boolean
+  name?: string | null
+  gender?: string | null
+  age?: number | null
+  occupation?: string | null
+}
+
+// 某支队伍的大众评审投票矩阵响应
+export interface TeamAudienceMatrixResponse {
+  success: boolean
+  totalSeats: number
+  yesCount: number
+  teamId: string
+  seats: TeamAudienceMatrixSeat[]
 }

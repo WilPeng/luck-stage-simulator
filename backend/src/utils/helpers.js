@@ -38,24 +38,21 @@ const ACTION_TYPES = {
 const STAGE_ORDER = [
   'preparation',     // 0  预先准备
   'captain_vote',    // 1  队长选举
-  'teaming',         // 2  组队
-  'song_select',     // 3  选歌
-  'training',        // 4  训练
-  'rehearsal',       // 5  彩排
-  'performance',     // 6  公演
-  'elimination'      // 7  淘汰
+  'concurrent',      // 2  并发行动（组队/选歌/训练/彩排）
+  'performance',     // 3  公演结算与结果展示
+  'elimination'      // 4  淘汰
 ]
 
 const STAGE_NAME = {
   preparation: '预先准备',
   captain_vote: '队长选举',
-  teaming: '组队',
-  song_select: '选歌',
-  training: '训练',
-  rehearsal: '彩排',
+  concurrent: '并发行动',
   performance: '公演',
   elimination: '淘汰'
 }
+
+// 并发阶段内包含的子行动（用于前端页面兼容与完成状态推断）
+const CONCURRENT_ACTIONS = ['teaming', 'song_select', 'training', 'rehearsal']
 
 // ===== 状态计算 =====
 /**
@@ -69,7 +66,10 @@ const STAGE_NAME = {
 const getStageStatus = (round, stage, currentRound, currentStage) => {
   if (!currentStage || currentRound == null) return 'future'
 
-  const idx = STAGE_ORDER.indexOf(stage)
+  // 并发阶段内的子行动统一视为 concurrent 阶段的一部分
+  const effectiveStage = CONCURRENT_ACTIONS.includes(stage) ? 'concurrent' : stage
+
+  const idx = STAGE_ORDER.indexOf(effectiveStage)
   const curIdx = STAGE_ORDER.indexOf(currentStage)
 
   if (idx < 0 || curIdx < 0) return 'future'
@@ -170,6 +170,7 @@ module.exports = {
   STAGE_ORDER,
   STAGE_NAME,
   STAGE_LIST: STAGE_ORDER, // 兼容旧代码
+  CONCURRENT_ACTIONS,
   ACTION_TYPES,
   maskPlayer,
   maskUser

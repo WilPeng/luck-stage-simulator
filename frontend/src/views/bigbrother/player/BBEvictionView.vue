@@ -21,13 +21,36 @@
         ⚠️ 你是本周的 HOH，只有在平票时才能投票
       </div>
 
-      <div v-if="nomination && !hasVoted && seasonStore.currentStage === 'eviction_vote'" class="vote-section">
+      <div v-if="isNominee && seasonStore.currentStage === 'eviction_vote'" class="nominee-waiting-card">
+        <div class="nominee-waiting-icon">⏳</div>
+        <div class="nominee-waiting-title">你本轮是被提名者，等待其他玩家投票</div>
+        <div class="nominee-waiting-desc">作为被提名人，你无法参与本轮淘汰投票。结果将在投票结束后公布。</div>
+        <div class="nominee-list-preview">
+          <div class="nominee-list-label">本轮被提名人：</div>
+          <div class="nominee-chips">
+            <span v-for="(name, i) in voteOptions" :key="i" class="nominee-chip"
+              :class="{ 'is-self': voteOptionIds[i] === authStore.currentUser?.id }">
+              <BBAvatar :name="name" :avatar="voteOptionAvatars[i]" size="sm" />
+              {{ name }}{{ voteOptionIds[i] === authStore.currentUser?.id ? '（你）' : '' }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="isNominee && seasonStore.currentStage === 'eviction'" class="nominee-waiting-card result-waiting">
+        <div class="nominee-waiting-icon">🔔</div>
+        <div class="nominee-waiting-title">投票已结束，等待公布结果</div>
+        <div class="nominee-waiting-desc">管理员即将宣布本轮淘汰结果。</div>
+      </div>
+
+      <div v-if="nomination && !hasVoted && !isNominee && seasonStore.currentStage === 'eviction_vote'" class="vote-section">
         <h3>选择你要淘汰的对象</h3>
         <div class="vote-options">
           <div v-for="(name, i) in voteOptions" :key="i" class="vote-option"
             :class="{ selected: selectedVote === voteOptionIds[i] }"
             @click="selectedVote = voteOptionIds[i]">
             <span class="vote-icon">🗳️</span>
+            <BBAvatar :name="name" :avatar="voteOptionAvatars[i]" size="md" />
             <span class="vote-name">{{ name }}</span>
             <span v-if="selectedVote === voteOptionIds[i]" class="check-mark">✓</span>
           </div>
@@ -72,7 +95,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetNominationHistory, bbCastVote, bbGetMyVote, bbGetEvictionHistory, bbGetCurrentHoh } from '../../../services/bbApi'
+import { bbGetCurrentNomination, bbGetNominationHistory, bbCastVote, bbGetMyVote, bbGetEvictionHistory, bbGetCurrentHoh } from '../../../services/bbApi'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBNomination, BBEvictionVote, BBEviction } from '../../../types/bigbrother'
 
 const route = useRoute()
@@ -100,6 +124,13 @@ const hasVoted = computed(() => !!myVote.value)
 
 const isHoh = computed(() => currentHoh.value?.winnerId === authStore.currentUser?.id)
 
+const isNominee = computed(() => {
+  if (!nomination.value || !authStore.currentUser?.id) return false
+  const allIds = [...nomination.value.nomineeIds]
+  if (nomination.value.replacementNomineeId) allIds.push(nomination.value.replacementNomineeId)
+  return allIds.includes(authStore.currentUser.id)
+})
+
 const voteOptions = computed(() => {
   if (!nomination.value) return []
   const names = [...nomination.value.nomineeNames]
@@ -112,6 +143,10 @@ const voteOptionIds = computed(() => {
   const ids = [...nomination.value.nomineeIds]
   if (nomination.value.replacementNomineeId) ids.push(nomination.value.replacementNomineeId)
   return [...new Set(ids)]
+})
+
+const voteOptionAvatars = computed(() => {
+  return voteOptionIds.value.map(() => null as string | null)
 })
 
 async function castVote() {
@@ -129,12 +164,16 @@ async function castVote() {
 }
 
 onMounted(async () => {
-  // 加载提名数据
-  try {
-    const history = await bbGetNominationHistory()
-    const roundKey = `round-${roundNum.value}`
-    nomination.value = history.find(h => h.roundId === roundKey) || null
-  } catch {}
+  // 加载提名数据（当前轮次用 /current 接口，历史轮次用 history 接口）
+  if (isCurrentRound.value) {
+    try { nomination.value = await bbGetCurrentNomination() } catch {}
+  } else {
+    try {
+      const history = await bbGetNominationHistory()
+      const roundKey = `round-${roundNum.value}`
+      nomination.value = history.find(h => h.roundId === roundKey) || null
+    } catch {}
+  }
 
   // 加载淘汰结果
   try {
@@ -159,6 +198,17 @@ onMounted(async () => {
 .history-tag { background: #88888822; color: #aaa; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
 .future-tag { background: #44444422; color: #666; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
 .hoh-vote-note { background: #ffaa0022; border: 1px solid #ffaa00; border-radius: 8px; padding: 12px 16px; font-size: 14px; color: #ffaa00; margin-bottom: 16px; }
+.nominee-waiting-card { background: linear-gradient(135deg, #1a0f2e, #2e0f1a); border: 1px solid #ff444444; border-radius: 12px; padding: 28px 24px; margin-bottom: 20px; text-align: center; }
+.nominee-waiting-card.result-waiting { background: linear-gradient(135deg, #0f2e1a, #1a2e0f); border-color: #ffaa0044; }
+.nominee-waiting-icon { font-size: 48px; margin-bottom: 12px; }
+.nominee-waiting-title { font-size: 18px; font-weight: 600; color: #ff6b6b; margin-bottom: 8px; }
+.result-waiting .nominee-waiting-title { color: #ffaa00; }
+.nominee-waiting-desc { font-size: 14px; color: #aaa; line-height: 1.6; }
+.nominee-list-preview { margin-top: 20px; padding-top: 16px; border-top: 1px solid #ffffff10; text-align: left; }
+.nominee-list-label { font-size: 13px; color: #888; margin-bottom: 10px; }
+.nominee-chips { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.nominee-chip { display: inline-flex; align-items: center; gap: 6px; background: #ffaa0015; border: 1px solid #ffaa0033; border-radius: 8px; padding: 8px 14px; font-size: 14px; color: #ffaa00; }
+.nominee-chip.is-self { background: #ff444422; border-color: #ff444466; color: #ff6b6b; font-weight: 600; }
 .voted-card { background: #0f2e0f; border: 1px solid #00ff88; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 .voted-icon { font-size: 36px; }
 .voted-label { font-size: 12px; color: #888; text-transform: uppercase; }

@@ -35,10 +35,11 @@ async function getRound(roundId) {
 // ===== GET /api/songs - 歌曲库 =====
 router.get('/', auth, async (req, res) => {
   try {
-    const { type, style, keyword } = req.query
+    const { type, style, keyword, singerGender } = req.query
     const filter = {}
     if (type) filter.type = type
     if (style) filter.style = style
+    if (singerGender) filter.singerGender = singerGender
     let songs = await Song.find(filter)
     if (keyword) {
       const k = keyword.toLowerCase()
@@ -54,7 +55,7 @@ router.get('/', auth, async (req, res) => {
 // ===== POST /api/songs - 新增歌曲 =====
 router.post('/', auth, requireAdmin, async (req, res) => {
   try {
-    const { name, style, difficulty, vocalWeight, danceWeight, charmWeight, baseScore, riskFactor, description, type } = req.body
+    const { name, style, difficulty, vocalWeight, danceWeight, charmWeight, baseScore, riskFactor, description, type, singerGender } = req.body
     if (!name) return res.status(400).json({ success: false, error: 'name 必填', code: 'INVALID_PARAMS' })
     const song = new Song({
       id: generateId(), name, style: style || '流行',
@@ -65,6 +66,7 @@ router.post('/', auth, requireAdmin, async (req, res) => {
       baseScore: typeof baseScore === 'number' ? baseScore : 100,
       riskFactor: typeof riskFactor === 'number' ? riskFactor : 0.2,
       description: description || '', type: type || 'team_show',
+      singerGender: singerGender || '',
       enabled: true, createdAt: new Date().toISOString()
     })
     await song.save()
@@ -97,6 +99,7 @@ router.post('/batch', auth, requireAdmin, async (req, res) => {
         baseScore: typeof item.baseScore === 'number' ? item.baseScore : 100,
         riskFactor: typeof item.riskFactor === 'number' ? item.riskFactor : 0.2,
         description: item.description || '',
+        singerGender: item.singerGender || '',
         enabled: true,
         createdAt: new Date().toISOString()
       })
@@ -116,7 +119,7 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
   try {
     const song = await Song.findOne({ id: req.params.id })
     if (!song) return res.status(404).json({ success: false, error: '歌曲不存在', code: 'NOT_FOUND' })
-    const fields = ['name', 'style', 'difficulty', 'vocalWeight', 'danceWeight', 'charmWeight', 'baseScore', 'riskFactor', 'description', 'type', 'enabled']
+    const fields = ['name', 'style', 'difficulty', 'vocalWeight', 'danceWeight', 'charmWeight', 'baseScore', 'riskFactor', 'description', 'type', 'enabled', 'singerGender']
     for (const f of fields) if (req.body[f] !== undefined) song[f] = req.body[f]
     song.updatedAt = new Date().toISOString()
     await song.save()
@@ -124,6 +127,19 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
     res.json({ success: true, data: song })
   } catch (e) {
     res.status(500).json({ success: false, error: '更新失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== DELETE /api/songs/all - 清空歌曲库 =====
+router.delete('/all', auth, requireAdmin, async (req, res) => {
+  try {
+    const count = await Song.countDocuments({})
+    await Song.deleteMany({})
+    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.SONG_LIBRARY_DELETE, 'song', 'all', `清空歌曲库，共删除 ${count} 首歌曲`)
+    res.json({ success: true, count })
+  } catch (e) {
+    console.error('清空歌曲库失败:', e)
+    res.status(500).json({ success: false, error: '清空歌曲库失败', code: 'SERVER_ERROR' })
   }
 })
 
@@ -472,7 +488,9 @@ router.post('/claim', auth, async (req, res) => {
     if (!roundSong) {
       return res.status(404).json({ success: false, error: '歌曲不存在', code: 'SONG_NOT_FOUND' })
     }
-    if (!roundSong.released) {
+    const round = await getRound(roundId)
+    const songReleased = roundSong.released || (round && round.songReleased)
+    if (!songReleased) {
       return res.status(400).json({ success: false, error: '该歌曲尚未释放', code: 'SONG_NOT_RELEASED' })
     }
     if (roundSong.assignedTeamId) {
@@ -512,7 +530,9 @@ router.post('/admin-assign', auth, requireAdmin, async (req, res) => {
     if (!roundSong) {
       return res.status(404).json({ success: false, error: '歌曲不存在', code: 'SONG_NOT_FOUND' })
     }
-    if (!roundSong.released) {
+    const round = await getRound(roundId)
+    const songReleased = roundSong.released || (round && round.songReleased)
+    if (!songReleased) {
       return res.status(400).json({ success: false, error: '该歌曲尚未释放', code: 'SONG_NOT_RELEASED' })
     }
     if (roundSong.assignedTeamId) {
@@ -549,8 +569,14 @@ router.get('/random', auth, requireAdmin, async (req, res) => {
     const songLibrary = require(songLibraryPath)
     const { generateRandomSong } = require('../utils/randomSong')
 
-    if (!songLibrary || songLibrary.length === 0) {
-      return res.status(500).json({ success: false, error: '歌曲库为空', code: 'EMPTY_LIBRARY' })
+    const { gender } = req.query
+    let pool = songLibrary
+    if (gender === 'male' || gender === 'female') {
+      pool = songLibrary.filter(s => s.gender === gender)
+    }
+
+    if (!pool || pool.length === 0) {
+      return res.status(400).json({ success: false, error: `无对应性别歌曲: ${gender || '全部'}`, code: 'EMPTY_LIBRARY' })
     }
 
     // 获取数据库中已有的歌名集合（用于去重提示，但不阻止）
@@ -560,15 +586,15 @@ router.get('/random', auth, requireAdmin, async (req, res) => {
     // 随机选取一首歌曲
     let songInfo, attempts = 0, maxAttempts = 100
     do {
-      const randomIndex = Math.floor(Math.random() * songLibrary.length)
-      songInfo = songLibrary[randomIndex]
+      const randomIndex = Math.floor(Math.random() * pool.length)
+      songInfo = pool[randomIndex]
       attempts++
     } while (songInfo && existingNames.has(songInfo.title) && attempts < maxAttempts)
 
     // 如果循环结束后 songInfo 为 undefined，直接随机选一首
     if (!songInfo) {
-      const randomIndex = Math.floor(Math.random() * songLibrary.length)
-      songInfo = songLibrary[randomIndex]
+      const randomIndex = Math.floor(Math.random() * pool.length)
+      songInfo = pool[randomIndex]
     }
 
     // 生成游戏属性
@@ -578,6 +604,7 @@ router.get('/random', auth, requireAdmin, async (req, res) => {
     const song = new Song({
       id: generateId(),
       ...songData,
+      singerGender: songInfo.gender || '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     })

@@ -1,10 +1,11 @@
 const express = require('express')
 const { auth, requireAdmin } = require('../middleware/auth')
-const { generateId, logAction, getCurrentSeason, randomInt, ACTION_TYPES } = require('../utils/helpers')
+const { generateId, logAction, getCurrentSeason, ACTION_TYPES } = require('../utils/helpers')
 const RehearsalResult = require('../models/RehearsalResult')
 const RoundTeam = require('../models/RoundTeam')
 const Round = require('../models/Round')
 const User = require('../models/User')
+const RoundCaptain = require('../models/RoundCaptain')
 
 const router = express.Router()
 
@@ -25,12 +26,27 @@ const REHEARSAL_EVENTS = [
 ]
 
 // ===== POST /api/rehearsal/roll - 为某队/全部队生成一次彩排结果 =====
-router.post('/roll', auth, requireAdmin, async (req, res) => {
+router.post('/roll', auth, async (req, res) => {
   try {
     const { roundId, teamId, all } = req.body
     const round = await getRound(roundId)
     const rId = round ? round.id : (roundId || 'default-round')
     const rIdx = round ? round.index : null
+    const isAdmin = req.user.role === 'admin'
+
+    // 若不是管理员，则必须是指定队伍的队长，且彩排已释放
+    if (!isAdmin) {
+      if (round && !round.rehearsalReleased) {
+        return res.status(403).json({ success: false, error: '彩排尚未开放', code: 'REHEARSAL_NOT_RELEASED' })
+      }
+      if (!teamId || all) {
+        return res.status(403).json({ success: false, error: '只有管理员可以批量彩排', code: 'FORBIDDEN' })
+      }
+      const captain = await RoundCaptain.findOne({ roundId: rId, playerId: req.user.userId })
+      if (!captain || captain.teamId !== teamId) {
+        return res.status(403).json({ success: false, error: '只有本队队长可以触发彩排', code: 'FORBIDDEN' })
+      }
+    }
 
     const teams = all
       ? await RoundTeam.find({ roundId: rId })
@@ -39,6 +55,10 @@ router.post('/roll', auth, requireAdmin, async (req, res) => {
     const results = []
     for (const t of teams) {
       if (!t) continue
+      // 每队每轮仅允许一次有效彩排结果
+      const existing = await RehearsalResult.findOne({ roundId: rId, teamId: t.id })
+      if (existing) continue
+
       const event = REHEARSAL_EVENTS[Math.floor(Math.random() * REHEARSAL_EVENTS.length)]
       const r = new RehearsalResult({
         id: generateId(), roundId: rId, roundIndex: rIdx,
@@ -49,7 +69,7 @@ router.post('/roll', auth, requireAdmin, async (req, res) => {
       results.push(r)
     }
 
-    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.REHEARSAL_ROLL, 'round', rId, `为 ${results.length} 支队伍生成彩排结果`)
+    logAction(req.user.userId, req.user.name || (isAdmin ? 'admin' : 'captain'), isAdmin ? 'admin' : 'player', ACTION_TYPES.REHEARSAL_ROLL, 'round', rId, `为 ${results.length} 支队伍生成彩排结果`)
     res.json({ success: true, data: results, count: results.length })
   } catch (e) {
     console.error(e)

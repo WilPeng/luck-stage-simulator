@@ -112,10 +112,11 @@ const fixedItems = [
 
 const roundStages = [
   { key: 'hoh_competition', icon: '👑', text: 'HOH竞争', route: 'hoh' },
-  { key: 'nomination', icon: '📋', text: '提名', route: 'nomination' },
-  { key: 'veto_competition', icon: '🛡️', text: '否决权', route: 'veto' },
-  { key: 'veto_ceremony', icon: '⚖️', text: '否决权会议', route: 'veto' },
-  { key: 'eviction_vote', icon: '🗳️', text: '淘汰投票', route: 'eviction' },
+  { key: 'nomination', icon: '📋', text: '提名仪式', route: 'nomination' },
+  { key: 'veto_competition', icon: '🛡️', text: '否决权竞争', route: 'veto-competition' },
+  { key: 'veto_ceremony', icon: '⚖️', text: '否决权会议', route: 'veto-ceremony' },
+  { key: 'replacement_nom', icon: '🔄', text: '替换提名', route: 'replacement-nom' },
+  { key: 'eviction_vote', icon: '🗳️', text: '淘汰投票', route: 'eviction-vote' },
   { key: 'eviction', icon: '🚪', text: '淘汰结果', route: 'eviction' },
 ]
 

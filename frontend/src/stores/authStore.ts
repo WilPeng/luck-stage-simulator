@@ -35,6 +35,14 @@ export const useAuthStore = defineStore('auth', () => {
     document.querySelectorAll('.admin-layout, .player-layout').forEach(el => {
       el.setAttribute('data-theme', t)
     })
+    // TDesign 暗色主题通过 :root.dark 或 :root[theme-mode='dark'] 控制
+    if (t === 'dark') {
+      document.documentElement.classList.add('dark')
+      document.documentElement.setAttribute('theme-mode', 'dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+      document.documentElement.removeAttribute('theme-mode')
+    }
   }
 
   function toggleTheme() {

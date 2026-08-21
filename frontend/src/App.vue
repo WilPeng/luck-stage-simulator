@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container">
+  <div class="app-container" :data-theme="theme" :class="{ 'dark': theme === 'dark' }">
     <ConfigProvider>
       <div>
         <router-view />
@@ -9,7 +9,15 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { ConfigProvider } from 'tdesign-vue-next'
+import { useAuthStore } from './stores/authStore'
+
+const authStore = useAuthStore()
+const theme = computed(() => authStore.theme)
+
+// 尽早应用主题，避免页面闪烁
+authStore.initTheme()
 </script>
 
 <style>
@@ -59,5 +67,14 @@ body {
 a {
   text-decoration: none;
   color: inherit;
+}
+
+/* 暗色模式全局底色与文字色 */
+[data-theme="dark"] html,
+[data-theme="dark"] body,
+[data-theme="dark"] #app,
+[data-theme="dark"] .app-container {
+  background: #1a1a2e;
+  color: #ffffff;
 }
 </style>

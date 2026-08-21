@@ -7,9 +7,32 @@
       <span v-else-if="isFuture" class="future-tag">未开始</span>
     </div>
 
-    <!-- 当前轮次且用户是 HOH 且处于提名阶段：显示提名操作 -->
-    <div v-if="isCurrentRound && isCurrentHoh && isNominationStage" class="nomination-action">
-      <div class="hoh-banner">🏆 你是本周的 HOH！请选择两名被提名人</div>
+    <!-- 直接民主模式：所有玩家参与全员投票 -->
+    <div v-if="isCurrentRound && isNominationStage && isDirectDemocracy" class="nomination-action democracy-action">
+      <div class="democracy-banner">🗳️ 本周为"直接民主"模式，提名由全员投票决定！请在下方为每位房客选择投票对象（HOH票数双倍）。</div>
+      <div v-if="activeList.length > 0" class="democracy-vote-section">
+        <div class="democracy-grid">
+          <div v-for="h in activeList" :key="h.id" class="democracy-row">
+            <span class="democracy-voter">
+              <BBAvatar :name="h.name" :avatar="h.avatar" size="sm" />
+              {{ h.name }}
+            </span>
+            <select v-model="democracyVotes[h.id]" class="bb-select-sm">
+              <option value="">选择投票对象</option>
+              <option v-for="n in democracyCandidates" :key="n.id" :value="n.id" :disabled="n.id === h.id">{{ n.name }}</option>
+            </select>
+          </div>
+        </div>
+        <button class="bb-btn" @click="submitDemocracyVotes" :disabled="submitting" style="margin-top: 12px;">
+          {{ submitting ? '提交中...' : '提交我的投票' }}
+        </button>
+      </div>
+      <div v-else class="empty-hint">暂无活跃房客可供投票</div>
+    </div>
+
+    <!-- 非直接民主模式：当前轮次且用户是 HOH 且处于提名阶段：显示提名操作 -->
+    <div v-else-if="isCurrentRound && isCurrentHoh && isNominationStage" class="nomination-action">
+      <div class="hoh-banner">🏆 你是本周的 HOH！{{ isTripleOffering ? '请选择三名被提名人' : '请选择两名被提名人' }}</div>
       <div class="nomination-form">
         <div class="form-group">
           <label>被提名人 1</label>
@@ -25,7 +48,14 @@
             <option v-for="h in listForNominee2" :key="h.id" :value="h.id">{{ h.name }}</option>
           </select>
         </div>
-        <button class="bb-btn" @click="submitNomination" :disabled="!nominee1 || !nominee2 || submitting">
+        <div v-if="isTripleOffering" class="form-group">
+          <label>被提名人 3（三重献祭）</label>
+          <select v-model="nominee3" class="bb-select">
+            <option value="" disabled>请选择</option>
+            <option v-for="h in listForNominee3" :key="h.id" :value="h.id">{{ h.name }}</option>
+          </select>
+        </div>
+        <button class="bb-btn" @click="submitNomination" :disabled="!nominee1 || !nominee2 || (isTripleOffering && !nominee3) || submitting">
           {{ submitting ? '提交中...' : '提交提名' }}
         </button>
       </div>
@@ -62,7 +92,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetNominationHistory, bbSetNomination, bbGetActiveHouseguests, bbGetHohHistory } from '../../../services/bbApi'
+import { bbGetNominationHistory, bbSetNomination, bbGetActiveHouseguests, bbGetHohHistory, bbGetCurrentVeto, bbGetSeasonConfig, bbVoteNominees } from '../../../services/bbApi'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
+import type { BBRoundConfig } from '../../../types/bigbrother'
 
 const route = useRoute()
 const authStore = useBbAuthStore()
@@ -75,12 +107,16 @@ const isFuture = computed(() => seasonStore.getStageStatus(roundNum.value, 'nomi
 
 const nomination = ref<any>(null)
 const currentHoh = ref<any>(null)
-const activeList = ref<{ id: string; name: string }[]>([])
+const activeList = ref<{ id: string; name: string; avatar: string | null }[]>([])
 const activeMap = ref<Record<string, string>>({})
 const nominee1 = ref('')
 const nominee2 = ref('')
+const nominee3 = ref('')
 const submitting = ref(false)
 const submitSuccess = ref(false)
+const savedPlayerId = ref('') // 被 POV 拯救的选手 ID
+const roundConfigs = ref<BBRoundConfig[]>([]) // twist 配置
+const democracyVotes = ref<Record<string, string>>({})
 
 const isCurrentHoh = computed(() => {
   return currentHoh.value?.winnerId === authStore.currentUser?.id
@@ -88,20 +124,37 @@ const isCurrentHoh = computed(() => {
 
 const isNominationStage = computed(() => seasonStore.currentStage === 'nomination')
 
+// 直接民主：检查当前轮次的 twist 配置
+const isDirectDemocracy = computed(() => {
+  const cfg = roundConfigs.value.find(c => c.round === roundNum.value)
+  return cfg?.twists?.includes('direct_democracy') || false
+})
+
+// 三重献祭：检查当前轮次的 twist 配置
+const isTripleOffering = computed(() => {
+  const cfg = roundConfigs.value.find(c => c.round === roundNum.value)
+  return cfg?.twists?.includes('triple_offering') || false
+})
+
+// 直接民主投票候选人（所有活跃玩家）
+const democracyCandidates = computed(() => activeList.value)
+
 const baseAvailable = computed(() => {
   const vetoWinnerId = nomination.value?.vetoWinnerId || ''
-  return activeList.value.filter(h =>
-    h.id !== authStore.currentUser?.id &&
-    h.id !== vetoWinnerId
-  )
+  const excludeSet = new Set([authStore.currentUser?.id, vetoWinnerId, savedPlayerId.value])
+  return activeList.value.filter(h => !excludeSet.has(h.id))
 })
 
 const listForNominee1 = computed(() => {
-  return baseAvailable.value.filter(h => h.id !== nominee2.value)
+  return baseAvailable.value.filter(h => h.id !== nominee2.value && h.id !== nominee3.value)
 })
 
 const listForNominee2 = computed(() => {
-  return baseAvailable.value.filter(h => h.id !== nominee1.value)
+  return baseAvailable.value.filter(h => h.id !== nominee1.value && h.id !== nominee3.value)
+})
+
+const listForNominee3 = computed(() => {
+  return baseAvailable.value.filter(h => h.id !== nominee1.value && h.id !== nominee2.value)
 })
 
 function isMe(name: string): boolean {
@@ -110,14 +163,13 @@ function isMe(name: string): boolean {
 
 async function submitNomination() {
   if (!nominee1.value || !nominee2.value) return
+  if (isTripleOffering.value && !nominee3.value) return
   submitting.value = true
   try {
-    const name1 = activeMap.value[nominee1.value] || ''
-    const name2 = activeMap.value[nominee2.value] || ''
-    await bbSetNomination(
-      [nominee1.value, nominee2.value],
-      [name1, name2]
-    )
+    const ids = [nominee1.value, nominee2.value]
+    if (isTripleOffering.value && nominee3.value) ids.push(nominee3.value)
+    const names = ids.map(id => activeMap.value[id] || '')
+    await bbSetNomination(ids, names)
     submitSuccess.value = true
     setTimeout(() => submitSuccess.value = false, 2000)
     try {
@@ -132,11 +184,46 @@ async function submitNomination() {
   }
 }
 
+async function submitDemocracyVotes() {
+  const votes = Object.entries(democracyVotes.value)
+    .filter(([, targetId]) => targetId)
+    .map(([voterId, targetId]) => ({
+      voterId,
+      voterName: activeMap.value[voterId] || '',
+      targetId,
+      targetName: activeMap.value[targetId] || ''
+    }))
+  if (votes.length === 0) { alert('请至少为一位房客投票'); return }
+  submitting.value = true
+  try {
+    const result = await bbVoteNominees(votes)
+    submitSuccess.value = true
+    setTimeout(() => submitSuccess.value = false, 2000)
+    try {
+      const history = await bbGetNominationHistory()
+      const roundKey = `round-${roundNum.value}`
+      nomination.value = history.find(h => h.roundId === roundKey) || null
+    } catch {}
+  } catch (e: any) {
+    alert(e.message || '投票失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     const hohHistory = await bbGetHohHistory()
     const roundKey = `round-${roundNum.value}`
     currentHoh.value = hohHistory.find(h => h.roundId === roundKey) || null
+  } catch {}
+  try {
+    const vetoData = await bbGetCurrentVeto()
+    savedPlayerId.value = vetoData?.usedOnPlayerId || ''
+  } catch {}
+  try {
+    const config = await bbGetSeasonConfig()
+    roundConfigs.value = config.roundConfigs || []
   } catch {}
   try {
     const history = await bbGetNominationHistory()
@@ -148,7 +235,7 @@ onMounted(async () => {
       const list = await bbGetActiveHouseguests()
       activeList.value = list
       const map: Record<string, string> = {}
-      list.forEach(h => { map[h.id] = h.name })
+      list.forEach(h => { map[h.id] = h.name; democracyVotes.value[h.id] = '' })
       activeMap.value = map
     } catch {}
   }
@@ -189,4 +276,16 @@ onMounted(async () => {
 .empty-card p { color: #666; }
 
 .success-toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #00ff88; color: #000; padding: 12px 24px; border-radius: 8px; font-weight: 600; }
+
+/* 直接民主样式 */
+.democracy-action { margin-bottom: 20px; }
+.democracy-banner { background: linear-gradient(135deg, #3498db22, #2980b922); border: 1px solid #3498db; border-radius: 8px; padding: 12px; text-align: center; font-size: 14px; color: #3498db; margin-bottom: 16px; line-height: 1.6; }
+.democracy-vote-section { background: linear-gradient(135deg, #0f0f2e, #1a1a3e); border: 1px solid #3498db44; border-radius: 12px; padding: 20px; }
+.democracy-grid { display: flex; flex-direction: column; gap: 8px; }
+.democracy-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #1a1a3e; border-radius: 6px; }
+.democracy-voter { flex: 1; font-size: 14px; color: #ccc; }
+.bb-select-sm { padding: 6px 10px; background: #0f0f2e; border: 1px solid #444; border-radius: 6px; color: #fff; font-size: 12px; width: 180px; }
+.bb-select-sm:focus { border-color: #3498db; outline: none; }
+.bb-select-sm option { background: #0f0f2e; color: #fff; }
+.empty-hint { text-align: center; color: #666; font-size: 14px; padding: 20px; }
 </style>

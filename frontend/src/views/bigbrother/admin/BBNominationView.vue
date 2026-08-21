@@ -8,7 +8,12 @@
     <div v-if="nomination" class="nomination-card">
       <div class="nomination-header">
         <span class="hoh-info">HOH: {{ nomination.hohName }}</span>
-        <span v-if="nomination.vetoUsed" class="veto-badge">否决权已使用</span>
+        <div class="header-badges">
+          <span v-if="nomination.isSecretKeeper" class="twist-badge secret">🎭 匿名房主</span>
+          <span v-if="nomination.isDirectDemocracy" class="twist-badge democracy">🗳️ 直接民主</span>
+          <span v-if="isTripleOffering" class="twist-badge triple">🔱 三重献祭</span>
+          <span v-if="nomination.vetoUsed" class="veto-badge">否决权已使用</span>
+        </div>
       </div>
       <div class="nominees">
         <div class="nominee-item" v-for="(name, i) in (nomination.nomineeNames || [])" :key="i">
@@ -24,11 +29,38 @@
     </div>
     <div v-else class="nomination-card empty">
       <p>暂无提名记录</p>
+      <div v-if="twistInfo" class="twist-info-bar">
+        <span v-if="twistInfo.isDirectDemocracy" class="twist-info-item">🗳️ 本轮为"直接民主"模式，提名由全员投票决定</span>
+        <span v-if="twistInfo.isTripleOffering" class="twist-info-item">🔱 本轮为"三重献祭"模式，允许提名3人</span>
+        <span v-if="twistInfo.isSecretKeeper" class="twist-info-item">🎭 本轮为"匿名房主"模式</span>
+      </div>
     </div>
 
     <div class="action-section">
       <h3>操作</h3>
-      <div class="action-buttons">
+      <template v-if="isDirectDemocracy">
+        <div class="twist-action-hint">
+          🗳️ 当前为"直接民主"模式，提名由全员投票决定。请在下方为每位房客选择投票对象，系统自动统计票数（HOH票数双倍）。
+        </div>
+        <div v-if="activeList.length > 0" class="democracy-vote-section">
+          <h4>全员投票（直接民主）</h4>
+          <div class="democracy-grid">
+            <div v-for="h in activeList" :key="h.id" class="democracy-row">
+              <span class="democracy-voter">
+                <BBAvatar :name="h.name" :avatar="h.avatar" size="sm" />
+                {{ h.name }}
+              </span>
+              <select v-model="democracyVotes[h.id]" class="bb-select-sm">
+                <option value="">选择投票对象</option>
+                <option v-for="n in democracyCandidates" :key="n.id" :value="n.id" :disabled="n.id === h.id">{{ n.name }}</option>
+              </select>
+            </div>
+          </div>
+          <button class="bb-btn bb-btn-primary" @click="submitDemocracyVotes" style="margin-top: 12px;">提交全员投票</button>
+        </div>
+        <div v-else class="empty-hint">暂无活跃房客可供投票</div>
+      </template>
+      <div v-else class="action-buttons">
         <button class="bb-btn" @click="showSetModal = true">✏️ 设置提名</button>
         <button class="bb-btn" @click="showReplaceModal = true" :disabled="!nomination">🔄 替换提名</button>
       </div>
@@ -71,6 +103,13 @@
                 <option v-for="h in listForNominee2" :key="h.id" :value="h.id">{{ h.name }}</option>
               </select>
             </div>
+            <div v-if="isTripleOffering" class="form-group">
+              <label>被提名人 3（三重献祭）</label>
+              <select v-model="nominee3" class="bb-select">
+                <option value="" disabled>请选择</option>
+                <option v-for="h in listForNominee3" :key="h.id" :value="h.id">{{ h.name }}</option>
+              </select>
+            </div>
             <div class="form-actions">
               <button class="bb-btn" @click="showSetModal = false">取消</button>
               <button class="bb-btn bb-btn-primary" @click="setNomination">确认提名</button>
@@ -103,60 +142,111 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { bbGetCurrentNomination, bbSetNomination, bbReplaceNomination, bbGetNominationHistory, bbGetActiveHouseguests } from '../../../services/bbApi'
+import { bbGetCurrentNomination, bbSetNomination, bbReplaceNomination, bbGetNominationHistory, bbGetActiveHouseguests, bbVoteNominees, bbGetCurrentVeto } from '../../../services/bbApi'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBNomination } from '../../../types/bigbrother'
 
 const nomination = ref<BBNomination | null>(null)
+const twistInfo = ref<any>(null)
 const history = ref<BBNomination[]>([])
-const activeList = ref<{ id: string; name: string }[]>([])
+const activeList = ref<{ id: string; name: string; avatar: string | null }[]>([])
 const activeMap = ref<Record<string, string>>({})
 const showSetModal = ref(false)
 const showReplaceModal = ref(false)
 const nominee1 = ref('')
 const nominee2 = ref('')
+const nominee3 = ref('')
 const replaceId = ref('')
+const democracyVotes = ref<Record<string, string>>({})
+const savedPlayerId = ref('') // 被 POV 拯救的选手 ID
 
-// 排除 HOH、已被提名的房客、否决权赢家
+// 排除 HOH、已被提名的房客、否决权赢家、被 POV 拯救的选手
 const baseAvailable = computed(() => {
   const hohId = nomination.value?.hohId || ''
   const vetoWinnerId = nomination.value?.vetoWinnerId || ''
   const nomineeIdSet = new Set(nomination.value?.nomineeIds || [])
+  const excludeSet = new Set([hohId, vetoWinnerId, savedPlayerId.value])
   return activeList.value.filter(h =>
-    h.id !== hohId &&
-    h.id !== vetoWinnerId &&
+    !excludeSet.has(h.id) &&
     !nomineeIdSet.has(h.id)
   )
 })
 
-// 被提名人1的列表：排除被提名人2已选的
 const listForNominee1 = computed(() => {
-  return baseAvailable.value.filter(h => h.id !== nominee2.value)
+  return baseAvailable.value.filter(h => h.id !== nominee2.value && h.id !== nominee3.value)
 })
 
-// 被提名人2的列表：排除被提名人1已选的
 const listForNominee2 = computed(() => {
-  return baseAvailable.value.filter(h => h.id !== nominee1.value)
+  return baseAvailable.value.filter(h => h.id !== nominee1.value && h.id !== nominee3.value)
 })
+
+const listForNominee3 = computed(() => {
+  return baseAvailable.value.filter(h => h.id !== nominee1.value && h.id !== nominee2.value)
+})
+
+// 直接民主：投票候选人（所有活跃玩家）
+const democracyCandidates = computed(() => activeList.value)
+
+// 直接民主：同时检查 nomination 和 twistInfo，确保无提名记录时也能正确识别
+const isDirectDemocracy = computed(() =>
+  (nomination.value as any)?.isDirectDemocracy || twistInfo.value?.isDirectDemocracy
+)
+
+// 三重献祭：同时检查 nomination 和 twistInfo，确保无提名记录时也能正确识别
+const isTripleOffering = computed(() =>
+  (nomination.value as any)?.isTripleOffering || twistInfo.value?.isTripleOffering
+)
 
 async function fetchData() {
-  try { nomination.value = await bbGetCurrentNomination() } catch {}
+  try {
+    const data = await bbGetCurrentNomination()
+    nomination.value = data as any
+    twistInfo.value = (data as any)?.twists || null
+  } catch {}
+  try {
+    const vetoData = await bbGetCurrentVeto()
+    savedPlayerId.value = vetoData?.usedOnPlayerId || ''
+  } catch {}
   try { history.value = await bbGetNominationHistory() } catch {}
   try {
     const list = await bbGetActiveHouseguests()
     activeList.value = list
     const map: Record<string, string> = {}
-    list.forEach(h => { map[h.id] = h.name })
+    list.forEach(h => { map[h.id] = h.name; democracyVotes.value[h.id] = '' })
     activeMap.value = map
   } catch {}
 }
 
 async function setNomination() {
-  if (!nominee1.value || !nominee2.value) { alert('请选择两名被提名人'); return }
-  const name1 = activeMap.value[nominee1.value] || ''
-  const name2 = activeMap.value[nominee2.value] || ''
+  const isTriple = isTripleOffering.value
+  const ids = [nominee1.value, nominee2.value]
+  if (isTriple && nominee3.value) ids.push(nominee3.value)
+  const names = ids.map(id => activeMap.value[id] || '')
+  if (ids.some(id => !id)) {
+    alert(isTriple ? '请选择三名被提名人' : '请选择两名被提名人')
+    return
+  }
   try {
-    await bbSetNomination([nominee1.value, nominee2.value], [name1, name2])
+    await bbSetNomination(ids, names)
     showSetModal.value = false
+    nominee1.value = ''; nominee2.value = ''; nominee3.value = ''
+    await fetchData()
+  } catch (e: any) { alert(e.message) }
+}
+
+async function submitDemocracyVotes() {
+  const votes = Object.entries(democracyVotes.value)
+    .filter(([, targetId]) => targetId)
+    .map(([voterId, targetId]) => ({
+      voterId,
+      voterName: activeMap.value[voterId] || '',
+      targetId,
+      targetName: activeMap.value[targetId] || ''
+    }))
+  if (votes.length === 0) { alert('请至少为一位房客投票'); return }
+  try {
+    const result = await bbVoteNominees(votes)
+    alert(`直接民主投票完成！提名结果：${result.data.nominees.map((n: any) => n.name).join('、')}`)
     await fetchData()
   } catch (e: any) { alert(e.message) }
 }
@@ -186,7 +276,24 @@ onMounted(fetchData)
 .nomination-card.empty p { text-align: center; color: #666; }
 .nomination-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .hoh-info { color: #aaa; font-size: 14px; }
+.header-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.twist-badge { padding: 2px 8px; border-radius: 8px; font-size: 11px; }
+.twist-badge.secret { background: #9b59b622; color: #9b59b6; border: 1px solid #9b59b644; }
+.twist-badge.democracy { background: #3498db22; color: #3498db; border: 1px solid #3498db44; }
+.twist-badge.triple { background: #e74c3c22; color: #e74c3c; border: 1px solid #e74c3c44; }
 .veto-badge { background: #ffaa0022; color: #ffaa00; padding: 2px 10px; border-radius: 10px; font-size: 12px; }
+.twist-info-bar { margin-top: 12px; padding: 10px; background: #1a1a3e; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
+.twist-info-item { font-size: 13px; color: #aaa; }
+.democracy-vote-section { margin-top: 12px; }
+.democracy-vote-section h4 { font-size: 14px; color: #3498db; margin: 0 0 12px; }
+.democracy-grid { display: flex; flex-direction: column; gap: 8px; }
+.democracy-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #1a1a3e; border-radius: 6px; }
+.democracy-voter { flex: 1; font-size: 14px; color: #ccc; }
+.bb-select-sm { padding: 6px 10px; background: #0f0f2e; border: 1px solid #444; border-radius: 6px; color: #fff; font-size: 12px; width: 180px; }
+.bb-select-sm:focus { border-color: #3498db; outline: none; }
+.bb-select-sm option { background: #0f0f2e; color: #fff; }
+.twist-action-hint { padding: 12px; background: #3498db11; border: 1px solid #3498db33; border-radius: 8px; font-size: 13px; color: #3498db; margin-bottom: 12px; }
+.empty-hint { text-align: center; color: #666; font-size: 14px; padding: 20px; }
 .nominees { display: flex; gap: 16px; }
 .nominee-item { flex: 1; background: #00ff8808; border: 1px solid #00ff8822; border-radius: 8px; padding: 16px; text-align: center; }
 .nominee-icon { display: block; font-size: 24px; margin-bottom: 8px; }

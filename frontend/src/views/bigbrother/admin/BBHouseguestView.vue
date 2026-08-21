@@ -19,6 +19,7 @@
       <table class="bb-table">
         <thead>
           <tr>
+            <th>头像</th>
             <th>名称</th>
             <th>登录码</th>
             <th>角色</th>
@@ -29,6 +30,7 @@
         </thead>
         <tbody>
           <tr v-for="h in list" :key="h.id">
+            <td><BBAvatar :name="h.name" :avatar="h.avatar" size="sm" /></td>
             <td class="name-cell">{{ h.name }}</td>
             <td><code class="code-tag">{{ h.loginCode }}</code></td>
             <td>{{ h.role === 'admin' ? '管理员' : '房客' }}</td>
@@ -39,7 +41,7 @@
               <button v-if="h.role !== 'admin'" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
             </td>
           </tr>
-          <tr v-if="list.length === 0"><td colspan="6" class="empty-cell">暂无数据</td></tr>
+          <tr v-if="list.length === 0"><td colspan="7" class="empty-cell">暂无数据</td></tr>
         </tbody>
       </table>
     </div>
@@ -75,6 +77,19 @@
                 <option value="jury">陪审团</option>
               </select>
             </div>
+            <div v-if="editingId" class="form-group">
+              <label>头像</label>
+              <div class="avatar-edit-section">
+                <BBAvatar :name="formName" :avatar="editingAvatar" size="lg" />
+                <div class="avatar-buttons">
+                  <label class="bb-btn bb-btn-xs upload-label">
+                    上传头像
+                    <input type="file" accept="image/*" hidden @change="onAdminAvatarFile" />
+                  </label>
+                  <button v-if="editingAvatar" class="bb-btn bb-btn-xs bb-btn-danger" @click="onAdminDeleteAvatar">删除头像</button>
+                </div>
+              </div>
+            </div>
             <div class="form-actions">
               <button class="bb-btn" @click="showCreateModal = false">取消</button>
               <button class="bb-btn bb-btn-primary" @click="saveHouseguest">{{ editingId ? '保存' : '创建' }}</button>
@@ -88,7 +103,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { bbGetHouseguests, bbCreateHouseguest, bbUpdateHouseguest, bbDeleteHouseguest } from '../../../services/bbApi'
+import { bbGetHouseguests, bbCreateHouseguest, bbUpdateHouseguest, bbDeleteHouseguest, bbUploadHouseguestAvatar, bbDeleteHouseguestAvatar } from '../../../services/bbApi'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBHouseguest } from '../../../types/bigbrother'
 
 const list = ref<BBHouseguest[]>([])
@@ -101,6 +117,7 @@ const editingId = ref<string | null>(null)
 const formName = ref('')
 const formCode = ref('')
 const formStatus = ref('active')
+const editingAvatar = ref<string | null>(null)
 
 async function fetchData() {
   try {
@@ -128,7 +145,29 @@ function editHouseguest(h: BBHouseguest) {
   formName.value = h.name
   formCode.value = h.loginCode
   formStatus.value = h.status
+  editingAvatar.value = h.avatar
   showCreateModal.value = true
+}
+
+async function onAdminAvatarFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || !editingId.value) return
+  try {
+    const result = await bbUploadHouseguestAvatar(editingId.value, file)
+    editingAvatar.value = result.avatar
+    await fetchData()
+  } catch (err: any) { alert(err.message) }
+  input.value = ''
+}
+
+async function onAdminDeleteAvatar() {
+  if (!editingId.value) return
+  try {
+    await bbDeleteHouseguestAvatar(editingId.value)
+    editingAvatar.value = null
+    await fetchData()
+  } catch (err: any) { alert(err.message) }
 }
 
 async function saveHouseguest() {
@@ -213,5 +252,9 @@ onMounted(fetchData)
 .form-group { margin-bottom: 16px; }
 .form-group label { display: block; font-size: 13px; color: #aaa; margin-bottom: 6px; }
 .form-group .bb-input, .form-group .bb-select { width: 100%; }
+.avatar-edit-section { display: flex; align-items: center; gap: 16px; }
+.avatar-buttons { display: flex; flex-direction: column; gap: 6px; }
+.upload-label { position: relative; display: inline-block; text-align: center; }
+.upload-label input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
 </style>

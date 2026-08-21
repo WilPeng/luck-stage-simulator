@@ -10,6 +10,15 @@
       <p class="subtitle">{{ isCaptain ? '从已释放的歌曲中为队伍抢选一首' : '查看本轮公演歌曲' }}</p>
     </div>
 
+    <!-- 未开放提示 -->
+    <div v-if="!isSongReleased" class="release-locked-banner">
+      <span class="lock-icon">🔒</span>
+      <div class="lock-text">
+        <div class="lock-title">选歌入口尚未开放</div>
+        <div class="lock-desc">请等待管理员在并发行动中心开放选歌</div>
+      </div>
+    </div>
+
     <!-- ===== 队长抢选界面（始终展示，不受阶段状态影响） ===== -->
     <div v-if="isCaptain" class="captain-view">
 
@@ -99,6 +108,7 @@
                     size="large"
                     block
                     :loading="claimingId === rs.id"
+                    :disabled="!isSongReleased"
                     @click="handleClaimSong(rs.id)"
                     class="claim-btn"
                   >
@@ -111,9 +121,9 @@
 
           <!-- 没有可抢选的歌曲 -->
           <div v-if="releasedSongs.length === 0 && !hasClaimedSong" class="empty-release">
-            <div class="empty-release-icon">⏳</div>
-            <h3>暂无可抢选的歌曲</h3>
-            <p>请等待管理员释放歌曲</p>
+            <div class="empty-release-icon">{{ isSongReleased ? '⏳' : '🔒' }}</div>
+            <h3>{{ isSongReleased ? '暂无可抢选的歌曲' : '选歌入口尚未开放' }}</h3>
+            <p>{{ isSongReleased ? '请等待管理员释放歌曲' : '请等待管理员在并发行动中心开放选歌' }}</p>
           </div>
         </div>
 
@@ -198,6 +208,8 @@ import { useSeasonStore } from '../../stores/seasonStore'
 import { useSongStore } from '../../stores/songStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useTeamStore } from '../../stores/teamStore'
+import { getConcurrentReleaseStatus } from '../../services/api'
+import type { ConcurrentReleaseStatusResponse } from '../../types/season'
 import StageStatusView from '../../components/StageStatusView.vue'
 
 const route = useRoute()
@@ -207,6 +219,10 @@ const authStore = useAuthStore()
 const teamStore = useTeamStore()
 
 const round = computed(() => Number(route.params.round))
+
+// 并发阶段释放状态
+const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
+const isSongReleased = computed(() => !!releaseStatus.value?.songReleased)
 
 // 队长判定：通过 team.captainId 匹配，不依赖 user.role 字段
 const isCaptain = computed(() => {
@@ -299,13 +315,22 @@ function getSongTypeLabel(type: string): string {
   return m[type] || type
 }
 
+async function loadReleaseStatus() {
+  try {
+    releaseStatus.value = await getConcurrentReleaseStatus(`round-${round.value}`)
+  } catch (e) {
+    releaseStatus.value = null
+  }
+}
+
 onMounted(async () => {
   const roundId = `round-${round.value}`
   console.log('[选歌] 加载 roundId:', roundId)
   await Promise.all([
     songStore.fetchRoundSongs(roundId),
     songStore.fetchTeamSongs(roundId),
-    teamStore.fetchTeams(roundId)
+    teamStore.fetchTeams(roundId),
+    loadReleaseStatus()
   ])
   // 调试：检查 isCaptain 判定所需的数据
   const me = authStore.currentUser
@@ -329,6 +354,18 @@ color: var(--text-primary);
 }
 
 // ===== 页面头部 =====
+.release-locked-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; margin-bottom: 20px;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 12px;
+  .lock-icon { font-size: 24px; }
+  .lock-text { flex: 1; }
+  .lock-title { font-size: 14px; font-weight: 600; color: #ffd700; }
+  .lock-desc { font-size: 12px; color: var(--text-tertiary); }
+}
+
 .page-header {
   position: relative;
   margin-bottom: 28px;

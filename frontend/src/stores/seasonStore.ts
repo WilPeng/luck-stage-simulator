@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { Season, StageType, StageStatus, MatrixCell, MenuItem, ResetSeasonResult, SeasonProgressResponse } from '../types/season'
+import type { Season, StageType, StageStatus, MatrixCell, MenuItem, ResetSeasonResult, SeasonProgressResponse, RoundUpdateParams } from '../types/season'
 import type { Round } from '../types/round'
 import { STAGE_ORDER, STAGE_NAMES, calculateStageStatus, getNextStage as getNextStageUtil, getStageName } from '../types/season'
 import type { RestartResult } from '../services/api'
@@ -67,7 +67,7 @@ export const useSeasonStore = defineStore('season', () => {
         currentRound: data.currentRound,
         currentStage: data.currentStage,
         status: 'running',
-        totalRounds: 10
+        totalRounds: data.totalRounds ?? 10
       }
       matrix.value = data.matrix
     } catch (e) {
@@ -197,15 +197,12 @@ export const useSeasonStore = defineStore('season', () => {
   /**
    * 更新轮次参数（兼容旧代码）
    */
-  async function updateRound(params: {
-    performanceRound?: number
-    eliminationRound?: number
-    trainingRound?: number
-    drawsPerPlayer?: number
-  }): Promise<void> {
+  async function updateRound(params: RoundUpdateParams): Promise<void> {
     try {
       await apiUpdateRound(params)
       await fetchSeason()
+      await fetchRounds()
+      await fetchProgress()
     } catch (e) {
       throw e
     }
@@ -216,12 +213,19 @@ export const useSeasonStore = defineStore('season', () => {
    */
   async function resetSeason(): Promise<ResetSeasonResult> {
     const data = await apiResetSeason()
-    season.value = null
+    season.value = {
+      id: season.value?.id || 'season-1',
+      name: season.value?.name || '乘风2026',
+      currentRound: data.newState.currentRound,
+      currentStage: data.newState.currentStage,
+      status: 'running',
+      totalRounds: season.value?.totalRounds ?? 10
+    }
     matrix.value = []
     menuItems.value = []
     rounds.value = []
-    currentRoundId.value = ''
-    currentRoundIndex.value = 1
+    currentRoundId.value = `round-${data.newState.currentRound}`
+    currentRoundIndex.value = data.newState.currentRound
     return data
   }
 

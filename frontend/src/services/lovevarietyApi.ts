@@ -6,7 +6,7 @@ import type {
 } from '../types/lovevariety'
 
 function getApiRoot(): string {
-  return 'https://luck-stage-simulator.onrender.com/api'
+  return ((import.meta as any).env?.VITE_API_BASE || '').replace(/\/$/, '') || '/api'
 }
 
 const API_BASE = `${getApiRoot()}/lovevariety`

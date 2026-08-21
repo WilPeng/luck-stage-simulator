@@ -20,6 +20,7 @@ const COLLECTIONS = [
   'AudienceVoteSession', // 大众评审投票场次
   'AudienceMember',  // 大众评审成员
   'AudienceVote',    // 大众评审投票明细
+  'AudienceTeamVote', // 大众评审对舞台（团队）的 yes/no 投票
   'AudienceVoteFinalRanking', // 大众评审最终排名（管理员释放后保存）
   'PerformanceValue',// 选手公演发挥值
   'Elimination',     // 淘汰记录（每轮）
@@ -45,6 +46,7 @@ const COLLECTIONS = [
   'BBEviction',
   'BBChatMessage',
   'BBOperationLog',
+  'BBSerpentMark',   // 毒蛇标记 twist
   // 恋综集合
   'LVSeason',
   'LVPlayer',

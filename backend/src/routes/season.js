@@ -228,9 +228,12 @@ router.get('/progress/matrix', auth, async (req, res) => {
   try {
     const season = await ensureSeason()
 
+    // 当实际进度已超过配置的 totalRounds 时，以当前轮次为有效总轮次
+    const effectiveTotalRounds = Math.max(season.totalRounds || 10, season.currentRound || 1)
+
     // 构建矩阵：每轮 × 每阶段
     const matrix = []
-    for (let r = 1; r <= season.totalRounds; r++) {
+    for (let r = 1; r <= effectiveTotalRounds; r++) {
       for (const st of STAGE_ORDER) {
         matrix.push({
           round: r,
@@ -247,7 +250,7 @@ router.get('/progress/matrix', auth, async (req, res) => {
         currentRound: season.currentRound,
         currentStage: season.currentStage,
         currentStageName: getStageName(season.currentStage),
-        totalRounds: season.totalRounds,
+        totalRounds: effectiveTotalRounds,
         matrix
       }
     })
@@ -283,13 +286,17 @@ router.get('/progress', auth, async (req, res) => {
   try {
     const season = await ensureSeason()
 
+    // 当实际进度已超过配置的 totalRounds 时，以当前轮次为有效总轮次，
+    // 确保侧边栏树能展示到当前所在的公演
+    const effectiveTotalRounds = Math.max(season.totalRounds || 10, season.currentRound || 1)
+
     // 构建 stageNameMap 供前端使用
     const stageNameMap = {}
     for (const s of STAGE_ORDER) stageNameMap[s] = STAGE_NAME[s]
 
     // 构建矩阵：每轮 × 每阶段
     const matrix = []
-    for (let r = 1; r <= season.totalRounds; r++) {
+    for (let r = 1; r <= effectiveTotalRounds; r++) {
       for (const st of STAGE_ORDER) {
         matrix.push({
           round: r,
@@ -306,7 +313,7 @@ router.get('/progress', auth, async (req, res) => {
         currentRound: season.currentRound,
         currentStage: season.currentStage,
         currentStageName: getStageName(season.currentStage),
-        totalRounds: season.totalRounds,
+        totalRounds: effectiveTotalRounds,
         stageOrder: STAGE_ORDER,
         stageNameMap,
         matrix

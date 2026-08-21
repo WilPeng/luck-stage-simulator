@@ -195,6 +195,7 @@ import { useTeamStore } from '../../stores/teamStore'
 import { useSeasonStore } from '../../stores/seasonStore'
 import { useLogStore } from '../../stores/logStore'
 import { usePerformanceStore } from '../../stores/performanceStore'
+import { useAuthStore } from '../../stores/authStore'
 import type { User } from '../../types/user'
 
 const router = useRouter()
@@ -204,13 +205,14 @@ const teamStore = useTeamStore()
 const seasonStore = useSeasonStore()
 const logStore = useLogStore()
 const performanceStore = usePerformanceStore()
+const authStore = useAuthStore()
 
 function goToLogs() {
-  router.push(`/games/${route.params.gameId}/admin/logs`)
+  router.push(`/games/${authStore.currentGameId}/admin/logs`)
 }
 
 function goToPerformance() {
-  router.push(`/games/${route.params.gameId}/admin/performance`)
+  router.push(`/games/${authStore.currentGameId}/admin/performance`)
 }
 
 const totalPlayers = computed(() => playerStore.getPlayers().length)

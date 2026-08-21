@@ -1,6 +1,6 @@
 // 类型定义
 import type { User } from '../types/user'
-import type { Season, StageType, StageStatus, MatrixCell, MenuItem, ResetSeasonResult, SeasonProgressResponse } from '../types/season'
+import type { Season, StageType, StageStatus, MatrixCell, MenuItem, ResetSeasonResult, SeasonProgressResponse, RoundUpdateParams, ConcurrentStatusResponse, ConcurrentActionType, ConcurrentReleaseStatusResponse } from '../types/season'
 import type { Team, TeamInvite, TeamApplication } from '../types/team'
 import type { Song, SongStats, SongAssignment, RoundSong, AddRoundSongRequest, UpdateScoringMethodRequest } from '../types/song'
 import type { TrainingCard, TrainingRecord, TrainingConfig, TrainingStats, TrainingDrawResult, AutoCompleteResult, TrainingRecordListResponse, TrainingRecordQuery, TrainingEffect } from '../types/training'
@@ -16,7 +16,9 @@ import type {
   GenerateAudienceVoteResponse,
   AudienceVoteRankingResponse,
   AudienceSeatsResponse,
-  AudienceVoteDetailResponse
+  AudienceVoteDetailResponse,
+  TeamAudienceMatrixResponse,
+  PerformanceGenerationMode
 } from '../types/performance'
 
 import type {
@@ -86,7 +88,7 @@ initStorage()
 const STATIC_API_BASE: string = ((import.meta as any).env?.VITE_API_BASE || '').replace(/\/$/, '')
 
 function getApiBase(): string {
-  const base = STATIC_API_BASE || 'https://luck-stage-simulator.onrender.com/api'
+  const base = STATIC_API_BASE || '/api'
   const gameId = sessionStorage.getItem('luck_sim_current_game') || 'shengfeng2026'
   return `${base}/${gameId}`
 }
@@ -166,6 +168,7 @@ export async function login(loginCode: string): Promise<{ token: string; user: U
   // 1. 尝试真实后端
   //    后端格式: { success: true, data: User, token: "jwt..." }
   //    不能走 doRequest（它只返回 json.data，会丢掉 token）
+  let backendError: string | null = null
   try {
     const url = `${getApiBase()}/auth/login`
     const res = await fetch(url, {
@@ -178,11 +181,18 @@ export async function login(loginCode: string): Promise<{ token: string; user: U
     if (res.ok && json.success !== false) {
       return { token: json.token, user: json.data }
     }
-  } catch { /* 无后端，降级到 mock */ }
+    // 后端明确返回失败：把真实错误抛出去，不要降级到 mock 掩盖问题
+    backendError = json.error || `登录失败 (${res.status})`
+  } catch (e: any) {
+    // 网络/CORS/无后端：记录原因，继续尝试 mock 降级
+    backendError = e?.message || '无法连接后端服务'
+  }
 
-  // 2. Mock 降级
+  // 2. Mock 降级（仅在本地无后端时使用）
   const user: any = await loginByCode(loginCode)
-  if (!user) throw new Error('登录码无效')
+  if (!user) {
+    throw new Error(backendError || '登录码无效')
+  }
   const token = 'mock-token-' + user.id
   return { token, user }
 }
@@ -286,7 +296,7 @@ export async function getSeasonMenu(): Promise<MenuItem[]> {
 }
 export const getMenu = getSeasonMenu
 
-export async function updateRound(params: { performanceRound?: number; eliminationRound?: number; trainingRound?: number; drawsPerPlayer?: number }): Promise<void> {
+export async function updateRound(params: RoundUpdateParams): Promise<void> {
   return safeCall(
     () => doRequest<void>('/season/round', {
       method: 'PUT',
@@ -313,6 +323,63 @@ export async function updateStage(stage: StageType): Promise<Season> {
     }),
     () => updateCurrentStage(stage),
     'updateStage'
+  )
+}
+
+// ================== 并发阶段 ==================
+
+export async function getConcurrentStatus(roundId: string): Promise<ConcurrentStatusResponse> {
+  return safeCall(
+    () => doRequest<ConcurrentStatusResponse>(`/concurrent/status?roundId=${roundId}`),
+    async () => ({
+      roundId,
+      roundIndex: 1,
+      drawsPerPlayer: 3,
+      teamReleased: false,
+      songReleased: false,
+      trainingReleased: false,
+      rehearsalReleased: false,
+      summary: {
+        totalTeams: 0,
+        teamCompleted: 0,
+        songCompleted: 0,
+        rehearsalCompleted: 0,
+        totalPlayers: 0,
+        trainingCompleted: 0,
+        allCompleted: false
+      }
+    }),
+    'getConcurrentStatus'
+  )
+}
+
+export async function getConcurrentReleaseStatus(roundId: string): Promise<ConcurrentReleaseStatusResponse> {
+  return safeCall(
+    () => doRequest<ConcurrentReleaseStatusResponse>(`/concurrent/release-status?roundId=${roundId}`),
+    async () => ({
+      roundId,
+      roundIndex: 1,
+      teamReleased: false,
+      songReleased: false,
+      trainingReleased: false,
+      rehearsalReleased: false
+    }),
+    'getConcurrentReleaseStatus'
+  )
+}
+
+export async function setConcurrentRelease(
+  roundId: string,
+  action: ConcurrentActionType,
+  released: boolean
+): Promise<ConcurrentStatusResponse> {
+  return safeCall(
+    () => doRequest<ConcurrentStatusResponse>('/concurrent/release', {
+      method: 'POST',
+      body: JSON.stringify({ roundId, action, released })
+    }),
+    async () => getConcurrentStatus(roundId),
+    'setConcurrentRelease'
   )
 }
 
@@ -1073,13 +1140,14 @@ export async function claimSong(roundId: string, roundSongId: string, teamId: st
   }
 }
 
-export async function getSongs(params?: { round?: number; type?: string; style?: string; keyword?: string }): Promise<Song[]> {
+export async function getSongs(params?: { round?: number; type?: string; style?: string; keyword?: string; singerGender?: string }): Promise<Song[]> {
   return safeCall(
     async () => {
       const query = new URLSearchParams()
       if (params?.type) query.append('type', params.type)
       if (params?.style) query.append('style', params.style)
       if (params?.keyword) query.append('keyword', params.keyword)
+      if (params?.singerGender) query.append('singerGender', params.singerGender)
       const qs = query.toString()
       return await doRequest<Song[]>(`/songs${qs ? '?' + qs : ''}`)
     },
@@ -1104,7 +1172,7 @@ export async function getSongStats(): Promise<SongStats> {
   )
 }
 
-export async function createSong(songData: { name: string; type?: string; style?: string; difficulty?: number; vocalWeight?: number; danceWeight?: number; charmWeight?: number; baseScore?: number; riskFactor?: number; description?: string }): Promise<Song> {
+export async function createSong(songData: { name: string; type?: string; style?: string; difficulty?: number; vocalWeight?: number; danceWeight?: number; charmWeight?: number; baseScore?: number; riskFactor?: number; description?: string; singerGender?: 'male' | 'female' }): Promise<Song> {
   return safeCall(
     () => doRequest<Song>('/songs', {
       method: 'POST',
@@ -1115,15 +1183,15 @@ export async function createSong(songData: { name: string; type?: string; style?
   )
 }
 
-export async function randomSong(): Promise<Song> {
+export async function randomSong(gender?: 'male' | 'female'): Promise<Song> {
   return safeCall(
-    () => doRequest<Song>('/songs/random'),
+    () => doRequest<Song>(`/songs/random${gender ? '?gender=' + gender : ''}`),
     async () => { throw new Error('Mock not supported') },
     'randomSong'
   )
 }
 
-export async function batchCreateSongs(songs: { name: string; type?: string; style?: string; difficulty?: number }[]): Promise<Song[]> {
+export async function batchCreateSongs(songs: { name: string; type?: string; style?: string; difficulty?: number; singerGender?: 'male' | 'female' }[]): Promise<Song[]> {
   return safeCall(
     () => doRequest<Song[]>('/songs/batch', {
       method: 'POST',
@@ -1150,6 +1218,14 @@ export async function deleteSong(id: string): Promise<void> {
     () => doRequest<void>(`/songs/${id}`, { method: 'DELETE' }),
     async () => { throw new Error('Mock not supported') },
     'deleteSong'
+  )
+}
+
+export async function deleteAllSongs(): Promise<{ count: number }> {
+  return safeCall(
+    () => doRequest<{ count: number }>('/songs/all', { method: 'DELETE' }),
+    async () => { throw new Error('Mock not supported') },
+    'deleteAllSongs'
   )
 }
 
@@ -1427,6 +1503,7 @@ export async function getPerformanceRoundStatus(roundId: string): Promise<{
   released: boolean
   opened: boolean
   seasonStage: string | null
+  generationMode: PerformanceGenerationMode
 }> {
   return safeCall(
     () => doRequest<{
@@ -1435,17 +1512,18 @@ export async function getPerformanceRoundStatus(roundId: string): Promise<{
       released: boolean
       opened: boolean
       seasonStage: string | null
+      generationMode: PerformanceGenerationMode
     }>(`/performance/round-status?roundId=${roundId}`),
-    async () => ({ started: false, settled: false, released: false, opened: false, seasonStage: null }),
+    async () => ({ started: false, settled: false, released: false, opened: false, seasonStage: null, generationMode: 'random' }),
     'getPerformanceRoundStatus'
   )
 }
 
 // 管理员打开公演管理页面
-export async function openPerformance(roundId: string): Promise<void> {
+export async function openPerformance(roundId: string): Promise<{ opened: boolean; started: boolean; generationMode: PerformanceGenerationMode }> {
   return safeCall(
-    () => doRequest<void>('/performance/open', { method: 'POST', body: { roundId } }),
-    async () => {},
+    () => doRequest<{ opened: boolean; started: boolean; generationMode: PerformanceGenerationMode }>('/performance/open', { method: 'POST', body: { roundId } }),
+    async () => ({ opened: true, started: false, generationMode: 'random' }),
     'openPerformance'
   )
 }
@@ -1538,11 +1616,11 @@ export async function playerGeneratePerformance(params: { roundId: string; playe
   )
 }
 
-export async function startPerformance(roundId: string): Promise<void> {
+export async function startPerformance(roundId: string, generationMode: PerformanceGenerationMode = 'random'): Promise<void> {
   return safeCall(
     () => doRequest<void>('/performance/start', {
       method: 'POST',
-      body: JSON.stringify({ roundId })
+      body: JSON.stringify({ roundId, generationMode })
     }),
     async () => {
       // Mock: 持久化 started 状态，刷新页面后能恢复
@@ -1574,14 +1652,25 @@ export async function savePerformancePlayerStatus(roundId: string, players: { pl
   )
 }
 
-export async function getPlayerPerformanceStatus(roundId: string): Promise<{ started: boolean; players: any[] }> {
+export async function getPlayerPerformanceStatus(roundId: string): Promise<{ started: boolean; generationMode: PerformanceGenerationMode; players: any[] }> {
   return safeCall(
-    () => doRequest<{ started: boolean; players: any[] }>(`/performance/player-status?roundId=${roundId}`),
+    () => doRequest<{ started: boolean; generationMode: PerformanceGenerationMode; players: any[] }>(`/performance/player-status?roundId=${roundId}`),
     async () => {
       const { loadPlayerStatuses, loadPerformanceStarted } = await import('./performanceService')
-      return { started: loadPerformanceStarted(roundId), players: loadPlayerStatuses(roundId) }
+      return { started: loadPerformanceStarted(roundId), generationMode: 'random', players: loadPlayerStatuses(roundId) }
     },
     'getPlayerPerformanceStatus'
+  )
+}
+
+export async function setPerformanceGenerationMode(roundId: string, generationMode: PerformanceGenerationMode): Promise<void> {
+  return safeCall(
+    () => doRequest<void>('/performance/generation-mode', {
+      method: 'POST',
+      body: JSON.stringify({ roundId, generationMode })
+    }),
+    async () => {},
+    'setPerformanceGenerationMode'
   )
 }
 
@@ -1698,6 +1787,15 @@ export async function getAudienceVoteDetail(roundId: string, seatNumber: number)
     () => doRequest<AudienceVoteDetailResponse>(`/admin/audience-vote/seat/${seatNumber}?roundId=${roundId}`),
     async () => ({ success: true, seat: null!, detail: null! } as any),
     'getAudienceVoteDetail'
+  )
+}
+
+// 获取某支队伍的大众评审投票矩阵（管理员）
+export async function getTeamAudienceMatrix(roundId: string, teamId: string): Promise<TeamAudienceMatrixResponse> {
+  return safeCall(
+    () => doRequest<TeamAudienceMatrixResponse>(`/admin/audience-vote/team-matrix?roundId=${roundId}&teamId=${teamId}`),
+    async () => ({ success: true, totalSeats: 0, yesCount: 0, teamId, seats: [] }),
+    'getTeamAudienceMatrix'
   )
 }
 

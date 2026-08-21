@@ -5,6 +5,12 @@
       <span class="round-tag">第{{ $route.params.round }}周</span>
     </div>
 
+    <!-- Twist 提示 -->
+    <div v-if="twistInfo && (twistInfo.isBoomerangPendant || twistInfo.isNoPendantChallenge)" class="twist-info-bar">
+      <span v-if="twistInfo.isBoomerangPendant" class="twist-item boomerang">🪃 回旋镖护符：使用否决权时将拯救所有被提名者，HOH 需重新提名全部人</span>
+      <span v-if="twistInfo.isNoPendantChallenge" class="twist-item no-pendant">🚫 无护符挑战：本轮跳过否决权竞争，无人持有否决权</span>
+    </div>
+
     <div v-if="veto" class="veto-card">
       <div class="veto-icon">🛡️</div>
       <div class="veto-info">
@@ -13,7 +19,8 @@
         <div class="veto-status">{{ veto.used ? '✅ 已使用' : '⏳ 未使用' }}</div>
         <div v-if="veto.used && (veto.usedOnPlayerName || veto.targetPlayerName)" class="veto-saved">
           拯救: <strong class="highlight">{{ veto.usedOnPlayerName || veto.targetPlayerName }}</strong>
-          <span class="veto-removed">（已从提名名单中移除）</span>
+          <span v-if="twistInfo?.isBoomerangPendant && veto.used" class="veto-boomerang">（回旋镖护符：全部被提名者已获救）</span>
+          <span v-else class="veto-removed">（已从提名名单中移除）</span>
         </div>
         <div v-if="veto.participants && veto.participants.length > 0" class="veto-participants">
           <div class="veto-subtitle">参与者（HOH + 2名被提名人 + 随机抽{{ veto.drawCount || 3 }}人）</div>
@@ -29,10 +36,12 @@
     </div>
     <!-- 否决权已使用，提示需要替换提名 -->
     <div v-if="veto?.used && nomination && nomination.nomineeIds.length < 2" class="replacement-hint">
-      ⚠️ 否决权已使用，请前往<a href="javascript:void(0)" @click="$router.push('/games/bigbrother/admin/nomination')" class="link">提名管理</a>替换提名
+      <span v-if="twistInfo?.isBoomerangPendant">🪃 回旋镖护符已触发！提名名单已清空，请前往<a href="javascript:void(0)" @click="$router.push('/games/bigbrother/admin/nomination')" class="link">提名管理</a>重新提名全部人</span>
+      <span v-else>⚠️ 否决权已使用，请前往<a href="javascript:void(0)" @click="$router.push('/games/bigbrother/admin/nomination')" class="link">提名管理</a>替换提名</span>
     </div>
-    <div v-else class="veto-card empty">
-      <p>暂无否决权记录</p>
+    <div v-else-if="!veto" class="veto-card empty">
+      <p v-if="twistInfo?.isNoPendantChallenge">🚫 本轮为"无护符挑战"模式，已跳过否决权竞争</p>
+      <p v-else>暂无否决权记录</p>
     </div>
 
     <div class="action-section">
@@ -91,6 +100,7 @@ import { bbGetCurrentVeto, bbGetVetoHistory, bbRunVetoCompetition, bbUseVeto, bb
 import type { BBVetoRecord, BBNomination } from '../../../types/bigbrother'
 
 const veto = ref<BBVetoRecord | null>(null)
+const twistInfo = ref<any>(null)
 const history = ref<BBVetoRecord[]>([])
 const nomination = ref<BBNomination | null>(null)
 const showUseModal = ref(false)
@@ -106,10 +116,12 @@ const nomineeOptions = computed(() => {
 
 async function fetchData() {
   try {
-    veto.value = await bbGetCurrentVeto()
-    history.value = await bbGetVetoHistory()
-    nomination.value = await bbGetCurrentNomination()
+    const result = await bbGetCurrentVeto()
+    veto.value = result as any
+    twistInfo.value = (result as any)?.twists || null
   } catch {}
+  try { history.value = await bbGetVetoHistory() } catch {}
+  try { nomination.value = await bbGetCurrentNomination() } catch {}
 }
 
 async function runCompetition() {
@@ -157,6 +169,11 @@ onMounted(fetchData)
 .veto-saved { margin-top: 8px; font-size: 14px; color: #aaa; }
 .highlight { color: #00ff88; }
 .veto-removed { display: block; font-size: 12px; color: #ffaa00; margin-top: 4px; }
+.veto-boomerang { display: block; font-size: 12px; color: #00ff88; margin-top: 4px; font-weight: 600; }
+.twist-info-bar { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 6px; }
+.twist-item { font-size: 13px; color: #aaa; }
+.twist-item.boomerang { color: #00ff88; }
+.twist-item.no-pendant { color: #ffaa00; }
 .veto-participants { margin-top: 16px; padding-top: 16px; border-top: 1px solid #00ff8811; }
 .veto-subtitle { font-size: 12px; color: #888; margin-bottom: 8px; }
 .participant-list { display: flex; flex-wrap: wrap; gap: 6px; }

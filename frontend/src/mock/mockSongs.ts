@@ -11,7 +11,8 @@ export const mockSongs: Song[] = [
     danceWeight: 3,
     charmWeight: 3,
     baseScore: 100,
-    riskFactor: 0.2
+    riskFactor: 0.2,
+    singerGender: 'male'
   },
   {
     id: 's002',
@@ -23,7 +24,8 @@ export const mockSongs: Song[] = [
     danceWeight: 5,
     charmWeight: 3,
     baseScore: 100,
-    riskFactor: 0.3
+    riskFactor: 0.3,
+    singerGender: 'female'
   },
   {
     id: 's003',
@@ -35,7 +37,8 @@ export const mockSongs: Song[] = [
     danceWeight: 2,
     charmWeight: 3,
     baseScore: 100,
-    riskFactor: 0.15
+    riskFactor: 0.15,
+    singerGender: 'male'
   },
   {
     id: 's004',
@@ -47,7 +50,8 @@ export const mockSongs: Song[] = [
     danceWeight: 3,
     charmWeight: 5,
     baseScore: 100,
-    riskFactor: 0.25
+    riskFactor: 0.25,
+    singerGender: 'female'
   },
   {
     id: 's005',
@@ -59,7 +63,8 @@ export const mockSongs: Song[] = [
     danceWeight: 4,
     charmWeight: 4,
     baseScore: 100,
-    riskFactor: 0.4
+    riskFactor: 0.4,
+    singerGender: 'female'
   },
   {
     id: 's006',
@@ -71,6 +76,7 @@ export const mockSongs: Song[] = [
     danceWeight: 4,
     charmWeight: 3,
     baseScore: 100,
-    riskFactor: 0.2
+    riskFactor: 0.2,
+    singerGender: 'male'
   }
 ]

@@ -22,6 +22,15 @@
         <template #icon><RefreshIcon /></template>
         自动分配
       </t-button>
+      <t-button
+        theme="danger"
+        block
+        :loading="lockAllLoading"
+        :disabled="allTeamsLocked"
+        @click="handleLockAllTeams"
+      >
+        一键锁定所有队伍
+      </t-button>
     </div>
 
     <!-- 未分配选手区 -->
@@ -451,6 +460,7 @@ const filteredUnassignedPlayers = ref<User[]>([])
 
 // 加载状态
 const setupLoading = ref(false)
+const lockAllLoading = ref(false)
 // 从路由参数获取轮次号，确保不同轮次加载各自的组队数据
 const roundFromRoute = computed(() => parseInt(route.params.round as string) || 0)
 const currentRoundId = computed(() => {
@@ -746,6 +756,38 @@ async function autoSetCaptains() {
     }
   } catch (error) {
     console.error('[autoSetCaptains] 整体出错:', error)
+  }
+}
+
+// 所有队伍是否都已锁定
+const allTeamsLocked = computed(() => {
+  return teamStore.teams.length > 0 && teamStore.teams.every(t => t.locked)
+})
+
+// 一键锁定所有未锁定队伍
+async function handleLockAllTeams() {
+  const unlockedTeams = teamStore.teams.filter(t => !t.locked)
+  if (unlockedTeams.length === 0) {
+    MessagePlugin.info('所有队伍已锁定')
+    return
+  }
+
+  lockAllLoading.value = true
+  const errors: string[] = []
+  for (const team of unlockedTeams) {
+    try {
+      await teamStore.lockTeam(team.id, currentRoundId.value)
+    } catch (e: any) {
+      console.warn(`[Team] 锁定队伍 ${team.name} 失败:`, e)
+      errors.push(`${team.name}: ${e.message}`)
+    }
+  }
+  lockAllLoading.value = false
+
+  if (errors.length > 0) {
+    MessagePlugin.warning(`部分队伍锁定失败:\n${errors.join('\n')}`)
+  } else {
+    MessagePlugin.success(`已锁定 ${unlockedTeams.length} 支队伍`)
   }
 }
 

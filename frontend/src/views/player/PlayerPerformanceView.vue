@@ -22,15 +22,38 @@
     <div v-else-if="phase === 2 && !hasDrawn" class="draw-stage">
       <div class="stage-badge">🌟 公演已开启</div>
       <div class="draw-area">
-        <div class="draw-icon">⚡</div>
-        <h2>抽取你的发挥值</h2>
+        <div class="draw-icon">{{ generationMode === 'pointer' ? '🎯' : '⚡' }}</div>
+        <h2>{{ generationMode === 'pointer' ? '停下指针获取发挥值' : '抽取你的发挥值' }}</h2>
         <p class="draw-hint">发挥值影响你的公演最终得分</p>
-        <button v-if="!drawing && !revealed" class="draw-btn" @click="doDraw">🎲 抽取发挥值</button>
-        <div v-if="drawing" class="slot-machine">
-          <div class="slot-numbers">
-            <span v-for="n in slotNumbers" :key="n" class="slot-num" :class="{ active: n === currentSlot }">{{ n }}</span>
+
+        <!-- 随机模式：老虎机 -->
+        <template v-if="generationMode === 'random'">
+          <button v-if="!drawing && !revealed" class="draw-btn" @click="doDraw">🎲 抽取发挥值</button>
+          <div v-if="drawing" class="slot-machine">
+            <div class="slot-numbers">
+              <span v-for="n in slotNumbers" :key="n" class="slot-num" :class="{ active: n === currentSlot }">{{ n }}</span>
+            </div>
           </div>
-        </div>
+        </template>
+
+        <!-- 指针模式：摆动指针 -->
+        <template v-else>
+          <div class="pointer-scale" ref="pointerScaleRef">
+            <div class="pointer-scale-track">
+              <div v-for="n in pointerNumbers" :key="n" class="pointer-tick" :class="{ major: n % 5 === 0 }">
+                <span class="tick-line"></span>
+                <span class="tick-label">{{ n }}</span>
+              </div>
+            </div>
+            <div class="pointer-cursor" :style="{ left: pointerPosition + '%' }">
+              <div class="cursor-head"></div>
+              <div class="cursor-value">{{ currentPointerValue }}</div>
+            </div>
+          </div>
+          <button v-if="!drawing && !revealed" class="draw-btn" @click="startPointer">🎯 开始摆动</button>
+          <button v-else-if="drawing" class="draw-btn stop-btn" @click="stopPointer">🛑 停下</button>
+        </template>
+
         <div v-if="revealed" class="result-reveal" @animationend="onRevealEnd">
           <div class="result-glow" :class="resultLevel"></div>
           <div class="result-value" :class="resultLevel">{{ drawValue }}</div>
@@ -67,6 +90,49 @@
         </div>
         <div v-if="!teamResult && phase >= 3" class="info-card dim"><span>等待队伍揭晓</span></div>
         <div v-if="!teamResult && phase < 3" class="info-card dim"><span>等待公演结算</span></div>
+      </div>
+
+      <!-- ===== 所有团队排名（释放后展示） ===== -->
+      <div v-if="phase >= 4 && performanceStore.sortedTeamPerformanceResults.length" class="teams-ranking-section">
+        <div class="section-title-bar">
+          <span class="section-icon">🏆</span>
+          <span>团队排名</span>
+        </div>
+        <div class="teams-ranking-list">
+          <div
+            v-for="team in performanceStore.sortedTeamPerformanceResults"
+            :key="team.teamId"
+            class="team-rank-card"
+            :class="{ 'is-my-team': team.teamId === currentTeam?.id, expanded: expandedTeamId === team.teamId }"
+            @click="toggleTeamExpand(team.teamId)"
+          >
+            <div class="team-rank-header">
+              <div class="team-rank-main">
+                <span class="team-rank-pos" :class="getTeamRankClass(team.rank)">{{ team.rank }}</span>
+                <div class="team-rank-info">
+                  <div class="team-rank-name">{{ team.teamName }}</div>
+                  <div class="team-rank-song">{{ team.songName }} · {{ team.playerPerformances.length }}人</div>
+                </div>
+              </div>
+              <div class="team-rank-votes">
+                <span class="votes-value">{{ team.finalVotes }}</span>
+                <span class="votes-label">票</span>
+              </div>
+            </div>
+            <div v-if="expandedTeamId === team.teamId" class="team-rank-detail" @click.stop>
+              <div class="detail-line">
+                团队得分 {{ team.teamScore }} · 评级 {{ team.teamRating }}<span v-if="team.teamRatingText">（{{ team.teamRatingText }}）</span>
+              </div>
+              <div class="member-list">
+                <div v-for="p in team.playerPerformances" :key="p.playerId" class="member-item">
+                  <span class="member-name">{{ p.playerName }}</span>
+                  <span class="member-score">{{ p.playerScore }}分</span>
+                  <span class="member-contribution">+{{ p.contribution }}票</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ===== 得分计算详情 ===== -->
@@ -274,7 +340,7 @@ import {
   getPlayerAudienceSeatDetail, savePerformancePlayerStatus
 } from '../../services/api'
 import { savePlayerStatuses, loadPlayerStatuses } from '../../services/performanceService'
-import type { AudienceSeat } from '../../types/performance'
+import type { AudienceSeat, PerformanceGenerationMode } from '../../types/performance'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -286,8 +352,9 @@ const currentUser = computed(() => authStore.currentUser)
 const roundId = computed(() => `round-${currentRound.value}`)
 
 // ===== 轮次状态 =====
-interface RoundStatus { started: boolean; settled: boolean; released: boolean; opened: boolean; seasonStage: string | null }
+interface RoundStatus { started: boolean; settled: boolean; released: boolean; opened: boolean; seasonStage: string | null; generationMode: PerformanceGenerationMode }
 const roundStatus = ref<RoundStatus | null>(null)
+const generationMode = computed<PerformanceGenerationMode>(() => roundStatus.value?.generationMode || 'random')
 
 const phase = computed(() => {
   if (!roundStatus.value) return -1
@@ -310,6 +377,24 @@ const drawValue = ref(0)
 const slotNumbers = [-10, -8, -6, -5, -3, -1, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 const currentSlot = ref(0)
 let slotTimer: number | null = null
+
+// ===== 指针模式状态 =====
+const pointerScaleRef = ref<HTMLElement | null>(null)
+const pointerNumbers = Array.from({ length: 31 }, (_, i) => i - 10) // -10 ~ 20
+const pointerPosition = ref(0) // 0 ~ 100
+const pointerDirection = ref(1) // 1 = 向右, -1 = 向左
+const pointerSpeed = ref(2.5) // 每次移动百分比
+let pointerRafId: number | null = null
+
+const MIN_POINTER_VALUE = -10
+const MAX_POINTER_VALUE = 20
+const POINTER_RANGE = MAX_POINTER_VALUE - MIN_POINTER_VALUE // 30
+
+const currentPointerValue = computed(() => {
+  const ratio = pointerPosition.value / 100
+  const raw = MIN_POINTER_VALUE + ratio * POINTER_RANGE
+  return Math.round(raw)
+})
 
 const resultLevel = computed(() => {
   const v = drawValue.value
@@ -499,6 +584,19 @@ const rankClass = computed(() => {
   return 'rank-normal'
 })
 
+// ===== 团队排名展开 =====
+const expandedTeamId = ref('')
+function toggleTeamExpand(teamId: string) {
+  expandedTeamId.value = expandedTeamId.value === teamId ? '' : teamId
+}
+function getTeamRankClass(rank: number) {
+  if (rank === 1) return 'rank-gold'
+  if (rank === 2) return 'rank-silver'
+  if (rank === 3) return 'rank-bronze'
+  if (rank <= 5) return 'rank-top'
+  return 'rank-normal'
+}
+
 const maxVotes = computed(() => {
   if (audienceRankings.value.length === 0) return 1
   return Math.max(...audienceRankings.value.map(r => r.votes || 0), 1)
@@ -539,6 +637,59 @@ async function doDraw() {
   }, 80)
 }
 
+function animatePointer() {
+  if (!drawing.value) return
+  pointerPosition.value += pointerDirection.value * pointerSpeed.value
+  if (pointerPosition.value >= 100) {
+    pointerPosition.value = 100
+    pointerDirection.value = -1
+  } else if (pointerPosition.value <= 0) {
+    pointerPosition.value = 0
+    pointerDirection.value = 1
+  }
+  pointerRafId = window.requestAnimationFrame(animatePointer)
+}
+
+async function startPointer() {
+  if (drawing.value) return
+  drawing.value = true
+  revealed.value = false
+  // 随机起始位置和方向
+  pointerPosition.value = Math.random() * 100
+  pointerDirection.value = Math.random() > 0.5 ? 1 : -1
+  pointerSpeed.value = 2.5
+  pointerRafId = window.requestAnimationFrame(animatePointer)
+}
+
+async function stopPointer() {
+  if (!drawing.value) return
+  if (pointerRafId !== null) {
+    window.cancelAnimationFrame(pointerRafId)
+    pointerRafId = null
+  }
+  const value = currentPointerValue.value
+  drawValue.value = value
+  drawing.value = false
+  revealed.value = true
+
+  // 持久化
+  const uid = currentUser.value?.id || ''
+  try {
+    await savePerformancePlayerStatus(roundId.value, [{ playerId: uid, performanceValue: value }])
+  } catch (e: any) {
+    console.warn('[Performance] 保存发挥值失败，仅本地存储:', e.message)
+  }
+
+  // 本地存储兜底
+  const statuses = loadPlayerStatuses(roundId.value)
+  const idx = statuses.findIndex(s => s.playerId === uid)
+  const entry = { playerId: uid, playerName: currentUser.value?.name || '', teamId: currentUser.value?.teamId || '', teamName: currentTeam.value?.name || '', generated: true, performanceValue: value }
+  if (idx >= 0) statuses[idx] = entry
+  else statuses.push(entry)
+  savePlayerStatuses(roundId.value, statuses)
+  hasDrawn.value = true
+}
+
 async function finishDraw() {
   const uid = currentUser.value?.id || ''
   // 客户端生成随机发挥值（-10 ~ 20）
@@ -575,7 +726,7 @@ onMounted(async () => {
     const status = await getPerformanceRoundStatus(roundId.value)
     roundStatus.value = status
   } catch {
-    roundStatus.value = { started: false, settled: false, released: false, opened: false, seasonStage: null }
+    roundStatus.value = { started: false, settled: false, released: false, opened: false, seasonStage: null, generationMode: 'random' }
   }
 
   // 2. 恢复 localStorage 发挥值
@@ -637,9 +788,8 @@ onMounted(async () => {
   align-items: center;
   // justify-content: center 在结果页用 flex-start
   color: var(--text-primary);
-  background: #f5f7fa;
+  background: var(--bg-primary);
   padding: 20px;
-color: var(--text-primary);
 }
 
 // ===== Phase 0 =====
@@ -670,6 +820,78 @@ color: var(--text-primary);
   .draw-hint { color: var(--text-muted); font-size: 13px; margin: 0 0 28px; }
 }
 .draw-btn { padding: 16px 48px; font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #ffd700, #ff6b6b); border: none; border-radius: 14px; color: var(--text-primary); cursor: pointer; transition: all 0.25s ease; letter-spacing: 1px; box-shadow: 0 6px 25px rgba(255,215,0,0.25); &:hover { transform: translateY(-3px); box-shadow: 0 10px 35px rgba(255,215,0,0.35); } &:active { transform: translateY(0); } }
+.draw-btn.stop-btn { background: linear-gradient(135deg, #ff6b6b, #e74c3c); box-shadow: 0 6px 25px rgba(231,76,60,0.25); }
+
+// ===== 指针模式 =====
+.pointer-scale {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  margin: 24px auto;
+  padding: 30px 12px 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+}
+.pointer-scale-track {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 40px;
+  position: relative;
+}
+.pointer-tick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  .tick-line {
+    width: 1px;
+    height: 8px;
+    background: var(--text-muted);
+    opacity: 0.5;
+  }
+  .tick-label {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    margin-top: 4px;
+  }
+  &.major {
+    .tick-line { width: 2px; height: 14px; background: var(--text-secondary); opacity: 0.8; }
+    .tick-label { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+  }
+}
+.pointer-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: left 0.05s linear;
+  .cursor-head {
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 14px solid #ffd700;
+    filter: drop-shadow(0 2px 4px rgba(255,215,0,0.4));
+  }
+  .cursor-value {
+    margin-top: 2px;
+    padding: 2px 8px;
+    background: rgba(255,215,0,0.15);
+    border: 1px solid rgba(255,215,0,0.3);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffd700;
+    min-width: 28px;
+    text-align: center;
+  }
+}
+
 .slot-machine { margin: 20px 0; }
 .slot-numbers { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; max-width: 320px; margin: 0 auto; }
 .slot-num { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; font-size: 16px; font-weight: 700; color: var(--text-muted); transition: all 0.05s;
@@ -700,8 +922,8 @@ color: var(--text-primary);
 .results-stage {
   width: 100%; max-width: 700px;
   padding-top: 20px;
-  // 当有评审席网格时用 flex-start，不要垂直居中
-  align-self: flex-start;
+  // 结果页整体在选手端水平居中
+  align-self: center;
 }
 .results-header { margin-bottom: 20px; text-align: left;
   h1 { font-size: 24px; font-weight: 800; margin: 0 0 4px; letter-spacing: 1px; }
@@ -718,6 +940,57 @@ color: var(--text-primary);
 }
 .info-card { padding: 12px 18px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 12px; display: flex; justify-content: space-between; align-items: center;
   &.dim { justify-content: center; color: var(--text-muted); }
+}
+
+// ===== 团队排名 =====
+.teams-ranking-section { margin-top: 8px; }
+.teams-ranking-list { display: flex; flex-direction: column; gap: 10px; }
+.team-rank-card {
+  background: var(--hover-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover { border-color: rgba(102, 126, 234, 0.4); }
+  &.is-my-team { border-color: rgba(102, 126, 234, 0.5); box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.1); }
+  &.expanded { border-color: rgba(102, 126, 234, 0.5); }
+}
+.team-rank-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+.team-rank-main { display: flex; align-items: center; gap: 12px; }
+.team-rank-pos {
+  width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; flex-shrink: 0; background: var(--progress-bg); color: var(--text-secondary);
+  &.rank-gold { background: linear-gradient(135deg, #ffd700, #ffb300); color: var(--text-primary); }
+  &.rank-silver { background: linear-gradient(135deg, #bdc3c7, #95a5a6); color: var(--text-primary); }
+  &.rank-bronze { background: linear-gradient(135deg, #e67e22, #d35400); color: var(--text-primary); }
+  &.rank-top { background: linear-gradient(135deg, #667eea, #764ba2); color: var(--text-primary); }
+}
+.team-rank-info { display: flex; flex-direction: column; gap: 2px; }
+.team-rank-name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.team-rank-song { font-size: 12px; color: var(--text-tertiary); }
+.team-rank-votes { display: flex; align-items: baseline; gap: 2px; }
+.votes-value { font-size: 20px; font-weight: 800; color: #667eea; }
+.votes-label { font-size: 12px; color: var(--text-tertiary); }
+.team-rank-detail {
+  padding: 0 16px 14px;
+  border-top: 1px solid var(--border-color);
+  animation: revealIn 0.25s ease;
+  .detail-line { font-size: 13px; color: var(--text-secondary); padding: 10px 0 6px; }
+}
+.member-list { display: flex; flex-direction: column; gap: 6px; }
+.member-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; background: var(--card-bg); border-radius: 8px; font-size: 13px;
+  .member-name { color: var(--text-primary); font-weight: 500; }
+  .member-score { color: var(--text-secondary); }
+  .member-contribution { color: #2ecc71; font-weight: 600; }
 }
 
 // ===== 通用区块标题 =====
@@ -747,11 +1020,11 @@ color: var(--text-primary);
 }
 
 // 评审详情弹窗
-.detail-loading, .detail-empty { padding: 24px; text-align: center; color: rgba(0,0,0,0.45); font-size: 14px; }
+.detail-loading, .detail-empty { padding: 24px; text-align: center; color: var(--text-tertiary); font-size: 14px; }
 .seat-detail-list { display: flex; flex-direction: column; gap: 8px; }
-.seat-detail-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(0,0,0,0.04); border-radius: 8px;
-  .vote-order { font-size: 13px; color: rgba(0,0,0,0.55); min-width: 48px; }
-  .vote-player { font-size: 14px; font-weight: 600; color: rgba(0,0,0,0.85); }
+.seat-detail-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--hover-bg); border-radius: 8px;
+  .vote-order { font-size: 13px; color: var(--text-tertiary); min-width: 48px; }
+  .vote-player { font-size: 14px; font-weight: 600; color: var(--text-primary); }
 }
 .reviewer-profile { display: flex; gap: 8px; padding: 8px 12px; background: linear-gradient(135deg, rgba(102,126,234,0.08), rgba(118,75,162,0.08)); border-radius: 8px; align-items: center; margin-bottom: 4px;
   .profile-tag { font-size: 12px; padding: 2px 10px; border-radius: 12px; color: var(--text-primary);
@@ -800,6 +1073,9 @@ color: var(--text-primary);
   .draw-stage .stage-badge { font-size: 12px; padding: 4px 16px; }
   .draw-area .draw-icon { font-size: 48px; } .draw-area h2 { font-size: 18px; }
   .draw-btn { padding: 14px 36px; font-size: 16px; }
+  .pointer-scale { max-width: 300px; padding: 26px 8px 10px; }
+  .pointer-tick .tick-label { font-size: 9px; }
+  .pointer-tick.major .tick-label { font-size: 11px; }
   .slot-numbers { max-width: 280px; }
   .slot-num { width: 36px; height: 36px; font-size: 14px; }
   .result-value { font-size: 56px; }

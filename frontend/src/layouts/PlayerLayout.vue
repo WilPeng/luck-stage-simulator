@@ -160,7 +160,7 @@ import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { useSeasonStore } from '../stores/seasonStore'
-import { STAGE_ORDER, STAGE_NAMES } from '../types/season'
+import { STAGE_ORDER, STAGE_NAMES, CONCURRENT_ACTIONS } from '../types/season'
 import type { StageType } from '../types/season'
 import type { User } from '../types/user'
 import { MessagePlugin } from 'tdesign-vue-next'
@@ -239,6 +239,7 @@ const stageClass = computed(() => {
   const classMap: Record<string, string> = {
     preparation: 'preparation',
     captain_vote: 'captain',
+    concurrent: 'concurrent',
     teaming: 'team',
     song_select: 'song',
     training: 'training',
@@ -260,6 +261,7 @@ const fixedItems = computed(() => [
 const stageConfig: Record<StageType, { icon: string; name: string }> = {
   preparation: { icon: '📋', name: '预先准备' },
   captain_vote: { icon: '👑', name: '队长选举' },
+  concurrent: { icon: '⚡', name: '并发行动' },
   teaming: { icon: '👥', name: '组队' },
   song_select: { icon: '🎵', name: '选歌' },
   training: { icon: '💪', name: '训练' },
@@ -268,9 +270,9 @@ const stageConfig: Record<StageType, { icon: string; name: string }> = {
   elimination: { icon: '📊', name: '淘汰结果' }
 }
 
-// 轮次阶段列表（排除已删除的彩排）
+// 轮次阶段列表（只显示主阶段，子行动在并发行动中心内访问）
 const roundStages = computed(() => {
-  return STAGE_ORDER.filter(type => type !== 'rehearsal').map(type => ({
+  return STAGE_ORDER.filter(type => type !== 'rehearsal' && !CONCURRENT_ACTIONS.includes(type)).map(type => ({
     type,
     icon: stageConfig[type].icon,
     name: stageConfig[type].name
@@ -285,7 +287,7 @@ const tabItems = computed(() => {
     { path: `${prefix}/player/profile`, icon: '✨', text: '我的' }
   ]
 
-  // 添加当前轮次的当前阶段（排除已删除的彩排）
+  // 添加当前轮次的当前阶段（排除彩排，并发阶段使用并发行动中心）
   if (seasonStore.season) {
     const currentStage = seasonStore.currentStage
     if (currentStage !== 'rehearsal') {
@@ -309,6 +311,7 @@ function getStagePath(round: number, stage: StageType): string {
   const pathMap: Record<StageType, string> = {
     preparation: `${prefix}/player/round/${round}/preparation`,
     captain_vote: `${prefix}/player/round/${round}/captain`,
+    concurrent: `${prefix}/player/round/${round}/concurrent`,
     teaming: `${prefix}/player/round/${round}/team`,
     song_select: `${prefix}/player/round/${round}/song-selection`,
     training: `${prefix}/player/round/${round}/training`,
@@ -367,6 +370,15 @@ function handleStageClick(event: Event, round: number, stage: StageType) {
   mobileMenuOpen.value = false
 }
 
+function initCollapsedRounds() {
+  const rounds = Array.from({ length: totalRounds.value }, (_, i) => i + 1)
+  rounds.forEach(round => {
+    if (getRoundStatus(round) === 'completed') {
+      collapsedRounds.value[round] = true
+    }
+  })
+}
+
 // 退出登录
 async function handleLogout() {
   await authStore.logout()
@@ -381,6 +393,7 @@ onMounted(async () => {
       seasonStore.fetchProgress(),
       seasonStore.fetchMenu()
     ])
+    initCollapsedRounds()
   } catch (e) {
     console.error('[PlayerLayout] 初始化加载失败:', e)
   }

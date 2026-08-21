@@ -376,7 +376,7 @@ router.post('/admin/random-assign', auth, requireAdmin, async (req, res) => {
   }
 })
 
-// ===== POST /api/teams/:teamId/captain - 设置队长 =====
+// ===== POST /api/teams/:teamId/captain - 设置/移除队长 =====
 router.post('/:teamId/captain', auth, requireAdmin, async (req, res) => {
   try {
     const { userId, playerId } = req.body
@@ -384,16 +384,24 @@ router.post('/:teamId/captain', auth, requireAdmin, async (req, res) => {
     const team = await RoundTeam.findOne({ id: req.params.teamId })
     if (!team) return res.status(404).json({ success: false, error: '队伍不存在', code: 'NOT_FOUND' })
 
-    team.captainId = targetPlayerId
+    const isRemoving = !targetPlayerId
+    const oldCaptainId = team.captainId
+    team.captainId = isRemoving ? null : targetPlayerId
     await team.save()
 
-    const user = await User.findOne({ id: targetPlayerId })
-    if (user && user.role !== 'admin') {
-      user.role = 'captain'
-      await user.save()
+    let user = null
+    if (!isRemoving) {
+      user = await User.findOne({ id: targetPlayerId })
+      if (user && user.role !== 'admin') {
+        user.role = 'captain'
+        await user.save()
+      }
     }
 
-    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.CAPTAIN_ASSIGN, 'team', team.id, `指定队长: ${user ? user.name : targetPlayerId}`)
+    const logMsg = isRemoving
+      ? `移除队长 (原队长: ${oldCaptainId || '无'})`
+      : `指定队长: ${user ? user.name : targetPlayerId}`
+    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.CAPTAIN_ASSIGN, 'team', team.id, logMsg)
 
     res.json({ success: true, data: { id: team.id, captainId: team.captainId, captainName: user ? user.name : null } })
   } catch (e) {
@@ -665,6 +673,12 @@ router.post('/:teamId/apply', auth, async (req, res) => {
 
     const team = await RoundTeam.findOne({ id: req.params.teamId })
     if (!team) return res.status(404).json({ success: false, error: '队伍不存在', code: 'NOT_FOUND' })
+
+    const round = await Round.findOne({ $or: [{ id: team.roundId }, { index: typeof team.roundId === 'string' && team.roundId.match(/\d+/) ? parseInt(team.roundId.match(/\d+/)[0]) : null }] })
+    if (round && !round.teamReleased) {
+      return res.status(403).json({ success: false, error: '组队尚未开放', code: 'TEAM_NOT_RELEASED' })
+    }
+
     if (team.locked) return res.status(403).json({ success: false, error: '队伍已锁定', code: 'TEAM_LOCKED' })
 
     // 是否已在队伍
@@ -696,6 +710,11 @@ router.post('/:teamId/applications/:playerId/accept', auth, async (req, res) => 
     if (!team) return res.status(404).json({ success: false, error: '队伍不存在', code: 'NOT_FOUND' })
     try { await assertIsCaptain(team, req.user.userId) }
     catch (e) { return res.status(403).json({ success: false, error: '仅队长可操作', code: 'FORBIDDEN' }) }
+
+    const round = await Round.findOne({ $or: [{ id: team.roundId }, { index: typeof team.roundId === 'string' && team.roundId.match(/\d+/) ? parseInt(team.roundId.match(/\d+/)[0]) : null }] })
+    if (round && !round.teamReleased) {
+      return res.status(403).json({ success: false, error: '组队尚未开放', code: 'TEAM_NOT_RELEASED' })
+    }
 
     const playerId = req.params.playerId
     const app = await TeamApplication.findOne({ teamId: team.id, playerId, status: 'pending' })
@@ -750,6 +769,11 @@ router.post('/invites/:inviteId/accept', auth, async (req, res) => {
 
     const team = await RoundTeam.findOne({ id: invite.teamId })
     if (!team) return res.status(404).json({ success: false, error: '队伍不存在', code: 'NOT_FOUND' })
+
+    const round = await Round.findOne({ $or: [{ id: team.roundId }, { index: typeof team.roundId === 'string' && team.roundId.match(/\d+/) ? parseInt(team.roundId.match(/\d+/)[0]) : null }] })
+    if (round && !round.teamReleased) {
+      return res.status(403).json({ success: false, error: '组队尚未开放', code: 'TEAM_NOT_RELEASED' })
+    }
 
     await addMemberToTeam(team, req.user.userId)
 

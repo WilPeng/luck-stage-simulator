@@ -154,6 +154,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { useSeasonStore } from '../stores/seasonStore'
+import { STAGE_ORDER } from '../types/season'
 import type { StageType, StageStatus } from '../types/season'
 
 const authStore = useAuthStore()
@@ -194,23 +195,22 @@ const stageItems = computed(() => [
   { path: `${gamePrefix.value}/admin/stage`, icon: '🎯', text: '赛程矩阵' }
 ])
 
-// 阶段配置
+// 阶段配置（按新的阶段顺序，单个轮次内使用并发行动中心）
 const stageConfig: Record<StageType, { icon: string; text: string }> = {
   preparation: { icon: '📋', text: '预先准备' },
   captain_vote: { icon: '👑', text: '队长选举' },
+  concurrent: { icon: '⚡', text: '并发行动' },
+  performance: { icon: '🌟', text: '公演' },
+  elimination: { icon: '📝', text: '淘汰' },
   teaming: { icon: '👥', text: '组队' },
   song_select: { icon: '🎵', text: '选歌' },
   training: { icon: '💪', text: '训练' },
-  rehearsal: { icon: '🎭', text: '彩排' },
-  performance: { icon: '🌟', text: '公演' },
-  elimination: { icon: '📝', text: '淘汰' }
+  rehearsal: { icon: '🎭', text: '彩排' }
 }
 
-// 显示的阶段列表（包含 preparation，按顺序排列，排除已删除的彩排）
+// 显示的阶段列表（按 STAGE_ORDER 顺序，仅显示主阶段）
 const stageList = computed(() => {
-  return Object.entries(stageConfig)
-    .filter(([key]) => key !== 'rehearsal')
-    .map(([key, value]) => ({ key: key as StageType, ...value }))
+  return STAGE_ORDER.map(key => ({ key: key as StageType, ...stageConfig[key as StageType] }))
 })
 
 // 其他管理菜单
@@ -274,10 +274,19 @@ async function handleLogout() {
   await router.replace(`/games/${authStore.currentGameId}/login`)
 }
 
+function initCollapsedRounds() {
+  rounds.value.forEach(round => {
+    if (getRoundStatus(round) === 'completed') {
+      collapsedRounds.value[round] = true
+    }
+  })
+}
+
 // 初始化加载
 onMounted(async () => {
   try {
     await seasonStore.fetchProgress()
+    initCollapsedRounds()
   } catch (e) {
     console.error('[AdminLayout] 初始化加载失败:', e)
   }

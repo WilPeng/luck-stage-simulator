@@ -157,8 +157,9 @@ const statusText = computed(() => {
 
 const currentTask = computed(() => {
   switch (seasonStore.season?.currentStage) {
-    case 'team': return '请前往组队页面申请入队或邀请队员'
-    case 'song': return '请查看歌曲池并选择公演歌曲'
+    case 'concurrent': return '组队、选歌、训练可同时进行，请前往并发行动中心'
+    case 'teaming': return '请前往组队页面申请入队或邀请队员'
+    case 'song_select': return '请查看歌曲池并选择公演歌曲'
     case 'training': return `你还有 ${remainingTraining.value} 次训练机会，请前往训练页面完成翻牌`
     case 'rehearsal': return '等待队长开启彩排'
     case 'performance': return '公演即将开始，请做好准备'
@@ -179,13 +180,15 @@ function goToTask() {
 
 const taskLink = computed(() => {
   const prefix = `/games/${authStore.currentGameId}/player`
+  const round = seasonStore.currentRoundNumber
   switch (seasonStore.season?.currentStage) {
-    case 'team': return `${prefix}/team`
-    case 'song': return `${prefix}/song`
-    case 'training': return `${prefix}/training`
-    case 'rehearsal': return `${prefix}/rehearsal`
-    case 'performance': return `${prefix}/performance`
-    case 'elimination': return `${prefix}/elimination`
+    case 'concurrent': return `${prefix}/round/${round}/concurrent`
+    case 'teaming': return `${prefix}/round/${round}/team`
+    case 'song_select': return `${prefix}/round/${round}/song-selection`
+    case 'training': return `${prefix}/round/${round}/training`
+    case 'rehearsal': return `${prefix}/round/${round}/rehearsal`
+    case 'performance': return `${prefix}/round/${round}/performance`
+    case 'elimination': return `${prefix}/round/${round}/elimination`
     default: return `${prefix}/home`
   }
 })

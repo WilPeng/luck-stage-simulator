@@ -3,7 +3,7 @@ const router = express.Router()
 const BBEvictionVote = require('../models/BBEvictionVote')
 const BBEviction = require('../models/BBEviction')
 const BBHouseguest = require('../models/BBHouseguest')
-const { generateId, logAction, getCurrentSeason, BB_ACTION_TYPES } = require('../helpers')
+const { generateId, logAction, getCurrentSeason, BB_ACTION_TYPES, hasTwist, getEvictCountForRound } = require('../helpers')
 
 // GET /votes - 获取当前轮次投票汇总
 router.get('/votes', async (req, res) => {
@@ -58,6 +58,14 @@ router.post('/vote', async (req, res) => {
     const actualVoterId = specVoterId || admin.id
     const actualVoterName = specVoterName || admin.name
     const isAdminVote = admin.role === 'admin' && !!specVoterId
+
+    // 检查投票人是否为被提名人（被提名人不能投票）
+    const allNomineeIds = [...(nominationDoc?.nomineeIds || [])]
+    if (nominationDoc?.replacementNomineeId) allNomineeIds.push(nominationDoc.replacementNomineeId)
+    if (allNomineeIds.includes(actualVoterId)) {
+      return res.status(400).json({ success: false, error: '被提名者不能参与淘汰投票', code: 'NOMINEE_CANNOT_VOTE' })
+    }
+
     if (admin.role !== 'admin' || !specVoterId) {
       // 非管理员代投模式 → 检查 HOH 限制
       const hohCol = getCollection('BBHohRecord')
@@ -129,7 +137,10 @@ router.post('/result', async (req, res) => {
     if (season.currentStage !== 'eviction') {
       return res.status(400).json({ success: false, error: '当前不是淘汰结果阶段，无法操作', code: 'WRONG_STAGE' })
     }
-    const roundId = `round-${season.currentRound}`
+    const curRound = season.currentRound
+    const twistConfigs = season.twistConfigs || []
+    const roundConfigs = season.roundConfigs || []
+    const roundId = `round-${curRound}`
     const { getCollection } = require('../../../config/db')
     const voteCol = getCollection('BBEvictionVote')
     const votes = await voteCol.find({ gameId: 'bigbrother', roundId }).toArray()
@@ -140,52 +151,111 @@ router.post('/result', async (req, res) => {
     // 获取当前 HOH
     const hohCol = getCollection('BBHohRecord')
     const currentHoh = await hohCol.findOne({ gameId: 'bigbrother', roundId })
+
+    // 根据 twist 计算本轮淘汰人数
+    const isTriple = hasTwist(curRound, 'triple_offering', twistConfigs, roundConfigs)
+    const evictCount = getEvictCountForRound(curRound, twistConfigs, roundConfigs)
+
     // 统计非 HOH 票数（只统计投给提名名单上的人）
     const tally = new Map()
     votes.forEach(v => {
-      if (!validTargetIds.has(v.targetId)) return // 跳过非提名者投票
-      if (currentHoh && v.voterId === currentHoh.winnerId) return // 先排除 HOH 票
+      if (!validTargetIds.has(v.targetId)) return
+      if (currentHoh && v.voterId === currentHoh.winnerId) return
       tally.set(v.targetId, { id: v.targetId, name: v.targetName, count: (tally.get(v.targetId)?.count || 0) + 1 })
     })
+
     // 判断是否平票
-    const counts = Array.from(tally.values())
-    const maxCount = Math.max(...counts.map(c => c.count), 0)
+    const counts = Array.from(tally.values()).sort((a, b) => b.count - a.count)
+    if (counts.length === 0) return res.status(400).json({ success: false, error: '没有投票记录', code: 'NO_VOTES' })
+
+    const maxCount = counts[0].count
     const tiedEntries = counts.filter(c => c.count === maxCount)
-    let evictedTarget = null
-    if (tiedEntries.length >= 2 && currentHoh) {
-      // 平票：HOH 投决定性一票
+    const evictedTargets = []
+
+    // 处理平票（仅当需要淘汰 1 人时处理平票，双淘汰不处理复杂平票）
+    if (tiedEntries.length >= 2 && currentHoh && evictCount === 1) {
       const hohVote = votes.find(v => v.voterId === currentHoh.winnerId)
       if (hohVote) {
-        evictedTarget = { id: hohVote.targetId, name: hohVote.targetName, count: maxCount + 1 }
+        evictedTargets.push({ id: hohVote.targetId, name: hohVote.targetName, count: maxCount + 1 })
       } else {
-        // HOH 没投票，随机选一个
-        evictedTarget = tiedEntries[Math.floor(Math.random() * tiedEntries.length)]
+        evictedTargets.push(tiedEntries[Math.floor(Math.random() * tiedEntries.length)])
       }
-    } else if (tiedEntries.length === 1) {
-      evictedTarget = tiedEntries[0]
+    } else {
+      // 取前 evictCount 名
+      for (let i = 0; i < Math.min(evictCount, counts.length); i++) {
+        evictedTargets.push(counts[i])
+      }
     }
-    if (!evictedTarget) return res.status(400).json({ success: false, error: '没有投票记录', code: 'NO_VOTES' })
+
     // 标记房客淘汰
-    const evicted = await BBHouseguest.findOne({ id: evictedTarget.id })
-    if (evicted) {
-      evicted.status = 'evicted'
-      await evicted.save()
+    const evictedResults = []
+    for (const target of evictedTargets) {
+      const evicted = await BBHouseguest.findOne({ id: target.id })
+      if (evicted) {
+        evicted.status = 'evicted'
+        await evicted.save()
+      }
+      evictedResults.push({ id: target.id, name: target.name, votes: target.count })
     }
+
+    // Twist #18 因果报应：被提名但未被淘汰的幸存者自动成为下轮 HOH
+    if (hasTwist(curRound, 'karmic_pawnship', twistConfigs, roundConfigs)) {
+      const evictedIds = new Set(evictedTargets.map(t => t.id))
+      const survivors = (nominationDoc?.nomineeIds || []).filter(id => !evictedIds.has(id))
+      if (survivors.length > 0) {
+        // 选择得票最多（但仍幸存）的玩家作为下轮 HOH
+        let karmicHoh = null
+        let karmicHohName = ''
+        // 优先选得票最多但未被淘汰的
+        for (const c of counts) {
+          if (!evictedIds.has(c.id)) {
+            karmicHoh = c.id
+            karmicHohName = c.name
+            break
+          }
+        }
+        // 如果没有投票记录，选第一个幸存者
+        if (!karmicHoh && survivors.length > 0) {
+          const hgCol = getCollection('BBHouseguest')
+          const survPlayer = await hgCol.findOne({ id: survivors[0] })
+          karmicHoh = survivors[0]
+          karmicHohName = survPlayer?.name || ''
+        }
+        season.nextHohPlayerId = karmicHoh
+        season.nextHohPlayerName = karmicHohName
+        season.updatedAt = new Date().toISOString()
+        await season.save()
+      }
+    }
+
     // 删除已有淘汰结果
-    await BBEviction.deleteMany({ gameId: 'bigbrother', roundId: `round-${season.currentRound}` })
-    const result = new BBEviction({
-      id: generateId(),
-      roundId: `round-${season.currentRound}`,
-      roundIndex: season.currentRound,
-      evictedId: evictedTarget.id,
-      evictedName: evictedTarget.name,
-      voteCount: maxCount,
-      totalVotes: votes.length,
-      gameId: 'bigbrother',
-      createdAt: new Date().toISOString()
+    await BBEviction.deleteMany({ gameId: 'bigbrother', roundId })
+
+    // 保存淘汰结果
+    for (const target of evictedTargets) {
+      const result = new BBEviction({
+        id: generateId(),
+        roundId,
+        roundIndex: curRound,
+        evictedId: target.id,
+        evictedName: target.name,
+        voteCount: target.count,
+        totalVotes: votes.length,
+        gameId: 'bigbrother',
+        createdAt: new Date().toISOString()
+      })
+      await result.save()
+    }
+
+    res.json({
+      success: true,
+      data: {
+        evicted: evictedResults,
+        isTripleEviction: isTriple,
+        karmicHoh: season.nextHohPlayerName || null,
+        totalVotes: votes.length
+      }
     })
-    await result.save()
-    res.json({ success: true, data: result.toObject() })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '宣布淘汰结果失败', code: 'SERVER_ERROR' })

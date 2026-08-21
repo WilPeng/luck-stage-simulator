@@ -149,10 +149,10 @@ onMounted(async () => {
 
 <style lang="scss" scoped>
 .player-history {
-color: var(--text-primary);
+  color: var(--text-primary);
   min-height: 100vh;
   padding: 20px;
-  background: #f5f7fa;
+  background: var(--bg-primary);
 }
 
 @media (max-width: 768px) {

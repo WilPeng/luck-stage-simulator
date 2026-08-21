@@ -13,10 +13,12 @@ const TeamPerformance = require('../models/TeamPerformance')
 const PlayerPerformance = require('../models/PlayerPerformance')
 const RehearsalResult = require('../models/RehearsalResult')
 const StageEvent = require('../models/StageEvent')
-const { generateAudienceVoteForRound } = require('../services/audienceVoteService')
+const { generateAudienceVoteForRound, clearAudienceVote, randomChineseName, randomGender, randomAge, randomOccupation } = require('../services/audienceVoteService')
 const PerformanceValue = require('../models/PerformanceValue')
 const PerformanceRoundState = require('../models/PerformanceRoundState')
 const AudienceVoteFinalRanking = require('../models/AudienceVoteFinalRanking')
+const AudienceMember = require('../models/AudienceMember')
+const AudienceTeamVote = require('../models/AudienceTeamVote')
 
 // ====================== 工具函数 ======================
 
@@ -307,11 +309,67 @@ function calcTeamScore(memberScores, teamName) {
   console.log(`║  成员个人分: [${memberScores.join(', ')}]`)
   console.log(`║  团队平均分 = (${memberScores.join(' + ')}) / ${memberScores.length} = ${teamScore}`)
   console.log(`║  团队总分 = ${teamScore}`)
-  console.log(`║  最终票数 = 500 + ${teamScore}×3 + avgCharm`)
+  console.log(`║  最终票数 = 1000 位大众评审 yes/no 模拟产生`)
   console.log(`║  评级: ${teamRating}(${teamRatingText})`)
   console.log('╚══════════════════════════════════════════════╝')
 
   return { teamScore, teamRating, teamRatingText }
+}
+
+/** 基于真实大众评审成员，模拟 1000 人对所有舞台的 yes/no 投票 */
+async function simulateAudienceVotesForTeams(roundId, teamsData, totalAudience = 1000) {
+  // 1. 清空旧团队票和旧评审成员（重算时需要完全重建）
+  await AudienceTeamVote.deleteMany({ roundId })
+  await AudienceMember.deleteMany({ roundId })
+
+  // 2. 生成 1000 位大众评审成员
+  const members = []
+  for (let i = 1; i <= totalAudience; i++) {
+    const age = randomAge()
+    const gender = randomGender()
+    members.push({
+      id: generateId(),
+      roundId,
+      seatNumber: i,
+      name: randomChineseName(gender),
+      gender,
+      age,
+      occupation: randomOccupation(age)
+    })
+  }
+  const savedMembers = await AudienceMember.insertMany(members)
+
+  // 3. 逐队逐人模拟 yes/no
+  const results = []
+  for (const team of teamsData) {
+    const appeal = team.teamScore + team.teamCharm * 0.5
+    let yesRate = appeal / 150
+    yesRate = Math.max(0.05, Math.min(0.95, yesRate))
+    // 舞台事件微调：事件票数按千分比转换
+    yesRate += (team.eventVotes || 0) / totalAudience
+    yesRate = Math.max(0.05, Math.min(0.95, yesRate))
+
+    const teamVotes = []
+    let finalVotes = 0
+    for (const m of savedMembers) {
+      const votedYes = Math.random() < yesRate
+      if (votedYes) finalVotes++
+      teamVotes.push({
+        id: generateId(),
+        roundId,
+        audienceId: m.id,
+        seatNumber: m.seatNumber,
+        teamId: team.teamId,
+        teamName: team.teamName,
+        votedYes,
+        createdAt: new Date().toISOString()
+      })
+    }
+    await AudienceTeamVote.insertMany(teamVotes)
+    results.push({ teamId: team.teamId, finalVotes, yesRate })
+  }
+
+  return results
 }
 
 // ====================== POST /api/performance/calculate - 公演结算（新评级体系） ======================
@@ -320,8 +378,6 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
   try {
     const round = await resolveRound(req)
     if (!round) return res.status(400).json({ success: false, error: '未找到轮次（请传 roundId 或 roundIndex）', code: 'NO_ROUND' })
-
-    const BASE_VOTES = 500
 
     // dbRoundId 用于存储到 TeamPerformance/PlayerPerformance（Round 的真实 id）
     // frontRoundId 用于查询 RoundTeam/RoundTeamMember/TeamSong（前端传入的 roundId 格式）
@@ -371,6 +427,11 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
     // 7. 清空旧结果（同时清理用 dbRoundId 和 frontRoundId 存的旧数据）
     await TeamPerformance.deleteMany({ roundId: { $in: [dbRoundId, frontRoundId] } })
     await PlayerPerformance.deleteMany({ roundId: { $in: [dbRoundId, frontRoundId] } })
+    // 重算时大众评审成员与投票也需重建，否则团队票与个人票无法一一对应
+    await AudienceMember.deleteMany({ roundId: { $in: [dbRoundId, frontRoundId] } })
+    await AudienceTeamVote.deleteMany({ roundId: { $in: [dbRoundId, frontRoundId] } })
+    await clearAudienceVote(dbRoundId, false).catch(() => {})
+    await clearAudienceVote(frontRoundId, false).catch(() => {})
 
     // ===== 8. 按新公式计算机个人分、团队分 =====
     const teamResults = []
@@ -423,9 +484,6 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
       // 团队平均魅力（用于最终票数加成）
       const teamCharm = Math.round(memberResults.reduce((s, m) => s + (userMap[m.playerId]?.attributes?.charm || 0), 0) / memberResults.length)
 
-      // 计算最终票数 = 500 + teamScore×3 + avgCharm
-      const finalVotes = BASE_VOTES + teamScore * 3 + teamCharm
-
       // 舞台事件（保留原有逻辑）
       let eventVotes = 0
       let eventId = null
@@ -460,13 +518,14 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
         songId: song.id,
         songName: song.name,
         memberCount: teamMembers.length,
-        baseVotes: BASE_VOTES,
-        attributeVotes: teamScore * 3,
+        baseVotes: 0,
+        attributeVotes: 0,
         performanceVotes: 0,
         compatibilityVotes: 0,
-        eventVotes: 0,
-        finalVotes,
-        finalScore: finalVotes, // 兼容旧字段
+        eventVotes,
+        finalVotes: 0,
+        finalScore: 0, // 兼容旧字段
+        audienceYesRate: 0,
         rank: 0,
         status: 'calculated',
         teamScore,
@@ -498,6 +557,27 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
       allPlayerResults.push(...memberResults)
     }
 
+    // 生成 1000 位大众评审成员，并逐队逐人模拟 yes/no 投票
+    const teamsData = teamResults.map(tr => ({
+      teamId: tr.teamId,
+      teamName: tr.teamName,
+      teamScore: tr.teamScore,
+      teamCharm: tr.teamAttributes?.charm || 0,
+      eventVotes: tr.eventVotes || 0
+    }))
+    const audienceVoteResults = await simulateAudienceVotesForTeams(dbRoundId, teamsData, 1000)
+    const resultMap = {}
+    for (const r of audienceVoteResults) resultMap[r.teamId] = r
+    for (const tr of teamResults) {
+      const r = resultMap[tr.teamId]
+      if (r) {
+        tr.finalVotes = r.finalVotes
+        tr.finalScore = r.finalVotes
+        tr.attributeVotes = r.finalVotes
+        tr.audienceYesRate = r.yesRate
+      }
+    }
+
     // 队伍排名（按 finalVotes）
     teamResults.sort((a, b) => b.finalVotes - a.finalVotes)
     for (let i = 0; i < teamResults.length; i++) teamResults[i].rank = i + 1
@@ -526,6 +606,7 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
         teamRatingText: tr.teamRatingText,
         finalVotes: tr.finalVotes,
         finalScore: tr.finalVotes,
+        audienceYesRate: tr.audienceYesRate,
         eventVotes: tr.eventVotes,
         songVocalWeight: tr.songVocalWeight,
         songDanceWeight: tr.songDanceWeight,
@@ -563,10 +644,10 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
       savedPlayers.push(pp)
     }
 
-    // 生成大众评审个人喜爱度投票
+    // 生成大众评审个人喜爱度投票（复用已生成的 1000 位成员）
     let audienceVoteResult = null
     try {
-      audienceVoteResult = await generateAudienceVoteForRound(round)
+      audienceVoteResult = await generateAudienceVoteForRound(round, { reuseMembers: true })
     } catch (avErr) {
       console.error('Generate audience vote failed:', avErr)
     }
@@ -870,7 +951,6 @@ router.delete('/', auth, requireAdmin, async (req, res) => {
 // ====================== 大众评审喜爱度投票接口 ======================
 
 const AudienceVoteSession = require('../models/AudienceVoteSession')
-const AudienceMember = require('../models/AudienceMember')
 const AudienceVote = require('../models/AudienceVote')
 
 // POST /api/performance/generate-audience-vote
@@ -1027,8 +1107,9 @@ router.post('/start', auth, requireAdmin, async (req, res) => {
     const round = await resolveRound(req)
     if (!round) return res.status(400).json({ success: false, error: '未找到轮次（请传 roundId 或 roundIndex）', code: 'NO_ROUND' })
 
-    const { roundId } = req.body
+    const { roundId, generationMode } = req.body
     const frontRoundId = roundId || `round-${round.index}`
+    const mode = generationMode === 'pointer' ? 'pointer' : 'random'
 
     const season = await getCurrentSeason()
     if (season) {
@@ -1044,6 +1125,7 @@ router.post('/start', auth, requireAdmin, async (req, res) => {
       roundId: round.id,
       roundIndex: round.index,
       started: true,
+      generationMode: mode,
       revealedTeamIds: [],
       updatedAt: new Date().toISOString()
     })
@@ -1054,10 +1136,48 @@ router.post('/start', auth, requireAdmin, async (req, res) => {
     // 清除该轮旧发挥值（如有）
     await PerformanceValue.deleteMany({ roundId: round.id })
 
-    res.json({ success: true, message: '公演已开启，选手端可开始生成发挥值', roundId: round.id, roundIndex: round.index })
+    res.json({ success: true, message: '公演已开启，选手端可开始生成发挥值', roundId: round.id, roundIndex: round.index, generationMode: mode })
   } catch (e) {
     console.error('Start performance error:', e)
     res.status(500).json({ success: false, error: '开启公演失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== POST /api/performance/generation-mode - 设置本轮发挥值生成方式 =====
+router.post('/generation-mode', auth, requireAdmin, async (req, res) => {
+  try {
+    const round = await resolveRound(req)
+    if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
+
+    const { generationMode } = req.body
+    if (!['random', 'pointer'].includes(generationMode)) {
+      return res.status(400).json({ success: false, error: '生成方式只能是 random 或 pointer', code: 'INVALID_MODE' })
+    }
+
+    let state = await PerformanceRoundState.findOne({ roundId: round.id })
+    if (state && state.started) {
+      return res.status(400).json({ success: false, error: '公演已开启，不能修改生成方式', code: 'ALREADY_STARTED' })
+    }
+    if (!state) {
+      state = new PerformanceRoundState({
+        id: generateId(),
+        roundId: round.id,
+        roundIndex: round.index,
+        started: false,
+        generationMode,
+        revealedTeamIds: [],
+        updatedAt: new Date().toISOString()
+      })
+    } else {
+      state.generationMode = generationMode
+      state.updatedAt = new Date().toISOString()
+    }
+    await state.save()
+
+    res.json({ success: true, data: { roundId: round.id, roundIndex: round.index, generationMode } })
+  } catch (e) {
+    console.error('Set generation mode error:', e)
+    res.status(500).json({ success: false, error: '设置生成方式失败', code: 'SERVER_ERROR' })
   }
 })
 
@@ -1202,6 +1322,7 @@ router.get('/player-status', auth, async (req, res) => {
     // 检查公演是否已开启
     const state = await PerformanceRoundState.findOne({ roundId: round.id })
     const started = state ? state.started : false
+    const generationMode = state ? state.generationMode : 'random'
 
     // 兼容 roundId 查询：使用 DB UUID 和前端 roundId 两种格式
     const frontRoundId = queryRoundId || `round-${round.index}`
@@ -1239,6 +1360,7 @@ router.get('/player-status', auth, async (req, res) => {
     res.json({
       success: true,
       started,
+      generationMode,
       players
     })
   } catch (e) {
@@ -1302,6 +1424,7 @@ router.get('/round-status', auth, async (req, res) => {
     // 检查 PerformanceRoundState
     const state = await PerformanceRoundState.findOne({ roundId: round.id })
     const started = state ? state.started : false
+    const generationMode = state ? state.generationMode : 'random'
 
     // 检查是否已结算（TeamPerformance 有记录）
     const teamPerfs = await TeamPerformance.find({ roundId: round.id })
@@ -1317,6 +1440,7 @@ router.get('/round-status', auth, async (req, res) => {
         started,
         settled,
         released,
+        generationMode,
         seasonStage,
         // 判断这个轮次是否已进入公演阶段（PerformanceRoundState 存在）
         opened: !!state
@@ -1350,6 +1474,7 @@ router.post('/open', auth, requireAdmin, async (req, res) => {
         roundId: round.id,
         roundIndex: round.index,
         started: false,
+        generationMode: 'random',
         revealedTeamIds: [],
         updatedAt: new Date().toISOString()
       })
@@ -1362,7 +1487,7 @@ router.post('/open', auth, requireAdmin, async (req, res) => {
       )
     }
 
-    res.json({ success: true, data: { opened: true, started: state.started } })
+    res.json({ success: true, data: { opened: true, started: state.started, generationMode: state.generationMode || 'random' } })
   } catch (e) {
     console.error('Open performance error:', e)
     res.status(500).json({ success: false, error: '开启公演管理失败', code: 'SERVER_ERROR' })

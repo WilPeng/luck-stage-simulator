@@ -7,6 +7,15 @@
           <p class="subtitle">{{ isCurrentUserCaptain ? '作为队长，管理你的队伍' : '申请加入或接收邀请' }}</p>
         </div>
 
+        <!-- 未开放提示 -->
+        <div v-if="!isTeamReleased" class="release-locked-banner">
+          <span class="lock-icon">🔒</span>
+          <div class="lock-text">
+            <div class="lock-title">组队入口尚未开放</div>
+            <div class="lock-desc">请等待管理员在并发行动中心开放组队</div>
+          </div>
+        </div>
+
         <!-- 队伍总览（所有人可见） -->
         <div class="teams-overview">
           <div class="section-title-bar">
@@ -61,8 +70,8 @@
                 <div class="app-avatar">{{ getAvatarIcon(getPlayerName(app)) }}</div>
                 <span class="app-name">{{ getPlayerName(app) }}</span>
                 <t-space>
-                  <t-button theme="success" size="small" @click="handleAcceptApplication(app)">同意</t-button>
-                  <t-button theme="default" size="small" @click="handleRejectApplication(app)">拒绝</t-button>
+                  <t-button theme="success" size="small" :disabled="!isTeamReleased" @click="handleAcceptApplication(app)">同意</t-button>
+                  <t-button theme="default" size="small" :disabled="!isTeamReleased" @click="handleRejectApplication(app)">拒绝</t-button>
                 </t-space>
               </div>
             </div>
@@ -79,7 +88,10 @@
               <div v-for="player in filteredUnassigned" :key="player.id" class="player-row">
                 <div class="player-row-avatar">{{ getAvatarIcon(player.name) }}</div>
                 <span class="player-row-name">{{ player.name }}</span>
-                <template v-if="!myTeam.locked">
+                <template v-if="!isTeamReleased">
+                  <t-tag theme="default" size="small">未开放</t-tag>
+                </template>
+                <template v-else-if="!myTeam.locked">
                   <t-button
                     v-if="!isPlayerInvited(player.id)"
                     size="small" theme="primary"
@@ -119,8 +131,8 @@
             <div v-for="invite in pendingInvites" :key="invite.id" class="invite-card">
               <span class="invite-text">{{ invite.captainName }} 邀请你加入「{{ invite.teamName }}」</span>
               <t-space>
-                <t-button theme="success" size="small" @click="handleAcceptInvite(invite)">接受</t-button>
-                <t-button theme="default" size="small" @click="handleRejectInvite(invite)">拒绝</t-button>
+                <t-button theme="success" size="small" :disabled="!isTeamReleased" @click="handleAcceptInvite(invite)">接受</t-button>
+                <t-button theme="default" size="small" :disabled="!isTeamReleased" @click="handleRejectInvite(invite)">拒绝</t-button>
               </t-space>
             </div>
           </div>
@@ -141,7 +153,7 @@
                 <template v-else-if="isTeamApplied(team.id)">
                   <t-tag theme="warning" block size="large">已申请</t-tag>
                 </template>
-                <t-button v-else theme="primary" block @click="handleApply(team.id)">申请加入</t-button>
+                <t-button v-else theme="primary" block :disabled="!isTeamReleased" @click="handleApply(team.id)">申请加入</t-button>
               </div>
             </div>
           </div>
@@ -182,8 +194,10 @@ import {
   acceptTeamInvite as apiAcceptInvite,
   rejectTeamInvite as apiRejectInvite,
   getTeamApplications,
-  getPlayerInvites
+  getPlayerInvites,
+  getConcurrentReleaseStatus
 } from '../../services/api'
+import type { ConcurrentReleaseStatusResponse } from '../../types/season'
 import StageStatusView from '../../components/StageStatusView.vue'
 
 const route = useRoute()
@@ -194,6 +208,10 @@ const authStore = useAuthStore()
 
 const currentRound = computed(() => parseInt(route.params.round as string) || 1)
 const searchKeyword = ref('')
+
+// 并发阶段释放状态
+const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
+const isTeamReleased = computed(() => !!releaseStatus.value?.teamReleased)
 
 // 当前选手
 const currentUser = computed(() => authStore.currentUser)
@@ -408,6 +426,14 @@ async function loadTeams() {
   }
 }
 
+async function loadReleaseStatus() {
+  try {
+    releaseStatus.value = await getConcurrentReleaseStatus(`round-${currentRound.value}`)
+  } catch (e) {
+    releaseStatus.value = null
+  }
+}
+
 async function loadAll() {
   await loadTeams()
   await loadApplications()
@@ -417,7 +443,8 @@ async function loadAll() {
 onMounted(async () => {
   await Promise.all([
     playerStore.fetchUsers({ pageSize: 1000 }),
-    seasonStore.fetchSeason()
+    seasonStore.fetchSeason(),
+    loadReleaseStatus()
   ])
   await loadAll()
 })
@@ -532,6 +559,18 @@ onMounted(async () => {
 .result-captain-badge { font-size: 10px; color: #f39c12; }
 
 .empty-tip { font-size: 13px; color: var(--text-tertiary); text-align: center; padding: 16px; }
+
+.release-locked-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; margin-bottom: 20px;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 12px;
+  .lock-icon { font-size: 24px; }
+  .lock-text { flex: 1; }
+  .lock-title { font-size: 14px; font-weight: 600; color: #ffd700; }
+  .lock-desc { font-size: 12px; color: var(--text-tertiary); }
+}
 
 // ===== 移动端适配 =====
 @media (max-width: 768px) {

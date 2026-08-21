@@ -20,7 +20,7 @@
       <!-- 如果队伍详情为空，显示提示 -->
       <t-alert v-if="teamsWithDetails.length === 0" theme="warning" style="margin-bottom: 16px">
         <template #message>
-          暂无队伍数据，请先完成组队。您可以前往 <router-link :to="`/games/${$route.params.gameId}/admin/team`">组队管理</router-link> 创建队伍。
+          暂无队伍数据，请先完成组队。您可以前往 <router-link :to="`/games/${authStore.currentGameId}/admin/team`">组队管理</router-link> 创建队伍。
         </template>
       </t-alert>
       
@@ -209,8 +209,10 @@ import { useEliminationStore } from '../../stores/eliminationStore'
 import { useSeasonStore } from '../../stores/seasonStore'
 import { usePerformanceStore } from '../../stores/performanceStore'
 import { useTeamStore } from '../../stores/teamStore'
+import { useAuthStore } from '../../stores/authStore'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const store = useEliminationStore()
 const seasonStore = useSeasonStore()
 const performanceStore = usePerformanceStore()

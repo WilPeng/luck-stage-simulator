@@ -4,10 +4,14 @@ const BaseModel = require('./BaseModel')
  * 队伍公演结果（每轮独立）
  * 字段: id / roundId / roundIndex / teamId / songId / teamName / songName
  *       票数拆解: baseVotes / attributeVotes / performanceVotes / compatibilityVotes / eventVotes / finalVotes
+ *       - finalVotes：由 1000 位大众评审 yes/no 模拟投票产生，范围 [0, 1000]
+ *       - attributeVotes：兼容字段，现与 finalVotes 相同
  *       歌曲权重: songVocalWeight / songDanceWeight / songCharmWeight
  *       队伍属性: avgVocal / avgDance / avgCharm
  *       适配度: compatibilityScore
  *       舞台事件: eventId / eventName / eventDescription
+ *       成员实时发挥明细: memberPerformances
+ *       大众评审投票率: audienceYesRate
  *       rank / createdAt
  */
 class TeamPerformance extends BaseModel {

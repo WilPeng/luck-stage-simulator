@@ -6,14 +6,21 @@
         <p>管理全局歌曲库，所有轮次公演均可使用</p>
       </div>
       <t-space>
-        <t-button theme="success" variant="outline" @click="handleRandomSong" :loading="randomSongLoading">
+        <t-button theme="primary" variant="outline" @click="handleRandomSong('male')" :loading="randomSongLoading">
           <template #icon><RocketIcon /></template>
-          随机产生歌曲
+          随机添加男歌手歌曲
+        </t-button>
+        <t-button theme="danger" variant="outline" @click="handleRandomSong('female')" :loading="randomSongLoading">
+          <template #icon><RocketIcon /></template>
+          随机添加女歌手歌曲
         </t-button>
         <t-button theme="primary" variant="outline" @click="showBatchDialog = true">
           <template #icon><FileIcon /></template>
           批量导入
         </t-button>
+        <t-popconfirm content="确定清空歌曲库？此操作不可恢复。" theme="danger" @confirm="handleClearAllSongs">
+          <t-button theme="danger" variant="outline">清空歌曲库</t-button>
+        </t-popconfirm>
         <t-button theme="primary" @click="showAddDialog = true">
           <template #icon><AddIcon /></template>
           新增歌曲
@@ -42,6 +49,12 @@
             <t-option value="民谣" label="民谣" />
             <t-option value="R&B" label="R&B" />
             <t-option value="电子" label="电子" />
+          </t-select>
+        </t-form-item>
+        <t-form-item label="歌手性别">
+          <t-select v-model="filters.singerGender" placeholder="全部" clearable style="width: 120px" @change="loadSongs">
+            <t-option value="male" label="男歌手" />
+            <t-option value="female" label="女歌手" />
           </t-select>
         </t-form-item>
         <t-form-item>
@@ -75,6 +88,12 @@
           <t-tag :theme="typeTheme(row.type)" variant="light" size="small">
             {{ typeLabel(row.type) }}
           </t-tag>
+        </template>
+        <template #singerGender="{ row }">
+          <t-tag v-if="row.singerGender" :theme="genderTheme(row.singerGender)" variant="light" size="small">
+            {{ genderLabel(row.singerGender) }}
+          </t-tag>
+          <span v-else>-</span>
         </template>
         <template #enabled="{ row }">
           <t-switch :value="row.enabled" :label="row.enabled ? '启用' : '禁用'" disabled />
@@ -110,6 +129,12 @@
             <t-option value="duet" label="合唱" />
             <t-option value="group" label="团秀" />
           </t-select>
+        </t-form-item>
+        <t-form-item label="歌手性别" name="singerGender">
+          <t-radio-group v-model="form.singerGender" variant="default-filled">
+            <t-radio-button value="male">男歌手</t-radio-button>
+            <t-radio-button value="female">女歌手</t-radio-button>
+          </t-radio-group>
         </t-form-item>
         <t-form-item label="风格" name="style">
           <t-input v-model="form.style" placeholder="如：流行、摇滚" />
@@ -185,6 +210,13 @@
                   </t-select>
                 </div>
                 <div class="batch-field">
+                  <label class="batch-label">歌手性别</label>
+                  <t-select v-model="item.singerGender" placeholder="选填">
+                    <t-option value="male" label="男歌手" />
+                    <t-option value="female" label="女歌手" />
+                  </t-select>
+                </div>
+                <div class="batch-field">
                   <label class="batch-label">风格</label>
                   <t-input v-model="item.style" placeholder="流行" />
                 </div>
@@ -232,14 +264,15 @@
 import { ref, reactive, onMounted } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { AddIcon, FileIcon, RocketIcon } from 'tdesign-icons-vue-next'
-import { getSongs, createSong, updateSong, deleteSong, batchCreateSongs, randomSong } from '../../services/api'
+import { getSongs, createSong, updateSong, deleteSong, deleteAllSongs, batchCreateSongs, randomSong } from '../../services/api'
 import type { Song } from '../../types/song'
 
 // 筛选条件
 const filters = reactive({
   keyword: '',
   type: '',
-  style: ''
+  style: '',
+  singerGender: ''
 })
 
 const songs = ref<Song[]>([])
@@ -270,6 +303,7 @@ interface BatchSongItem {
   charmWeight: number
   baseScore: number
   riskFactor: number
+  singerGender: string
 }
 
 function createEmptyBatchSong(): BatchSongItem {
@@ -282,7 +316,8 @@ function createEmptyBatchSong(): BatchSongItem {
     danceWeight: 3,
     charmWeight: 3,
     baseScore: 100,
-    riskFactor: 0.2
+    riskFactor: 0.2,
+    singerGender: ''
   }
 }
 
@@ -306,7 +341,8 @@ const form = reactive({
   charmWeight: 3,
   baseScore: 100,
   riskFactor: 0.2,
-  description: ''
+  description: '',
+  singerGender: ''
 })
 
 const rules = {
@@ -319,6 +355,7 @@ const columns = [
   { colKey: 'difficulty', title: '难度', width: 160 },
   { colKey: 'weights', title: '声/舞/魅', width: 150 },
   { colKey: 'type', title: '类型', width: 100 },
+  { colKey: 'singerGender', title: '歌手性别', width: 100 },
   { colKey: 'baseScore', title: '基础分', width: 80 },
   { colKey: 'riskFactor', title: '风险系数', width: 90 },
   { colKey: 'enabled', title: '状态', width: 80 },
@@ -335,13 +372,22 @@ function typeLabel(type?: string) {
   return map[type || 'team_show'] || type || '公演'
 }
 
+function genderTheme(gender?: string) {
+  return gender === 'female' ? 'danger' : 'primary'
+}
+
+function genderLabel(gender?: string) {
+  return gender === 'female' ? '女歌手' : gender === 'male' ? '男歌手' : gender || '-'
+}
+
 async function loadSongs() {
   loading.value = true
   try {
     const data = await getSongs({
       type: filters.type || undefined,
       style: filters.style || undefined,
-      keyword: filters.keyword || undefined
+      keyword: filters.keyword || undefined,
+      singerGender: filters.singerGender || undefined
     } as any)
     songs.value = data
     pagination.total = data.length
@@ -356,6 +402,7 @@ function resetFilters() {
   filters.keyword = ''
   filters.type = ''
   filters.style = ''
+  filters.singerGender = ''
   loadSongs()
 }
 
@@ -376,6 +423,7 @@ function editSong(song: Song) {
   form.baseScore = song.baseScore || 100
   form.riskFactor = song.riskFactor ?? 0.2
   form.description = song.description || ''
+  form.singerGender = song.singerGender || ''
   showAddDialog.value = true
 }
 
@@ -391,6 +439,7 @@ function resetForm() {
   form.baseScore = 100
   form.riskFactor = 0.2
   form.description = ''
+  form.singerGender = ''
 }
 
 async function doSave() {
@@ -428,16 +477,27 @@ async function doDelete(id: string) {
 }
 
 // 随机产生歌曲
-async function handleRandomSong() {
+async function handleRandomSong(gender: 'male' | 'female') {
   randomSongLoading.value = true
   try {
-    const song = await randomSong()
-    MessagePlugin.success(`成功随机产生歌曲: ${song.name}`)
+    const song = await randomSong(gender)
+    MessagePlugin.success(`成功随机产生${gender === 'female' ? '女歌手' : '男歌手'}歌曲: ${song.name}`)
     await loadSongs()
   } catch (e: any) {
     MessagePlugin.error(e.message || '随机产生歌曲失败')
   } finally {
     randomSongLoading.value = false
+  }
+}
+
+// 清空歌曲库
+async function handleClearAllSongs() {
+  try {
+    const res = await deleteAllSongs()
+    MessagePlugin.success(`已清空歌曲库，共删除 ${res.count} 首歌曲`)
+    await loadSongs()
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '清空歌曲库失败')
   }
 }
 

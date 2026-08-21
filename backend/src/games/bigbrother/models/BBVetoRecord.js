@@ -9,7 +9,8 @@ class BBVetoRecord extends BaseModel {
     this.participants = data?.participants || [] // [{ playerId, playerName, rank }]
     this.winnerId = data?.winnerId || null
     this.winnerName = data?.winnerName || ''
-    this.used = data?.used || false // 是否使用了否决权
+    this.status = data?.status || 'pending' // 否决权状态：pending=未决定, used=已使用, skipped=已跳过
+    this.used = data?.used || false // 是否使用了否决权（向后兼容，status==='used'时为true）
     this.usedOnPlayerId = data?.usedOnPlayerId || null // 被拯救的提名者
     this.usedOnPlayerName = data?.usedOnPlayerName || ''
     this.gameId = data?.gameId || 'bigbrother'

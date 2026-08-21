@@ -1,38 +1,41 @@
 // ================== 赛程状态机类型定义 ==================
 
 // 阶段类型（前后端统一）
+// teaming / song_select / training 已从主阶段序列中移除，但在并发阶段内仍作为子行动使用
 export type StageType =
   | 'preparation'     // 预先准备
   | 'captain_vote'    // 队长选举
-  | 'teaming'         // 组队
-  | 'song_select'     // 选歌
-  | 'training'        // 训练
-  | 'rehearsal'       // 彩排
-  | 'performance'     // 公演
+  | 'concurrent'      // 并发行动（组队/选歌/训练/彩排）
+  | 'performance'     // 公演结算与结果展示
   | 'elimination'     // 淘汰
+  | 'teaming'         // 组队（并发子行动，兼容页面）
+  | 'song_select'     // 选歌（并发子行动，兼容页面）
+  | 'training'        // 训练（并发子行动，兼容页面）
+  | 'rehearsal'       // 彩排（并发子行动，兼容页面）
 
 // 阶段顺序（固定，用于状态计算）
 export const STAGE_ORDER: StageType[] = [
   'preparation',
   'captain_vote',
-  'teaming',
-  'song_select',
-  'training',
-  'rehearsal',
+  'concurrent',
   'performance',
   'elimination'
 ]
+
+// 并发阶段包含的子行动
+export const CONCURRENT_ACTIONS: StageType[] = ['teaming', 'song_select', 'training', 'rehearsal']
 
 // 阶段名称映射（用于显示）
 export const STAGE_NAMES: Record<StageType, string> = {
   preparation: '预先准备',
   captain_vote: '队长选举',
+  concurrent: '并发行动',
+  performance: '公演',
+  elimination: '淘汰',
   teaming: '组队',
   song_select: '选歌',
   training: '训练',
-  rehearsal: '彩排',
-  performance: '公演',
-  elimination: '淘汰'
+  rehearsal: '彩排'
 }
 
 // 阶段状态（动态计算）
@@ -88,6 +91,44 @@ export interface MenuItem {
   name: string
 }
 
+// ================== 并发阶段相关类型 ==================
+
+export type ConcurrentActionType = 'team' | 'song' | 'training' | 'rehearsal'
+
+export interface ConcurrentStatusResponse {
+  roundId: string
+  roundIndex: number
+  drawsPerPlayer: number
+  teamReleased: boolean
+  songReleased: boolean
+  trainingReleased: boolean
+  rehearsalReleased: boolean
+  summary: {
+    totalTeams: number
+    teamCompleted: number
+    songCompleted: number
+    rehearsalCompleted: number
+    totalPlayers: number
+    trainingCompleted: number
+    allCompleted: boolean
+  }
+}
+
+export interface SetConcurrentReleaseRequest {
+  roundId: string
+  action: ConcurrentActionType
+  released: boolean
+}
+
+export interface ConcurrentReleaseStatusResponse {
+  roundId: string
+  roundIndex: number
+  teamReleased: boolean
+  songReleased: boolean
+  trainingReleased: boolean
+  rehearsalReleased: boolean
+}
+
 // ================== 管理员操作相关类型 ==================
 
 // 设置阶段请求
@@ -120,6 +161,7 @@ export interface RoundUpdateParams {
   eliminationRound?: number
   trainingRound?: number
   drawsPerPlayer?: number
+  totalRounds?: number
 }
 
 export interface RoundUpdateResult {
@@ -180,8 +222,10 @@ export function calculateStageStatus(
   targetRound: number,
   targetStage: StageType
 ): StageStatus {
+  // 并发阶段内的子行动统一映射为 concurrent
+  const effectiveTargetStage = CONCURRENT_ACTIONS.includes(targetStage) ? 'concurrent' : targetStage
   const currentStageIndex = STAGE_ORDER.indexOf(currentStage)
-  const targetStageIndex = STAGE_ORDER.indexOf(targetStage)
+  const targetStageIndex = STAGE_ORDER.indexOf(effectiveTargetStage as StageType)
 
   if (targetRound < currentRound) {
     return 'completed'

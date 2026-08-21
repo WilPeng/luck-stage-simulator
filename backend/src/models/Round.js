@@ -4,7 +4,7 @@ const BaseModel = require('./BaseModel')
  * 轮次（核心：Season → Round1/Round2/Round3 ...）
  * 字段: id / seasonId / index / stage / createdAt / updatedAt
  * 预先准备配置: teamCount / teamSizes / songPoolIds / trainingTimesAllowed / eliminationCount / dangerLineRatio
- * stage: setup → preparation → captain → teaming → song → training → rehearsal → performance → elimination
+ * stage: setup → preparation → captain_vote → concurrent → performance → elimination
  */
 class Round extends BaseModel {
   constructor(data) {
@@ -21,6 +21,11 @@ class Round extends BaseModel {
     this.trainingTimesAllowed = 5
     this.eliminationCount = 5
     this.dangerLineRatio = 0.2
+    // 并发阶段释放开关：控制各子行动是否对选手/队长开放
+    this.teamReleased = false
+    this.songReleased = false
+    this.trainingReleased = false
+    this.rehearsalReleased = false
     if (data) Object.assign(this, data)
   }
 

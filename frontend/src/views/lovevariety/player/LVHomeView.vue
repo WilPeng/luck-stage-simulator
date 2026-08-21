@@ -74,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLvAuthStore } from '../../../stores/lovevarietyAuthStore'
 import { useLvSeasonStore } from '../../../stores/lovevarietySeasonStore'
@@ -86,6 +86,30 @@ const router = useRouter()
 const authStore = useLvAuthStore()
 const seasonStore = useLvSeasonStore()
 const avatarInputRef = ref<HTMLInputElement>()
+
+let pollingTimer: ReturnType<typeof setInterval> | null = null
+
+function startWaitingPolling() {
+  if (pollingTimer) return
+  pollingTimer = setInterval(async () => {
+    try {
+      await seasonStore.fetchProgress()
+      if (seasonStore.currentStage !== 'waiting') {
+        stopPolling()
+        await seasonStore.fetchMenu()
+      }
+    } catch {
+      // 忽略轮询错误，下次继续尝试
+    }
+  }, 3000)
+}
+
+function stopPolling() {
+  if (pollingTimer) {
+    clearInterval(pollingTimer)
+    pollingTimer = null
+  }
+}
 
 const isWaiting = computed(() => seasonStore.currentStage === 'waiting')
 const isCurrentRound = computed(() => true)
@@ -169,6 +193,13 @@ async function onAvatarChange(e: Event) {
 onMounted(async () => {
   await seasonStore.fetchProgress()
   await seasonStore.fetchMenu()
+  if (seasonStore.currentStage === 'waiting') {
+    startWaitingPolling()
+  }
+})
+
+onUnmounted(() => {
+  stopPolling()
 })
 </script>
 

@@ -18,6 +18,7 @@ class Song extends BaseModel {
       this.charmWeight = typeof data.charmWeight === 'number' ? data.charmWeight : 3
       this.type = data.type || 'group'
       this.style = data.style || ''
+      this.singerGender = data.singerGender || ''
       this.createdAt = data.createdAt || new Date().toISOString()
       this.updatedAt = data.updatedAt || new Date().toISOString()
     }

@@ -625,6 +625,174 @@ router.post('/rehearsal/generate', auth, requireAdmin, async (req, res) => {
 // 公演结算
 // ================================================================
 
+async function calculatePerformance(round, frontRoundId) {
+  // 使用实际 Round.id 作为数据库查询的 roundId，前端传入的 roundId 用于 RoundTeam 等查询
+  const dbRoundId = round.id
+  const season = await ensureSeason()
+  const BASE_VOTES = 500
+
+  // 队伍（用前端 roundId 查询，因为 teams 的 roundId 存的是前端格式如 "round-1"）
+  const teams = await RoundTeam.find({ roundId: frontRoundId })
+  if (teams.length === 0) throw new Error('该轮没有队伍')
+
+  // 歌曲
+  const teamSongs = await TeamSong.find({ roundId: frontRoundId })
+  const allSongs = await Song.find({})
+  const songMap = {}
+  for (const s of allSongs) songMap[s.id] = s
+  const teamSongMap = {}
+  for (const ts of teamSongs) teamSongMap[ts.teamId] = ts
+
+  // 成员
+  const members = await RoundTeamMember.find({ roundId: frontRoundId })
+  const membersByTeam = {}
+  for (const m of members) { if (!membersByTeam[m.teamId]) membersByTeam[m.teamId] = []; membersByTeam[m.teamId].push(m) }
+
+  // 选手
+  const users = await User.find({})
+  const userMap = {}
+  for (const u of users) userMap[u.id] = u
+
+  // 彩排
+  const rehearsalResults = await RehearsalResult.find({ roundId: frontRoundId })
+  const teamRehearsal = {}
+  for (const r of rehearsalResults) { if (!teamRehearsal[r.teamId] || new Date(r.createdAt) > new Date(teamRehearsal[r.teamId].createdAt)) teamRehearsal[r.teamId] = r }
+
+  // 舞台事件池
+  const StageEvent = require('../models/StageEvent')
+  const stageEvents = await StageEvent.find({ enabled: true })
+
+  // 清空旧结果（同时清理用前端 roundId 和 dbRoundId 存的旧数据）
+  await TeamPerformance.deleteMany({ roundId: { $in: [dbRoundId, frontRoundId] } })
+  await PlayerPerformance.deleteMany({ roundId: { $in: [dbRoundId, frontRoundId] } })
+
+  const teamResults = []
+  const allPlayerResults = []
+
+  for (const team of teams) {
+    const ts = teamSongMap[team.id]
+    const song = ts ? songMap[ts.songId] : null
+    const teamMembers = (membersByTeam[team.id] || []).filter(m => {
+      const u = userMap[m.playerId]
+      return u && u.status !== 'eliminated'
+    })
+    if (teamMembers.length === 0) continue
+
+    const vw = song?.vocalWeight || 3
+    const dw = song?.danceWeight || 3
+    const cw = song?.charmWeight || 3
+
+    let sumVocal = 0, sumDance = 0, sumCharm = 0
+    for (const m of teamMembers) {
+      const u = userMap[m.playerId]
+      sumVocal += u.attributes?.vocal || 0
+      sumDance += u.attributes?.dance || 0
+      sumCharm += u.attributes?.charm || 0
+    }
+    const n = teamMembers.length
+    const avgVocal = Math.round(sumVocal / n)
+    const avgDance = Math.round(sumDance / n)
+    const avgCharm = Math.round(sumCharm / n)
+
+    const attrWeighted = (avgVocal * vw + avgDance * dw + avgCharm * cw) / (vw + dw + cw)
+    const attributeVotes = Math.round(attrWeighted * 0.8)
+
+    const songIdeal = (50 * vw + 50 * dw + 50 * cw) / (vw + dw + cw)
+    const deviation = Math.abs(attrWeighted - songIdeal)
+    const compatibilityScore = Math.max(0, Math.round(100 - deviation * 2))
+    const compatibilityVotes = Math.round(compatibilityScore * 0.63)
+
+    const memberPerformances = []
+    let totalPerformance = 0
+    for (const m of teamMembers) {
+      const u = userMap[m.playerId]
+      const perfValue = randomInt(-10, 20)
+      totalPerformance += perfValue
+      memberPerformances.push({ playerId: u.id, playerName: u.name, performanceValue: perfValue })
+    }
+    const performanceVotes = totalPerformance
+
+    let eventVotes = 0, eventId = null, eventName = '', eventDescription = ''
+    if (stageEvents.length > 0) {
+      const drawn = stageEvents[Math.floor(Math.random() * stageEvents.length)]
+      eventVotes = drawn.voteEffect || 0
+      eventId = drawn.id
+      eventName = drawn.name
+      eventDescription = drawn.description || ''
+    }
+
+    const rehearsalBonus = teamRehearsal[team.id]?.bonus?.team || 0
+    const finalVotes = Math.max(0, BASE_VOTES + attributeVotes + performanceVotes + compatibilityVotes + eventVotes + rehearsalBonus)
+
+    teamResults.push({
+      teamId: team.id, teamName: team.name, songId: song?.id || null, songName: song?.name || null,
+      baseVotes: BASE_VOTES, attributeVotes, performanceVotes, compatibilityVotes, eventVotes,
+      finalVotes, rehearsalBonus,
+      songVocalWeight: vw, songDanceWeight: dw, songCharmWeight: cw,
+      avgVocal, avgDance, avgCharm, compatibilityScore,
+      eventId, eventName, eventDescription,
+      memberPerformances
+    })
+
+    const teamPlayerResults = []
+    for (const mp of memberPerformances) {
+      teamPlayerResults.push({
+        playerId: mp.playerId, playerName: mp.playerName, teamId: team.id, teamName: team.name,
+        performanceValue: mp.performanceValue, contribution: 0, rankInTeam: null
+      })
+    }
+    const absTotal = teamPlayerResults.reduce((s, p) => s + Math.abs(p.performanceValue), 0) || 1
+    for (const p of teamPlayerResults) p.contribution = Math.round((Math.abs(p.performanceValue) / absTotal) * 100)
+    teamPlayerResults.sort((a, b) => b.performanceValue - a.performanceValue)
+    for (let i = 0; i < teamPlayerResults.length; i++) teamPlayerResults[i].rankInTeam = i + 1
+    allPlayerResults.push(...teamPlayerResults)
+  }
+
+  teamResults.sort((a, b) => b.finalVotes - a.finalVotes)
+  for (let i = 0; i < teamResults.length; i++) teamResults[i].rank = i + 1
+
+  allPlayerResults.sort((a, b) => b.performanceValue - a.performanceValue)
+  for (let i = 0; i < allPlayerResults.length; i++) allPlayerResults[i].rank = i + 1
+
+  const savedTeamPerf = []
+  for (const tr of teamResults) {
+    const tp = new TeamPerformance({
+      id: generateId(), roundId: dbRoundId, roundIndex: round.index, teamId: tr.teamId, songId: tr.songId,
+      teamName: tr.teamName, songName: tr.songName,
+      baseVotes: tr.baseVotes, attributeVotes: tr.attributeVotes,
+      performanceVotes: tr.performanceVotes, compatibilityVotes: tr.compatibilityVotes,
+      eventVotes: tr.eventVotes, finalVotes: tr.finalVotes,
+      finalScore: tr.finalVotes, attrScore: tr.attributeVotes + tr.compatibilityVotes,
+      randomScore: tr.performanceVotes, rehearsalBonus: tr.rehearsalBonus,
+      songVocalWeight: tr.songVocalWeight, songDanceWeight: tr.songDanceWeight, songCharmWeight: tr.songCharmWeight,
+      avgVocal: tr.avgVocal, avgDance: tr.avgDance, avgCharm: tr.avgCharm,
+      compatibilityScore: tr.compatibilityScore,
+      eventId: tr.eventId, eventName: tr.eventName, eventDescription: tr.eventDescription,
+      memberPerformances: tr.memberPerformances,
+      rank: tr.rank, createdAt: new Date().toISOString()
+    })
+    await tp.save()
+    savedTeamPerf.push(tp)
+  }
+
+  const savedPlayerPerf = []
+  for (const pr of allPlayerResults) {
+    const pp = new PlayerPerformance({
+      id: generateId(), roundId: dbRoundId, roundIndex: round.index,
+      playerId: pr.playerId, teamId: pr.teamId, playerName: pr.playerName, teamName: pr.teamName,
+      performanceValue: pr.performanceValue, contribution: pr.contribution,
+      rankInTeam: pr.rankInTeam, rank: pr.rank, createdAt: new Date().toISOString()
+    })
+    await pp.save()
+    savedPlayerPerf.push(pp)
+  }
+
+  return {
+    teamPerformances: savedTeamPerf,
+    playerPerformances: savedPlayerPerf
+  }
+}
+
 // POST /api/admin/performance/calculate
 router.post('/performance/calculate', auth, requireAdmin, async (req, res) => {
   try {
@@ -641,180 +809,192 @@ router.post('/performance/calculate', auth, requireAdmin, async (req, res) => {
       }
     }
     if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'NO_ROUND' })
-    // 使用实际 Round.id 作为数据库查询的 roundId，前端传入的 roundId 用于 RoundTeam 等查询
-    const dbRoundId = round.id
-    const frontRoundId = inputRoundId
-    const season = await ensureSeason()
-    const BASE_VOTES = 500
 
-    // 队伍（用前端 roundId 查询，因为 teams 的 roundId 存的是前端格式如 "round-1"）
-    const teams = await RoundTeam.find({ roundId: frontRoundId })
-    if (teams.length === 0) return res.status(400).json({ success: false, error: '该轮没有队伍', code: 'NO_TEAMS' })
-
-    // 歌曲
-    const teamSongs = await TeamSong.find({ roundId: frontRoundId })
-    const allSongs = await Song.find({})
-    const songMap = {}
-    for (const s of allSongs) songMap[s.id] = s
-    const teamSongMap = {}
-    for (const ts of teamSongs) teamSongMap[ts.teamId] = ts
-
-    // 成员
-    const members = await RoundTeamMember.find({ roundId: frontRoundId })
-    const membersByTeam = {}
-    for (const m of members) { if (!membersByTeam[m.teamId]) membersByTeam[m.teamId] = []; membersByTeam[m.teamId].push(m) }
-
-    // 选手
-    const users = await User.find({})
-    const userMap = {}
-    for (const u of users) userMap[u.id] = u
-
-    // 彩排
-    const rehearsalResults = await RehearsalResult.find({ roundId: frontRoundId })
-    const teamRehearsal = {}
-    for (const r of rehearsalResults) { if (!teamRehearsal[r.teamId] || new Date(r.createdAt) > new Date(teamRehearsal[r.teamId].createdAt)) teamRehearsal[r.teamId] = r }
-
-    // 舞台事件池
-    const StageEvent = require('../models/StageEvent')
-    const stageEvents = await StageEvent.find({ enabled: true })
-
-    // 清空旧结果（同时清理用前端 roundId 和 dbRoundId 存的旧数据）
-    await TeamPerformance.deleteMany({ roundId: { $in: [dbRoundId, frontRoundId] } })
-    await PlayerPerformance.deleteMany({ roundId: { $in: [dbRoundId, frontRoundId] } })
-
-    const teamResults = []
-    const allPlayerResults = []
-
-    for (const team of teams) {
-      const ts = teamSongMap[team.id]
-      const song = ts ? songMap[ts.songId] : null
-      const teamMembers = (membersByTeam[team.id] || []).filter(m => {
-        const u = userMap[m.playerId]
-        return u && u.status !== 'eliminated'
-      })
-      if (teamMembers.length === 0) continue
-
-      const vw = song?.vocalWeight || 3
-      const dw = song?.danceWeight || 3
-      const cw = song?.charmWeight || 3
-
-      let sumVocal = 0, sumDance = 0, sumCharm = 0
-      for (const m of teamMembers) {
-        const u = userMap[m.playerId]
-        sumVocal += u.attributes?.vocal || 0
-        sumDance += u.attributes?.dance || 0
-        sumCharm += u.attributes?.charm || 0
-      }
-      const n = teamMembers.length
-      const avgVocal = Math.round(sumVocal / n)
-      const avgDance = Math.round(sumDance / n)
-      const avgCharm = Math.round(sumCharm / n)
-
-      const attrWeighted = (avgVocal * vw + avgDance * dw + avgCharm * cw) / (vw + dw + cw)
-      const attributeVotes = Math.round(attrWeighted * 0.8)
-
-      const songIdeal = (50 * vw + 50 * dw + 50 * cw) / (vw + dw + cw)
-      const deviation = Math.abs(attrWeighted - songIdeal)
-      const compatibilityScore = Math.max(0, Math.round(100 - deviation * 2))
-      const compatibilityVotes = Math.round(compatibilityScore * 0.63)
-
-      const memberPerformances = []
-      let totalPerformance = 0
-      for (const m of teamMembers) {
-        const u = userMap[m.playerId]
-        const perfValue = randomInt(-10, 20)
-        totalPerformance += perfValue
-        memberPerformances.push({ playerId: u.id, playerName: u.name, performanceValue: perfValue })
-      }
-      const performanceVotes = totalPerformance
-
-      let eventVotes = 0, eventId = null, eventName = '', eventDescription = ''
-      if (stageEvents.length > 0) {
-        const drawn = stageEvents[Math.floor(Math.random() * stageEvents.length)]
-        eventVotes = drawn.voteEffect || 0
-        eventId = drawn.id
-        eventName = drawn.name
-        eventDescription = drawn.description || ''
-      }
-
-      const rehearsalBonus = teamRehearsal[team.id]?.bonus?.team || 0
-      const finalVotes = Math.max(0, BASE_VOTES + attributeVotes + performanceVotes + compatibilityVotes + eventVotes + rehearsalBonus)
-
-      teamResults.push({
-        teamId: team.id, teamName: team.name, songId: song?.id || null, songName: song?.name || null,
-        baseVotes: BASE_VOTES, attributeVotes, performanceVotes, compatibilityVotes, eventVotes,
-        finalVotes, rehearsalBonus,
-        songVocalWeight: vw, songDanceWeight: dw, songCharmWeight: cw,
-        avgVocal, avgDance, avgCharm, compatibilityScore,
-        eventId, eventName, eventDescription,
-        memberPerformances
-      })
-
-      const teamPlayerResults = []
-      for (const mp of memberPerformances) {
-        teamPlayerResults.push({
-          playerId: mp.playerId, playerName: mp.playerName, teamId: team.id, teamName: team.name,
-          performanceValue: mp.performanceValue, contribution: 0, rankInTeam: null
-        })
-      }
-      const absTotal = teamPlayerResults.reduce((s, p) => s + Math.abs(p.performanceValue), 0) || 1
-      for (const p of teamPlayerResults) p.contribution = Math.round((Math.abs(p.performanceValue) / absTotal) * 100)
-      teamPlayerResults.sort((a, b) => b.performanceValue - a.performanceValue)
-      for (let i = 0; i < teamPlayerResults.length; i++) teamPlayerResults[i].rankInTeam = i + 1
-      allPlayerResults.push(...teamPlayerResults)
-    }
-
-    teamResults.sort((a, b) => b.finalVotes - a.finalVotes)
-    for (let i = 0; i < teamResults.length; i++) teamResults[i].rank = i + 1
-
-    allPlayerResults.sort((a, b) => b.performanceValue - a.performanceValue)
-    for (let i = 0; i < allPlayerResults.length; i++) allPlayerResults[i].rank = i + 1
-
-    const savedTeamPerf = []
-    for (const tr of teamResults) {
-      const tp = new TeamPerformance({
-        id: generateId(), roundId: dbRoundId, roundIndex: round.index, teamId: tr.teamId, songId: tr.songId,
-        teamName: tr.teamName, songName: tr.songName,
-        baseVotes: tr.baseVotes, attributeVotes: tr.attributeVotes,
-        performanceVotes: tr.performanceVotes, compatibilityVotes: tr.compatibilityVotes,
-        eventVotes: tr.eventVotes, finalVotes: tr.finalVotes,
-        finalScore: tr.finalVotes, attrScore: tr.attributeVotes + tr.compatibilityVotes,
-        randomScore: tr.performanceVotes, rehearsalBonus: tr.rehearsalBonus,
-        songVocalWeight: tr.songVocalWeight, songDanceWeight: tr.songDanceWeight, songCharmWeight: tr.songCharmWeight,
-        avgVocal: tr.avgVocal, avgDance: tr.avgDance, avgCharm: tr.avgCharm,
-        compatibilityScore: tr.compatibilityScore,
-        eventId: tr.eventId, eventName: tr.eventName, eventDescription: tr.eventDescription,
-        memberPerformances: tr.memberPerformances,
-        rank: tr.rank, createdAt: new Date().toISOString()
-      })
-      await tp.save()
-      savedTeamPerf.push(tp)
-    }
-
-    const savedPlayerPerf = []
-    for (const pr of allPlayerResults) {
-      const pp = new PlayerPerformance({
-        id: generateId(), roundId: dbRoundId, roundIndex: round.index,
-        playerId: pr.playerId, teamId: pr.teamId, playerName: pr.playerName, teamName: pr.teamName,
-        performanceValue: pr.performanceValue, contribution: pr.contribution,
-        rankInTeam: pr.rankInTeam, rank: pr.rank, createdAt: new Date().toISOString()
-      })
-      await pp.save()
-      savedPlayerPerf.push(pp)
-    }
-
-    await logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.PERFORMANCE_CALC, 'performance', dbRoundId, `第 ${round.index} 轮公演结算: ${savedTeamPerf.length} 团 / ${savedPlayerPerf.length} 人`)
+    const result = await calculatePerformance(round, inputRoundId)
+    await logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.PERFORMANCE_CALC, 'performance', round.id, `第 ${round.index} 轮公演结算: ${result.teamPerformances.length} 团 / ${result.playerPerformances.length} 人`)
 
     res.json({
       success: true,
       data: {
-        teamPerformances: savedTeamPerf.map(t => { const o = t.toObject ? t.toObject() : t; delete o._id; return o }),
-        playerPerformances: savedPlayerPerf.map(p => { const o = p.toObject ? p.toObject() : p; delete o._id; return o })
+        teamPerformances: result.teamPerformances.map(t => { const o = t.toObject ? t.toObject() : t; delete o._id; return o }),
+        playerPerformances: result.playerPerformances.map(p => { const o = p.toObject ? p.toObject() : p; delete o._id; return o })
       }
     })
   } catch (e) {
     console.error(e)
-    res.status(500).json({ success: false, error: '公演结算失败', code: 'SERVER_ERROR' })
+    res.status(500).json({ success: false, error: '公演结算失败: ' + (e.message || ''), code: 'SERVER_ERROR' })
+  }
+})
+
+// ================================================================
+// 并发阶段公布结果
+// ================================================================
+
+// POST /api/admin/concurrent/publish
+router.post('/concurrent/publish', auth, requireAdmin, async (req, res) => {
+  try {
+    const { roundId: inputRoundId } = req.body
+    if (!inputRoundId) return res.status(400).json({ success: false, error: '缺少 roundId', code: 'MISSING_PARAM' })
+
+    let round = await Round.findOne({ id: inputRoundId })
+    if (!round) {
+      const match = inputRoundId.match(/^round[_-](\d+)$/)
+      if (match) {
+        const idx = parseInt(match[1])
+        const season = await ensureSeason()
+        round = await getOrCreateRound(season, idx)
+      }
+    }
+    if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'NO_ROUND' })
+
+    const frontRoundId = `round-${round.index}`
+    const roundFilter = { $in: [round.id, frontRoundId] }
+    const season = await ensureSeason()
+    const drawsPerPlayer = (season && season.trainingDrawsPerPlayer) || 3
+
+    // 1. 自动补齐组队：为未入队选手随机分配
+    const activePlayers = await User.find({ role: { $ne: 'admin' }, status: 'active' })
+    const existingMembers = await RoundTeamMember.find({ roundId: roundFilter })
+    const assignedPlayerIds = new Set(existingMembers.map(m => m.playerId))
+    const teams = await RoundTeam.find({ roundId: roundFilter })
+    const membersCount = {}
+    for (const m of existingMembers) membersCount[m.teamId] = (membersCount[m.teamId] || 0) + 1
+
+    const proxyResults = { team: 0, song: 0, training: 0, rehearsal: 0 }
+
+    for (const player of activePlayers) {
+      if (assignedPlayerIds.has(player.id)) continue
+      const availableTeams = teams.filter(t => (membersCount[t.id] || 0) < t.maxMembers)
+      if (availableTeams.length === 0) continue
+      const team = availableTeams[Math.floor(Math.random() * availableTeams.length)]
+      const member = new RoundTeamMember({
+        id: generateId(),
+        roundId: frontRoundId,
+        roundIndex: round.index,
+        teamId: team.id,
+        playerId: player.id,
+        createdAt: new Date().toISOString()
+      })
+      await member.save()
+      membersCount[team.id] = (membersCount[team.id] || 0) + 1
+      assignedPlayerIds.add(player.id)
+      proxyResults.team++
+    }
+
+    // 2. 自动补齐选歌：为没有歌曲的队伍随机分配
+    const teamSongs = await TeamSong.find({ roundId: roundFilter })
+    const teamsWithSong = new Set(teamSongs.map(ts => ts.teamId))
+    const roundSongs = await require('../models/RoundSong').find({ roundId: roundFilter })
+    const allSongs = await Song.find({})
+    const songMap = {}
+    for (const s of allSongs) songMap[s.id] = s
+    const availableSongs = roundSongs.map(rs => songMap[rs.songId]).filter(Boolean)
+
+    for (const team of teams) {
+      if (teamsWithSong.has(team.id)) continue
+      if (availableSongs.length === 0) break
+      const song = availableSongs[Math.floor(Math.random() * availableSongs.length)]
+      const teamSong = new TeamSong({
+        id: generateId(),
+        roundId: frontRoundId,
+        roundIndex: round.index,
+        teamId: team.id,
+        songId: song.id,
+        assignedBy: 'admin-publish',
+        createdAt: new Date().toISOString()
+      })
+      await teamSong.save()
+      proxyResults.song++
+    }
+
+    // 3. 自动补齐训练：为未完成训练次数的选手抽卡
+    const trainingCards = (await TrainingCard.find({})).filter(c => c.enabled !== false)
+    for (const player of activePlayers) {
+      const existingRecords = await TrainingRecord.find({ roundId: roundFilter, playerId: player.id })
+      const remaining = drawsPerPlayer - existingRecords.length
+      if (remaining <= 0) continue
+      if (trainingCards.length === 0) break
+
+      for (let i = 0; i < remaining; i++) {
+        const drawn = trainingCards[Math.floor(Math.random() * trainingCards.length)]
+        const attrDelta = drawn.effect || { vocal: 0, dance: 0, charm: 0 }
+        player.attributes = player.attributes || { vocal: 30, dance: 30, charm: 30 }
+        player.attributes.vocal = (player.attributes.vocal || 0) + (attrDelta.vocal || 0)
+        player.attributes.dance = (player.attributes.dance || 0) + (attrDelta.dance || 0)
+        player.attributes.charm = (player.attributes.charm || 0) + (attrDelta.charm || 0)
+
+        const record = new TrainingRecord({
+          id: generateId(),
+          roundId: frontRoundId,
+          roundIndex: round.index,
+          userId: player.id,
+          userName: player.name,
+          playerId: player.id,
+          cardId: drawn.id,
+          cardName: drawn.name,
+          cardType: drawn.type || 'normal',
+          effect: drawn.effect || {},
+          attrDelta,
+          attributesAfter: { ...player.attributes },
+          createdAt: new Date().toISOString()
+        })
+        await record.save()
+      }
+      await player.save()
+      proxyResults.training++
+    }
+
+    // 4. 自动补齐彩排：为没有彩排结果的队伍生成一次
+    const rehearsalResults = await RehearsalResult.find({ roundId: roundFilter })
+    const teamsWithRehearsal = new Set(rehearsalResults.map(r => r.teamId))
+    const events = [
+      { id: 'perfect', name: '完美彩排', description: '团队配合完美', bonus: { team: 5, each: 2 } },
+      { id: 'good', name: '顺利完成', description: '团队正常表现', bonus: { team: 3, each: 1 } },
+      { id: 'ok', name: '一般发挥', description: '中规中矩', bonus: { team: 1, each: 0 } },
+      { id: 'mess', name: '小失误', description: '个别成员失误', bonus: { team: 0, each: -1 } },
+      { id: 'chaos', name: '混乱', description: '整个团队节奏错乱', bonus: { team: -3, each: -2 } }
+    ]
+    for (const team of teams) {
+      if (teamsWithRehearsal.has(team.id)) continue
+      const event = events[Math.floor(Math.random() * events.length)]
+      const r = new RehearsalResult({
+        id: generateId(),
+        roundId: frontRoundId,
+        roundIndex: round.index,
+        teamId: team.id,
+        teamName: team.name,
+        eventName: event.name,
+        description: event.description,
+        bonus: event.bonus,
+        createdAt: new Date().toISOString()
+      })
+      await r.save()
+      proxyResults.rehearsal++
+    }
+
+    // 5. 执行公演结算
+    const calcResult = await calculatePerformance(round, frontRoundId)
+
+    // 6. 推进阶段到 performance
+    season.currentStage = 'performance'
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+
+    await logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.PERFORMANCE_CALC, 'performance', round.id,
+      `公布结果: 第 ${round.index} 轮, 代理 ${JSON.stringify(proxyResults)}, 结算 ${calcResult.teamPerformances.length} 团 / ${calcResult.playerPerformances.length} 人`)
+
+    res.json({
+      success: true,
+      data: {
+        proxyResults,
+        currentStage: season.currentStage,
+        teamPerformances: calcResult.teamPerformances.map(t => { const o = t.toObject ? t.toObject() : t; delete o._id; return o }),
+        playerPerformances: calcResult.playerPerformances.map(p => { const o = p.toObject ? p.toObject() : p; delete o._id; return o })
+      }
+    })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '公布结果失败: ' + (e.message || ''), code: 'SERVER_ERROR' })
   }
 })
 

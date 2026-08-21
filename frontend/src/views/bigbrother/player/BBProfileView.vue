@@ -5,12 +5,20 @@
     </div>
 
     <div class="profile-card">
-      <div class="profile-avatar">{{ user?.name?.[0] || '?' }}</div>
+      <label class="profile-avatar-wrap" title="点击更换头像">
+        <BBAvatar :name="user?.name || '?'" :avatar="user?.avatar" size="lg" />
+        <div class="avatar-overlay">📷</div>
+        <input type="file" accept="image/*" hidden @change="onAvatarFile" />
+      </label>
       <div class="profile-info">
         <div class="profile-name">{{ user?.name }}</div>
         <div class="profile-code">登录码: {{ user?.loginCode }}</div>
         <div class="profile-status">
           <span class="status-tag" :class="user?.status">{{ statusText }}</span>
+        </div>
+        <div class="avatar-actions">
+          <button class="bb-btn-xs" @click="triggerUpload">更换头像</button>
+          <button v-if="user?.avatar" class="bb-btn-xs bb-btn-danger-xs" @click="handleDeleteAvatar">删除头像</button>
         </div>
       </div>
     </div>
@@ -36,16 +44,47 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
+import { bbUploadMyAvatar, bbDeleteMyAvatar } from '../../../services/bbApi'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 
 const authStore = useBbAuthStore()
 const user = computed(() => authStore.currentUser)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const statusText = computed(() => {
   const map: Record<string, string> = { active: '活跃', evicted: '已淘汰', jury: '陪审团' }
   return map[user.value?.status || ''] || user.value?.status || ''
 })
+
+function triggerUpload() {
+  const el = document.querySelector('.profile-avatar-wrap input[type="file"]') as HTMLInputElement
+  if (el) el.click()
+}
+
+async function onAvatarFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  try {
+    const result = await bbUploadMyAvatar(file, user.value?.id)
+    if (user.value) {
+      authStore.currentUser = { ...user.value, avatar: result.avatar }
+    }
+  } catch (err: any) { alert(err.message) }
+  input.value = ''
+}
+
+async function handleDeleteAvatar() {
+  if (!confirm('确定删除头像吗？')) return
+  try {
+    await bbDeleteMyAvatar(user.value?.id)
+    if (user.value) {
+      authStore.currentUser = { ...user.value, avatar: null }
+    }
+  } catch (err: any) { alert(err.message) }
+}
 </script>
 
 <style scoped>
@@ -53,10 +92,17 @@ const statusText = computed(() => {
 .page-header { margin-bottom: 24px; }
 .page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
 .profile-card { background: linear-gradient(135deg, #0f0f2e, #1a1a3e); border: 1px solid #00ff8822; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
-.profile-avatar { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #00ff88, #00cc66); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; color: #1a1a3e; }
+.profile-avatar-wrap { position: relative; cursor: pointer; flex-shrink: 0; }
+.avatar-overlay { position: absolute; inset: 0; border-radius: 50%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 20px; opacity: 0; transition: opacity 0.2s; }
+.profile-avatar-wrap:hover .avatar-overlay { opacity: 1; }
 .profile-name { font-size: 20px; font-weight: 600; color: #fff; }
 .profile-code { font-size: 13px; color: #888; margin-top: 4px; }
 .profile-status { margin-top: 8px; }
+.avatar-actions { margin-top: 8px; display: flex; gap: 8px; }
+.bb-btn-xs { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+.bb-btn-xs:hover { background: #00ff8822; }
+.bb-btn-danger-xs { border-color: #ff4444; color: #ff4444; }
+.bb-btn-danger-xs:hover { background: #ff444422; }
 .status-tag { padding: 2px 10px; border-radius: 10px; font-size: 12px; }
 .status-tag.active { background: #00ff8822; color: #00ff88; }
 .status-tag.evicted { background: #ff444422; color: #ff4444; }

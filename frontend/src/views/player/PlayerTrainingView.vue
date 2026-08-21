@@ -5,6 +5,15 @@
       <p class="subtitle">第{{ currentRound }}公演 · 翻开卡牌提升属性</p>
     </div>
 
+    <!-- 未开放提示 -->
+    <div v-if="!isTrainingReleased" class="release-locked-banner">
+      <span class="lock-icon">🔒</span>
+      <div class="lock-text">
+        <div class="lock-title">训练入口尚未开放</div>
+        <div class="lock-desc">请等待管理员在并发行动中心开放训练</div>
+      </div>
+    </div>
+
     <!-- ===== 属性面板 ===== -->
     <div class="attr-panel">
       <div class="attr-item vocal">
@@ -115,6 +124,8 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { useTrainingCardStore } from '../../stores/trainingCardStore'
 import { usePlayerStore } from '../../stores/playerStore'
+import { getConcurrentReleaseStatus } from '../../services/api'
+import type { ConcurrentReleaseStatusResponse } from '../../types/season'
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next'
 
 const route = useRoute()
@@ -125,13 +136,17 @@ const playerStore = usePlayerStore()
 const currentRound = computed(() => parseInt(route.params.round as string) || 1)
 const currentUser = computed(() => authStore.currentUser)
 
+// 并发阶段释放状态
+const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
+const isTrainingReleased = computed(() => !!releaseStatus.value?.trainingReleased)
+
 // 属性值（实时响应）
 const attributes = reactive({ vocal: 50, dance: 50, charm: 50 })
 
 // 训练次数
 const remainingDraws = ref(0)
 const trainingCount = ref(0)
-const isTrainingLocked = computed(() => remainingDraws.value <= 0)
+const isTrainingLocked = computed(() => remainingDraws.value <= 0 || !isTrainingReleased.value)
 
 // 50 个卡槽
 interface CardResult {
@@ -321,6 +336,14 @@ function getTypeLabel(type: string): string {
   return m[type] || type
 }
 
+async function loadReleaseStatus() {
+  try {
+    releaseStatus.value = await getConcurrentReleaseStatus(`round-${currentRound.value}`)
+  } catch (e) {
+    releaseStatus.value = null
+  }
+}
+
 onMounted(async () => {
   if (!currentUser.value) return
   try {
@@ -334,8 +357,8 @@ onMounted(async () => {
       attributes.charm = userData.attributes.charm
     }
 
-    // 2. 加载训练配置
-    await trainingStore.fetchConfig()
+    // 2. 加载训练配置与释放状态
+    await Promise.all([trainingStore.fetchConfig(), loadReleaseStatus()])
     const config = trainingStore.config
     remainingDraws.value = config?.drawsPerPlayer || 3
 
@@ -372,6 +395,18 @@ onMounted(async () => {
   margin: 0 auto;
   padding: 0 4px;
 color: var(--text-primary);
+}
+
+.release-locked-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; margin-bottom: 20px;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 12px;
+  .lock-icon { font-size: 24px; }
+  .lock-text { flex: 1; }
+  .lock-title { font-size: 14px; font-weight: 600; color: #ffd700; }
+  .lock-desc { font-size: 12px; color: var(--text-tertiary); }
 }
 
 .page-header {

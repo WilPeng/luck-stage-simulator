@@ -32,6 +32,10 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 const LV_AVATAR_DIR = path.join(__dirname, '..', 'uploads', 'lvavatars')
 if (!fs.existsSync(LV_AVATAR_DIR)) fs.mkdirSync(LV_AVATAR_DIR, { recursive: true })
 
+// 确保 Big Brother 头像上传目录存在
+const BB_AVATAR_DIR = path.join(__dirname, '..', 'uploads', 'bbavatars')
+if (!fs.existsSync(BB_AVATAR_DIR)) fs.mkdirSync(BB_AVATAR_DIR, { recursive: true })
+
 const initData = async () => {
   const User = require('./models/User')
   const Season = require('./models/Season')
@@ -40,16 +44,16 @@ const initData = async () => {
   const Team = require('./models/Team')
   const StageEvent = require('./models/StageEvent')
 
-  const existingUsers = await User.find({})
-  if (existingUsers.length === 0) {
-    console.log('Initializing seed data...')
+  const { v4: uuidv4 } = require('uuid')
+  const generateId = () => uuidv4()
+  const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
+  const gameId = 'shengfeng2026'
 
-    const { v4: uuidv4 } = require('uuid')
-    const generateId = () => uuidv4()
-    const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
-
-    const gameId = 'shengfeng2026'
-    const admin = new User({
+  // ===== 管理员 =====
+  const admin = await User.findOne({ role: 'admin' })
+  if (!admin) {
+    console.log('Initializing admin user...')
+    const newAdmin = new User({
       id: generateId(),
       name: '赛事管理员',
       loginCode: 'ADMIN2026',
@@ -61,8 +65,14 @@ const initData = async () => {
       trainingCount: 0,
       gameId
     })
-    await admin.save()
+    await newAdmin.save()
+    console.log('Created admin user')
+  }
 
+  // ===== 选手 =====
+  const playerCount = await User.countDocuments({ role: { $in: ['player', 'captain'] } })
+  if (playerCount === 0) {
+    console.log('Initializing player seed data...')
     const playerNames = [
       { name: '44岚', vocal: 58, dance: 42, charm: 55 },
       { name: '星辰', vocal: 62, dance: 38, charm: 48 },
@@ -76,7 +86,6 @@ const initData = async () => {
       { name: '金焰', vocal: 52, dance: 46, charm: 48 }
     ]
     const users = []
-
     for (let i = 0; i < 10; i++) {
       const player = playerNames[i]
       const user = new User({
@@ -99,8 +108,14 @@ const initData = async () => {
       users.push(user)
     }
     await User.insertMany(users)
+    console.log(`Created ${users.length} players`)
+  }
 
-    const season = new Season({
+  // ===== Season =====
+  const season = await Season.findOne({})
+  if (!season) {
+    console.log('Initializing season...')
+    const newSeason = new Season({
       id: generateId(),
       name: '乘风2026第一季',
       currentStage: 'setup',
@@ -108,8 +123,14 @@ const initData = async () => {
       teamSetup: null,
       gameId
     })
-    await season.save()
+    await newSeason.save()
+    console.log('Created season')
+  }
 
+  // ===== 歌曲库 =====
+  const songCount = await Song.countDocuments({})
+  if (songCount === 0) {
+    console.log('Initializing songs...')
     const songs = [
       { id: 's001', name: '逆光飞翔', style: '流行', difficulty: 3, vocalWeight: 4, danceWeight: 3, charmWeight: 3, baseScore: 100, riskFactor: 0.2, gameId },
       { id: 's002', name: '舞动奇迹', style: '舞曲', difficulty: 4, vocalWeight: 2, danceWeight: 5, charmWeight: 3, baseScore: 100, riskFactor: 0.3, gameId },
@@ -119,7 +140,13 @@ const initData = async () => {
       { id: 's006', name: '梦想舞台', style: '流行', difficulty: 3, vocalWeight: 3, danceWeight: 4, charmWeight: 3, baseScore: 100, riskFactor: 0.2, gameId }
     ]
     await Song.insertMany(songs.map(s => new Song(s)))
+    console.log(`Created ${songs.length} songs`)
+  }
 
+  // ===== 训练卡 =====
+  const tcCount = await TrainingCard.countDocuments({})
+  if (tcCount === 0) {
+    console.log('Initializing training cards...')
     const trainingCards = [
       { id: 'tc001', name: '声乐老师加课', type: 'vocal', description: '声乐老师单独辅导，Vocal大幅提升', effect: { vocal: 5 }, weight: 15, enabled: true, gameId },
       { id: 'tc002', name: '高强度舞蹈课', type: 'dance', description: '魔鬼训练，Dance能力大幅提升', effect: { dance: 5 }, weight: 15, enabled: true, gameId },
@@ -138,7 +165,13 @@ const initData = async () => {
       { id: 'tc015', name: '突破极限', type: 'event', description: '突破自身极限，最高属性中幅提升', effect: { highest: 3 }, weight: 10, enabled: true, gameId }
     ]
     await TrainingCard.insertMany(trainingCards.map(tc => new TrainingCard(tc)))
+    console.log(`Created ${trainingCards.length} training cards`)
+  }
 
+  // ===== 舞台事件 =====
+  const eventCount = await StageEvent.countDocuments({})
+  if (eventCount === 0) {
+    console.log('Initializing stage events...')
     const stageEvents = [
       { id: 'evt001', name: '观众沸腾', voteEffect: 87, description: '现场气氛极佳，观众给予了极高认可', gameId },
       { id: 'evt002', name: '全场合唱', voteEffect: 120, description: '全场观众起立合唱，场面震撼人心', gameId },
@@ -152,17 +185,18 @@ const initData = async () => {
       { id: 'evt010', name: '中规中矩', voteEffect: 0, description: '演出平稳进行，没有特别出彩但也没有失误', gameId }
     ]
     await StageEvent.insertMany(stageEvents.map(se => new StageEvent(se)))
+    console.log(`Created ${stageEvents.length} stage events`)
+  }
 
-    console.log('Seed data initialized successfully:')
-    console.log('  - 1 admin user')
-    console.log('  - 16 players (all unassigned, no teams)')
-    console.log('  - 0 teams (admin needs to set up teams first)')
-    console.log('  - 6 songs')
-    console.log('  - 15 training cards')
-    console.log('  - 1 season (stage: setup - 队伍配置阶段)')
-    console.log('  -> 请管理员在前端页面设置团数和每团人数')
-  } else {
-    console.log('Existing data found, skipping initialization')
+  // ===== 迁移：为没有 gameId 的用户补全默认 gameId =====
+  const usersWithoutGameId = await User.countDocuments({ gameId: null })
+  if (usersWithoutGameId > 0) {
+    console.log(`Migrating ${usersWithoutGameId} users without gameId...`)
+    await User._collection().updateMany(
+      { gameId: null },
+      { $set: { gameId } }
+    )
+    console.log('User gameId migration completed')
   }
 
   // ===== 数据迁移：修复 seed 数据中的 roundIndex 字段 =====
@@ -225,6 +259,7 @@ app.use('/api/bigbrother/veto', bbGameIdMiddleware, require('./games/bigbrother/
 app.use('/api/bigbrother/eviction', bbGameIdMiddleware, require('./games/bigbrother/routes/bbEviction'))
 app.use('/api/bigbrother/logs', bbGameIdMiddleware, require('./games/bigbrother/routes/bbLogs'))
 app.use('/api/bigbrother/chat', bbGameIdMiddleware, require('./games/bigbrother/routes/bbChat'))
+app.use('/api/bigbrother/minigame', bbGameIdMiddleware, require('./games/bigbrother/routes/bbMinigame'))
 
 // ===== 恋综路由（固定 gameId = lovevariety）=====
 const lvGameIdMiddleware = (req, res, next) => { req.gameId = 'lovevariety'; next() }
@@ -246,6 +281,7 @@ app.use('/api/:gameId/songs', require('./routes/songs'))
 app.use('/api/:gameId/training', require('./routes/training'))
 app.use('/api/:gameId/rehearsal', require('./routes/rehearsal'))
 app.use('/api/:gameId/performance', require('./routes/performance'))
+app.use('/api/:gameId/concurrent', require('./routes/concurrent'))
 app.use('/api/:gameId/player', require('./routes/player'))
 app.use('/api/:gameId/admin/audience-vote', require('./routes/audienceVote'))
 app.use('/api/:gameId/audience-vote', require('./routes/audienceVote'))
@@ -398,6 +434,14 @@ initStore().then(() => {
         // 初始化聊天 WebSocket
         const { initChatSocket } = require('./socket/chat')
         initChatSocket(io)
+
+        // 初始化 Big Brother 聊天 WebSocket
+        const { initBBChatSocket } = require('./socket/bbChat')
+        initBBChatSocket(io)
+
+        // 初始化 Big Brother 小游戏 WebSocket
+        const { initBBMinigameSocket } = require('./socket/bbMinigame')
+        initBBMinigameSocket(io)
 
         server.listen(PORT, () => {
           console.log(`Server running on port ${PORT}`)

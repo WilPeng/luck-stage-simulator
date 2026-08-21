@@ -1,8 +1,13 @@
 <template>
   <div class="bb-home">
     <div class="welcome-section">
-      <h1>欢迎回来，{{ authStore.currentUser?.name }}</h1>
-      <p class="subtitle">当前第 {{ seasonStore.currentRoundNumber }} 周 · {{ seasonStore.stageName }}</p>
+      <div class="welcome-row">
+        <BBAvatar :name="authStore.currentUser?.name || '?'" :avatar="authStore.currentUser?.avatar" size="lg" />
+        <div>
+          <h1>欢迎回来，{{ authStore.currentUser?.name }}</h1>
+          <p class="subtitle">当前第 {{ seasonStore.currentRoundNumber }} 周 · {{ seasonStore.stageName }}</p>
+        </div>
+      </div>
     </div>
 
     <div v-if="currentHoh" class="hoh-banner" :class="{ 'is-me': isMe(currentHoh.winnerName) }">
@@ -77,6 +82,7 @@ import { useRouter } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
 import { bbGetCurrentHoh } from '../../../services/bbApi'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 
 const router = useRouter()
 const authStore = useBbAuthStore()
@@ -150,6 +156,7 @@ onMounted(async () => {
 <style scoped>
 .bb-home { max-width: 1000px; margin: 0 auto; }
 .welcome-section { margin-bottom: 24px; }
+.welcome-row { display: flex; align-items: center; gap: 16px; }
 .welcome-section h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0 0 8px; }
 .subtitle { font-size: 14px; color: #888; margin: 0; }
 

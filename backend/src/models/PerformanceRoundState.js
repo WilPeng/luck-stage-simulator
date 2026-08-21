@@ -10,6 +10,7 @@ class PerformanceRoundState extends BaseModel {
     this.roundId = null             // 前端 roundId 格式 "round-1"
     this.roundIndex = null          // 轮次数字
     this.started = false            // 公演是否已开启
+    this.generationMode = 'random'  // 'random' | 'pointer'，发挥值生成方式
     this.revealedTeamIds = []       // 已揭晓的队伍 ID 列表
     this.updatedAt = null
     if (data) Object.assign(this, data)

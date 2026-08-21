@@ -282,6 +282,9 @@ router.post('/draw', auth, async (req, res) => {
       const season = await getCurrentSeason()
       if (season) round = await Round.findOne({ seasonId: season.id, index: rIdxInput })
     }
+    if (round && !round.trainingReleased) {
+      return res.status(403).json({ success: false, error: '训练尚未开放', code: 'TRAINING_NOT_RELEASED' })
+    }
     const rId = round ? round.id : (roundId || 'default-round')
     const rIdx = round ? round.index : rIdxInput
 

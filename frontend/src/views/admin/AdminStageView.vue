@@ -23,8 +23,16 @@
           <span class="overview-value">{{ stageName }}</span>
           <span class="overview-label">当前阶段</span>
         </div>
-        <div class="overview-item">
-          <span class="overview-value">{{ totalRounds }}</span>
+        <div class="overview-item editable">
+          <div v-if="!editingTotalRounds" class="overview-value-with-action">
+            <span class="overview-value">{{ totalRounds }}</span>
+            <t-button variant="text" size="small" @click="startEditTotalRounds">修改</t-button>
+          </div>
+          <div v-else class="overview-value-edit">
+            <t-input v-model="totalRoundsDraft" type="number" size="small" style="width: 70px" />
+            <t-button theme="primary" size="small" :loading="savingTotalRounds" @click="saveTotalRounds">保存</t-button>
+            <t-button variant="text" size="small" @click="cancelEditTotalRounds">取消</t-button>
+          </div>
           <span class="overview-label">总轮次</span>
         </div>
         <div class="overview-item">
@@ -79,11 +87,19 @@
       <div class="quick-actions">
         <t-button
           theme="primary"
-          :disabled="!canGoNextStage"
+          :disabled="!canGoNextStage || seasonStore.currentStage === 'concurrent'"
           :loading="stageChanging"
           @click="handleNextStage"
         >
           进入下一阶段
+        </t-button>
+        <t-button
+          v-if="seasonStore.currentStage === 'concurrent'"
+          theme="warning"
+          :loading="stageChanging"
+          @click="goToConcurrentCenter"
+        >
+          前往并发行动中心
         </t-button>
         <t-button
           variant="outline"
@@ -99,6 +115,7 @@
           <div>状态机说明：</div>
           <ul style="margin: 8px 0 0 0; padding-left: 20px;">
             <li>管理员只控制 <strong>当前轮次 + 当前阶段</strong></li>
+            <li>并发行动阶段：组队、选歌、训练、彩排可同时进行</li>
             <li>所有页面状态由系统动态计算</li>
             <li>已完成 = 绿色，当前 = 蓝色，未开始 = 灰色</li>
           </ul>
@@ -160,6 +177,7 @@ import { useSeasonStore } from '../../stores/seasonStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { useSongStore } from '../../stores/songStore'
+import { useAuthStore } from '../../stores/authStore'
 import { STAGE_ORDER, STAGE_NAMES, getStageName } from '../../types/season'
 import type { StageType, StageStatus } from '../../types/season'
 
@@ -167,6 +185,7 @@ const router = useRouter()
 const route = useRoute()
 const seasonStore = useSeasonStore()
 const playerStore = usePlayerStore()
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const stageChanging = ref(false)
@@ -175,6 +194,11 @@ const resetDialogVisible = ref(false)
 const confirmDialogVisible = ref(false)
 const targetRound = ref(1)
 const targetStage = ref<StageType>('preparation')
+
+// 总轮次编辑
+const editingTotalRounds = ref(false)
+const totalRoundsDraft = ref('')
+const savingTotalRounds = ref(false)
 
 // 计算属性
 const currentRoundNumber = computed(() => seasonStore.currentRoundNumber)
@@ -274,6 +298,11 @@ async function confirmSwitch() {
   }
 }
 
+// 前往并发行动中心
+function goToConcurrentCenter() {
+  router.push(`/games/${authStore.currentGameId}/admin/round/${currentRoundNumber.value}/concurrent`)
+}
+
 // 进入下一阶段
 async function handleNextStage() {
   stageChanging.value = true
@@ -306,6 +335,39 @@ async function handleNextRound() {
   }
 }
 
+// 编辑总轮次
+function startEditTotalRounds() {
+  totalRoundsDraft.value = String(totalRounds.value)
+  editingTotalRounds.value = true
+}
+
+function cancelEditTotalRounds() {
+  editingTotalRounds.value = false
+}
+
+async function saveTotalRounds() {
+  const value = parseInt(totalRoundsDraft.value, 10)
+  if (isNaN(value) || value < 1) {
+    MessagePlugin.warning('总轮次必须大于等于 1')
+    return
+  }
+  if (value < currentRoundNumber.value) {
+    MessagePlugin.warning('总轮次不能小于当前轮次')
+    return
+  }
+
+  savingTotalRounds.value = true
+  try {
+    await seasonStore.updateRound({ totalRounds: value })
+    MessagePlugin.success(`总轮次已设置为 ${value}`)
+    editingTotalRounds.value = false
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '设置失败')
+  } finally {
+    savingTotalRounds.value = false
+  }
+}
+
 // 重置确认
 function handleResetConfirm() {
   resetDialogVisible.value = true
@@ -323,8 +385,7 @@ async function handleReset() {
     MessagePlugin.success('赛季已重置，跳转到第一公演')
     resetting.value = false
     // 跳转到第一公演预先准备阶段
-    const route = useRoute()
-    router.push(`/games/${route.params.gameId}/admin/round/1/preparation`)
+    router.push(`/games/${authStore.currentGameId}/admin/round/1/preparation`)
   } catch (e: any) {
     MessagePlugin.error('重置失败: ' + (e.message || '后端接口异常'))
     resetting.value = false
@@ -398,6 +459,21 @@ onMounted(loadData)
   padding: 12px;
   border-radius: 8px;
   background: var(--bg-primary);
+
+  &.editable {
+    .overview-value-with-action {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .overview-value-edit {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+  }
 }
 
 .overview-value {

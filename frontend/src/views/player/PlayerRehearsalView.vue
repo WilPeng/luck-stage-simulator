@@ -6,6 +6,15 @@
           <h1>彩排中心</h1>
           <p class="subtitle">查看彩排结果和对公演的影响</p>
         </div>
+
+        <!-- 未开放提示 -->
+        <div v-if="!isRehearsalReleased" class="release-locked-banner">
+          <span class="lock-icon">🔒</span>
+          <div class="lock-text">
+            <div class="lock-title">彩排入口尚未开放</div>
+            <div class="lock-desc">请等待管理员在并发行动中心开放彩排</div>
+          </div>
+        </div>
         
         <t-card v-if="currentTeam" theme="poster" class="team-card">
       <div class="team-header">
@@ -46,12 +55,13 @@
           <t-icon name="info-circle" style="font-size: 48px; color: var(--text-primary)" />
         </template>
       </t-empty>
-      <p class="empty-desc">{{ isCaptain ? '作为队长，你可以开启彩排' : '请等待队长开启彩排' }}</p>
+      <p class="empty-desc">{{ isCaptain ? (isRehearsalReleased ? '作为队长，你可以开启彩排' : '彩排入口尚未开放') : '请等待队长开启彩排' }}</p>
       <t-button
         v-if="isCaptain"
         theme="warning"
         variant="base"
         class="rehearsal-btn"
+        :disabled="!isRehearsalReleased"
         @click="handleStartRehearsal"
       >
         🎭 开始彩排
@@ -175,11 +185,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { usePerformanceStore } from '../../stores/performanceStore'
+import { getConcurrentReleaseStatus } from '../../services/api'
+import type { ConcurrentReleaseStatusResponse } from '../../types/season'
 import StageStatusView from '../../components/StageStatusView.vue'
 
 const route = useRoute()
@@ -188,6 +200,10 @@ const teamStore = useTeamStore()
 const performanceStore = usePerformanceStore()
 
 const currentRound = computed(() => Number(route.params.round))
+
+// 并发阶段释放状态
+const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
+const isRehearsalReleased = computed(() => !!releaseStatus.value?.rehearsalReleased)
 
 const currentUser = computed(() => authStore.currentUser)
 const isCaptain = computed(() => authStore.isCaptain)
@@ -218,15 +234,38 @@ async function handleStartRehearsal() {
   await performanceStore.start(currentTeam.value.id)
 }
 
+async function loadReleaseStatus() {
+  try {
+    releaseStatus.value = await getConcurrentReleaseStatus(`round-${currentRound.value}`)
+  } catch (e) {
+    releaseStatus.value = null
+  }
+}
+
 onMounted(async () => {
-  await teamStore.fetchTeams()
-  await performanceStore.fetchRehearsals()
+  await Promise.all([
+    teamStore.fetchTeams(),
+    performanceStore.fetchRehearsals(),
+    loadReleaseStatus()
+  ])
 })
 </script>
 
 <style lang="scss" scoped>
 .player-rehearsal {
 color: var(--text-primary);
+}
+
+.release-locked-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; margin-bottom: 20px;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 12px;
+  .lock-icon { font-size: 24px; }
+  .lock-text { flex: 1; }
+  .lock-title { font-size: 14px; font-weight: 600; color: #ffd700; }
+  .lock-desc { font-size: 12px; color: var(--text-tertiary); }
 }
 
 .rehearsal-header {

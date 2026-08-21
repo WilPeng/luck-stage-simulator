@@ -36,6 +36,22 @@
               </div>
             </div>
 
+            <div class="generation-mode-section">
+              <div class="mode-label">发挥值生成方式</div>
+              <t-radio-group
+                v-model="generationMode"
+                variant="default-filled"
+                :disabled="performanceStarted === true"
+                @change="handleGenerationModeChange"
+              >
+                <t-radio-button value="random">🎲 随机生成</t-radio-button>
+                <t-radio-button value="pointer">🎯 指针摆动</t-radio-button>
+              </t-radio-group>
+              <div class="mode-hint">
+                {{ generationMode === 'random' ? '选手端点击后系统随机给出发挥值' : '选手端通过点击停下指针获取发挥值' }}
+              </div>
+            </div>
+
             <div class="action-section">
               <t-button v-if="performanceStarted === false" theme="primary" size="large" block @click="handleStartPerformance">
                 选手开始公演
@@ -201,25 +217,39 @@
                     <span class="team-score">{{ teamDetail.teamScore }}分</span>
                   </div>
                 </div>
-                <!-- 最终票数构成 -->
-                <div class="detail-item final-breakdown">
-                  <span class="detail-label">最终票数构成</span>
-                  <div class="breakdown-list">
-                    <div class="breakdown-row">
-                      <span>基础票数</span>
-                      <span>500</span>
-                    </div>
-                    <div class="breakdown-row">
-                      <span>团队得分（{{ teamDetail.teamScore }}分）× 3</span>
-                      <span>+{{ teamDetail.teamScore * 3 }}</span>
-                    </div>
-                    <div class="breakdown-row">
-                      <span>平均魅力加成</span>
-                      <span class="positive">+{{ teamDetail.teamAttributes?.charm || 0 }}</span>
-                    </div>
-                    <div class="breakdown-row total">
-                      <span>最终票数</span>
-                      <span>{{ teamDetail.finalVotes }}票</span>
+                <!-- 大众评审投票矩阵 -->
+                <div class="detail-item audience-matrix-block">
+                  <div class="matrix-header">
+                    <span class="detail-label">大众评审投票矩阵</span>
+                    <span class="matrix-stat">
+                      投 YES：{{ teamAudienceMatrices[teamDetail.teamId]?.filter(s => s.votedYes).length || 0 }} / {{ teamAudienceMatrices[teamDetail.teamId]?.length || 1000 }}
+                    </span>
+                  </div>
+                  <div v-if="loadingTeamMatrix[teamDetail.teamId]" class="matrix-loading">
+                    <t-loading size="small" text="加载评审矩阵中..." />
+                  </div>
+                  <div v-else-if="!teamAudienceMatrices[teamDetail.teamId]?.length" class="matrix-empty">
+                    暂无大众评审投票记录
+                  </div>
+                  <div v-else class="audience-matrix">
+                    <div
+                      v-for="seat in teamAudienceMatrices[teamDetail.teamId]"
+                      :key="`${teamDetail.teamId}-${seat.seatNumber}`"
+                      class="matrix-seat"
+                      :class="{ yes: seat.votedYes }"
+                    >
+                      <t-tooltip placement="top">
+                        <template #content>
+                          <div>{{ seat.seatNumber }}号 · {{ seat.name || '未知评审' }}</div>
+                          <div style="font-size:12px;opacity:0.8">{{ seat.gender }} · {{ seat.age }}岁 · {{ seat.occupation }}</div>
+                          <div style="font-size:12px;opacity:0.8">{{ seat.votedYes ? '投了 YES' : '未投 YES' }}</div>
+                        </template>
+                        <div class="seat-inner">
+                          <div class="seat-name">{{ seat.name || '未知' }}</div>
+                          <div class="seat-gender-age">{{ seat.gender }} {{ seat.age }}岁</div>
+                          <div class="seat-occupation">{{ seat.occupation }}</div>
+                        </div>
+                      </t-tooltip>
                     </div>
                   </div>
                 </div>
@@ -276,6 +306,8 @@ import { usePlayerStore } from '../../stores/playerStore'
 import { calculatePerformanceResults } from '../../utils/performanceCalculator'
 import { saveRevealedTeams, loadRevealedTeams } from '../../services/performanceService'
 import type { PlayerStatus } from '../../services/performanceService'
+import type { TeamAudienceMatrixSeat, PerformanceGenerationMode } from '../../types/performance'
+import { setPerformanceGenerationMode } from '../../services/api'
 import AudienceVoteView from './AudienceVoteView.vue'
 
 const router = useRouter()
@@ -306,6 +338,7 @@ const currentRoundIdComputed = computed(() => {
 
 // ==================== 阶段一：选手发挥 ====================
 const performanceStarted = ref<boolean | null>(null) // null = 未确认，false = 未开启，true = 已开启
+const generationMode = ref<PerformanceGenerationMode>('random')
 const playerStatuses = ref<any[]>([])
 const playerPage = ref(1)
 const generatingPlayerId = ref('')
@@ -344,6 +377,9 @@ async function initPlayerStatuses() {
   try {
     const { getPlayerPerformanceStatus } = await import('../../services/api')
     const result = await getPlayerPerformanceStatus(roundId)
+    if (result.generationMode) {
+      generationMode.value = result.generationMode
+    }
     if (result.players?.length > 0) {
       playerStatuses.value = result.players
       performanceStarted.value = result.started || false
@@ -387,11 +423,23 @@ async function persistPlayerStatuses() {
   }
 }
 
+// 切换生成方式
+async function handleGenerationModeChange(value: string | number | boolean) {
+  const mode = value as PerformanceGenerationMode
+  generationMode.value = mode
+  try {
+    await setPerformanceGenerationMode(currentRoundIdComputed.value, mode)
+    MessagePlugin.success(`已切换到${mode === 'random' ? '随机生成' : '指针摆动'}模式`)
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '切换生成方式失败')
+  }
+}
+
 // 管理员开启公演
 async function handleStartPerformance() {
   try {
     const { startPerformance, getPlayerPerformanceStatus } = await import('../../services/api')
-    await startPerformance(currentRoundIdComputed.value || `round-${currentRound.value}`)
+    await startPerformance(currentRoundIdComputed.value || `round-${currentRound.value}`, generationMode.value)
     performanceStarted.value = true
 
     // 开启前先拉取一次最新状态，避免覆盖选手已生成的数据
@@ -465,6 +513,10 @@ const teamPerformanceResults = computed(() => performanceStore.teamPerformanceRe
 const sortedTeamResults = computed(() => performanceStore.sortedTeamPerformanceResults)
 const hasCalculated = computed(() => teamPerformanceResults.value.length > 0)
 
+// 各队的大众评审投票矩阵 { [teamId]: TeamAudienceMatrixSeat[] }
+const teamAudienceMatrices = ref<Record<string, TeamAudienceMatrixSeat[]>>({})
+const loadingTeamMatrix = ref<Record<string, boolean>>({})
+
 async function handleCalculate() {
   if (!currentRoundIdComputed.value) return
   const dialog = DialogPlugin.confirm({
@@ -491,6 +543,24 @@ async function handleCalculate() {
   })
 }
 
+async function loadTeamAudienceMatrix(teamId: string) {
+  if (!currentRoundIdComputed.value || !teamId) return
+  if (teamAudienceMatrices.value[teamId]?.length) return
+
+  loadingTeamMatrix.value[teamId] = true
+  try {
+    const { getTeamAudienceMatrix } = await import('../../services/api')
+    const res = await getTeamAudienceMatrix(currentRoundIdComputed.value, teamId)
+    if (res.success) {
+      teamAudienceMatrices.value[teamId] = res.seats || []
+    }
+  } catch (e: any) {
+    console.error('[Performance] 加载团队投票矩阵失败:', e.message)
+  } finally {
+    loadingTeamMatrix.value[teamId] = false
+  }
+}
+
 function handleRevealTeam(team: any) {
   // 避免重复添加
   if (!selectedTeamForReveal.value.find((t: any) => t.teamId === team.teamId)) {
@@ -500,6 +570,9 @@ function handleRevealTeam(team: any) {
   performanceStore.teamPerformanceResults = [...performanceStore.teamPerformanceResults]
 
   allTeamsRevealed.value = performanceStore.teamPerformanceResults.every((t: any) => t.status === 'confirmed')
+
+  // 加载该队的大众评审投票矩阵
+  loadTeamAudienceMatrix(team.teamId)
 
   // 持久化已揭晓的队伍
   if (currentRoundIdComputed.value) {
@@ -593,6 +666,12 @@ onMounted(async () => {
     if (revealed.length > 0 && revealed.length === teamPerformanceResults.value.length) {
       allTeamsRevealed.value = true
     }
+    // 预加载已揭晓队伍的投票矩阵
+    for (const team of teamPerformanceResults.value) {
+      if (team.status === 'confirmed') {
+        loadTeamAudienceMatrix(team.teamId)
+      }
+    }
   }
 
   // 检查是否已有观众投票结果
@@ -664,6 +743,27 @@ onMounted(async () => {
   .generated-count {
     font-size:14px;
     color: var(--text-secondary);
+  }
+}
+
+.generation-mode-section {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+
+  .mode-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+  }
+
+  .mode-hint {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--text-tertiary);
   }
 }
 
@@ -855,33 +955,105 @@ onMounted(async () => {
       }
     }
 
-    // 票数构成列表
-    .final-breakdown {
-      .breakdown-list {
+    // 大众评审投票矩阵
+    .audience-matrix-block {
+      .matrix-header {
         display: flex;
-        flex-direction: column;
-        gap: 6px;
-        padding: 12px;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+
+        .matrix-stat {
+          font-size: 13px;
+          color: var(--text-secondary);
+        }
+      }
+
+      .matrix-loading,
+      .matrix-empty {
+        padding: 20px;
+        text-align: center;
+        color: var(--text-secondary);
+        background: #f7f8fa;
+        border-radius: 8px;
+      }
+
+      .audience-matrix {
+        display: grid;
+        grid-template-columns: repeat(20, 1fr);
+        gap: 3px;
+        max-height: 420px;
+        overflow-y: auto;
+        padding: 8px;
         background: #f7f8fa;
         border-radius: 8px;
 
-        .breakdown-row {
+        .matrix-seat {
+          aspect-ratio: 1;
           display: flex;
-          justify-content: space-between;
-          padding: 6px 0;
-          font-size: 14px;
-          color: var(--text-secondary);
+          align-items: center;
+          justify-content: center;
+          background: #ffffff;
+          border: 1px solid #e5e6eb;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          overflow: hidden;
+          min-width: 0;
 
-          .positive { color: #00a870; font-weight: 600; }
-          .negative { color: #e34d59; font-weight: 600; }
+          .seat-inner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            line-height: 1.1;
+            text-align: center;
+            width: 100%;
+            padding: 1px;
+          }
 
-          &.total {
-            border-top: 2px solid #0052d9;
-            margin-top: 4px;
-            padding-top: 10px;
-            font-weight: 700;
-            color: #0052d9;
-            font-size: 16px;
+          .seat-name {
+            font-size: 8px;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+          .seat-gender-age {
+            font-size: 8px;
+            font-weight: 600;
+            color: #667eea;
+            white-space: nowrap;
+          }
+
+          .seat-occupation {
+            font-size: 7px;
+            color: var(--text-tertiary);
+            white-space: nowrap;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+          &:hover {
+            transform: scale(1.15);
+            border-color: #0052d9;
+            z-index: 1;
+          }
+
+          &.yes {
+            background: #00a870;
+            border-color: #00a870;
+
+            .seat-name,
+            .seat-gender-age,
+            .seat-occupation {
+              color: #ffffff;
+            }
           }
         }
       }

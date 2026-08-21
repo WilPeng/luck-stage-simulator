@@ -30,7 +30,7 @@
           </div>
 
           <div class="nav-section">
-            <div class="nav-section-title">赛程控制</div>
+            <div class="nav-section-title">赛季设置</div>
             <div v-for="item in stageItems" :key="item.path"
               class="nav-item" :class="{ active: $route.path.startsWith(item.path) }"
               @click="navigateTo(item.path)">
@@ -109,17 +109,17 @@ const fixedItems = [
 ]
 
 const stageItems = [
-  { icon: '🎯', text: '赛程矩阵', path: '/games/bigbrother/admin/stage' },
+  { icon: '🎯', text: '赛季设置', path: '/games/bigbrother/admin/stage' },
 ]
 
 const stageList = [
-  { key: 'hoh_competition' as BBStageType, icon: '👑', text: 'HOH竞争' },
-  { key: 'nomination' as BBStageType, icon: '📋', text: '提名' },
-  { key: 'veto_competition' as BBStageType, icon: '🛡️', text: '否决权竞争' },
-  { key: 'veto_ceremony' as BBStageType, icon: '⚖️', text: '否决权会议' },
-  { key: 'replacement_nom' as BBStageType, icon: '🔄', text: '替换提名' },
-  { key: 'eviction_vote' as BBStageType, icon: '🗳️', text: '淘汰投票' },
-  { key: 'eviction' as BBStageType, icon: '🚪', text: '淘汰结果' },
+  { key: 'hoh_competition' as BBStageType, icon: '👑', text: 'HOH竞争', route: 'hoh' },
+  { key: 'nomination' as BBStageType, icon: '📋', text: '提名仪式', route: 'nomination' },
+  { key: 'veto_competition' as BBStageType, icon: '🛡️', text: '否决权竞争', route: 'veto-competition' },
+  { key: 'veto_ceremony' as BBStageType, icon: '⚖️', text: '否决权会议', route: 'veto-ceremony' },
+  { key: 'replacement_nom' as BBStageType, icon: '🔄', text: '替换提名', route: 'replacement-nom' },
+  { key: 'eviction_vote' as BBStageType, icon: '🗳️', text: '淘汰投票', route: 'eviction-vote' },
+  { key: 'eviction' as BBStageType, icon: '🚪', text: '淘汰结果', route: 'eviction' },
 ]
 
 const otherItems = [
@@ -180,16 +180,8 @@ function navigateTo(path: string) {
 function navigateToStage(round: number, stage: BBStageType) {
   if (!isStageClickable(round, stage)) return
   mobileMenuOpen.value = false
-  const stageRoutes: Record<string, string> = {
-    hoh_competition: 'hoh',
-    nomination: 'nomination',
-    veto_competition: 'veto',
-    veto_ceremony: 'veto',
-    replacement_nom: 'nomination',
-    eviction_vote: 'eviction',
-    eviction: 'eviction'
-  }
-  const routeName = stageRoutes[stage] || 'hoh'
+  const st = stageList.find(s => s.key === stage)
+  const routeName = st?.route || 'hoh'
   router.push(`/games/bigbrother/admin/round/${round}/${routeName}`)
 }
 

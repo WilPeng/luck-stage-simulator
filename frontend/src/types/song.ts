@@ -12,6 +12,7 @@ export interface Song {
   availableRounds?: number[]
   enabled?: boolean
   description?: string
+  singerGender?: 'male' | 'female'
 }
 
 export interface SongStats {

@@ -23,6 +23,12 @@ const normalizeQuery = (query = {}) => {
       continue
     }
 
+    // $or / $and 等 MongoDB 操作符直接透传，不做处理
+    if (key === '$or' || key === '$and') {
+      normalized[key] = query[key]
+      continue
+    }
+
     normalized[key] = normalizeQueryValue(query[key])
   }
 
@@ -79,6 +85,34 @@ class BaseModel {
   async find(query = {}) {
     const documents = await this._getCollection().find(normalizeQuery(query)).toArray()
     return documents.map(document => this._hydrate(document))
+  }
+
+  // 支持 sort/skip/limit 的分页查询，返回 { data, total }
+  async findPaginated(query = {}, options = {}) {
+    const { sort = {}, skip = 0, limit = 0 } = options
+    const collection = this._getCollection()
+    const normalizedQuery = normalizeQuery(query)
+
+    let cursor = collection.find(normalizedQuery)
+    if (Object.keys(sort).length > 0) {
+      cursor = cursor.sort(sort)
+    }
+    if (skip > 0) {
+      cursor = cursor.skip(skip)
+    }
+    if (limit > 0) {
+      cursor = cursor.limit(limit)
+    }
+
+    const [documents, total] = await Promise.all([
+      cursor.toArray(),
+      collection.countDocuments(normalizedQuery)
+    ])
+
+    return {
+      data: documents.map(document => this._hydrate(document)),
+      total
+    }
   }
 
   async deleteOne(query = {}) {

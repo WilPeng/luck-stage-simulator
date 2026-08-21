@@ -2,13 +2,14 @@ const BaseModel = require('./BaseModel')
 
 /**
  * 大众评审成员（每轮 1000 人）
- * 字段: id / roundId / seatNumber / gender / age / occupation / createdAt
+ * 字段: id / roundId / seatNumber / name / gender / age / occupation / createdAt
  */
 class AudienceMember extends BaseModel {
   constructor(data) {
     super('AudienceMember')
     this.roundId = null
     this.seatNumber = null
+    this.name = ''        // 中文姓名，与 gender 相关
     this.gender = null    // 男 / 女
     this.age = null       // 18-60
     this.occupation = null // 职业

@@ -26,6 +26,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'history', name: 'PlayerHistory', component: () => import('../views/player/PlayerHistoryView.vue') },
       { path: 'round/:round/preparation', name: 'PlayerPreparation', component: () => import('../views/player/PlayerPlaceholderView.vue') },
       { path: 'round/:round/captain', name: 'PlayerCaptain', component: () => import('../views/player/PlayerCaptainView.vue') },
+      { path: 'round/:round/concurrent', name: 'PlayerConcurrent', component: () => import('../views/player/PlayerConcurrentView.vue') },
       { path: 'round/:round/team', name: 'PlayerTeam', component: () => import('../views/player/PlayerTeamView.vue') },
       { path: 'round/:round/song-selection', name: 'PlayerSongSelection', component: () => import('../views/player/PlayerSongSelectionView.vue') },
       { path: 'round/:round/training', name: 'PlayerTraining', component: () => import('../views/player/PlayerTrainingView.vue') },
@@ -57,6 +58,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'chat', name: 'AdminChat', component: () => import('../views/ChatView.vue') },
       { path: 'round/:round/preparation', name: 'AdminRoundPreparation', component: () => import('../views/admin/AdminPreparationView.vue') },
       { path: 'round/:round/captain_vote', name: 'AdminRoundCaptain', component: () => import('../views/admin/AdminCaptainView.vue') },
+      { path: 'round/:round/concurrent', name: 'AdminRoundConcurrent', component: () => import('../views/admin/AdminConcurrentView.vue') },
       { path: 'round/:round/teaming', name: 'AdminRoundTeam', component: () => import('../views/admin/AdminTeamView.vue') },
       { path: 'round/:round/song_select', name: 'AdminRoundSong', component: () => import('../views/admin/AdminSongView.vue') },
       { path: 'round/:round/training', name: 'AdminRoundTraining', component: () => import('../views/admin/AdminTrainingCardView.vue') },
@@ -78,8 +80,11 @@ const routes: RouteRecordRaw[] = [
       { path: 'history', name: 'BBPlayerHistory', component: () => import('../views/bigbrother/player/BBHistoryView.vue') },
       { path: 'round/:round/hoh', name: 'BBPlayerHoh', component: () => import('../views/bigbrother/player/BBHohView.vue') },
       { path: 'round/:round/nomination', name: 'BBPlayerNomination', component: () => import('../views/bigbrother/player/BBNominationView.vue') },
-      { path: 'round/:round/veto', name: 'BBPlayerVeto', component: () => import('../views/bigbrother/player/BBVetoView.vue') },
-      { path: 'round/:round/eviction', name: 'BBPlayerEviction', component: () => import('../views/bigbrother/player/BBEvictionView.vue') }
+      { path: 'round/:round/veto-competition', name: 'BBPlayerVetoCompetition', component: () => import('../views/bigbrother/player/BBVetoCompetitionView.vue') },
+      { path: 'round/:round/veto-ceremony', name: 'BBPlayerVetoCeremony', component: () => import('../views/bigbrother/player/BBVetoCeremonyView.vue') },
+      { path: 'round/:round/replacement-nom', name: 'BBPlayerReplacementNom', component: () => import('../views/bigbrother/player/BBReplacementNomView.vue') },
+      { path: 'round/:round/eviction-vote', name: 'BBPlayerEvictionVote', component: () => import('../views/bigbrother/player/BBEvictionVoteView.vue') },
+      { path: 'round/:round/eviction', name: 'BBPlayerEviction', component: () => import('../views/bigbrother/player/BBEvictionResultView.vue') }
     ]
   },
   // ===== Big Brother 管理端 =====
@@ -95,10 +100,14 @@ const routes: RouteRecordRaw[] = [
       { path: 'stage', name: 'BBAdminStage', component: () => import('../views/bigbrother/admin/BBStageView.vue') },
       { path: 'logs', name: 'BBAdminLogs', component: () => import('../views/bigbrother/admin/BBLogView.vue') },
       { path: 'chat', name: 'BBAdminChat', component: () => import('../views/bigbrother/admin/BBChatView.vue') },
-      { path: 'round/:round/hoh', name: 'BBAdminRoundHoh', component: () => import('../views/bigbrother/admin/BBHohView.vue') },
-      { path: 'round/:round/nomination', name: 'BBAdminRoundNomination', component: () => import('../views/bigbrother/admin/BBNominationView.vue') },
-      { path: 'round/:round/veto', name: 'BBAdminRoundVeto', component: () => import('../views/bigbrother/admin/BBVetoView.vue') },
-      { path: 'round/:round/eviction', name: 'BBAdminRoundEviction', component: () => import('../views/bigbrother/admin/BBEvictionView.vue') }
+      // 7 个独立阶段页面
+      { path: 'round/:round/hoh', name: 'BBAdminRoundHoh', component: () => import('../views/bigbrother/admin/BBHohCompetitionView.vue') },
+      { path: 'round/:round/nomination', name: 'BBAdminRoundNomination', component: () => import('../views/bigbrother/admin/BBInitialNominationView.vue') },
+      { path: 'round/:round/veto-competition', name: 'BBAdminRoundVetoCompetition', component: () => import('../views/bigbrother/admin/BBVetoDrawView.vue') },
+      { path: 'round/:round/veto-ceremony', name: 'BBAdminRoundVetoCeremony', component: () => import('../views/bigbrother/admin/BBVetoCeremonyView.vue') },
+      { path: 'round/:round/replacement-nom', name: 'BBAdminRoundReplacementNom', component: () => import('../views/bigbrother/admin/BBReplacementNomView.vue') },
+      { path: 'round/:round/eviction-vote', name: 'BBAdminRoundEvictionVote', component: () => import('../views/bigbrother/admin/BBEvictionVoteView.vue') },
+      { path: 'round/:round/eviction', name: 'BBAdminRoundEviction', component: () => import('../views/bigbrother/admin/BBEvictionResultView.vue') }
     ]
   },
   // ===== 恋综选手端 =====

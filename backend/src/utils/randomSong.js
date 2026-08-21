@@ -53,13 +53,12 @@ function generateDifficulty() {
 }
 
 /**
- * 生成声乐/舞蹈/魅力权重（1-10，三项之和在15-25之间保证合理）
+ * 生成声乐/舞蹈/魅力权重（1-10 之间的整数）
  */
 function generateWeights() {
-  // 先随机生成三个1-10的值
-  let vocal = randomInt(3, 10)
-  let dance = randomInt(3, 10)
-  let charm = randomInt(3, 10)
+  let vocal = randomInt(1, 10)
+  let dance = randomInt(1, 10)
+  let charm = randomInt(1, 10)
   return { vocalWeight: vocal, danceWeight: dance, charmWeight: charm }
 }
 

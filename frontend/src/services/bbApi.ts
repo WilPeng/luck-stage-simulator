@@ -2,11 +2,13 @@ import type {
   BBSeason, BBSeasonProgress, BBMenuData, BBHouseguest,
   BBHouseguestListResponse, BBHouseguestStats, BBHohRecord,
   BBNomination, BBVetoRecord, BBEvictionVote, BBEviction,
-  BBChatMessage, BBVoteResult, BBStageType
+  BBChatMessage, BBVoteResult, BBStageType,
+  BBTwistRoundConfig, BBTwistDef, BBRoundConfig,
+  MinigameDef, MinigameRoom
 } from '../types/bigbrother'
 
 function getApiRoot(): string {
-  return 'https://luck-stage-simulator.onrender.com/api'
+  return ((import.meta as any).env?.VITE_API_BASE || '').replace(/\/$/, '') || '/api'
 }
 
 const API_BASE = `${getApiRoot()}/bigbrother`
@@ -103,10 +105,49 @@ export async function bbResetSeason(): Promise<any> {
   return doRequest<any>('/season/reset', { method: 'POST' })
 }
 
-export async function bbUpdateRound(params: { totalRounds?: number }): Promise<BBSeason> {
+export async function bbUpdateRound(params: { totalRounds?: number; insertAfter?: number; deleteRound?: number }): Promise<BBSeason> {
   return doRequest<BBSeason>('/season/round', {
     method: 'PUT',
     body: JSON.stringify(params)
+  })
+}
+
+// ===== Twist 配置 =====
+export async function bbGetTwistConfigs(): Promise<{ twistConfigs: BBTwistRoundConfig[]; allTwists: BBTwistDef[] }> {
+  return doRequest('/season/twists')
+}
+
+export async function bbSaveTwistConfigs(twistConfigs: BBTwistRoundConfig[]): Promise<BBSeason> {
+  return doRequest<BBSeason>('/season/twists', {
+    method: 'PUT',
+    body: JSON.stringify({ twistConfigs })
+  })
+}
+
+// ===== 赛季配置（新接口） =====
+export async function bbGetSeasonConfig(): Promise<{
+  roundConfigs: BBRoundConfig[]
+  allTwists: BBTwistDef[]
+  totalRounds: number
+  isSeasonStarted: boolean
+  currentRound: number
+  jurySize: number
+}> {
+  return doRequest('/season/config')
+}
+
+export async function bbSaveSeasonConfig(params: { roundConfigs: BBRoundConfig[]; totalRounds?: number; jurySize?: number; finalSize?: number }): Promise<BBSeason> {
+  return doRequest<BBSeason>('/season/config', {
+    method: 'PUT',
+    body: JSON.stringify(params)
+  })
+}
+
+// ===== 直接民主投票 =====
+export async function bbVoteNominees(votes: { voterId: string; voterName: string; targetId: string; targetName: string }[]): Promise<any> {
+  return doRequest('/nomination/vote-nominees', {
+    method: 'POST',
+    body: JSON.stringify({ votes })
   })
 }
 
@@ -147,6 +188,69 @@ export async function bbDeleteHouseguest(id: string): Promise<void> {
   return doRequest<void>(`/houseguests/${id}`, { method: 'DELETE' })
 }
 
+// ===== 头像 =====
+
+/** 将存储路径转为可访问的完整 URL */
+export function bbGetAvatarUrl(avatar: string | null | undefined): string | null {
+  if (!avatar) return null
+  if (avatar.startsWith('http')) return avatar
+  return avatar
+}
+
+/** 选手自行上传头像 */
+export async function bbUploadMyAvatar(file: File, houseguestId?: string): Promise<{ avatar: string; houseguestId: string }> {
+  const formData = new FormData()
+  formData.append('avatar', file)
+  if (houseguestId) formData.append('houseguestId', houseguestId)
+  const url = `${API_BASE}/houseguests/me/avatar`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: buildHeaders().Authorization || '' },
+    body: formData
+  })
+  const json = await res.json()
+  if (!res.ok || json.success === false) throw new Error(json.error || '上传失败')
+  return json.data
+}
+
+/** 选手自行删除头像 */
+export async function bbDeleteMyAvatar(houseguestId?: string): Promise<void> {
+  const url = `${API_BASE}/houseguests/me/avatar`
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: { ...buildHeaders(), 'Content-Type': 'application/json' },
+    body: houseguestId ? JSON.stringify({ houseguestId }) : undefined
+  })
+  const json = await res.json()
+  if (!res.ok || json.success === false) throw new Error(json.error || '删除失败')
+}
+
+/** 管理员上传指定房客头像 */
+export async function bbUploadHouseguestAvatar(id: string, file: File): Promise<{ avatar: string; houseguestId: string }> {
+  const formData = new FormData()
+  formData.append('avatar', file)
+  const url = `${API_BASE}/houseguests/${id}/avatar`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: buildHeaders().Authorization || '' },
+    body: formData
+  })
+  const json = await res.json()
+  if (!res.ok || json.success === false) throw new Error(json.error || '上传失败')
+  return json.data
+}
+
+/** 管理员删除指定房客头像 */
+export async function bbDeleteHouseguestAvatar(id: string): Promise<void> {
+  const url = `${API_BASE}/houseguests/${id}/avatar`
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: buildHeaders()
+  })
+  const json = await res.json()
+  if (!res.ok || json.success === false) throw new Error(json.error || '删除失败')
+}
+
 // ===== HOH =====
 export async function bbGetCurrentHoh(): Promise<BBHohRecord | null> {
   return doRequest<BBHohRecord | null>('/hoh/current')
@@ -163,8 +267,13 @@ export async function bbAssignHoh(playerId: string, playerName: string): Promise
   })
 }
 
-export async function bbRunHohCompetition(): Promise<BBHohRecord> {
-  return doRequest<BBHohRecord>('/hoh/competition', { method: 'POST' })
+export async function bbRunHohCompetition(minigameResult?: {
+  winnerId: string; winnerName: string; minigameId: string; scores?: Record<string, number>
+}): Promise<BBHohRecord> {
+  return doRequest<BBHohRecord>('/hoh/competition', {
+    method: 'POST',
+    body: JSON.stringify(minigameResult ? { minigameResult } : {})
+  })
 }
 
 // ===== 提名 =====
@@ -195,8 +304,24 @@ export async function bbGetCurrentVeto(): Promise<BBVetoRecord | null> {
   return doRequest<BBVetoRecord | null>('/veto/current')
 }
 
-export async function bbRunVetoCompetition(): Promise<BBVetoRecord> {
-  return doRequest<BBVetoRecord>('/veto/competition', { method: 'POST' })
+export async function bbDrawVetoParticipants(): Promise<BBVetoRecord> {
+  return doRequest<BBVetoRecord>('/veto/draw', { method: 'POST' })
+}
+
+export async function bbPickVetoParticipant(pickedByPlayerId: string, pickedPlayerId: string): Promise<BBVetoRecord> {
+  return doRequest<BBVetoRecord>('/veto/pick', {
+    method: 'POST',
+    body: JSON.stringify({ pickedByPlayerId, pickedPlayerId })
+  })
+}
+
+export async function bbRunVetoCompetition(minigameResult?: {
+  winnerId: string; winnerName: string; minigameId: string; scores?: Record<string, number>
+}): Promise<BBVetoRecord> {
+  return doRequest<BBVetoRecord>('/veto/competition', {
+    method: 'POST',
+    body: JSON.stringify(minigameResult ? { minigameResult } : {})
+  })
 }
 
 export async function bbUseVeto(targetPlayerId: string, targetPlayerName: string): Promise<BBVetoRecord> {
@@ -263,10 +388,22 @@ export async function bbGetChatMessages(params?: { page?: number; pageSize?: num
   return doRequest(`/chat${qs ? '?' + qs : ''}`)
 }
 
-export async function bbSendChatMessage(content: string): Promise<BBChatMessage> {
+export async function bbGetPrivateChatMessages(targetId: string, params?: { page?: number; pageSize?: number }): Promise<{ messages: BBChatMessage[]; total: number }> {
+  const query = new URLSearchParams()
+  if (params?.page) query.append('page', String(params.page))
+  if (params?.pageSize) query.append('pageSize', String(params.pageSize))
+  const qs = query.toString()
+  return doRequest(`/chat/private/${targetId}${qs ? '?' + qs : ''}`)
+}
+
+export async function bbGetAllPrivateChats(): Promise<{ conversations: { user1Id: string; user1Name: string; user2Id: string; user2Name: string; messages: BBChatMessage[] }[] }> {
+  return doRequest('/chat/all-private')
+}
+
+export async function bbSendChatMessage(content: string, chatType?: string, targetId?: string, targetName?: string): Promise<BBChatMessage> {
   return doRequest<BBChatMessage>('/chat', {
     method: 'POST',
-    body: JSON.stringify({ content })
+    body: JSON.stringify({ content, chatType, targetId, targetName })
   })
 }
 
@@ -274,6 +411,40 @@ export async function bbDeleteChatMessage(id: string): Promise<void> {
   return doRequest<void>(`/chat/${id}`, { method: 'DELETE' })
 }
 
-export async function bbClearChatMessages(): Promise<void> {
-  return doRequest<void>('/chat', { method: 'DELETE' })
+export async function bbClearChatMessages(chatType?: string): Promise<void> {
+  const query = chatType ? `?chatType=${chatType}` : ''
+  return doRequest<void>(`/chat${query}`, { method: 'DELETE' })
 }
+
+// ===== 小游戏 =====
+export async function bbGetMinigameList(): Promise<MinigameDef[]> {
+  return doRequest<MinigameDef[]>('/minigame/list')
+}
+
+export async function bbCreateMinigameRoom(
+  gameType: 'hoh' | 'veto',
+  minigameId: string,
+  participants: { playerId: string; playerName: string; avatar?: string | null }[]
+): Promise<MinigameRoom> {
+  return doRequest<MinigameRoom>('/minigame/create-room', {
+    method: 'POST',
+    body: JSON.stringify({ gameType, minigameId, participants })
+  })
+}
+
+export async function bbStartMinigame(roomId: string): Promise<void> {
+  return doRequest<void>('/minigame/start', {
+    method: 'POST',
+    body: JSON.stringify({ roomId })
+  })
+}
+
+export async function bbGetMinigameRoom(roomId: string): Promise<MinigameRoom | null> {
+  return doRequest<MinigameRoom | null>(`/minigame/room/${roomId}`)
+}
+
+export async function bbGetActiveMinigameRoom(gameType: 'hoh' | 'veto'): Promise<MinigameRoom | null> {
+  return doRequest<MinigameRoom | null>(`/minigame/active-room/${gameType}`)
+}
+
+

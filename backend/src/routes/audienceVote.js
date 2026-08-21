@@ -8,6 +8,7 @@ const PlayerPerformance = require('../models/PlayerPerformance')
 const AudienceVoteSession = require('../models/AudienceVoteSession')
 const AudienceMember = require('../models/AudienceMember')
 const AudienceVote = require('../models/AudienceVote')
+const AudienceTeamVote = require('../models/AudienceTeamVote')
 const AudienceVoteFinalRanking = require('../models/AudienceVoteFinalRanking')
 const { generateAudienceVoteForRound, clearAudienceVote, AUDIENCE_COUNT, VOTES_PER_AUDIENCE } = require('../services/audienceVoteService')
 
@@ -200,6 +201,7 @@ router.get('/seats', auth, requireAdmin, async (req, res) => {
         id: `seat-${i}`,
         seatNumber: i,
         voted: !!m,
+        name: m ? m.name : null,
         gender: m ? m.gender : null,
         age: m ? m.age : null,
         occupation: m ? m.occupation : null
@@ -242,8 +244,12 @@ router.get('/seat/:seatNumber', auth, requireAdmin, async (req, res) => {
       })
     }
 
-    const votes = await AudienceVote.find({ roundId: round.id, audienceId: member.id })
+    const [votes, teamVotes] = await Promise.all([
+      AudienceVote.find({ roundId: round.id, audienceId: member.id }),
+      AudienceTeamVote.find({ roundId: round.id, audienceId: member.id, votedYes: true })
+    ])
     votes.sort((a, b) => a.voteOrder - b.voteOrder)
+    teamVotes.sort((a, b) => a.teamName.localeCompare(b.teamName, 'zh-CN'))
 
     const users = await User.find({})
     const userMap = {}
@@ -253,9 +259,11 @@ router.get('/seat/:seatNumber', auth, requireAdmin, async (req, res) => {
       success: true,
       detail: {
         seatNumber,
+        name: member.name || null,
         gender: member.gender || null,
         age: member.age || null,
         occupation: member.occupation || null,
+        teamVotes: teamVotes.map(tv => ({ teamId: tv.teamId, teamName: tv.teamName })),
         votes: votes.map(v => ({
           voteOrder: v.voteOrder,
           playerId: v.playerId,
@@ -277,8 +285,9 @@ router.delete('/', auth, requireAdmin, async (req, res) => {
     const round = await resolveRoundFromBody(req)
     if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
 
-    await clearAudienceVote(round.id)
-    res.json({ success: true, message: `已清空第 ${round.index || '?'} 轮大众评审投票` })
+    const includeMembers = req.body.clearMembers === true || req.body.includeMembers === true
+    await clearAudienceVote(round.id, includeMembers)
+    res.json({ success: true, message: `已清空第 ${round.index || '?'} 轮大众评审投票${includeMembers ? '（含评审成员）' : ''}` })
   } catch (e) {
     console.error('Delete audience vote error:', e)
     res.status(500).json({ success: false, error: '清空失败', code: 'SERVER_ERROR' })
@@ -486,6 +495,7 @@ router.get('/player-seats', auth, async (req, res) => {
         id: `seat-${i}`,
         seatNumber: i,
         voted: !!m,
+        name: m ? m.name : null,
         gender: m ? m.gender : null,
         age: m ? m.age : null,
         occupation: m ? m.occupation : null
@@ -500,6 +510,52 @@ router.get('/player-seats', auth, async (req, res) => {
   } catch (e) {
     console.error('Get player seats error:', e)
     res.status(500).json({ success: false, error: '获取评审席失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== GET /api/audience-vote/team-matrix - 查看某支队伍的大众评审投票矩阵（管理员）=====
+router.get('/team-matrix', auth, requireAdmin, async (req, res) => {
+  try {
+    const round = await resolveRoundFromQuery(req)
+    if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
+
+    const { teamId } = req.query
+    if (!teamId) return res.status(400).json({ success: false, error: '缺少 teamId', code: 'MISSING_TEAM_ID' })
+
+    const [members, teamVotes] = await Promise.all([
+      AudienceMember.find({ roundId: round.id }),
+      AudienceTeamVote.find({ roundId: round.id, teamId, votedYes: true })
+    ])
+
+    const memberMap = {}
+    for (const m of members) memberMap[m.seatNumber] = m
+
+    const votedSeatSet = new Set()
+    for (const tv of teamVotes) votedSeatSet.add(tv.seatNumber)
+
+    const seats = []
+    for (let i = 1; i <= AUDIENCE_COUNT; i++) {
+      const m = memberMap[i]
+      seats.push({
+        seatNumber: i,
+        votedYes: votedSeatSet.has(i),
+        name: m ? m.name : null,
+        gender: m ? m.gender : null,
+        age: m ? m.age : null,
+        occupation: m ? m.occupation : null
+      })
+    }
+
+    res.json({
+      success: true,
+      totalSeats: AUDIENCE_COUNT,
+      yesCount: teamVotes.length,
+      teamId,
+      seats
+    })
+  } catch (e) {
+    console.error('Get team matrix error:', e)
+    res.status(500).json({ success: false, error: '获取团队投票矩阵失败', code: 'SERVER_ERROR' })
   }
 })
 
@@ -522,8 +578,12 @@ router.get('/player-seat/:seatNumber', auth, async (req, res) => {
       })
     }
 
-    const votes = await AudienceVote.find({ roundId: round.id, audienceId: member.id })
+    const [votes, teamVotes] = await Promise.all([
+      AudienceVote.find({ roundId: round.id, audienceId: member.id }),
+      AudienceTeamVote.find({ roundId: round.id, audienceId: member.id, votedYes: true })
+    ])
     votes.sort((a, b) => a.voteOrder - b.voteOrder)
+    teamVotes.sort((a, b) => a.teamName.localeCompare(b.teamName, 'zh-CN'))
 
     const users = await User.find({})
     const userMap = {}
@@ -533,9 +593,11 @@ router.get('/player-seat/:seatNumber', auth, async (req, res) => {
       success: true,
       detail: {
         seatNumber,
+        name: member.name || null,
         gender: member.gender || null,
         age: member.age || null,
         occupation: member.occupation || null,
+        teamVotes: teamVotes.map(tv => ({ teamId: tv.teamId, teamName: tv.teamName })),
         votes: votes.map(v => ({
           voteOrder: v.voteOrder,
           playerId: v.playerId,

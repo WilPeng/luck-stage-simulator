@@ -1,0 +1,7 @@
+[LVPlayers] 使用本地文件存储头像
+Connected to MongoDB: luck-stage
+[Big Brother] Existing data found, skipping initialization
+[恋综] Existing data found, skipping initialization
+Server running on port 3000
+WebSocket (Socket.IO) enabled
+Database persistence enabled: mongodb://localhost:27017/luck-stage

@@ -7,7 +7,14 @@
       <span v-else-if="isFuture" class="future-tag">未开始</span>
     </div>
 
-    <div v-if="currentHoh" class="hoh-announcement">
+    <!-- 小游戏模式：有活跃房间且玩家在参与者中 -->
+    <div v-if="showMinigame" class="minigame-section">
+      <component :is="gameComponent" :roomId="activeRoom.roomId"
+        :participants="activeRoom.participants" @finished="onMinigameFinished" />
+    </div>
+
+    <!-- 已有结果 -->
+    <div v-else-if="currentHoh" class="hoh-announcement">
       <div class="hoh-card" :class="{ 'is-me': isMe(currentHoh.winnerName) }">
         <div class="hoh-crown">👑</div>
         <div class="hoh-body">
@@ -22,6 +29,8 @@
         </div>
       </div>
     </div>
+
+    <!-- 等待中 -->
     <div v-else class="hoh-card pending">
       <div class="hoh-crown">👑</div>
       <div class="hoh-body">
@@ -33,12 +42,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, markRaw, type Component } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetHohHistory } from '../../../services/bbApi'
-import type { BBHohRecord } from '../../../types/bigbrother'
+import { bbGetHohHistory, bbGetActiveMinigameRoom, bbRunHohCompetition } from '../../../services/bbApi'
+import ClickSpeedGame from '../../../components/bigbrother/minigames/ClickSpeedGame.vue'
+import MemoryMatchGame from '../../../components/bigbrother/minigames/MemoryMatchGame.vue'
+import QuickMathGame from '../../../components/bigbrother/minigames/QuickMathGame.vue'
+import BalanceBarGame from '../../../components/bigbrother/minigames/BalanceBarGame.vue'
+import DiceDuelGame from '../../../components/bigbrother/minigames/DiceDuelGame.vue'
+import type { BBHohRecord, MinigameRoom } from '../../../types/bigbrother'
 
 const route = useRoute()
 const authStore = useBbAuthStore()
@@ -49,49 +63,103 @@ const isHistory = computed(() => seasonStore.isStageCompleted(roundNum.value, 'h
 const isFuture = computed(() => seasonStore.getStageStatus(roundNum.value, 'hoh_competition') === 'future')
 
 const currentHoh = ref<BBHohRecord | null>(null)
+const activeRoom = ref<MinigameRoom | null>(null)
+const gameComponent = ref<Component | null>(null)
+
+const myId = computed(() => authStore.currentUser?.id || '')
+const myName = computed(() => authStore.currentUser?.name || '')
+
+const showMinigame = computed(() => {
+  if (!activeRoom.value || activeRoom.value.status === 'finished') return false
+  if (!activeRoom.value.participants) return false
+  return activeRoom.value.participants.some(p => p.playerId === myId.value)
+})
+
+const gameComponentMap: Record<string, Component> = {
+  'click-speed': markRaw(ClickSpeedGame),
+  'memory-match': markRaw(MemoryMatchGame),
+  'quick-math': markRaw(QuickMathGame),
+  'balance-bar': markRaw(BalanceBarGame),
+  'dice-duel': markRaw(DiceDuelGame)
+}
 
 function isMe(name: string): boolean {
-  return name === authStore.currentUser?.name
+  return name === myName.value
+}
+
+async function onMinigameFinished(winner: { playerId: string; playerName: string }) {
+  // 通知后端记录获胜者
+  try {
+    const result = await bbRunHohCompetition({
+      winnerId: winner.playerId,
+      winnerName: winner.playerName,
+      minigameId: activeRoom.value?.minigameId || '',
+      scores: {}
+    })
+    currentHoh.value = result
+    activeRoom.value = null
+  } catch (e: any) {
+    console.error('记录 HOH 结果失败:', e)
+  }
 }
 
 onMounted(async () => {
+  // 加载 HOH 历史
   try {
     const history = await bbGetHohHistory()
     const roundKey = `round-${roundNum.value}`
     currentHoh.value = history.find(h => h.roundId === roundKey) || null
   } catch {}
+
+  // 检查活跃的小游戏房间（初始 + 轮询）
+  let pollTimer: ReturnType<typeof setInterval> | null = null
+
+  const checkRoom = async () => {
+    // 已有结果或房间已结束，停止轮询
+    if (currentHoh.value || activeRoom.value?.status === 'finished') {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+      return
+    }
+    try {
+      const room = await bbGetActiveMinigameRoom('hoh')
+      if (room) {
+        activeRoom.value = room
+        gameComponent.value = gameComponentMap[room.minigameId] || null
+        // 房间已存在，可以停止轮询（后续由小游戏组件的 socket 处理）
+        if (room.status === 'finished' && pollTimer) {
+          clearInterval(pollTimer)
+          pollTimer = null
+        }
+      }
+    } catch {}
+  }
+
+  // 首次检查
+  await checkRoom()
+  // 每2秒轮询，直到房间出现或已有结果
+  if (!currentHoh.value && (!activeRoom.value || activeRoom.value.status !== 'finished')) {
+    pollTimer = setInterval(checkRoom, 2000)
+  }
+
+  onUnmounted(() => {
+    if (pollTimer) clearInterval(pollTimer)
+  })
 })
 </script>
 
 <style scoped>
-.bb-hoh-player { max-width: 500px; margin: 0 auto; padding: 16px; }
+.bb-hoh-player { max-width: 600px; margin: 0 auto; padding: 16px; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
 .page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
 .round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
 .history-tag { background: #88888822; color: #aaa; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
 .future-tag { background: #44444422; color: #666; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
-
+.minigame-section { margin-bottom: 20px; background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 12px; overflow: hidden; }
 .hoh-announcement { animation: fadeIn 0.4s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-.hoh-card {
-  background: linear-gradient(135deg, #0f0f2e, #1a1a3e);
-  border: 1px solid #444;
-  border-radius: 16px;
-  padding: 32px 24px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-.hoh-card.is-me {
-  border-color: #00ff88;
-  background: linear-gradient(135deg, #0a1a0a, #0f2e1a);
-  box-shadow: 0 0 20px rgba(0, 255, 136, 0.1);
-}
-.hoh-card.pending {
-  border-color: #444;
-}
-
+.hoh-card { background: linear-gradient(135deg, #0f0f2e, #1a1a3e); border: 1px solid #444; border-radius: 16px; padding: 32px 24px; display: flex; align-items: center; gap: 20px; }
+.hoh-card.is-me { border-color: #00ff88; background: linear-gradient(135deg, #0a1a0a, #0f2e1a); box-shadow: 0 0 20px rgba(0, 255, 136, 0.1); }
+.hoh-card.pending { border-color: #444; }
 .hoh-crown { font-size: 56px; flex-shrink: 0; }
 .hoh-body { flex: 1; }
 .hoh-label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }

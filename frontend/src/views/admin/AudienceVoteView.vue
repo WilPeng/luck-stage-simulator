@@ -289,12 +289,13 @@
               <template v-if="seat.voted && seat.gender">
                 <t-tooltip placement="top">
                   <template #content>
-                    <div>{{ seat.seatNumber }}号评审</div>
+                    <div>{{ seat.seatNumber }}号评审 · {{ seat.name || '未知' }}</div>
                     <div style="font-size:12px;opacity:0.8">{{ seat.gender }} · {{ seat.age }}岁 · {{ seat.occupation }}</div>
                   </template>
-                  <span class="seat-gender-age">{{ seat.gender }} {{ seat.age }}岁</span>
+                  <div class="seat-name">{{ seat.name || '未知' }}</div>
+                  <div class="seat-gender-age">{{ seat.gender }} {{ seat.age }}岁</div>
+                  <div class="seat-occupation">{{ seat.occupation }}</div>
                 </t-tooltip>
-                <span class="seat-occupation">{{ seat.occupation }}</span>
               </template>
               <t-tooltip v-else placement="top" :content="`${seat.seatNumber}号评审`">
                 <span class="seat-empty">—</span>
@@ -315,9 +316,24 @@
         <div v-if="store.selectedAudienceDetail" class="vote-detail-editable">
           <!-- 评审档案 -->
           <div v-if="store.selectedAudienceDetail.gender" class="reviewer-profile">
+            <span class="profile-tag name">{{ store.selectedAudienceDetail.name || '未知评审' }}</span>
             <span class="profile-tag gender">{{ store.selectedAudienceDetail.gender }}</span>
             <span class="profile-tag age">{{ store.selectedAudienceDetail.age }}岁</span>
             <span class="profile-tag occupation">{{ store.selectedAudienceDetail.occupation }}</span>
+          </div>
+          <!-- 舞台 yes 票 -->
+          <div v-if="store.selectedAudienceDetail.teamVotes && store.selectedAudienceDetail.teamVotes.length > 0" class="team-votes-section">
+            <div class="section-label">为以下舞台投送 yes：</div>
+            <div class="team-votes-list">
+              <span
+                v-for="tv in store.selectedAudienceDetail.teamVotes"
+                :key="tv.teamId"
+                class="team-vote-tag"
+              >{{ tv.teamName }}</span>
+            </div>
+          </div>
+          <div v-else class="team-votes-section empty">
+            <div class="section-label">暂无舞台投票记录</div>
           </div>
           <div class="edit-hint">可修改该评审的投票对象，下拉选择选手</div>
           <div
@@ -1035,15 +1051,25 @@ watch(currentRoundId, (newVal, oldVal) => {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0;
+    gap: 1px;
     line-height: 1.15;
     text-align: center;
     width: 100%;
     padding: 2px;
   }
 
+  .seat-name {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .seat-gender-age {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 600;
     color: #667eea;
     white-space: nowrap;
@@ -1119,9 +1145,40 @@ watch(currentRoundId, (newVal, oldVal) => {
       border-radius: 12px;
       color: #fff;
 
+      &.name { background: #10b981; font-weight: 500; }
       &.gender { background: #667eea; }
       &.age { background: #f093fb; }
       &.occupation { background: #4facfe; }
+    }
+  }
+
+  .team-votes-section {
+    padding: 10px 12px;
+    background: #f6ffed;
+    border-radius: 8px;
+
+    &.empty {
+      background: #f5f5f5;
+    }
+
+    .section-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .team-votes-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+
+      .team-vote-tag {
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 12px;
+        background: #52c41a;
+        color: #fff;
+      }
     }
   }
 

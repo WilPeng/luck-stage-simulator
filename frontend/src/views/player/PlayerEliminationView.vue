@@ -89,8 +89,8 @@ onMounted(async () => {
 .elimination-page {
   min-height: 100vh;
   padding: 24px 20px;
-  background: #f5f7fa;
-color: var(--text-primary);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 // ===== 晋级恭喜 =====

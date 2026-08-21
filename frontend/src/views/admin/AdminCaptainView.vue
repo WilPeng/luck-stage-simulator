@@ -17,12 +17,16 @@
         <t-card title="候选选手" :bordered="false" class="stage-card">
           <template #subtitle>
             <t-tag theme="primary" variant="light">第 {{ currentRound }} 公演</t-tag>
-            <span class="subtitle-info">共 {{ candidates.length }} 位候选选手</span>
+            <span class="subtitle-info">共 {{ filteredCandidates.length }} / {{ candidates.length }} 位候选选手</span>
           </template>
+
+          <div class="candidate-search">
+            <t-input v-model="searchKeyword" placeholder="搜索选手姓名" clearable />
+          </div>
 
           <div class="candidates-grid">
             <div
-              v-for="candidate in candidates"
+              v-for="candidate in filteredCandidates"
               :key="candidate.id"
               class="candidate-card"
               :class="{
@@ -147,10 +151,9 @@
               theme="primary"
               block
               :loading="saving"
-              :disabled="!allTeamsAssigned"
               @click="saveCaptains"
             >
-              保存队长与阵型
+              刷新队长数据
             </t-button>
             <t-button
               variant="outline"
@@ -237,6 +240,7 @@ const saving = ref(false)
 const showVotingRecords = ref(false)
 const selectedCaptains = ref<string[]>([])
 const voteRecords = ref<{ voterName: string; targetName: string; targetId: string; createdAt: string }[]>([])
+const searchKeyword = ref('')
 
 const groupedRecords = computed(() => {
   const map = new Map<string, { playerId: string; playerName: string; votes: number; voters: string[] }>()
@@ -333,7 +337,12 @@ const candidates = computed(() => {
   ).map(u => ({
     ...u,
     isCurrentRoundCaptain: isRoundCaptain(u.id)
-  }))
+  }))})
+
+const filteredCandidates = computed(() => {
+  const kw = searchKeyword.value.trim().toLowerCase()
+  if (!kw) return candidates.value
+  return candidates.value.filter(c => (c.name || '').toLowerCase().includes(kw))
 })
 
 // 当前轮的队长列表（已分配到队伍的）
@@ -436,94 +445,148 @@ function getTeamCaptain(teamId: string): User | undefined {
   return candidates.value.find(c => c.id === captainId)
 }
 
-// 为队伍分配队长
-function assignCaptainToTeam(teamId: string, captainId: string) {
-  // 检查该队长是否已被分配到其他队伍
-  Object.keys(teamCaptainMap.value).forEach(tid => {
-    if (teamCaptainMap.value[tid] === captainId && tid !== teamId) {
-      delete teamCaptainMap.value[tid]
+// 持久化单个队伍的队长分配到后端
+async function persistTeamCaptain(teamId: string, captainId: string) {
+  const roundId = `round-${currentRound.value}`
+  const team = teams.value.find(t => t.id === teamId)
+  if (!team) return
+
+  try {
+    // 先把队长当作普通队员加入队伍
+    const isCaptainInMembers = team.members?.some(m => m.playerId === captainId)
+    if (!isCaptainInMembers) {
+      await teamStore.addMember(team.id, captainId, roundId)
     }
-  })
+
+    // 再设置该队员为队长身份
+    await teamStore.assignCaptain(team.id, captainId, roundId)
+
+    // 更新队名为"xxx团"
+    const captain = playerStore.getPlayerById(captainId)
+    if (captain) {
+      const newTeamName = `${captain.name}团`
+      await teamStore.updateTeamName(team.id, newTeamName, roundId)
+    }
+  } catch (e: any) {
+    console.error(`[Captain] 保存队伍 ${team.name} 队长失败:`, e)
+    throw e
+  }
+}
+
+async function clearTeamCaptain(teamId: string) {
+  const roundId = `round-${currentRound.value}`
+  try {
+    await teamStore.assignCaptain(teamId, '', roundId)
+  } catch (e: any) {
+    console.error(`[Captain] 移除队伍 ${teamId} 队长失败:`, e)
+    throw e
+  }
+}
+
+// 为队伍分配队长（立即持久化）
+async function assignCaptainToTeam(teamId: string, captainId: string) {
+  const roundId = `round-${currentRound.value}`
+  // 检查该队长是否已被分配到其他队伍，若是则先移除
+  const previousTeamId = Object.keys(teamCaptainMap.value).find(
+    tid => teamCaptainMap.value[tid] === captainId && tid !== teamId
+  )
+
+  if (previousTeamId) {
+    delete teamCaptainMap.value[previousTeamId]
+    try {
+      await clearTeamCaptain(previousTeamId)
+    } catch (e: any) {
+      MessagePlugin.error(`移除原队伍队长失败: ${e.message}`)
+    }
+  }
+
   teamCaptainMap.value[teamId] = captainId
+
+  try {
+    saving.value = true
+    await persistTeamCaptain(teamId, captainId)
+    MessagePlugin.success('队长已分配并保存')
+    // 刷新数据
+    await teamStore.fetchTeams(roundId)
+    await loadTeams()
+    await loadCaptainRecords()
+  } catch (e: any) {
+    MessagePlugin.error(`分配队长失败: ${e.message}`)
+  } finally {
+    saving.value = false
+  }
 }
 
-// 移除队伍的队长分配
-function removeTeamCaptain(teamId: string) {
+// 移除队伍的队长分配（立即持久化）
+async function removeTeamCaptain(teamId: string) {
   delete teamCaptainMap.value[teamId]
+  try {
+    saving.value = true
+    await clearTeamCaptain(teamId)
+    MessagePlugin.success('队长已移除')
+    await teamStore.fetchTeams(`round-${currentRound.value}`)
+    await loadTeams()
+    await loadCaptainRecords()
+  } catch (e: any) {
+    MessagePlugin.error(`移除队长失败: ${e.message}`)
+  } finally {
+    saving.value = false
+  }
 }
 
-function autoSelectCaptains() {
-  const sorted = [...candidates.value].sort((a, b) => {
-    const aTotal = (a.attributes?.vocal || 0) + (a.attributes?.dance || 0) + (a.attributes?.charm || 0)
-    const bTotal = (b.attributes?.vocal || 0) + (b.attributes?.dance || 0) + (b.attributes?.charm || 0)
-    return bTotal - aTotal
-  })
-  selectedCaptains.value = sorted.slice(0, teamCount.value).map(c => c.id)
-  
-  // 自动分配到队伍
+async function autoSelectCaptains() {
+  // 随机从候选人中选出队长并随机分配到各队
+  const pool = [...candidates.value]
+  const count = Math.min(teamCount.value, teams.value.length, pool.length)
+  // Fisher–Yates 洗牌后取前 count 个
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]]
+  }
+  selectedCaptains.value = pool.slice(0, count).map(c => c.id)
+
+  // 逐个队伍保存，每次分配都立即请求后端
+  const roundId = `round-${currentRound.value}`
+  const errors: string[] = []
   teamCaptainMap.value = {}
-  teams.value.forEach((team, index) => {
-    if (selectedCaptains.value[index]) {
-      teamCaptainMap.value[team.id] = selectedCaptains.value[index]
+  saving.value = true
+  for (const [index, team] of teams.value.entries()) {
+    const captainId = selectedCaptains.value[index]
+    if (!captainId) continue
+    teamCaptainMap.value[team.id] = captainId
+    try {
+      await persistTeamCaptain(team.id, captainId)
+    } catch (e: any) {
+      console.warn(`[Captain] 自动分配队伍 ${team.name} 队长失败:`, e)
+      errors.push(`${team.name}: ${e.message}`)
     }
-  })
-  
-  MessagePlugin.success(`已自动推选并分配 ${teamCount.value} 位队长`)
+  }
+  saving.value = false
+
+  // 刷新数据
+  await teamStore.fetchTeams(roundId)
+  await loadTeams()
+  await loadCaptainRecords()
+
+  if (errors.length > 0) {
+    MessagePlugin.warning(`自动分配完成，但部分队伍失败:\n${errors.join('\n')}`)
+  } else {
+    MessagePlugin.success(`已自动推选并分配 ${teamCount.value} 位队长`)
+  }
 }
 
 async function saveCaptains() {
+  // 现在每次分配都会实时保存，此按钮仅用于刷新数据
   saving.value = true
   try {
-    // 1. 先作为普通队员加入队伍，再设为队长，最后更新队名
-    // 注意：不再修改 User.role，队长信息通过 RoundCaptain 表按轮次管理
     const roundId = `round-${currentRound.value}`
-    const errors: string[] = []
-    for (const team of teams.value) {
-      const captainId = teamCaptainMap.value[team.id] || ''
-      if (!captainId) continue
-
-      try {
-        // 先把队长当作普通队员加入队伍
-        const isCaptainInMembers = team.members?.some(m => m.playerId === captainId)
-        if (!isCaptainInMembers) {
-          await teamStore.addMember(team.id, captainId, roundId)
-        }
-
-        // 再设置该队员为队长身份（按轮次保存到 RoundTeam）
-        await teamStore.assignCaptain(team.id, captainId, roundId)
-
-        // 更新队名为"xxx团"
-        const captain = playerStore.getPlayerById(captainId)
-        if (captain) {
-          const newTeamName = `${captain.name}团`
-          try {
-            await teamStore.updateTeamName(team.id, newTeamName, roundId)
-          } catch (nameErr: any) {
-            console.warn(`[Captain] 更新队伍 ${team.name} 队名失败:`, nameErr.message)
-            errors.push(`${team.name}: ${nameErr.message}`)
-          }
-        }
-      } catch (teamErr: any) {
-        console.warn(`[Captain] 处理队伍 ${team.name} 时出错:`, teamErr.message)
-        errors.push(`${team.name}: ${teamErr.message}`)
-      }
-    }
-
-    // 2. 刷新数据
     await teamStore.fetchTeams(roundId)
     await loadTeams()
-    // 重新加载当前轮次的队长数据
     await loadCaptainRecords()
-
-    if (errors.length > 0) {
-      MessagePlugin.warning(`队长已保存，但部分操作未完成:\n${errors.join('\n')}`)
-    } else {
-      MessagePlugin.success('队长与阵型已保存，队伍已自动更名')
-    }
-    selectedCaptains.value = []
+    MessagePlugin.success('队长数据已刷新')
   } catch (e: any) {
-    console.error('[Captain] saveCaptains error:', e)
-    MessagePlugin.error(e.message || '保存失败')
+    console.error('[Captain] saveCaptains refresh error:', e)
+    MessagePlugin.error(e.message || '刷新失败')
   } finally {
     saving.value = false
   }
@@ -618,21 +681,28 @@ onMounted(loadData)
   font-size: 13px;
 }
 
+.candidate-search {
+  margin-bottom: 16px;
+}
+
 .candidates-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
 }
 
 .candidate-card {
   display: flex;
-  gap: 12px;
-  padding: 16px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
   background: var(--card-bg);
   border: 2px solid #e5e7eb;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
+  text-align: center;
 
   &:hover {
     border-color: #0052d9;
@@ -651,8 +721,8 @@ onMounted(loadData)
 }
 
 .candidate-avatar {
-  width: 60px;
-  height: 60px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
@@ -671,36 +741,39 @@ onMounted(loadData)
     justify-content: center;
     background: linear-gradient(135deg, #0052cc, #003da6);
     color: #fff;
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 600;
   }
 }
 
 .candidate-info {
-  flex: 1;
+  width: 100%;
   min-width: 0;
 }
 
 .candidate-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   margin-bottom: 6px;
 }
 
 .candidate-name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+  word-break: break-all;
 }
 
 .candidate-stats {
   display: flex;
+  justify-content: center;
   gap: 6px;
   margin-bottom: 6px;
 
   .stat {
-    font-size: 12px;
+    font-size: 11px;
     padding: 2px 6px;
     background: var(--bg-primary);
     border-radius: 4px;
@@ -738,8 +811,7 @@ onMounted(loadData)
 }
 
 .candidate-actions {
-  display: flex;
-  align-items: flex-start;
+  width: 100%;
 }
 
 .empty-state {

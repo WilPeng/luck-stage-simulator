@@ -25,19 +25,23 @@
       <h3>🗳️ 为房客投票</h3>
       <div class="vote-grid">
         <div v-for="h in activeHouseguests" :key="h.id" class="vote-row"
-          :class="{ voted: getVote(h.id), isHoh: h.id === currentHohId }">
+          :class="{ voted: getVote(h.id), isHoh: h.id === currentHohId, isNominee: nomineeIds.includes(h.id) }">
           <div class="voter-info">
+            <BBAvatar :name="h.name" :avatar="h.avatar" size="sm" />
             <span class="voter-name">{{ h.name }}</span>
+            <span v-if="nomineeIds.includes(h.id)" class="nominee-tag">被提名（不可投票）</span>
             <span v-if="h.id === currentHohId" class="hoh-tag">HOH（仅平票可投）</span>
           </div>
           <div class="voter-vote">
             <span v-if="getVote(h.id)" class="voted-target">→ {{ getVote(h.id) }}</span>
+            <span v-else-if="nomineeIds.includes(h.id)" class="not-voted nominee-skip">被提名人跳过</span>
             <span v-else class="not-voted">未投票</span>
           </div>
           <div class="voter-action">
             <select v-model="voteSelections[h.id]" class="bb-select-sm"
+              :disabled="nomineeIds.includes(h.id)"
               @change="castVoteFor(h.id, h.name, voteSelections[h.id])">
-              <option value="">选择投票对象</option>
+              <option value="">{{ nomineeIds.includes(h.id) ? '被提名，无法投票' : '选择投票对象' }}</option>
               <option v-for="n in nomineeOptions" :key="n.id" :value="n.id"
                 :disabled="h.id === n.id">
                 {{ n.name }}
@@ -57,11 +61,20 @@
       </div>
     </div>
 
+    <!-- Twist 提示 -->
+    <div v-if="twistInfo && (twistInfo.isTripleEviction || twistInfo.isKarmicPawnship)" class="twist-info-bar">
+      <span v-if="twistInfo.isTripleEviction" class="twist-item triple">🔱 三重献祭：本轮将淘汰得票最高的 2 人</span>
+      <span v-if="twistInfo.isKarmicPawnship" class="twist-item karmic">⚖️ 因果报应：被提名但未被淘汰的幸存者将自动成为下轮 HOH</span>
+    </div>
+
     <div class="action-section">
       <h3>操作</h3>
+      <div v-if="twistInfo?.isTripleEviction" class="twist-action-hint">
+        🔱 三重献祭生效中：宣布结果后将淘汰得票最高的 2 名被提名人
+      </div>
       <div class="action-buttons">
         <button class="bb-btn bb-btn-danger" @click="announceResult" :disabled="voteData.total === 0">
-          🚪 宣布淘汰结果
+          🚪 宣布淘汰结果{{ twistInfo?.isTripleEviction ? '（双淘汰）' : '' }}
         </button>
       </div>
     </div>
@@ -105,18 +118,26 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { bbGetVotes, bbCastVote, bbAnnounceEviction, bbGetEvictionHistory, bbGetHouseguestStats, bbGetActiveHouseguests, bbGetCurrentNomination, bbGetCurrentHoh } from '../../../services/bbApi'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBEviction } from '../../../types/bigbrother'
 
 const voteData = ref<{ votes: any[]; total: number }>({ votes: [], total: 0 })
 const lastEviction = ref<BBEviction | null>(null)
 const evictionHistory = ref<BBEviction[]>([])
+const twistInfo = ref<any>(null)
 const activeCount = ref(0)
-const activeHouseguests = ref<{ id: string; name: string }[]>([])
+const activeHouseguests = ref<{ id: string; name: string; avatar: string | null }[]>([])
 const nomination = ref<any>(null)
 const currentHoh = ref<any>(null)
 const voteSelections = ref<Record<string, string>>({})
 
 const currentHohId = computed(() => currentHoh.value?.winnerId || '')
+
+const nomineeIds = computed(() => {
+  const ids = [...(nomination.value?.nomineeIds || [])]
+  if (nomination.value?.replacementNomineeId) ids.push(nomination.value.replacementNomineeId)
+  return ids
+})
 
 const nomineeOptions = computed(() => {
   const ids = nomination.value?.nomineeIds || []
@@ -158,10 +179,21 @@ async function fetchData() {
 }
 
 async function announceResult() {
-  if (!confirm('确定宣布淘汰结果？此操作将淘汰得票最多的房客。')) return
+  const msg = twistInfo.value?.isTripleEviction
+    ? '确定宣布淘汰结果？此操作将淘汰得票最高的 2 名房客（三重献祭）。'
+    : '确定宣布淘汰结果？此操作将淘汰得票最多的房客。'
+  if (!confirm(msg)) return
   try {
     const result = await bbAnnounceEviction()
-    alert(`${result.evictedName} 被淘汰！(${result.voteCount}/${result.totalVotes}票)`)
+    twistInfo.value = result
+    if (result.isTripleEviction && result.evicted?.length > 1) {
+      alert(`${result.evicted.map((e: any) => e.name).join('、')} 被淘汰！(${result.totalVotes}总票)`)
+    } else if (result.evicted?.length > 0) {
+      alert(`${result.evicted[0].name} 被淘汰！(${result.evicted[0].votes}票)`)
+    }
+    if (result.karmicHoh) {
+      alert(`⚖️ 因果报应生效：${result.karmicHoh} 将成为下轮 HOH`)
+    }
     await fetchData()
   } catch (e: any) { alert(e.message) }
 }
@@ -187,17 +219,25 @@ onMounted(fetchData)
 .vote-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #1a1a3e; border-radius: 8px; border: 1px solid #00ff8811; }
 .vote-row.voted { border-color: #00ff8844; }
 .vote-row.isHoh { border-color: #ffaa0044; background: #2e2a0f; }
+.vote-row.isNominee { border-color: #ff444444; background: #2e0f0f; opacity: 0.85; }
 .voter-info { flex: 1; min-width: 0; }
 .voter-name { font-size: 14px; color: #fff; font-weight: 500; }
 .hoh-tag { display: inline-block; margin-left: 8px; font-size: 10px; color: #ffaa00; background: #ffaa0022; padding: 1px 8px; border-radius: 6px; }
+.nominee-tag { display: inline-block; margin-left: 8px; font-size: 10px; color: #ff4444; background: #ff444422; padding: 1px 8px; border-radius: 6px; }
 .voter-vote { width: 120px; text-align: center; }
 .voted-target { color: #00ff88; font-size: 13px; }
 .not-voted { color: #666; font-size: 12px; }
+.nominee-skip { color: #ff4444; }
 .voter-action { width: 160px; }
 .bb-select-sm { width: 100%; padding: 6px 8px; background: #0f0f2e; border: 1px solid #444; border-radius: 6px; color: #fff; font-size: 12px; }
 .bb-select-sm:focus { border-color: #ffaa00; outline: none; }
 .bb-select-sm option { background: #0f0f2e; color: #fff; }
 
+.twist-info-bar { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 6px; }
+.twist-item { font-size: 13px; color: #aaa; }
+.twist-item.triple { color: #e74c3c; }
+.twist-item.karmic { color: #00ff88; }
+.twist-action-hint { padding: 10px 14px; background: #e74c3c11; border: 1px solid #e74c3c33; border-radius: 8px; font-size: 13px; color: #e74c3c; margin-bottom: 12px; }
 .eviction-result-card { background: linear-gradient(135deg, #2e0f0f, #3e1a1a); border: 1px solid #ff4444; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
 .result-icon { font-size: 48px; }
 .result-label { font-size: 12px; color: #888; text-transform: uppercase; }
