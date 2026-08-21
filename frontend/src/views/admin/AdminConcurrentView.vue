@@ -28,10 +28,6 @@
           <span class="overview-value">{{ status?.summary?.trainingCompleted ?? 0 }}</span>
           <span class="overview-label">训练完成</span>
         </div>
-        <div class="overview-item">
-          <span class="overview-value">{{ status?.summary?.rehearsalCompleted ?? 0 }}</span>
-          <span class="overview-label">已彩排</span>
-        </div>
       </div>
 
       <div class="global-status">
@@ -124,7 +120,7 @@ const gamePrefix = computed(() => `/games/${authStore.currentGameId}`)
 
 const allReleased = computed(() => {
   if (!status.value) return false
-  return status.value.teamReleased && status.value.songReleased && status.value.trainingReleased && status.value.rehearsalReleased
+  return status.value.teamReleased && status.value.songReleased && status.value.trainingReleased
 })
 
 const releaseItems = computed(() => {
@@ -155,14 +151,6 @@ const releaseItems = computed(() => {
       released: s.trainingReleased,
       progressText: `${summary.trainingCompleted} / ${summary.totalPlayers} 选手`,
       description: '开放后选手可进行训练抽卡'
-    },
-    {
-      action: 'rehearsal' as ConcurrentActionType,
-      icon: '🎭',
-      name: '彩排',
-      released: s.rehearsalReleased,
-      progressText: `${summary.rehearsalCompleted} / ${summary.totalTeams} 队伍`,
-      description: '开放后队长可触发本队彩排'
     }
   ]
 })
@@ -207,8 +195,7 @@ function actionName(action: ConcurrentActionType): string {
   const map: Record<ConcurrentActionType, string> = {
     team: '组队',
     song: '选歌',
-    training: '训练',
-    rehearsal: '彩排'
+    training: '训练'
   }
   return map[action]
 }
@@ -257,7 +244,7 @@ onMounted(loadData)
 
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   margin-top: 16px;
 }

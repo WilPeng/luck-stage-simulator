@@ -66,7 +66,6 @@ const statusText = computed(() => {
     team: '组队阶段',
     song: '选歌阶段',
     training: '训练阶段',
-    rehearsal: '彩排阶段',
     performance: '公演结算',
     elimination: '淘汰阶段',
     completed: '已完成'

@@ -140,15 +140,6 @@ export interface TrainingRecord {
   createdAt: string
 }
 
-// 彩排结果
-export interface RehearsalResult {
-  id: string
-  roundId: string
-  teamId: string
-  bonus: number
-  createdAt: string
-}
-
 // 队伍邀请（按轮次）
 export interface TeamInvite {
   id: string

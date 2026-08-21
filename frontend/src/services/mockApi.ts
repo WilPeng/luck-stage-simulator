@@ -1,11 +1,11 @@
-import type { User, Season, StageType, Team, TeamInvite, TeamApplication, Song, TrainingCard, TrainingRecord, TrainingConfig, PerformanceResult, PlayerScore, RehearsalResult, OperationLog } from '../types'
+import type { User, Season, StageType, Team, TeamInvite, TeamApplication, Song, TrainingCard, TrainingRecord, TrainingConfig, PerformanceResult, PlayerScore, OperationLog } from '../types'
 import { mockUsers } from '../mock/mockUsers'
 import { mockSeason } from '../mock/mockSeason'
 import { mockTeams, mockTeamInvites, mockTeamApplications } from '../mock/mockTeams'
 import { mockSongs } from '../mock/mockSongs'
 import { mockTrainingCards } from '../mock/mockTrainingCards'
 import { mockLogs } from '../mock/mockLogs'
-import { mockPerformanceResults, mockPlayerScores, mockRehearsalResults } from '../mock/mockPerformance'
+import { mockPerformanceResults, mockPlayerScores } from '../mock/mockPerformance'
 import { weightedRandom, randomInt } from '../utils/random'
 import { calculateTeamAverage, calculateSongAttrScore, calculateTeamFinalScore, calculatePlayerScore } from '../utils/score'
 
@@ -21,7 +21,6 @@ const STORAGE_KEYS = {
   LOGS: 'luck_sim_logs',
   PERFORMANCE: 'luck_sim_performance',
   PLAYER_SCORES: 'luck_sim_player_scores',
-  REHEARSAL: 'luck_sim_rehearsal',
   TRAINING_RECORDS: 'luck_sim_training_records',
   TRAINING_CONFIG: 'luck_sim_training_config',
   CURRENT_USER: 'luck_sim_current_user'
@@ -73,9 +72,6 @@ export function initStorage(): void {
   }
   if (!localStorage.getItem(STORAGE_KEYS.PLAYER_SCORES)) {
     saveToStorage(STORAGE_KEYS.PLAYER_SCORES, mockPlayerScores)
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.REHEARSAL)) {
-    saveToStorage(STORAGE_KEYS.REHEARSAL, mockRehearsalResults)
   }
   if (!localStorage.getItem(STORAGE_KEYS.TRAINING_RECORDS)) {
     saveToStorage(STORAGE_KEYS.TRAINING_RECORDS, [])
@@ -510,52 +506,6 @@ export function getTrainingRecords(userId?: string): Promise<TrainingRecord[]> {
   })
 }
 
-export function startRehearsal(teamId: string): Promise<RehearsalResult> {
-  return new Promise((resolve) => {
-    const events = [
-      { name: '和声惊喜', description: '和声效果超出预期', bonus: { vocal: 2 } },
-      { name: '舞蹈默契', description: '舞蹈配合完美', bonus: { dance: 3 } },
-      { name: '舞台魅力', description: '整体表现力提升', bonus: { charm: 2 } },
-      { name: '状态平平', description: '表现中规中矩', bonus: { vocal: 1, dance: 1 } },
-      { name: '突发状况', description: '出现小失误', bonus: { vocal: -1, dance: -1 } }
-    ]
-    
-    const event = events[randomInt(0, events.length - 1)]
-    
-    const result: RehearsalResult = {
-      id: 'r_' + Date.now(),
-      teamId,
-      eventName: event.name,
-      description: event.description,
-      bonus: event.bonus,
-      createdAt: new Date().toLocaleString()
-    }
-    
-    const results = getFromStorage<RehearsalResult[]>(STORAGE_KEYS.REHEARSAL, [])
-    const existingIndex = results.findIndex(r => r.teamId === teamId)
-    if (existingIndex !== -1) {
-      results[existingIndex] = result
-    } else {
-      results.push(result)
-    }
-    saveToStorage(STORAGE_KEYS.REHEARSAL, results)
-    
-    const team = getFromStorage<Team[]>(STORAGE_KEYS.TEAMS, mockTeams).find(t => t.id === teamId)
-    const user = getFromStorage<User[]>(STORAGE_KEYS.USERS, mockUsers).find(u => u.id === team?.captainId)
-    addLog({
-      userId: team?.captainId || '',
-      userName: user?.name || '未知用户',
-      role: user?.role || 'captain',
-      actionType: 'start_rehearsal',
-      targetType: 'team',
-      targetId: teamId,
-      detail: (user?.name || '') + '开启彩排，获得: ' + event.name
-    })
-    
-    resolve(result)
-  })
-}
-
 export function getPlayerScores(): Promise<PlayerScore[]> {
   return new Promise((resolve) => {
     const scores = getFromStorage<PlayerScore[]>(STORAGE_KEYS.PLAYER_SCORES, [])
@@ -576,7 +526,6 @@ export function mockCalculatePerformance(): Promise<PerformanceResult[]> {
     const users = getFromStorage<User[]>(STORAGE_KEYS.USERS, mockUsers)
     const songs = getFromStorage<Song[]>(STORAGE_KEYS.SONGS, mockSongs)
     const assignments = getFromStorage<any[]>(STORAGE_KEYS.SONG_ASSIGNMENTS, [])
-    const rehearsals = getFromStorage<RehearsalResult[]>(STORAGE_KEYS.REHEARSAL, [])
     
     const results: PerformanceResult[] = []
     
@@ -589,9 +538,7 @@ export function mockCalculatePerformance(): Promise<PerformanceResult[]> {
       
       const attrScore = calculateSongAttrScore(teamAvg, song)
       const randomScore = randomInt(-10, 20)
-      const rehearsal = rehearsals.find(r => r.teamId === team.id)
-      const rehearsalBonus = rehearsal ? (rehearsal.bonus.vocal || 0) + (rehearsal.bonus.dance || 0) + (rehearsal.bonus.charm || 0) : 0
-      const finalScore = calculateTeamFinalScore(song.baseScore, attrScore, randomScore, rehearsalBonus)
+      const finalScore = calculateTeamFinalScore(song.baseScore, attrScore, randomScore)
       
       results.push({
         id: 'perf_' + team.id,
@@ -602,7 +549,6 @@ export function mockCalculatePerformance(): Promise<PerformanceResult[]> {
         teamCharm: teamAvg.charm,
         attrScore,
         randomScore,
-        rehearsalBonus,
         finalScore,
         rank: 0
       })
@@ -731,13 +677,6 @@ export function addLog(log: Omit<OperationLog, 'id' | 'createdAt'>): void {
   saveToStorage(STORAGE_KEYS.LOGS, logs)
 }
 
-
-export function getRehearsalResults(): Promise<RehearsalResult[]> {
-  return new Promise((resolve) => {
-    const results = getFromStorage<RehearsalResult[]>(STORAGE_KEYS.REHEARSAL, []);
-    resolve(results);
-  })
-}
 
 // 清空用户本轮训练记录
 export function clearUserTrainingRecords(userId: string, round?: number): Promise<void> {

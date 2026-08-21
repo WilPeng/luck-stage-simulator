@@ -14,7 +14,6 @@ const COLLECTIONS = [
   'TeamSong',        // 队伍选择歌曲（替代 SongAssignment + SongSelection）
   'TrainingCard',    // 训练卡（永久）
   'TrainingRecord',  // 训练记录（每轮）
-  'RehearsalResult', // 彩排结果（每轮）
   'TeamPerformance', // 队伍公演结果（每轮）
   'PlayerPerformance', // 选手个人公演结果（每轮）
   'AudienceVoteSession', // 大众评审投票场次

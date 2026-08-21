@@ -2,7 +2,7 @@ const BaseModel = require('./BaseModel')
 
 /**
  * 公演结果（每轮独立，按团队计算）
- * 字段: id / teamId / teamName / songId / songName / roundId / roundIndex / attrScore / randomScore / rehearsalBonus / teamRankBonus / finalScore / rank / dangerTeam / createdAt / updatedAt
+ * 字段: id / teamId / teamName / songId / songName / roundId / roundIndex / attrScore / randomScore / teamRankBonus / finalScore / rank / dangerTeam / createdAt / updatedAt
  */
 class PerformanceResult extends BaseModel {
   constructor(data) {

@@ -64,7 +64,6 @@ function getActionIcon(actionType: string): string {
     lock_team: '🔒',
     select_song: '🎵',
     training_draw: '🎴',
-    rehearsal: '🎭',
     performance_calculate: '🏆',
     elimination_generate: '❌',
     stage_change: '📅'
@@ -84,7 +83,6 @@ function getActionText(actionType: string): string {
     lock_team: '锁定队伍',
     select_song: '选择歌曲',
     training_draw: '训练翻牌',
-    rehearsal: '彩排',
     performance_calculate: '公演结算',
     elimination_generate: '淘汰结果',
     stage_change: '阶段变更'
@@ -104,7 +102,6 @@ function getActionClass(actionType: string): string {
     lock_team: 'warning',
     select_song: 'info',
     training_draw: 'success',
-    rehearsal: 'success',
     performance_calculate: 'success',
     elimination_generate: 'danger',
     stage_change: 'warning'
@@ -134,7 +131,6 @@ function getActionTagTheme(actionType: string): 'success' | 'danger' | 'warning'
     lock_team: 'warning',
     select_song: 'primary',
     training_draw: 'success',
-    rehearsal: 'success',
     performance_calculate: 'success',
     elimination_generate: 'danger',
     stage_change: 'warning'

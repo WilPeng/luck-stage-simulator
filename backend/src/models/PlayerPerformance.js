@@ -18,7 +18,6 @@ class PlayerPerformance extends BaseModel {
     this.attrScore = 0
     this.randomScore = 0
     this.teamScoreShare = 0
-    this.rehearsalBonus = 0
     this.finalScore = 0
     this.rank = null
     // 新字段

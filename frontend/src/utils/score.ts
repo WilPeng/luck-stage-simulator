@@ -24,12 +24,11 @@ export function calculateSongAttrScore(teamAverage: { vocal: number; dance: numb
 }
 
 export function calculateTeamFinalScore(
-  songBaseScore: number, 
-  attrScore: number, 
-  randomScore: number, 
-  rehearsalBonus: number
+  songBaseScore: number,
+  attrScore: number,
+  randomScore: number
 ): number {
-  return Math.round(songBaseScore + attrScore * 2 + randomScore + rehearsalBonus)
+  return Math.round(songBaseScore + attrScore * 2 + randomScore)
 }
 
 export function calculatePlayerScore(

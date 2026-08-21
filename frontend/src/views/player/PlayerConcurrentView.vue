@@ -35,17 +35,6 @@
         <span class="action-desc">翻开卡牌提升属性</span>
         <span class="action-arrow">→</span>
       </router-link>
-
-      <router-link
-        v-if="isCaptain"
-        :to="`${gamePrefix}/player/round/${currentRound}/team`"
-        class="action-card"
-      >
-        <span class="action-icon">🎭</span>
-        <span class="action-title">彩排</span>
-        <span class="action-desc">队长在队伍页面触发彩排</span>
-        <span class="action-arrow">→</span>
-      </router-link>
     </div>
 
     <div class="progress-section">
@@ -83,10 +72,6 @@ const songStore = useSongStore()
 const gamePrefix = computed(() => `/games/${authStore.currentGameId}`)
 const currentRound = computed(() => parseInt(route.params.round as string, 10) || 1)
 const currentUserId = computed(() => authStore.currentUser?.id || '')
-
-const isCaptain = computed(() => {
-  return teamStore.teams.some(t => t.captainId === currentUserId.value)
-})
 
 const myTeam = computed(() => {
   return teamStore.teams.find(t => t.members?.some(m => m.playerId === currentUserId.value))

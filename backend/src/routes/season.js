@@ -13,7 +13,6 @@ const RoundTeamMember = require('../models/RoundTeamMember')
 const RoundSong = require('../models/RoundSong')
 const TeamSong = require('../models/TeamSong')
 const TrainingRecord = require('../models/TrainingRecord')
-const RehearsalResult = require('../models/RehearsalResult')
 const CaptainVote = require('../models/CaptainVote')
 const RoundCaptain = require('../models/RoundCaptain')
 const PerformanceValue = require('../models/PerformanceValue')
@@ -430,7 +429,7 @@ router.put('/config', auth, requireAdmin, async (req, res) => {
 // ===== POST /api/season/restart =====
 /**
  * 一键重新开始（POST /api/season/restart）
- * - 清空所有轮的队伍/训练/彩排/投票数据
+ * - 清空所有轮的队伍/训练/投票数据
  * - 所有选手状态重置为 active（队长角色变回 player）
  * - 保留历史公演结果和淘汰记录
  * - currentRound → 1, currentStage → PREPARATION
@@ -443,7 +442,7 @@ router.post('/restart', auth, requireAdmin, async (req, res) => {
     const allRounds = await Round.find({ seasonId: season.id })
     const allRoundIds = allRounds.map(r => r.id)
 
-    // 清空所有轮的队伍/训练/彩排/投票数据
+    // 清空所有轮的队伍/训练/投票数据
     if (allRoundIds.length > 0) {
       const roundFilter = { roundId: { $in: allRoundIds } }
       await RoundTeam.deleteMany(roundFilter)
@@ -452,7 +451,6 @@ router.post('/restart', auth, requireAdmin, async (req, res) => {
       await RoundSong.deleteMany(roundFilter)
       await TeamSong.deleteMany(roundFilter)
       await TrainingRecord.deleteMany(roundFilter)
-      await RehearsalResult.deleteMany(roundFilter)
       await CaptainVote.deleteMany(roundFilter)
       await RoundCaptain.deleteMany(roundFilter)
       await PerformanceValue.deleteMany(roundFilter)
@@ -513,7 +511,7 @@ router.post('/restart', auth, requireAdmin, async (req, res) => {
 // ===== POST /api/season/reset =====
 /**
  * 完全重置（POST /api/season/reset）
- * - 清空所有业务数据（队伍/训练/彩排/公演/淘汰/聊天）
+ * - 清空所有业务数据（队伍/训练/公演/淘汰/聊天）
  * - 所有选手属性和状态还原
  * - 赛季从头开始
  */
@@ -531,10 +529,9 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
       { name: 'RoundTeamMember', model: require('../models/RoundTeamMember') },
       { name: 'RoundSong', model: require('../models/RoundSong') },
       { name: 'TeamSong', model: require('../models/TeamSong') },
-      // 训练/彩排 (4-5)
+      // 训练 (4)
       { name: 'TrainingRecord', model: require('../models/TrainingRecord') },
-      { name: 'RehearsalResult', model: require('../models/RehearsalResult') },
-      // 公演结果 (6)
+      // 公演结果 (5)
       { name: 'TeamPerformance', model: require('../models/TeamPerformance') },
       { name: 'PlayerPerformance', model: require('../models/PlayerPerformance') },
       // 大众评审投票 (7)
@@ -568,7 +565,6 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
         const deleted = typeof before === 'number' ? before - after : 0
         if (name === 'RoundTeam') stats.teamsDeleted = before
         if (name === 'TrainingRecord') stats.trainingRecordsDeleted = before
-        if (name === 'RehearsalResult') stats.rehearsalResultsDeleted = before
         if (name === 'TeamPerformance') stats.performanceResultsDeleted = before
         if (name === 'PlayerPerformance') stats.playerScoresDeleted = before
         if (name === 'Elimination') stats.eliminationRecordsDeleted = before

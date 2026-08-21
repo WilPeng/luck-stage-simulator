@@ -4,7 +4,7 @@ import type { Season, StageType, StageStatus, MatrixCell, MenuItem, ResetSeasonR
 import type { Team, TeamInvite, TeamApplication } from '../types/team'
 import type { Song, SongStats, SongAssignment, RoundSong, AddRoundSongRequest, UpdateScoringMethodRequest } from '../types/song'
 import type { TrainingCard, TrainingRecord, TrainingConfig, TrainingStats, TrainingDrawResult, AutoCompleteResult, TrainingRecordListResponse, TrainingRecordQuery, TrainingEffect } from '../types/training'
-import type { RehearsalResult, SafeTeamMark, SafeTeamMarkRequest } from '../types/performance'
+import type { SafeTeamMark, SafeTeamMarkRequest } from '../types/performance'
 import type {
   TeamResult,
   PlayerResult,
@@ -32,7 +32,7 @@ import type {
   EliminationConfig
 } from '../types/elimination'
 import type { OperationLog } from '../types/log'
-import type { Round, RoundTeam, RoundTeamMember, TeamSong, PlayerPerformance, TeamPerformance, Elimination as RoundElimination, EliminationCandidate as RoundEliminationCandidate, TrainingRecord as RoundTrainingRecord, RehearsalResult as RoundRehearsalResult } from '../types/round'
+import type { Round, RoundTeam, RoundTeamMember, TeamSong, PlayerPerformance, TeamPerformance, Elimination as RoundElimination, EliminationCandidate as RoundEliminationCandidate, TrainingRecord as RoundTrainingRecord } from '../types/round'
 
 // mock 兼容层
 import {
@@ -55,8 +55,6 @@ import {
   getTrainingCards as mockGetCards,
   drawTrainingCard as mockDrawTrainingCard,
   getTrainingRecords as mockGetTrainingRecords,
-  startRehearsal as mockStartRehearsal,
-  getRehearsalResults as mockGetRehearsal,
   getPerformanceResults as mockGetPerfResults,
   getPlayerScores as mockGetPlayerScores,
   getLogs as mockGetLogs,
@@ -337,8 +335,7 @@ function readLocalRelease(roundId: string): ConcurrentReleaseStatusResponse {
     roundIndex: parseInt(roundId.replace(/^round[-_]/, ''), 10) || 1,
     teamReleased: false,
     songReleased: false,
-    trainingReleased: false,
-    rehearsalReleased: false
+    trainingReleased: false
   }
 }
 
@@ -370,12 +367,10 @@ export async function getConcurrentStatus(roundId: string): Promise<ConcurrentSt
         teamReleased: !!local?.teamReleased,
         songReleased: !!local?.songReleased,
         trainingReleased: !!local?.trainingReleased,
-        rehearsalReleased: !!local?.rehearsalReleased,
         summary: {
           totalTeams: 0,
           teamCompleted: 0,
           songCompleted: 0,
-          rehearsalCompleted: 0,
           totalPlayers: 0,
           trainingCompleted: 0,
           allCompleted: false
@@ -1500,19 +1495,6 @@ export async function autoCompleteUser(userId: string, round?: number): Promise<
   )
 }
 
-// ================== 彩排 ==================
-
-export async function startRehearsalAPI(teamId: string, roundId?: string): Promise<RehearsalResult> {
-  return safeCall(
-    () => doRequest<RehearsalResult[]>('/rehearsal/roll', {
-      method: 'POST',
-      body: JSON.stringify({ teamId, roundId })
-    }).then(list => (Array.isArray(list) ? list[0] : list) as RehearsalResult),
-    () => mockStartRehearsal(teamId),
-    'startRehearsal'
-  )
-}
-
 // ================== 公演 ==================
 
 // 查询本轮公演是否已开启（不走 doRequest 避免 data 剥离）
@@ -1712,44 +1694,7 @@ export async function setPerformanceGenerationMode(roundId: string, generationMo
   )
 }
 
-// ================== 彩排 ==================
 
-export async function getRehearsalResultsAPI(roundId?: string): Promise<RehearsalResult[]> {
-  return safeCall(
-    () => {
-      const query = roundId ? `?roundId=${roundId}` : ''
-      return doRequest<RehearsalResult[]>(`/rehearsal/results${query}`)
-    },
-    mockGetRehearsal,
-    'getRehearsalResults'
-  )
-}
-
-export async function startRehearsal(teamId: string, roundId?: string): Promise<RehearsalResult> {
-  return startRehearsalAPI(teamId, roundId)
-}
-
-// 管理员批量为所有未彩排队伍生成彩排结果
-export async function rollAllRehearsals(roundId: string): Promise<RehearsalResult[]> {
-  return safeCall(
-    () => doRequest<RehearsalResult[]>('/rehearsal/roll', {
-      method: 'POST',
-      body: JSON.stringify({ roundId, all: true })
-    }),
-    async () => [],
-    'rollAllRehearsals'
-  )
-}
-
-// 删除单条彩排结果（管理员）
-export async function deleteRehearsalResult(id: string): Promise<void> {
-  return safeCall(
-    () => doRequest<void>(`/rehearsal/results/${id}`, { method: 'DELETE' }),
-    async () => undefined,
-    'deleteRehearsalResult'
-  )
-}
-export const getRehearsalResults = getRehearsalResultsAPI
 
 export async function markSafeTeams(params: SafeTeamMarkRequest): Promise<void> {
   return safeCall(

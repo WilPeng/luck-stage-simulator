@@ -5,13 +5,12 @@
 export type StageType =
   | 'preparation'     // 预先准备
   | 'captain_vote'    // 队长选举
-  | 'concurrent'      // 并发行动（组队/选歌/训练/彩排）
+  | 'concurrent'      // 并发行动（组队/选歌/训练）
   | 'performance'     // 公演结算与结果展示
   | 'elimination'     // 淘汰
   | 'teaming'         // 组队（并发子行动，兼容页面）
   | 'song_select'     // 选歌（并发子行动，兼容页面）
   | 'training'        // 训练（并发子行动，兼容页面）
-  | 'rehearsal'       // 彩排（并发子行动，兼容页面）
 
 // 阶段顺序（固定，用于状态计算）
 export const STAGE_ORDER: StageType[] = [
@@ -23,7 +22,7 @@ export const STAGE_ORDER: StageType[] = [
 ]
 
 // 并发阶段包含的子行动
-export const CONCURRENT_ACTIONS: StageType[] = ['teaming', 'song_select', 'training', 'rehearsal']
+export const CONCURRENT_ACTIONS: StageType[] = ['teaming', 'song_select', 'training']
 
 // 阶段名称映射（用于显示）
 export const STAGE_NAMES: Record<StageType, string> = {
@@ -34,8 +33,7 @@ export const STAGE_NAMES: Record<StageType, string> = {
   elimination: '淘汰',
   teaming: '组队',
   song_select: '选歌',
-  training: '训练',
-  rehearsal: '彩排'
+  training: '训练'
 }
 
 // 阶段状态（动态计算）
@@ -93,7 +91,7 @@ export interface MenuItem {
 
 // ================== 并发阶段相关类型 ==================
 
-export type ConcurrentActionType = 'team' | 'song' | 'training' | 'rehearsal'
+export type ConcurrentActionType = 'team' | 'song' | 'training'
 
 export interface ConcurrentStatusResponse {
   roundId: string
@@ -102,12 +100,10 @@ export interface ConcurrentStatusResponse {
   teamReleased: boolean
   songReleased: boolean
   trainingReleased: boolean
-  rehearsalReleased: boolean
   summary: {
     totalTeams: number
     teamCompleted: number
     songCompleted: number
-    rehearsalCompleted: number
     totalPlayers: number
     trainingCompleted: number
     allCompleted: boolean
@@ -126,7 +122,6 @@ export interface ConcurrentReleaseStatusResponse {
   teamReleased: boolean
   songReleased: boolean
   trainingReleased: boolean
-  rehearsalReleased: boolean
 }
 
 // ================== 管理员操作相关类型 ==================
@@ -183,7 +178,6 @@ export interface ResetSeasonResult {
     teamsDeleted: number
     invitesDeleted: number
     applicationsDeleted: number
-    rehearsalResultsDeleted: number
     performanceResultsDeleted: number
     playerScoresDeleted: number
     logsDeleted: number

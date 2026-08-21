@@ -7,7 +7,6 @@ import type {
   PerformanceStats,
   PerformanceHistory,
   CalculatePerformanceResult,
-  RehearsalResult,
   SafeTeamMark,
   SafeTeamMarkRequest,
   TeamPerformanceResult,
@@ -26,8 +25,6 @@ import {
   updatePerformanceConfig,
   calculatePerformance,
   getPerformanceHistory,
-  getRehearsalResults,
-  startRehearsalAPI,
   markSafeTeams as apiMarkSafeTeams,
   getSafeTeams,
   generateAudienceVote,
@@ -48,7 +45,6 @@ export const usePerformanceStore = defineStore('performance', () => {
   const stats = ref<PerformanceStats | null>(null)
   const config = ref<PerformanceConfig | null>(null)
   const history = ref<PerformanceHistory[]>([])
-  const rehearsalResults = ref<RehearsalResult[]>([])
   const safeTeams = ref<SafeTeamMark[]>([])
   const loading = ref(false)
   const currentRound = ref<number>(1)
@@ -383,30 +379,6 @@ export const usePerformanceStore = defineStore('performance', () => {
     }
   }
 
-  async function fetchRehearsals(round?: number): Promise<void> {
-    if (round !== undefined) currentRound.value = round
-    try {
-      rehearsalResults.value = await getRehearsalResults(`round-${currentRound.value}`)
-    } catch (e) {
-      rehearsalResults.value = []
-    }
-  }
-
-  async function start(teamId: string): Promise<RehearsalResult> {
-    const result = await startRehearsalAPI(teamId, `round-${currentRound.value}`)
-    const index = rehearsalResults.value.findIndex(item => item.teamId === teamId)
-    if (index >= 0) {
-      rehearsalResults.value[index] = result
-    } else {
-      rehearsalResults.value.push(result)
-    }
-    return result
-  }
-
-  function getTeamRehearsal(teamId: string): RehearsalResult | null {
-    return rehearsalResults.value.find(item => item.teamId === teamId) || null
-  }
-
   // 安全团相关方法
   async function fetchSafeTeams(round?: number): Promise<void> {
     if (round === undefined) round = currentRound.value
@@ -482,7 +454,6 @@ export const usePerformanceStore = defineStore('performance', () => {
     stats,
     config,
     history,
-    rehearsalResults,
     safeTeams,
     loading,
     currentRound,
@@ -525,12 +496,9 @@ export const usePerformanceStore = defineStore('performance', () => {
     fetchFinalRanking,
     getAudienceRankByPlayerId,
     fetchHistory,
-    fetchRehearsals,
     fetchSafeTeams,
     doMarkSafeTeams,
     isTeamSafe,
-    start,
-    getTeamRehearsal,
     getTeamResult,
     getPlayerResult,
     getPlayerResultsByTeam,

@@ -297,7 +297,7 @@ export const useSeasonStore = defineStore('season', () => {
    */
   function applyConcurrentStatus(
     roundIndex: number,
-    status: { teamReleased?: boolean; songReleased?: boolean; trainingReleased?: boolean; rehearsalReleased?: boolean }
+    status: { teamReleased?: boolean; songReleased?: boolean; trainingReleased?: boolean }
   ): ConcurrentReleaseStatusResponse {
     const roundId = `round-${roundIndex}`
     const next: ConcurrentReleaseStatusResponse = {
@@ -305,8 +305,7 @@ export const useSeasonStore = defineStore('season', () => {
       roundIndex,
       teamReleased: !!status.teamReleased,
       songReleased: !!status.songReleased,
-      trainingReleased: !!status.trainingReleased,
-      rehearsalReleased: !!status.rehearsalReleased
+      trainingReleased: !!status.trainingReleased
     }
     concurrentRelease.value = { ...concurrentRelease.value, [roundId]: next }
     return next
@@ -326,7 +325,7 @@ export const useSeasonStore = defineStore('season', () => {
    * 获取某轮已开放的并发子行动列表
    */
   function getReleasedConcurrentActions(roundIndex: number): ConcurrentActionType[] {
-    const actions: ConcurrentActionType[] = ['team', 'song', 'training', 'rehearsal']
+    const actions: ConcurrentActionType[] = ['team', 'song', 'training']
     return actions.filter(a => isConcurrentActionReleased(roundIndex, a))
   }
 

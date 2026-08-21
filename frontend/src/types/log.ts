@@ -21,7 +21,6 @@ export type ActionType =
   | 'lock_team'
   | 'select_song'
   | 'training_draw'
-  | 'rehearsal'
   | 'performance_calculate'
   | 'elimination_generate'
   | 'stage_change'

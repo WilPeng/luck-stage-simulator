@@ -210,7 +210,7 @@ async function migrateRoundIndex() {
     require('./models/RoundTeam'), require('./models/RoundTeamMember'),
     require('./models/RoundCaptain'), require('./models/RoundPreparation'),
     require('./models/TeamSong'), require('./models/TrainingRecord'),
-    require('./models/RehearsalResult'), require('./models/CaptainVote'),
+    require('./models/CaptainVote'),
     require('./models/PerformanceValue'), require('./models/PerformanceRoundState'),
     require('./models/TeamInvite'), require('./models/TeamApplication'),
     require('./models/TeamPerformance'), require('./models/PlayerPerformance'),
@@ -279,7 +279,6 @@ app.use('/api/:gameId/teams', require('./routes/teams'))
 app.use('/api/:gameId/captain', require('./routes/captain'))
 app.use('/api/:gameId/songs', require('./routes/songs'))
 app.use('/api/:gameId/training', require('./routes/training'))
-app.use('/api/:gameId/rehearsal', require('./routes/rehearsal'))
 app.use('/api/:gameId/performance', require('./routes/performance'))
 app.use('/api/:gameId/concurrent', require('./routes/concurrent'))
 app.use('/api/:gameId/player', require('./routes/player'))

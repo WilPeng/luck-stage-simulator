@@ -26,7 +26,6 @@ class TeamPerformance extends BaseModel {
     // 旧字段（兼容）
     this.attrScore = 0
     this.randomScore = 0
-    this.rehearsalBonus = 0
     this.teamRankBonus = 0
     this.finalScore = 0
     // 新字段 - 票数拆解

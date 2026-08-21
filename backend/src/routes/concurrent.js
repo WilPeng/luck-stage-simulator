@@ -8,7 +8,6 @@ const RoundTeam = require('../models/RoundTeam')
 const RoundTeamMember = require('../models/RoundTeamMember')
 const TeamSong = require('../models/TeamSong')
 const TrainingRecord = require('../models/TrainingRecord')
-const RehearsalResult = require('../models/RehearsalResult')
 
 const router = express.Router()
 
@@ -39,7 +38,7 @@ function getRoundFilter(r) {
   return { $in: [r.id, front] }
 }
 
-const RELEASE_ACTIONS = ['team', 'song', 'training', 'rehearsal']
+const RELEASE_ACTIONS = ['team', 'song', 'training']
 
 /**
  * 推断并发阶段各项行动的完成状态，并带上释放开关
@@ -51,12 +50,11 @@ async function getConcurrentStatus(roundInfo) {
   const season = await getCurrentSeason()
   const drawsPerPlayer = (season && season.trainingDrawsPerPlayer) || 3
 
-  const [teams, members, teamSongs, trainingRecords, rehearsalResults, users] = await Promise.all([
+  const [teams, members, teamSongs, trainingRecords, users] = await Promise.all([
     RoundTeam.find({ roundId: roundFilter }),
     RoundTeamMember.find({ roundId: roundFilter }),
     TeamSong.find({ roundId: roundFilter }),
     TrainingRecord.find({ roundId: roundFilter }),
-    RehearsalResult.find({ roundId: roundFilter }),
     User.find({ role: { $ne: 'admin' }, status: 'active' })
   ])
 
@@ -74,19 +72,12 @@ async function getConcurrentStatus(roundInfo) {
     trainingCountByPlayer[r.playerId] = (trainingCountByPlayer[r.playerId] || 0) + 1
   }
 
-  const rehearsalByTeam = {}
-  for (const r of rehearsalResults) {
-    rehearsalByTeam[r.teamId] = r
-  }
-
   const teamCompletedCount = teams.filter(t => (membersByTeam[t.id] || []).length > 0).length
   const songCompletedCount = teams.filter(t => !!teamSongMap[t.id]).length
-  const rehearsalCompletedCount = teams.filter(t => !!rehearsalByTeam[t.id]).length
   const trainingCompletedCount = users.filter(u => (trainingCountByPlayer[u.id] || 0) >= drawsPerPlayer).length
 
   const allTeamCompleted = teams.length > 0 && teamCompletedCount === teams.length
   const allSongCompleted = teams.length > 0 && songCompletedCount === teams.length
-  const allRehearsalCompleted = teams.length > 0 && rehearsalCompletedCount === teams.length
   const allTrainingCompleted = users.length > 0 && trainingCompletedCount === users.length
 
   return {
@@ -96,15 +87,13 @@ async function getConcurrentStatus(roundInfo) {
     teamReleased: !!round.teamReleased,
     songReleased: !!round.songReleased,
     trainingReleased: !!round.trainingReleased,
-    rehearsalReleased: !!round.rehearsalReleased,
     summary: {
       totalTeams: teams.length,
       teamCompleted: teamCompletedCount,
       songCompleted: songCompletedCount,
-      rehearsalCompleted: rehearsalCompletedCount,
       totalPlayers: users.length,
       trainingCompleted: trainingCompletedCount,
-      allCompleted: allTeamCompleted && allSongCompleted && allRehearsalCompleted && allTrainingCompleted
+      allCompleted: allTeamCompleted && allSongCompleted && allTrainingCompleted
     }
   }
 }
@@ -124,8 +113,7 @@ router.get('/release-status', auth, async (req, res) => {
         roundIndex: round.index,
         teamReleased: !!round.teamReleased,
         songReleased: !!round.songReleased,
-        trainingReleased: !!round.trainingReleased,
-        rehearsalReleased: !!round.rehearsalReleased
+        trainingReleased: !!round.trainingReleased
       }
     })
   } catch (e) {
@@ -195,9 +183,6 @@ router.post('/release', auth, requireAdmin, async (req, res) => {
         break
       case 'training':
         round.trainingReleased = released
-        break
-      case 'rehearsal':
-        round.rehearsalReleased = released
         break
     }
 

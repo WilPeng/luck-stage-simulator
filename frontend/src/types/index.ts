@@ -26,6 +26,6 @@ export {
 export type { Team, TeamInvite, TeamApplication } from './team'
 export type { Song } from './song'
 export type { TrainingCard, TrainingRecord, TrainingConfig } from './training'
-export type { PerformanceResult, PlayerScore, RehearsalResult } from './performance'
+export type { PerformanceResult, PlayerScore } from './performance'
 export type { OperationLog, ActionType } from './log'
 export type { RankingListResponse, EliminationStats, EliminationRecord, RankingEntry, RestoreResult, ManualEliminateParams, ManualEliminateResult, EliminationCandidate } from './elimination'

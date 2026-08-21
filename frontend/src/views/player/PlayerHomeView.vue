@@ -161,7 +161,6 @@ const currentTask = computed(() => {
     case 'teaming': return '请前往组队页面申请入队或邀请队员'
     case 'song_select': return '请查看歌曲池并选择公演歌曲'
     case 'training': return `你还有 ${remainingTraining.value} 次训练机会，请前往训练页面完成翻牌`
-    case 'rehearsal': return '等待队长开启彩排'
     case 'performance': return '公演即将开始，请做好准备'
     case 'elimination': return '查看淘汰结果'
     default: return '当前阶段暂无任务'
@@ -186,7 +185,6 @@ const taskLink = computed(() => {
     case 'teaming': return `${prefix}/round/${round}/team`
     case 'song_select': return `${prefix}/round/${round}/song-selection`
     case 'training': return `${prefix}/round/${round}/training`
-    case 'rehearsal': return `${prefix}/round/${round}/rehearsal`
     case 'performance': return `${prefix}/round/${round}/performance`
     case 'elimination': return `${prefix}/round/${round}/elimination`
     default: return `${prefix}/home`
@@ -288,7 +286,6 @@ color: var(--text-primary);
   &.training { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
   &.team { background: linear-gradient(135deg, #4ecdc4, #44a08d); }
   &.song { background: linear-gradient(135deg, #ffd700, #ff6b6b); }
-  &.rehearsal { background: linear-gradient(135deg, #a29bfe, #6c5ce7); }
   &.performance { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
   &.elimination { background: linear-gradient(135deg, #e74c3c, #c0392b); }
 }

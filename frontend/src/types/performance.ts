@@ -89,7 +89,6 @@ export interface TeamResult {
   avgCharm?: number
   attrScore: number
   randomScore: number
-  rehearsalBonus?: number
   teamRankBonus?: number
   finalScore: number
   rank: number
@@ -203,7 +202,6 @@ export interface PerformanceResult {
   teamCharm: number
   attrScore: number
   randomScore: number
-  rehearsalBonus?: number
   finalScore: number
   rank: number
 }
@@ -220,20 +218,6 @@ export interface PlayerScore {
   teamBonus: number
   finalScore: number
   rank: number
-}
-
-// 彩排结果
-export interface RehearsalResult {
-  id: string
-  teamId: string
-  eventName: string
-  description: string
-  bonus: {
-    vocal?: number
-    dance?: number
-    charm?: number
-  }
-  createdAt: string
 }
 
 // 安全团标记

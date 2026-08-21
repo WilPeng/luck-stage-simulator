@@ -55,11 +55,6 @@ const stageClass = computed(() => props.stage)
     color: #fff;
   }
   
-  &.rehearsal {
-    background: #fdcb6e;
-    color: #2c3e50;
-  }
-  
   &.performance {
     background: linear-gradient(135deg, #f39c12, #e74c3c);
     color: #fff;

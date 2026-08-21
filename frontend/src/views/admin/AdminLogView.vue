@@ -119,7 +119,6 @@ function getActionText(action: string): string {
     lock_team: '锁定队伍',
     select_song: '选择歌曲',
     draw_card: '训练翻牌',
-    start_rehearsal: '开启彩排',
     calculate_performance: '公演结算',
     generate_elimination: '淘汰结果',
     update_stage: '阶段切换'

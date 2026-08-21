@@ -265,7 +265,6 @@ const stageConfig: Record<StageType, { icon: string; name: string }> = {
   teaming: { icon: '👥', name: '组队' },
   song_select: { icon: '🎵', name: '选歌' },
   training: { icon: '💪', name: '训练' },
-  rehearsal: { icon: '🎭', name: '彩排' }, // 保留配置以匹配 STAGE_ORDER
   performance: { icon: '🌟', name: '公演结果' },
   elimination: { icon: '📊', name: '淘汰结果' }
 }
@@ -274,13 +273,12 @@ const stageConfig: Record<StageType, { icon: string; name: string }> = {
 const ACTION_TO_STAGE: Record<string, StageType> = {
   team: 'teaming',
   song: 'song_select',
-  training: 'training',
-  rehearsal: 'rehearsal'
+  training: 'training'
 }
 
 // 主阶段列表（不含并发子行动）
 const MAIN_STAGES: StageType[] = STAGE_ORDER.filter(
-  type => type !== 'rehearsal' && !CONCURRENT_ACTIONS.includes(type)
+  type => !CONCURRENT_ACTIONS.includes(type)
 )
 
 // 某轮的阶段列表：主阶段 + 该轮已开放的并发子行动（插在"并发行动"之后）
@@ -311,18 +309,16 @@ const tabItems = computed(() => {
     { path: `${prefix}/player/profile`, icon: '✨', text: '我的' }
   ]
 
-  // 添加当前轮次的当前阶段（排除彩排，并发阶段使用并发行动中心）
+  // 添加当前轮次的当前阶段（并发阶段使用并发行动中心）
   if (seasonStore.season) {
     const currentStage = seasonStore.currentStage
-    if (currentStage !== 'rehearsal') {
-      const stageInfo = stageConfig[currentStage]
-      if (stageInfo) {
-        items.push({
-          path: getStagePath(currentRoundNumber.value, currentStage),
-          icon: stageInfo.icon,
-          text: stageInfo.name
-        })
-      }
+    const stageInfo = stageConfig[currentStage]
+    if (stageInfo) {
+      items.push({
+        path: getStagePath(currentRoundNumber.value, currentStage),
+        icon: stageInfo.icon,
+        text: stageInfo.name
+      })
     }
   }
 
@@ -339,7 +335,6 @@ function getStagePath(round: number, stage: StageType): string {
     teaming: `${prefix}/player/round/${round}/team`,
     song_select: `${prefix}/player/round/${round}/song-selection`,
     training: `${prefix}/player/round/${round}/training`,
-    rehearsal: `${prefix}/player/round/${round}/rehearsal`,
     performance: `${prefix}/player/round/${round}/performance`,
     elimination: `${prefix}/player/round/${round}/elimination`
   }

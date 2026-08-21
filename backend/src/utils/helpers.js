@@ -19,7 +19,6 @@ const ACTION_TYPES = {
   ROUND_SONG_ADD: 'ROUND_SONG_ADD',
   ROUND_SONG_REMOVE: 'ROUND_SONG_REMOVE',
   TEAM_SONG_ASSIGN: 'TEAM_SONG_ASSIGN',
-  REHEARSAL_ROLL: 'REHEARSAL_ROLL',
   PERFORMANCE_CALC: 'PERFORMANCE_CALC',
   ELIMINATION: 'ELIMINATION',
   SEASON_RESET: 'SEASON_RESET',
@@ -38,7 +37,7 @@ const ACTION_TYPES = {
 const STAGE_ORDER = [
   'preparation',     // 0  预先准备
   'captain_vote',    // 1  队长选举
-  'concurrent',      // 2  并发行动（组队/选歌/训练/彩排）
+  'concurrent',      // 2  并发行动（组队/选歌/训练）
   'performance',     // 3  公演结算与结果展示
   'elimination'      // 4  淘汰
 ]
@@ -52,7 +51,7 @@ const STAGE_NAME = {
 }
 
 // 并发阶段内包含的子行动（用于前端页面兼容与完成状态推断）
-const CONCURRENT_ACTIONS = ['teaming', 'song_select', 'training', 'rehearsal']
+const CONCURRENT_ACTIONS = ['teaming', 'song_select', 'training']
 
 // ===== 状态计算 =====
 /**
