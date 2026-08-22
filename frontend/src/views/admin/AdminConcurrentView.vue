@@ -81,15 +81,29 @@
         <div class="mode-setting-info">
           <span class="mode-icon">🎲</span>
           <div>
-            <div class="mode-title">公演发挥值抽取方式</div>
+            <div class="mode-title">
+              公演发挥值抽取方式
+              <t-tag theme="primary" variant="light" size="small" class="mode-current-tag">
+                {{ currentModeInfo.icon }} 当前：{{ currentModeInfo.name }}
+              </t-tag>
+            </div>
             <div class="mode-desc">设定选手抽取发挥值的方式，开放"发挥值抽取"后选手按此方式抽取</div>
+            <div class="mode-current-desc">{{ currentModeInfo.desc }}</div>
           </div>
         </div>
         <div class="mode-setting-actions">
-          <t-radio-group v-model="genMode" variant="default-filled" size="small">
-            <t-radio-button value="random">🎰 随机老虎机</t-radio-button>
-            <t-radio-button value="pointer">🎯 摆动指针</t-radio-button>
-          </t-radio-group>
+          <t-select
+            v-model="genMode"
+            style="width: 180px"
+            size="small"
+            placeholder="选择抽取方式"
+          >
+            <t-option value="random" label="🎰 随机老虎机（随机）" />
+            <t-option value="pointer" label="🎯 摆动指针（反应）" />
+            <t-option value="speed" label="⚡ 手速挑战（连击）" />
+            <t-option value="strategy" label="🧠 策略抉择（风险）" />
+            <t-option value="reflex" label="🔴 反应力（变灯点击）" />
+          </t-select>
           <t-button theme="primary" size="small" :loading="savingMode" @click="handleSaveMode">保存设置</t-button>
         </div>
       </div>
@@ -128,7 +142,7 @@ const seasonStore = useSeasonStore()
 const loading = ref(false)
 const toggling = ref<ConcurrentActionType | ''>('')
 const status = ref<ConcurrentStatusResponse | null>(null)
-const genMode = ref<'random' | 'pointer'>('random')
+const genMode = ref<'random' | 'pointer' | 'speed' | 'strategy' | 'reflex'>('random')
 const savingMode = ref(false)
 
 const roundIndex = computed(() => {
@@ -197,10 +211,11 @@ async function loadData() {
     if (status.value) {
       seasonStore.applyConcurrentStatus(roundIndex.value, status.value)
     }
-    // 读取发挥值抽取方式
+    // 读取发挥值抽取方式（实时回显当前设置，支持全部 5 种模式）
     try {
       const rs = await getPerformanceRoundStatus(roundId.value)
-      if (rs?.generationMode === 'random' || rs?.generationMode === 'pointer') {
+      const validModes = ['random', 'pointer', 'speed', 'strategy', 'reflex']
+      if (rs?.generationMode && validModes.includes(rs.generationMode)) {
         genMode.value = rs.generationMode
       }
     } catch { /* ignore */ }
@@ -211,11 +226,31 @@ async function loadData() {
   }
 }
 
+// 各模式的中文名称
+const MODE_NAMES: Record<string, { name: string; icon: string; desc: string }> = {
+  random: { name: '随机老虎机', icon: '🎰', desc: '纯随机抽取' },
+  pointer: { name: '摆动指针', icon: '🎯', desc: '反应与时机' },
+  speed: { name: '手速挑战', icon: '⚡', desc: '快速连击' },
+  strategy: { name: '策略抉择', icon: '🧠', desc: '风险权衡' },
+  reflex: { name: '反应力', icon: '🔴', desc: '变灯点击' }
+}
+
+const currentModeInfo = computed(() => {
+  return MODE_NAMES[genMode.value] || { name: genMode.value, icon: '🎲', desc: '' }
+})
+
 async function handleSaveMode() {
   savingMode.value = true
   try {
     await setPerformanceGenerationMode(roundId.value, genMode.value)
-    MessagePlugin.success(`抽取方式已设置为 ${genMode.value === 'random' ? '随机老虎机' : '摆动指针'}`)
+    const modeName: Record<string, string> = {
+      random: '随机老虎机',
+      pointer: '摆动指针',
+      speed: '手速挑战',
+      strategy: '策略抉择',
+      reflex: '反应力'
+    }
+    MessagePlugin.success(`抽取方式已设置为 ${modeName[genMode.value] || genMode.value}`)
   } catch (e: any) {
     MessagePlugin.error(e.message || '保存失败')
   } finally {
@@ -257,11 +292,15 @@ onMounted(loadData)
   min-height: 100%;
   padding: 12px;
   background: var(--bg-primary);
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .concurrent-card {
   margin-bottom: 12px;
-  border-radius: 8px;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--card-border);
 }
 
 .page-head {
@@ -311,11 +350,24 @@ onMounted(loadData)
     .mode-title {
       font-size: 15px;
       font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mode-current-tag {
+      font-weight: 600;
     }
 
     .mode-desc {
       font-size: 12px;
       color: var(--text-secondary);
+    }
+
+    .mode-current-desc {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 2px;
     }
   }
 

@@ -11,6 +11,7 @@ import type {
   EliminationPk,
   ConfirmDangerParams,
   StartPkParams,
+  ProposePkParams,
   ResolvePkResult
 } from '../types/elimination'
 import {
@@ -24,6 +25,7 @@ import {
   confirmDangerList as apiConfirmDanger,
   getDangerStatus as apiGetDangerStatus,
   getPkQueue as apiGetPkQueue,
+  proposePk as apiProposePk,
   startPk as apiStartPk,
   generatePkVotes as apiGeneratePkVotes,
   getPkHistory as apiGetPkHistory,
@@ -153,6 +155,8 @@ export const useEliminationStore = defineStore('elimination', () => {
     loading.value = true
     try {
       dangerStatus.value = await apiGetDangerStatus(round)
+      // 需求9：刷新容错——从后端恢复待处理 PK（proposed/voting），避免刷新丢失状态
+      currentPk.value = dangerStatus.value?.pendingPk || null
     } catch (e) {
       dangerStatus.value = null
     } finally {
@@ -192,6 +196,17 @@ export const useEliminationStore = defineStore('elimination', () => {
     loading.value = true
     try {
       currentPk.value = await apiStartPk(params)
+    } catch (e) {
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function doProposePk(params: ProposePkParams): Promise<void> {
+    loading.value = true
+    try {
+      currentPk.value = await apiProposePk(params)
     } catch (e) {
       throw e
     } finally {
@@ -277,6 +292,7 @@ export const useEliminationStore = defineStore('elimination', () => {
     fetchPkQueue,
     fetchPkHistory,
     doConfirmDanger,
+    doProposePk,
     doStartPk,
     doGeneratePkVotes,
     doResolvePk,

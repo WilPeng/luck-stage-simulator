@@ -205,13 +205,14 @@ color: var(--text-primary);
 }
 
 .welcome-section {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+  padding: 4px 0;
 
   h1 {
-    font-size: 20px;
-    font-weight: 700;
+    font-size: 24px;
+    font-weight: 800;
     margin: 0 0 6px 0;
-    background: linear-gradient(135deg, #ffd700, #ff6b6b);
+    background: linear-gradient(135deg, #6c5ce7, #a29bfe, #ff6b6b);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -225,7 +226,7 @@ color: var(--text-primary);
   .season-info {
     color: var(--text-tertiary);
     margin: 0;
-    font-size: 12px;
+    font-size: 13px;
   }
 }
 
@@ -233,18 +234,26 @@ color: var(--text-primary);
 .grid-container {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .info-card {
   background: var(--card-bg);
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: 14px;
+  padding: 16px 18px;
   display: flex;
   align-items: center;
   gap: 14px;
-  border-left: 3px solid transparent;
+  border: 1px solid var(--card-border);
+  border-left: 4px solid transparent;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  transition: all 0.25s;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(108, 92, 231, 0.12);
+  }
 
   &.stage-card { border-left-color: #a29bfe; }
   &.team-card { border-left-color: #4ecdc4; }
@@ -257,8 +266,15 @@ color: var(--text-primary);
 }
 
 .card-icon {
-  font-size: 26px;
+  font-size: 28px;
   flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hover-bg);
+  border-radius: 14px;
 }
 
 .card-content {
@@ -336,13 +352,20 @@ color: var(--text-primary);
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .card {
   background: var(--card-bg);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 14px;
+  padding: 18px;
+  border: 1px solid var(--card-border);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  transition: all 0.25s;
+
+  &:hover {
+    box-shadow: 0 6px 18px rgba(108, 92, 231, 0.1);
+  }
 }
 
 .card-header {
@@ -351,7 +374,17 @@ color: var(--text-primary);
   gap: 8px;
   margin-bottom: 14px;
 
-  .header-icon { font-size: 18px; }
+  .header-icon {
+    font-size: 18px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--hover-bg);
+    border-radius: 8px;
+  }
+
   .header-title {
     font-size: 14px;
     font-weight: 600;

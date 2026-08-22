@@ -22,6 +22,20 @@ async function getRound(roundId) {
       if (season) query.seasonId = season.id
       const byIndex = await Round.findOne(query)
       if (byIndex) return byIndex
+      // 找不到时自动创建该轮次（与 eliminationService 保持一致，避免 ROUND_NOT_FOUND）
+      if (season) {
+        const created = new Round({
+          id: require('../utils/helpers').generateId(),
+          seasonId: season.id,
+          index: parseInt(match[1]),
+          stage: 'preparation',
+          gameId: season.gameId || null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+        await created.save()
+        return created
+      }
     }
   }
   const season = await getCurrentSeason()

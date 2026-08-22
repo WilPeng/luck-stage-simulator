@@ -331,38 +331,40 @@ onMounted(async () => {
 <style lang="scss" scoped>
 /* ===================== CSS 变量（主题切换） ===================== */
 .admin-layout {
-  --bg-primary: #f0f2f5;
+  --bg-primary: #f4f5fb;
   --bg-secondary: #ffffff;
   --card-bg: #ffffff;
-  --card-border: #e8e8e8;
-  --text-primary: #333333;
-  --text-secondary: #666666;
-  --text-tertiary: #999999;
-  --text-muted: #bbbbbb;
-  --border-color: #e8e8e8;
+  --card-border: #eceaf6;
+  --text-primary: #2b2b3a;
+  --text-secondary: #5c5c72;
+  --text-tertiary: #9a9ab0;
+  --text-muted: #b8b8cc;
+  --border-color: #eceaf6;
   --sidebar-bg: #ffffff;
   --header-bg: #ffffff;
-  --hover-bg: rgba(0, 82, 204, 0.06);
-  --active-bg: rgba(0, 82, 204, 0.08);
-  --progress-bg: #f0f0f0;
-  --primary-color: #0052cc;
+  --hover-bg: rgba(108, 92, 231, 0.06);
+  --active-bg: rgba(108, 92, 231, 0.09);
+  --progress-bg: #f0eefb;
+  --primary-color: #6c5ce7;
+  --brand-gradient: linear-gradient(135deg, #6c5ce7, #a29bfe);
 
   &[data-theme="dark"] {
-    --bg-primary: #1a1a2e;
-    --bg-secondary: #2a2a4a;
-    --card-bg: #2a2a4a;
+    --bg-primary: #14142a;
+    --bg-secondary: #1e1e3a;
+    --card-bg: rgba(255, 255, 255, 0.06);
     --card-border: rgba(255, 255, 255, 0.1);
     --text-primary: #ffffff;
-    --text-secondary: rgba(255, 255, 255, 0.7);
-    --text-tertiary: rgba(255, 255, 255, 0.45);
-    --text-muted: rgba(255, 255, 255, 0.35);
-    --border-color: rgba(255, 255, 255, 0.08);
-    --sidebar-bg: #2a2a4a;
-    --header-bg: #2a2a4a;
-    --hover-bg: rgba(255, 255, 255, 0.06);
+    --text-secondary: rgba(255, 255, 255, 0.72);
+    --text-tertiary: rgba(255, 255, 255, 0.46);
+    --text-muted: rgba(255, 255, 255, 0.36);
+    --border-color: rgba(255, 255, 255, 0.1);
+    --sidebar-bg: #1e1e3a;
+    --header-bg: #1e1e3a;
+    --hover-bg: rgba(255, 255, 255, 0.07);
     --active-bg: rgba(255, 255, 255, 0.1);
-    --progress-bg: rgba(255, 255, 255, 0.15);
-    --primary-color: #667eea;
+    --progress-bg: rgba(255, 255, 255, 0.16);
+    --primary-color: #8d7bff;
+    --brand-gradient: linear-gradient(135deg, #7c6cf0, #b39dff);
   }
 }
 
@@ -376,13 +378,27 @@ onMounted(async () => {
 
 .admin-header {
   flex-shrink: 0;
-  background: var(--header-bg);
+  background: linear-gradient(120deg, #6c5ce7 0%, #8a7bf5 55%, #a29bfe 100%);
   padding: 0 24px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px rgba(108, 92, 231, 0.28);
   z-index: 100;
   height: 56px;
   display: flex;
   align-items: center;
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: -80%;
+    right: -4%;
+    width: 280px;
+    height: 280px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.16) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
 }
 
 .header-content {
@@ -391,6 +407,8 @@ onMounted(async () => {
   align-items: center;
   width: 100%;
   max-width: 1400px;
+  position: relative;
+  z-index: 1;
 }
 
 .logo-section {
@@ -405,8 +423,9 @@ onMounted(async () => {
 
 .logo-text {
   font-size: 16px;
-  font-weight: 600;
-  color: #0052cc;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
 
 .header-info {
@@ -421,8 +440,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
@@ -430,39 +449,41 @@ onMounted(async () => {
   padding: 0;
 
   &:hover {
-    background: var(--hover-bg);
+    background: rgba(255, 255, 255, 0.25);
     transform: scale(1.05);
   }
 }
 
 .stage-tag {
-  padding: 4px 12px;
-  background: linear-gradient(135deg, #0052cc, #003da6);
+  padding: 4px 14px;
+  background: rgba(255, 255, 255, 0.2);
   color: #fff;
-  border-radius: 4px;
+  border-radius: 20px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .user-name {
-  color: var(--text-primary);
-  font-weight: 500;
+  color: #ffffff;
+  font-weight: 600;
   font-size: 14px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .logout-btn {
-  padding: 5px 12px;
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  color: var(--text-primary);
+  padding: 5px 14px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  color: #fff;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    color: #0052cc;
-    border-color: #0052cc;
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
   }
 }
 
@@ -491,17 +512,18 @@ onMounted(async () => {
 }
 
 .admin-sider {
-  width: 220px;
+  width: 232px;
   flex-shrink: 0;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border-color);
   overflow-y: auto;
+  padding: 10px 0;
 }
 
 .sider-nav {
   display: flex;
   flex-direction: column;
-  padding: 8px;
+  padding: 6px 10px;
 }
 
 .nav-section {
@@ -512,12 +534,12 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px 4px;
+  padding: 10px 12px 6px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   cursor: pointer;
   user-select: none;
 
@@ -543,22 +565,22 @@ onMounted(async () => {
 
   .round-status {
     font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 4px;
+    padding: 2px 8px;
+    border-radius: 10px;
     font-weight: normal;
 
     &.completed {
-      background: rgba(0, 168, 112, 0.1);
+      background: rgba(0, 168, 112, 0.12);
       color: #00a870;
     }
 
     &.current {
-      background: rgba(0, 82, 217, 0.1);
-      color: #0052cc;
+      background: rgba(108, 92, 231, 0.14);
+      color: var(--primary-color);
     }
 
     &.future {
-      background: rgba(156, 163, 175, 0.1);
+      background: rgba(156, 163, 175, 0.12);
       color: #9ca3af;
     }
   }
@@ -588,19 +610,22 @@ onMounted(async () => {
   color: var(--text-secondary);
   text-decoration: none;
   font-size: 14px;
-  border-radius: 6px;
+  border-radius: 10px;
   transition: all 0.2s;
   cursor: pointer;
+  margin: 2px 0;
 
   &:hover {
     color: var(--primary-color);
     background: var(--hover-bg);
+    transform: translateX(2px);
   }
 
   &.active {
     color: var(--primary-color);
-    background: var(--active-bg);
-    font-weight: 500;
+    background: linear-gradient(90deg, rgba(108, 92, 231, 0.14), rgba(162, 155, 254, 0.06));
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px rgba(108, 92, 231, 0.15);
   }
 }
 

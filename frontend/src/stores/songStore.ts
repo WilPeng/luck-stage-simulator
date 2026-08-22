@@ -9,7 +9,9 @@ import {
   assignTeamSongs as apiAssignTeamSongs,
   getTeamSongs as apiGetTeamSongs,
   releaseSong as apiReleaseSong,
-  claimSong as apiClaimSong
+  claimSong as apiClaimSong,
+  removeRoundSong as apiRemoveRoundSong,
+  clearRoundSongs as apiClearRoundSongs
 } from '../services/api'
 import { getTeamSongs as dsGetTeamSongs, saveTeamSongs as dsSaveTeamSongs, assignSongToTeam as dsAssignSongToTeam, getRoundSongs as dsGetRoundSongs, saveRoundSongs as dsSaveRoundSongs } from '../services/dataService'
 import { useSeasonStore } from './seasonStore'
@@ -206,6 +208,43 @@ export const useSongStore = defineStore('song', () => {
     loadedTeamSongsRoundId.value = ''
   }
 
+  // 从本轮移除单条歌曲（管理员）
+  async function removeRoundSong(roundSongId: string, roundId?: string): Promise<void> {
+    const rid = roundId || currentRoundId.value
+    if (!rid) throw new Error('No roundId provided')
+    loading.value = true
+    try {
+      await apiRemoveRoundSong(roundSongId)
+      // 同步 dataService
+      const currentRoundSongs = dsGetRoundSongs(rid)
+      const updated = currentRoundSongs.filter((rs: any) => rs.id !== roundSongId && rs.songId !== roundSongId)
+      dsSaveRoundSongs(rid, updated)
+      await fetchRoundSongs(rid)
+    } catch (e) {
+      console.error('[SongStore] removeRoundSong error:', e)
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 清空本轮歌曲（管理员）
+  async function clearRoundSongs(roundId?: string): Promise<void> {
+    const rid = roundId || currentRoundId.value
+    if (!rid) throw new Error('No roundId provided')
+    loading.value = true
+    try {
+      await apiClearRoundSongs(rid)
+      dsSaveRoundSongs(rid, [])
+      await fetchRoundSongs(rid)
+    } catch (e) {
+      console.error('[SongStore] clearRoundSongs error:', e)
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     songs,
     roundSongs,
@@ -219,6 +258,8 @@ export const useSongStore = defineStore('song', () => {
     assignTeamSongs,
     releaseSong,
     claimSong,
+    removeRoundSong,
+    clearRoundSongs,
     getSongById,
     getTeamSong,
     getUnassignedRoundSongs,

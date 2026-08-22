@@ -650,7 +650,9 @@ onMounted(loadData)
 }
 
 .stage-card {
-  border-radius: 8px;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--card-border);
 }
 
 .page-head {

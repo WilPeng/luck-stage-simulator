@@ -34,6 +34,7 @@ import type {
   DangerStatus,
   DangerQueueEntry,
   StartPkParams,
+  ProposePkParams,
   EliminationPk,
   ResolvePkResult
 } from '../types/elimination'
@@ -316,6 +317,15 @@ export async function getRounds(): Promise<Round[]> {
     () => doRequest<Round[]>('/rounds'),
     async () => [],
     'getRounds'
+  )
+}
+
+// 需求6：获取指定轮次的历史公演数据（组队/公演成绩/淘汰记录）
+export async function getSeasonHistory(roundId: string): Promise<any> {
+  return safeCall(
+    () => doRequest(`/season/history?roundId=${roundId}`),
+    async () => ({ roundId, teams: [], members: [], teamPerformances: [], playerPerformances: [], eliminations: [] }),
+    'getSeasonHistory'
   )
 }
 
@@ -1091,6 +1101,24 @@ export async function addRoundSongs(params: { roundId: string; songs: Array<{ so
   )
 }
 
+// 从本轮移除单条歌曲（管理员）
+export async function removeRoundSong(roundSongId: string): Promise<void> {
+  return safeCall(
+    () => doRequest<void>(`/songs/round/${roundSongId}`, { method: 'DELETE' }),
+    async () => {},
+    'removeRoundSong'
+  )
+}
+
+// 清空本轮歌曲（管理员）
+export async function clearRoundSongs(roundId: string): Promise<void> {
+  return safeCall(
+    () => doRequest<void>(`/songs/round/clear/${roundId}`, { method: 'DELETE' }),
+    async () => {},
+    'clearRoundSongs'
+  )
+}
+
 export async function assignTeamSongs(params: { roundId: string; assignments: Array<{ teamId: string; songId: string }> }): Promise<TeamSong[]> {
   return safeCall(
     () => doRequest<TeamSong[]>('/songs/team-songs', {
@@ -1476,10 +1504,11 @@ export async function getTrainingStats(): Promise<TrainingStats> {
 }
 
 export async function clearUserTrainingRecords(userId: string, round?: number): Promise<void> {
+  const roundStr = round !== undefined ? `round-${round}` : undefined
   return safeCall(
     () => doRequest<void>('/training/clear-user-records', {
       method: 'DELETE',
-      body: JSON.stringify({ userId, round })
+      body: JSON.stringify({ userId, round: roundStr, roundId: roundStr })
     }),
     async () => mockClearUserTrainingRecords(userId, round),
     'clearUserTrainingRecords'
@@ -1880,7 +1909,7 @@ export async function getEliminationRecords(round?: number): Promise<Elimination
   return safeCall(
     () => {
       const query = round !== undefined ? `?round=${round}` : ''
-      return doRequest<EliminationRecord[]>(`/elimination/history${query}`)
+      return doRequest<EliminationRecord[]>(`/elimination${query}`)
     },
     async () => [],
     'getEliminationRecords'
@@ -1968,6 +1997,17 @@ export async function getPkQueue(round?: number): Promise<DangerQueueEntry[]> {
     },
     async () => [],
     'getPkQueue'
+  )
+}
+
+export async function proposePk(params: ProposePkParams): Promise<EliminationPk> {
+  return safeCall(
+    () => doRequest<EliminationPk>('/elimination/pk/propose', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    }),
+    async () => { throw new Error('PK 申请仅在连接后端时可用') },
+    'proposePk'
   )
 }
 

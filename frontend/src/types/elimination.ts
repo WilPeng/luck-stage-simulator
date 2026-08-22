@@ -108,6 +108,7 @@ export interface DangerStatus {
   confirmed: boolean
   playerIds: string[]
   queue: DangerQueueEntry[]
+  colors?: Record<string, string>
   pendingPk?: EliminationPk | null
 }
 
@@ -117,9 +118,19 @@ export interface PkPlayer {
   playerName: string
   teamId: string | null
   teamName: string | null
-  weight: number
-  votes: number
+  weight?: number
+  votes: number | null
   decision: 'safe' | 'pending' | 'eliminated' | null
+}
+
+// PK 评审投票明细
+export interface PkVoteDetail {
+  seatNumber: number
+  audienceName: string
+  gender?: string | null
+  age?: number | null
+  occupation?: string | null
+  playerId: string
 }
 
 // PK 记录
@@ -128,17 +139,14 @@ export interface EliminationPk {
   roundId: string
   roundIndex: number
   pkIndex: number
-  attribute: 'vocal' | 'dance' | 'charm'
+  attribute: 'vocal' | 'dance' | 'charm' | null
   challengerId: string
+  proposerId?: string | null
   players: PkPlayer[]
-  voteDetails?: {
-    seatNumber: number
-    audienceName: string
-    playerId: string
-  }[]
+  voteDetails?: PkVoteDetail[]
   queueBefore: DangerQueueEntry[]
   queueAfter: DangerQueueEntry[]
-  status: 'voting' | 'resolved'
+  status: 'proposed' | 'voting' | 'resolved'
   createdAt: string
   updatedAt: string
 }
@@ -149,11 +157,19 @@ export interface ConfirmDangerParams {
   playerIds: string[]
 }
 
-// PK 发起参数
-export interface StartPkParams {
+// 选手提交 PK 申请参数（不选属性）
+export interface ProposePkParams {
   round: number
   challengerId: string
   opponentIds: string[]
+}
+
+// PK 发起参数（管理员：从申请发起或直接发起，选属性）
+export interface StartPkParams {
+  round: number
+  pkId?: string
+  challengerId?: string
+  opponentIds?: string[]
   attribute: 'vocal' | 'dance' | 'charm'
 }
 

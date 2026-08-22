@@ -56,31 +56,24 @@
       <t-empty v-if="dangerQueue.length === 0" description="危险队列已清空" />
     </div>
 
-    <!-- PK 发起（当前用户是队首时） -->
-    <div v-if="isMeChallenger" class="pk-start-section">
+    <!-- PK 发起（当前用户是队首时，提交申请由管理员发起） -->
+    <div v-if="isMeChallenger && !pendingPk" class="pk-start-section">
       <div class="section-header">
         <span class="section-badge">⚔️</span>
-        <h2>发起 PK</h2>
+        <h2>选择 PK 对象</h2>
       </div>
       <div class="pk-start-panel">
         <div class="pk-field">
-          <span class="field-label">选择 2 名对手</span>
+          <span class="field-label">选择 2 名对手（属性由管理员选择）</span>
           <div class="opponent-select">
-            <t-select v-model="opponentId1" :options="opponentOptions" placeholder="选择第一名对手" clearable />
-            <t-select v-model="opponentId2" :options="opponentOptions" placeholder="选择第二名对手" clearable />
+            <t-select v-model="opponentId1" :options="opponentOptions1" placeholder="选择第一名对手" clearable />
+            <t-select v-model="opponentId2" :options="opponentOptions2" placeholder="选择第二名对手" clearable />
           </div>
         </div>
-        <div class="pk-field">
-          <span class="field-label">PK 属性</span>
-          <t-radio-group v-model="pkAttribute" variant="default-filled">
-            <t-radio-button value="vocal">🎤 声乐</t-radio-button>
-            <t-radio-button value="dance">💃 舞蹈</t-radio-button>
-            <t-radio-button value="charm">✨ 魅力</t-radio-button>
-          </t-radio-group>
-        </div>
-        <t-button theme="primary" block :disabled="!canStartPk" :loading="pkStarting" @click="handleStartPk">
-          发起 PK
+        <t-button theme="primary" block :disabled="!canStartPk" :loading="pkStarting" @click="handleProposePk">
+          提交 PK 申请
         </t-button>
+        <p class="pk-tip">提交后等待管理员选择 PK 属性并发起</p>
       </div>
     </div>
 
@@ -88,8 +81,10 @@
     <div v-if="pendingPk" class="pk-active-section">
       <div class="section-header">
         <span class="section-badge">🗳️</span>
-        <h2>第 {{ pendingPk.pkIndex }} 场 PK</h2>
-        <span class="section-count">{{ attributeName(pendingPk.attribute) }}</span>
+        <h2>
+          {{ pendingPk.status === 'proposed' ? 'PK 申请已提交' : `第 ${pendingPk.pkIndex} 场 PK` }}
+        </h2>
+        <span v-if="pendingPk.attribute" class="section-count">{{ attributeName(pendingPk.attribute) }}</span>
       </div>
       <div class="pk-players">
         <div
@@ -100,8 +95,25 @@
         >
           <span class="pk-player-name">{{ p.playerName }}</span>
           <span class="pk-player-team">{{ p.teamName || '未组队' }}</span>
-          <span v-if="p.votes > 0" class="pk-player-votes">{{ p.votes }}票</span>
-          <span v-else class="pk-player-waiting">等待评审投票...</span>
+          <span v-if="p.votes !== null && p.votes > 0" class="pk-player-votes">{{ p.votes }}票</span>
+          <span v-else class="pk-player-waiting">
+            {{ pendingPk.status === 'proposed' ? '等待管理员发起' : '大众评审投票中...' }}
+          </span>
+        </div>
+      </div>
+      <!-- 进行中的 PK：管理员已产生票数后展示查票区（不显示具体票数） -->
+      <div v-if="pendingPk.voteDetails?.length" class="pk-check-votes">
+        <span class="check-title">评审投票查票（{{ pendingPk.voteDetails.length }} 人）</span>
+        <div class="check-seats">
+          <span
+            v-for="seat in pendingPk.voteDetails"
+            :key="seat.seatNumber"
+            class="check-seat"
+            :style="{ background: playerColor(seat.playerId) }"
+            :title="audienceTooltip(seat)"
+          >
+            {{ seat.seatNumber }}
+          </span>
         </div>
       </div>
       <p class="pk-tip">投票结果公布后由管理员裁定安全 / 待定 / 淘汰</p>
@@ -117,28 +129,28 @@
         <div v-for="pk in pkHistory" :key="pk.id" class="pk-history-item">
           <div class="pk-history-head">
             <span class="pk-index">第 {{ pk.pkIndex }} 场</span>
-            <span class="pk-attribute">{{ attributeName(pk.attribute) }}</span>
-            <span class="pk-status" :class="pk.status">{{ pk.status === 'resolved' ? '已裁定' : '进行中' }}</span>
+            <span v-if="pk.attribute" class="pk-attribute">{{ attributeName(pk.attribute) }}</span>
+            <span class="pk-status" :class="pk.status">{{ statusText(pk.status) }}</span>
           </div>
           <div class="pk-history-players">
             <div v-for="p in pk.players" :key="p.playerId" class="pk-history-player">
               <span class="pk-history-name">{{ p.playerName }}</span>
-              <span v-if="p.votes > 0" class="pk-history-votes">{{ p.votes }}票</span>
+              <span v-if="p.votes !== null && p.votes > 0" class="pk-history-votes">{{ p.votes }}票</span>
               <span v-if="p.decision" class="pk-history-decision" :class="p.decision">
                 {{ decisionText(p.decision) }}
               </span>
             </div>
           </div>
-          <!-- 查票区 -->
-          <div class="pk-check-votes">
-            <span class="check-title">评审投票查票（{{ pk.voteDetails?.length || 0 }} 人）</span>
+          <!-- 查票区（管理员产生票数后即对选手开放，展示评审投票投给谁，不展示具体票数） -->
+          <div v-if="pk.voteDetails?.length" class="pk-check-votes">
+            <span class="check-title">评审投票查票（{{ pk.voteDetails.length }} 人）</span>
             <div class="check-seats">
               <span
-                v-for="seat in pk.voteDetails || []"
+                v-for="seat in pk.voteDetails"
                 :key="seat.seatNumber"
                 class="check-seat"
                 :style="{ background: playerColor(seat.playerId) }"
-                :title="`${seat.seatNumber}号评审 → ${playerNameById(seat.playerId)}`"
+                :title="audienceTooltip(seat)"
               >
                 {{ seat.seatNumber }}
               </span>
@@ -194,7 +206,6 @@ const currentUserId = computed(() => authStore.currentUser?.id || '')
 
 const opponentId1 = ref('')
 const opponentId2 = ref('')
-const pkAttribute = ref<'vocal' | 'dance' | 'charm'>('vocal')
 const pkStarting = ref(false)
 
 const isEliminated = computed(() => {
@@ -202,8 +213,17 @@ const isEliminated = computed(() => {
   return user?.status === 'eliminated'
 })
 
+// 需求7：淘汰名单只显示本轮淘汰的选手（不含更早轮次已淘汰者）
 const eliminatedPlayers = computed(() => {
-  return playerStore.users.filter(u => u.status === 'eliminated')
+  return store.records.map(r => {
+    const u = playerStore.users.find(x => x.id === (r.userId || r.playerId))
+    return {
+      id: r.userId || r.playerId,
+      name: r.userName || u?.name || r.userId,
+      teamId: r.teamId || null,
+      teamName: r.teamName || null
+    }
+  })
 })
 
 // 危险名单相关
@@ -223,12 +243,21 @@ const isMeChallenger = computed(() => {
   return dangerQueue.value[0]?.playerId === currentUserId.value
 })
 
-const opponentOptions = computed(() => {
-  const ids = new Set([opponentId2.value])
+// 需求5：两个下拉框去重——第一个选了A后，第二个不显示A；反之亦然
+const opponentOptions1 = computed(() => {
+  const excluded = new Set([opponentId2.value])
   return dangerQueue.value
     .filter(e => e.playerId !== dangerQueue.value[0]?.playerId)
-    .filter(e => !ids.has(e.playerId))
-    .map(e => ({ label: `${e.playerName}（${e.popularityVotes}票）`, value: e.playerId }))
+    .filter(e => !excluded.has(e.playerId))
+    .map(e => ({ label: e.playerName, value: e.playerId }))
+})
+
+const opponentOptions2 = computed(() => {
+  const excluded = new Set([opponentId1.value])
+  return dangerQueue.value
+    .filter(e => e.playerId !== dangerQueue.value[0]?.playerId)
+    .filter(e => !excluded.has(e.playerId))
+    .map(e => ({ label: e.playerName, value: e.playerId }))
 })
 
 const canStartPk = computed(() => {
@@ -247,16 +276,14 @@ function getTeamName(teamId?: string): string {
   return team?.name || '未知队伍'
 }
 
-// 危险区选手颜色（按队列顺序分配固定色板）
-const COLOR_PALETTE = ['#e74c3c', '#f39c12', '#27ae60', '#2980b9', '#8e44ad', '#16a085', '#c0392b', '#d35400', '#2c3e50', '#7f8c8d']
-const colorMap = new Map<string, string>()
+// 需求3：颜色从后端读取（固定不变，全员一致），兜底按队列顺序分配
+const DEFAULT_COLOR_PALETTE = ['#e74c3c', '#f39c12', '#27ae60', '#2980b9', '#8e44ad', '#16a085', '#c0392b', '#d35400', '#2c3e50', '#7f8c8d']
 
 function playerColor(playerId: string): string {
-  if (!colorMap.has(playerId)) {
-    const idx = dangerQueue.value.findIndex(e => e.playerId === playerId)
-    colorMap.set(playerId, COLOR_PALETTE[(idx >= 0 ? idx : colorMap.size) % COLOR_PALETTE.length])
-  }
-  return colorMap.get(playerId) || '#95a5a6'
+  const colors = store.dangerStatus?.colors
+  if (colors && colors[playerId]) return colors[playerId]
+  const idx = dangerQueue.value.findIndex(e => e.playerId === playerId)
+  return DEFAULT_COLOR_PALETTE[(idx >= 0 ? idx : 0) % DEFAULT_COLOR_PALETTE.length]
 }
 
 function playerNameById(playerId: string): string {
@@ -276,25 +303,36 @@ function decisionText(d: string): string {
   return map[d] || d
 }
 
-async function handleStartPk() {
+function statusText(status: string): string {
+  const map: Record<string, string> = { proposed: '待管理员发起', voting: '投票中', resolved: '已裁定' }
+  return map[status] || status
+}
+
+// 需求2：评审信息展示（姓名/性别/年龄/职业 + 投给谁）
+function audienceTooltip(seat: { seatNumber: number; audienceName: string; gender?: string | null; age?: number | null; occupation?: string | null; playerId: string }): string {
+  const info = `${seat.seatNumber}号评审 ${seat.audienceName || ''}（${seat.gender || '-'} ${seat.age ?? '-'}岁 ${seat.occupation || '-'}）`
+  return `${info} → 投给 ${playerNameById(seat.playerId)}`
+}
+
+// 需求1：选手端只提交 PK 申请（不选属性），由管理员发起
+async function handleProposePk() {
   if (!canStartPk.value) {
     MessagePlugin.warning('请选择 2 名不同的对手')
     return
   }
   pkStarting.value = true
   try {
-    await store.doStartPk({
+    await store.doProposePk({
       round: currentRound.value,
       challengerId: dangerQueue.value[0].playerId,
-      opponentIds: [opponentId1.value, opponentId2.value],
-      attribute: pkAttribute.value
+      opponentIds: [opponentId1.value, opponentId2.value]
     })
     opponentId1.value = ''
     opponentId2.value = ''
-    MessagePlugin.success('PK 已发起')
+    MessagePlugin.success('PK 申请已提交，等待管理员发起')
     await loadAll()
   } catch (e: any) {
-    MessagePlugin.error(e.message || '发起 PK 失败')
+    MessagePlugin.error(e.message || '提交 PK 申请失败')
   } finally {
     pkStarting.value = false
   }
@@ -305,7 +343,8 @@ async function loadAll() {
     await Promise.all([
       store.fetchDangerStatus(currentRound.value),
       store.fetchPkQueue(currentRound.value),
-      store.fetchPkHistory(currentRound.value)
+      store.fetchPkHistory(currentRound.value),
+      store.fetchRecords(currentRound.value)
     ])
   } catch (e) {
     console.warn('[PlayerElimination] 加载失败:', e)

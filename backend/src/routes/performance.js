@@ -1108,7 +1108,7 @@ router.post('/start', auth, requireAdmin, async (req, res) => {
 
     const { roundId, generationMode } = req.body
     const frontRoundId = roundId || `round-${round.index}`
-    const mode = generationMode === 'pointer' ? 'pointer' : 'random'
+    const mode = ['random', 'pointer', 'speed', 'strategy', 'reflex'].includes(generationMode) ? generationMode : 'random'
 
     const season = await getCurrentSeason()
     if (season) {
@@ -1148,8 +1148,8 @@ router.post('/generation-mode', auth, requireAdmin, async (req, res) => {
     if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
 
     const { generationMode } = req.body
-    if (!['random', 'pointer'].includes(generationMode)) {
-      return res.status(400).json({ success: false, error: '生成方式只能是 random 或 pointer', code: 'INVALID_MODE' })
+    if (!['random', 'pointer', 'speed', 'strategy', 'reflex'].includes(generationMode)) {
+      return res.status(400).json({ success: false, error: '生成方式只能是 random/pointer/speed/strategy/reflex', code: 'INVALID_MODE' })
     }
 
     let state = await PerformanceRoundState.findOne({ roundId: round.id })

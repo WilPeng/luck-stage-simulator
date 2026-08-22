@@ -275,6 +275,9 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .player-profile {
 color: var(--text-primary);
+max-width: 1000px;
+margin: 0 auto;
+padding: 16px 8px;
 }
 
 .profile-header {

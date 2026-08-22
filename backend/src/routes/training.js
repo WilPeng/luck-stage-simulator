@@ -79,6 +79,32 @@ function computeAttrDelta(drawn, user) {
     }
   }
 
+  // 均衡化：向三者均值靠拢，缩小属性差距
+  // balance>0 时提高最低项、降低最高项各 balance 点；balance<0 时反向拉大差距
+  if (typeof eff.balance === 'number' && eff.balance !== 0) {
+    const keys = ['vocal', 'dance', 'charm']
+    const sorted = keys.slice().sort((a, b) => cur[a] - cur[b])
+    const minK = sorted[0]
+    const maxK = sorted[2]
+    const b = Math.max(-10, Math.min(10, eff.balance))
+    attrDelta[minK] += b
+    attrDelta[maxK] -= b
+  }
+
+  // 幸运加成：随机一项大幅提升
+  if (typeof eff.lucky === 'number' && eff.lucky !== 0) {
+    const keys = ['vocal', 'dance', 'charm']
+    const k = keys[Math.floor(Math.random() * 3)]
+    attrDelta[k] += eff.lucky
+  }
+
+  // 团队共振：三项等额提升（适合综合/队伍增益卡）
+  if (typeof eff.teamAll === 'number' && eff.teamAll !== 0) {
+    for (const k of ['vocal', 'dance', 'charm']) {
+      attrDelta[k] += eff.teamAll
+    }
+  }
+
   return attrDelta
 }
 
@@ -594,30 +620,61 @@ router.post('/auto-complete-all', auth, requireAdmin, async (req, res) => {
   }
 })
 
-// ===== DELETE /api/training/clear-user-records - 取消本轮所有选手训练成果 =====
+// ===== DELETE /api/training/clear-user-records - 取消某选手/本轮训练成果（回滚属性） =====
 router.delete('/clear-user-records', auth, requireAdmin, async (req, res) => {
   try {
-    const { roundId, roundIndex } = req.query
-    const round = await getRound(roundId)
-    const rId = round ? round.id : roundId
+    // 兼容：支持 query（roundId/roundIndex/userId）与 body（userId/round）两种传参
+    const { roundId, roundIndex, userId: qUserId } = req.query
+    const body = req.body || {}
+    const userId = qUserId || body.userId || null
+    const roundParam = body.round ?? (roundId ? roundId : null)
 
-    const filter = {}
-    if (rId) {
-      if (rId !== roundId) {
-        filter.$or = [{ roundId: rId }, { roundId: roundId }]
-      } else {
-        filter.roundId = rId
+    // 解析轮次：round 支持数字、round-1、round_1 或 roundId(UUID)
+    let rId = null
+    let roundIdx = null
+    if (roundParam !== null && roundParam !== undefined && roundParam !== '') {
+      const round = await getRound(String(roundParam))
+      if (round) {
+        rId = round.id
+        roundIdx = round.index
+      } else if (String(roundParam).match(/^round[_-](\d+)$/)) {
+        roundIdx = parseInt(String(roundParam).match(/^round[_-](\d+)$/)[1])
       }
+    } else if (roundIndex) {
+      roundIdx = parseInt(roundIndex)
     }
-    if (roundIndex) filter.roundIndex = parseInt(roundIndex)
+
+    // 构造过滤条件
+    const roundClause = rId
+      ? { $or: [{ roundId: rId }, { roundId: `round-${roundIdx || ''}` }] }
+      : (roundIdx ? { roundId: `round-${roundIdx}` } : {})
+
+    let filter = {}
+    if (userId) {
+      // 记录可能存 playerId 或 userId，用 $or 匹配两者任一
+      filter.$or = [
+        { playerId: userId },
+        { userId: userId }
+      ]
+      if (roundClause.$or || roundClause.roundId) {
+        filter.$and = [roundClause]
+      }
+    } else {
+      filter = roundClause
+    }
+    const recordsToDelete = await TrainingRecord.find(filter)
+
+    // 累加每位选手的属性增量（回滚用）
     const rollbackMap = {}
-    for (const r of records) {
+    for (const r of recordsToDelete) {
       const delta = r.attrDelta || r.effect || {}
-      const pid = r.playerId
-      if (!rollbackMap[pid]) rollbackMap[pid] = { vocal: 0, dance: 0, charm: 0 }
+      const pid = r.userId || r.playerId
+      if (!pid) continue
+      if (!rollbackMap[pid]) rollbackMap[pid] = { vocal: 0, dance: 0, charm: 0, count: 0 }
       rollbackMap[pid].vocal += delta.vocal || 0
       rollbackMap[pid].dance += delta.dance || 0
       rollbackMap[pid].charm += delta.charm || 0
+      rollbackMap[pid].count += 1
     }
 
     // 回滚用户属性
@@ -627,19 +684,20 @@ router.delete('/clear-user-records', auth, requireAdmin, async (req, res) => {
         user.attributes.vocal = (user.attributes.vocal || 0) - delta.vocal
         user.attributes.dance = (user.attributes.dance || 0) - delta.dance
         user.attributes.charm = (user.attributes.charm || 0) - delta.charm
+        user.trainingCount = Math.max(0, (user.trainingCount || 0) - delta.count)
         await user.save()
       }
     }
 
     await TrainingRecord.deleteMany(filter)
 
-    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TRAINING_CONFIG, 'training', rId,
-      `取消本轮训练成果：删除 ${records.length} 条记录，回滚 ${Object.keys(rollbackMap).length} 位选手属性`)
+    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TRAINING_CONFIG, 'training', rId || roundIdx || '',
+      `取消训练成果：删除 ${recordsToDelete.length} 条记录，回滚 ${Object.keys(rollbackMap).length} 位选手属性`)
 
-    res.json({ success: true, data: { deletedCount: records.length, affectedUsers: Object.keys(rollbackMap).length } })
+    res.json({ success: true, data: { deletedCount: recordsToDelete.length, affectedUsers: Object.keys(rollbackMap).length } })
   } catch (e) {
     console.error(e)
-    res.status(500).json({ success: false, error: '取消训练成果失败', code: 'SERVER_ERROR' })
+    res.status(500).json({ success: false, error: '取消训练成果失败: ' + (e.message || ''), code: 'SERVER_ERROR' })
   }
 })
 

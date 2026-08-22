@@ -48,24 +48,14 @@ function serializeSeason(s) {
 
 /**
  * 清除指定轮次的业务数据（进入新轮次时调用）
- * @param {number} roundIndex - 要清除的轮次索引（1-based）
+ * 需求6：保留历史组队/公演/得票数据（各轮数据按 roundId 天然隔离），不再删除
+ * 选手一公、二公、三公的队伍/公演/得票记录全部保留，可通过 /api/season/history 查阅
+ * @param {number} roundIndex - 要清除的轮次索引（1-based，保留处理，不再实际删除）
  */
 async function clearRoundData(roundIndex) {
-  const roundDetail = await Round.findOne({ seasonId: (await getCurrentSeason())?.id, index: roundIndex })
-  if (!roundDetail) return
-
-  const dbRoundId = roundDetail.id
-  const frontRoundId = `round-${roundIndex}`
-  const filter = { roundId: { $in: [dbRoundId, frontRoundId] } }
-
-  await Promise.all([
-    RoundTeam.deleteMany(filter),
-    RoundTeamMember.deleteMany(filter),
-    RoundCaptain.deleteMany(filter),
-    CaptainVote.deleteMany(filter),
-    TeamSong.deleteMany(filter),
-    RoundSong.deleteMany(filter),
-  ])
+  // 需求6：历史轮次数据全部保留，不再清理。
+  // 若需要真正清除历史（如完全重置赛季），使用 POST /api/season/reset 或 /api/season/restart。
+  return
 }
 
 // ===== GET /api/season =====

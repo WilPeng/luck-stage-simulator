@@ -2,9 +2,77 @@
   <div class="player-history">
     <div class="history-header">
       <h1>我的记录</h1>
-      <p class="subtitle">查看你的所有操作记录</p>
+      <p class="subtitle">查看你的操作记录与历史公演数据</p>
     </div>
-    
+
+    <!-- ===== 历史公演数据（需求6） ===== -->
+    <t-card theme="dark" class="history-card">
+      <div class="section-head">
+        <h3>📊 历史公演数据</h3>
+        <t-select
+          v-model="selectedRound"
+          :options="roundOptions"
+          placeholder="选择轮次查看"
+          style="width: 160px"
+          size="small"
+          @change="loadRoundHistory"
+        />
+      </div>
+
+      <div v-if="!selectedRound" class="history-hint">选择轮次查看该公演的组队、成绩与淘汰记录</div>
+
+      <div v-else-if="historyLoading" class="history-hint">加载中...</div>
+
+      <div v-else-if="roundHistory" class="round-history">
+        <!-- 我的队伍 -->
+        <div class="history-block">
+          <div class="block-title">🏟️ 第 {{ selectedRound }} 公 · 我的队伍</div>
+          <div v-if="myTeams.length === 0" class="block-empty">本轮未组队</div>
+          <div v-for="t in myTeams" :key="t.id" class="block-row">
+            <span class="row-name">{{ t.name }}</span>
+            <span class="row-sub">队长：{{ captainName(t.captainId) }}</span>
+          </div>
+        </div>
+
+        <!-- 我的成绩 -->
+        <div class="history-block">
+          <div class="block-title">🏆 第 {{ selectedRound }} 公 · 我的成绩</div>
+          <div v-if="myPerformance" class="block-row">
+            <span class="row-name">个人分：{{ myPerformance.playerScore ?? myPerformance.finalScore ?? '-' }}</span>
+            <span class="row-sub">评级：{{ myPerformance.stageRating || '-' }} · 发挥值：{{ myPerformance.performanceValue ?? '-' }}</span>
+          </div>
+          <div v-else class="block-empty">本轮暂无成绩</div>
+        </div>
+
+        <!-- 全轮队伍排名 -->
+        <div class="history-block">
+          <div class="block-title">📈 第 {{ selectedRound }} 公 · 队伍排名</div>
+          <div v-if="roundHistory.teamPerformances?.length" class="rank-list">
+            <div
+              v-for="tp in roundHistory.teamPerformances"
+              :key="tp.teamId"
+              class="rank-row"
+            >
+              <span class="rank-badge">{{ tp.rank }}</span>
+              <span class="row-name">{{ tp.teamName }}</span>
+              <span class="row-sub">{{ tp.finalVotes ?? tp.finalScore ?? '-' }}票</span>
+            </div>
+          </div>
+          <div v-else class="block-empty">本轮暂无排名数据</div>
+        </div>
+
+        <!-- 本轮淘汰 -->
+        <div class="history-block">
+          <div class="block-title">❌ 第 {{ selectedRound }} 公 · 淘汰名单</div>
+          <div v-if="roundHistory.eliminations?.length" class="block-row">
+            <span class="row-name">{{ roundHistory.eliminations.map((e: any) => e.userName || e.playerId).join('、') }}</span>
+          </div>
+          <div v-else class="block-empty">本轮无人淘汰</div>
+        </div>
+      </div>
+    </t-card>
+
+    <!-- ===== 操作记录 ===== -->
     <t-card v-if="userLogs.length > 0" theme="dark" class="history-card">
       <t-timeline mode="alternate" theme="dark" class="custom-timeline">
         <t-timeline-item 
@@ -39,18 +107,74 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '../../stores/authStore'
 import { useLogStore } from '../../stores/logStore'
+import { useSeasonStore } from '../../stores/seasonStore'
+import { usePlayerStore } from '../../stores/playerStore'
+import { getSeasonHistory, getRounds } from '../../services/api'
 
 const authStore = useAuthStore()
 const logStore = useLogStore()
+const seasonStore = useSeasonStore()
+const playerStore = usePlayerStore()
 
 const currentUser = computed(() => authStore.currentUser)
 const userLogs = computed(() => {
   if (!currentUser.value) return []
   return logStore.logs.filter(log => log.userId === currentUser.value?.id)
 })
+
+// ===== 历史公演数据（需求6） =====
+const rounds = ref<any[]>([])
+const selectedRound = ref<number | undefined>(undefined)
+const roundHistory = ref<any>(null)
+const historyLoading = ref(false)
+
+const roundOptions = computed(() => {
+  return rounds.value.map(r => ({ label: `第${r.index}公演`, value: r.index }))
+})
+
+const myTeams = computed(() => {
+  if (!roundHistory.value?.teams || !currentUser.value) return []
+  const members = roundHistory.value.members || []
+  const myMember = members.find((m: any) => m.playerId === currentUser.value?.id)
+  if (!myMember) return []
+  const teams = roundHistory.value.teams || []
+  const team = teams.find((t: any) => t.id === myMember.teamId)
+  return team ? [team] : []
+})
+
+const myPerformance = computed(() => {
+  if (!roundHistory.value?.playerPerformances || !currentUser.value) return null
+  return roundHistory.value.playerPerformances.find((p: any) => p.playerId === currentUser.value?.id) || null
+})
+
+function captainName(captainId?: string): string {
+  if (!captainId) return '未指定'
+  const user = playerStore.users.find(u => u.id === captainId)
+  return user?.name || captainId
+}
+
+async function loadRounds() {
+  try {
+    rounds.value = await getRounds()
+  } catch {
+    rounds.value = []
+  }
+}
+
+async function loadRoundHistory() {
+  if (!selectedRound.value) return
+  historyLoading.value = true
+  try {
+    roundHistory.value = await getSeasonHistory(`round-${selectedRound.value}`)
+  } catch (e) {
+    roundHistory.value = null
+  } finally {
+    historyLoading.value = false
+  }
+}
 
 function getActionIcon(actionType: string): string {
   const icons: Record<string, string> = {
@@ -139,7 +263,11 @@ function getActionTagTheme(actionType: string): 'success' | 'danger' | 'warning'
 }
 
 onMounted(async () => {
-  await logStore.fetchLogs()
+  await Promise.all([
+    logStore.fetchLogs(),
+    loadRounds(),
+    playerStore.fetchAllUsers()
+  ])
 })
 </script>
 
@@ -184,6 +312,106 @@ onMounted(async () => {
     color: var(--text-tertiary);
     margin: 0;
     font-size: 14px;
+  }
+}
+
+// ===== 历史公演数据 =====
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+
+  h3 {
+    margin: 0;
+    font-size: 16px;
+  }
+}
+
+.history-hint {
+  color: var(--text-tertiary);
+  font-size: 13px;
+  padding: 16px 0;
+  text-align: center;
+}
+
+.round-history {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.history-block {
+  background: var(--bg-primary);
+  border-radius: 10px;
+  padding: 14px;
+
+  .block-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  .block-empty {
+    font-size: 13px;
+    color: var(--text-tertiary);
+  }
+
+  .block-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border-color);
+
+    .row-name {
+      font-weight: 500;
+    }
+
+    .row-sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-left: auto;
+    }
+  }
+}
+
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rank-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border-color);
+
+  .rank-badge {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #3498db;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .row-name {
+    font-weight: 500;
+    flex: 1;
+  }
+
+  .row-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
   }
 }
 

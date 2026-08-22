@@ -53,65 +53,142 @@
       :header="editingCard ? '编辑卡牌' : '新增卡牌'"
       :confirm-btn="{ content: '保存', loading: saving }"
       :cancel-btn="{}"
-      width="560px"
+      width="920px"
+      :dialog-style="{ maxWidth: '94vw' }"
       @confirm="doSave"
     >
-      <t-form :data="form" :rules="rules" label-width="90px">
-        <t-form-item label="卡牌名称" name="name">
-          <t-input v-model="form.name" placeholder="如：声乐特训" />
-        </t-form-item>
-        <t-form-item label="卡牌类型" name="type">
-          <t-select v-model="form.type">
-            <t-option value="vocal" label="声乐" />
-            <t-option value="dance" label="舞蹈" />
-            <t-option value="charm" label="魅力" />
-            <t-option value="mixed" label="综合" />
-            <t-option value="event" label="事件" />
-            <t-option value="self_select" label="自选属性" />
-          </t-select>
-        </t-form-item>
-        <t-form-item label="抽卡权重">
-          <t-input-number v-model="form.weight" :min="1" :max="100" />
-          <span class="form-hint">权重越大越容易被抽到</span>
-        </t-form-item>
-        <t-form-item label="属性效果">
-          <div class="effect-form">
-            <div class="effect-row">
-              <label>声乐</label>
-              <t-input-number v-model="form.effect.vocal" :min="-10" :max="10" size="small" />
-              <label>舞蹈</label>
-              <t-input-number v-model="form.effect.dance" :min="-10" :max="10" size="small" />
-              <label>魅力</label>
-              <t-input-number v-model="form.effect.charm" :min="-10" :max="10" size="small" />
+      <t-form :data="form" :rules="rules" label-width="80px">
+        <!-- 基础信息 -->
+        <div class="form-block">
+          <div class="block-title">📇 基础信息</div>
+          <t-row :gutter="12">
+            <t-col :xs="24" :sm="12">
+              <t-form-item label="卡牌名称" name="name">
+                <t-input v-model="form.name" placeholder="如：声乐特训" />
+              </t-form-item>
+            </t-col>
+            <t-col :xs="24" :sm="12">
+              <t-form-item label="卡牌类型" name="type">
+                <t-select v-model="form.type">
+                  <t-option value="vocal" label="🎤 声乐" />
+                  <t-option value="dance" label="💃 舞蹈" />
+                  <t-option value="charm" label="✨ 魅力" />
+                  <t-option value="mixed" label="🔀 综合" />
+                  <t-option value="event" label="⚡ 事件" />
+                  <t-option value="self_select" label="🎯 自选属性" />
+                </t-select>
+              </t-form-item>
+            </t-col>
+            <t-col :xs="24" :sm="12">
+              <t-form-item label="抽卡权重">
+                <t-input-number v-model="form.weight" :min="1" :max="100" style="width: 100%" />
+                <span class="form-hint">权重越大越容易被抽到</span>
+              </t-form-item>
+            </t-col>
+            <t-col :xs="24" :sm="12">
+              <t-form-item label="启用">
+                <t-switch v-model="form.enabled" />
+              </t-form-item>
+            </t-col>
+          </t-row>
+        </div>
+
+        <!-- 属性效果 -->
+        <div class="form-block">
+          <div class="block-title">📊 属性效果（填写生效，0 表示不使用）</div>
+          <div class="effect-grid">
+            <!-- 固定属性 -->
+            <div class="effect-card fixed">
+              <div class="effect-card-title">🔧 固定属性</div>
+              <div class="effect-field">
+                <label>🎤 声乐</label>
+                <t-input-number v-model="form.effect.vocal" :min="-10" :max="10" size="small" />
+              </div>
+              <div class="effect-field">
+                <label>💃 舞蹈</label>
+                <t-input-number v-model="form.effect.dance" :min="-10" :max="10" size="small" />
+              </div>
+              <div class="effect-field">
+                <label>✨ 魅力</label>
+                <t-input-number v-model="form.effect.charm" :min="-10" :max="10" size="small" />
+              </div>
             </div>
-            <div class="effect-row">
-              <label>随机单属性</label>
-              <t-input-number v-model="form.effect.randomOne" :min="-10" :max="10" size="small" />
-              <label>随机双属性</label>
-              <t-input-number v-model="form.effect.randomTwo" :min="-10" :max="10" size="small" />
-              <label>补弱</label>
-              <t-input-number v-model="form.effect.lowest" :min="-10" :max="10" size="small" />
-              <label>增强</label>
-              <t-input-number v-model="form.effect.highest" :min="-10" :max="10" size="small" />
+
+            <!-- 随机效果 -->
+            <div class="effect-card random">
+              <div class="effect-card-title">🎲 随机效果</div>
+              <div class="effect-field">
+                <label>随机单属性</label>
+                <t-input-number v-model="form.effect.randomOne" :min="-10" :max="10" size="small" />
+              </div>
+              <div class="effect-field">
+                <label>随机双属性</label>
+                <t-input-number v-model="form.effect.randomTwo" :min="-10" :max="10" size="small" />
+              </div>
+              <div class="effect-field">
+                <label>幸运加成</label>
+                <t-input-number v-model="form.effect.lucky" :min="-10" :max="15" size="small" />
+                <span class="field-hint">随机一项大幅提升</span>
+              </div>
             </div>
-            <div class="effect-row">
-              <label>自选属性</label>
-              <t-input-number v-model="form.effect.selfSelect" :min="-10" :max="10" size="small" />
+
+            <!-- 策略效果 -->
+            <div class="effect-card strategy">
+              <div class="effect-card-title">🧠 策略效果</div>
+              <div class="effect-field">
+                <label>补弱（最低项）</label>
+                <t-input-number v-model="form.effect.lowest" :min="-10" :max="10" size="small" />
+              </div>
+              <div class="effect-field">
+                <label>增强（最高项）</label>
+                <t-input-number v-model="form.effect.highest" :min="-10" :max="10" size="small" />
+              </div>
+              <div class="effect-field">
+                <label>均衡化</label>
+                <t-input-number v-model="form.effect.balance" :min="-10" :max="10" size="small" />
+                <span class="field-hint">拉近属性差距</span>
+              </div>
             </div>
-            <div class="effect-row">
-              <label>随机倍率</label>
-              <t-input-number v-model="form.effect.multiply" :min="0.1" :max="5" :step="0.1" :decimalPlaces="1" size="small" placeholder="1=不变" />
-              <label>全体倍率</label>
-              <t-input-number v-model="form.effect.multiplyAll" :min="0.1" :max="5" :step="0.1" :decimalPlaces="1" size="small" placeholder="1=不变" />
+
+            <!-- 倍率与全员 -->
+            <div class="effect-card boost">
+              <div class="effect-card-title">⚡ 倍率 / 全员</div>
+              <div class="effect-field">
+                <label>随机倍率</label>
+                <t-input-number v-model="form.effect.multiply" :min="0.1" :max="5" :step="0.1" :decimal-places="1" size="small" />
+                <span class="field-hint">1=不变</span>
+              </div>
+              <div class="effect-field">
+                <label>全体倍率</label>
+                <t-input-number v-model="form.effect.multiplyAll" :min="0.1" :max="5" :step="0.1" :decimal-places="1" size="small" />
+                <span class="field-hint">1=不变</span>
+              </div>
+              <div class="effect-field">
+                <label>团队共振</label>
+                <t-input-number v-model="form.effect.teamAll" :min="-10" :max="10" size="small" />
+                <span class="field-hint">三项等额提升</span>
+              </div>
+            </div>
+
+            <!-- 自选 -->
+            <div class="effect-card self">
+              <div class="effect-card-title">🎯 自选</div>
+              <div class="effect-field">
+                <label>自选属性</label>
+                <t-input-number v-model="form.effect.selfSelect" :min="-10" :max="10" size="small" />
+                <span class="field-hint">选手自行选择</span>
+              </div>
             </div>
           </div>
-        </t-form-item>
-        <t-form-item label="启用">
-          <t-switch v-model="form.enabled" />
-        </t-form-item>
-        <t-form-item label="描述">
-          <t-textarea v-model="form.description" :rows="2" placeholder="选填" />
-        </t-form-item>
+        </div>
+
+        <!-- 描述 -->
+        <div class="form-block">
+          <div class="block-title">📝 卡牌描述</div>
+          <t-form-item label="描述">
+            <t-textarea v-model="form.description" :rows="2" placeholder="选填，展示给选手" />
+          </t-form-item>
+        </div>
       </t-form>
     </t-dialog>
   </div>
@@ -139,11 +216,14 @@ const form = reactive({
     charm: 0,
     randomOne: 0,
     randomTwo: 0,
+    lucky: 0,
     lowest: 0,
     highest: 0,
+    balance: 0,
     selfSelect: 0,
     multiply: 0,
-    multiplyAll: 0
+    multiplyAll: 0,
+    teamAll: 0
   },
   weight: 10,
   enabled: true
@@ -174,7 +254,12 @@ function typeLabel(type?: string) {
 }
 
 function effectLabel(key: string): string {
-  const map: Record<string, string> = { vocal: '声乐', dance: '舞蹈', charm: '魅力', randomOne: '随机单', randomTwo: '随机双', lowest: '补弱', highest: '增强', selfSelect: '自选', multiply: '随机倍率', multiplyAll: '全体倍率' }
+  const map: Record<string, string> = {
+    vocal: '声乐', dance: '舞蹈', charm: '魅力',
+    randomOne: '随机单', randomTwo: '随机双', lucky: '幸运',
+    lowest: '补弱', highest: '增强', balance: '均衡',
+    selfSelect: '自选', multiply: '随机倍率', multiplyAll: '全体倍率', teamAll: '团队共振'
+  }
   return map[key] || key
 }
 
@@ -210,11 +295,14 @@ function editCard(card: TrainingCard) {
     charm: (card.effect as any)?.charm ?? 0,
     randomOne: (card.effect as any)?.randomOne ?? 0,
     randomTwo: (card.effect as any)?.randomTwo ?? 0,
+    lucky: (card.effect as any)?.lucky ?? 0,
     lowest: (card.effect as any)?.lowest ?? 0,
     highest: (card.effect as any)?.highest ?? 0,
+    balance: (card.effect as any)?.balance ?? 0,
     selfSelect: (card.effect as any)?.selfSelect ?? 0,
     multiply: (card.effect as any)?.multiply ?? 0,
-    multiplyAll: (card.effect as any)?.multiplyAll ?? 0
+    multiplyAll: (card.effect as any)?.multiplyAll ?? 0,
+    teamAll: (card.effect as any)?.teamAll ?? 0
   }
   form.weight = card.weight ?? 10
   form.enabled = card.enabled !== false
@@ -226,7 +314,7 @@ function resetForm() {
   form.name = ''
   form.type = 'mixed'
   form.description = ''
-  form.effect = { vocal: 0, dance: 0, charm: 0, randomOne: 0, randomTwo: 0, lowest: 0, highest: 0, selfSelect: 0, multiply: 0, multiplyAll: 0 }
+  form.effect = { vocal: 0, dance: 0, charm: 0, randomOne: 0, randomTwo: 0, lucky: 0, lowest: 0, highest: 0, balance: 0, selfSelect: 0, multiply: 0, multiplyAll: 0, teamAll: 0 }
   form.weight = 10
   form.enabled = true
 }
@@ -291,6 +379,8 @@ onMounted(loadCards)
   min-height: 100%;
   padding: 20px;
   background: var(--bg-primary);
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .page-header {
@@ -347,23 +437,97 @@ onMounted(loadCards)
   margin-left: 8px;
 }
 
-.effect-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
+// 表单区块
+.form-block {
+  margin-bottom: 20px;
 
-  .effect-row {
+  .block-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+  }
+}
+
+// 效果分组网格（宽屏 3 列，窄屏自适应）
+.effect-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.effect-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  min-width: 0;
+
+  &.fixed { border-left: 3px solid #3498db; }
+  &.random { border-left: 3px solid #f39c12; }
+  &.strategy { border-left: 3px solid #8e44ad; }
+  &.boost { border-left: 3px solid #e74c3c; }
+  &.self { border-left: 3px solid #27ae60; }
+
+  .effect-card-title {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--text-primary);
+  }
+
+  .effect-field {
     display: flex;
     align-items: center;
     gap: 8px;
+    margin-bottom: 8px;
+    min-width: 0;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
 
     label {
       font-size: 12px;
       color: var(--text-secondary);
       white-space: nowrap;
-      min-width: 60px;
+      flex-shrink: 0;
+      min-width: 64px;
     }
+
+    .t-input-number {
+      width: 110px;
+      flex-shrink: 0;
+
+      :deep(.t-input__inner) {
+        min-width: 0;
+        font-size: 13px;
+      }
+    }
+
+    .field-hint {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      white-space: nowrap;
+      flex-shrink: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .effect-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .effect-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -175,6 +175,8 @@ onMounted(loadData)
   min-height: 100%;
   padding: 12px;
   background: var(--bg-primary);
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
 .danger-card {

@@ -287,8 +287,8 @@ onMounted(async () => {
   font-size: 24px;
 
   &.primary {
-    background: rgba(0, 82, 217, 0.1);
-    color: #0052d9;
+    background: rgba(108, 92, 231, 0.12);
+    color: #6c5ce7;
   }
 
   &.success {

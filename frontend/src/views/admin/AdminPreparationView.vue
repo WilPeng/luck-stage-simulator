@@ -16,7 +16,7 @@
 
     <t-row :gutter="16">
       <!-- 队伍结构配置 -->
-      <t-col :span="12">
+      <t-col :span="24">
         <t-card title="队伍结构" :bordered="false" class="stage-card">
           <template #subtitle>
             <t-tag theme="primary" variant="light">第 {{ currentRound }} 公演</t-tag>
@@ -70,58 +70,11 @@
           </div>
         </t-card>
       </t-col>
-
-      <!-- 歌曲配置 -->
-      <t-col :span="12">
-        <t-card title="歌曲池配置" :bordered="false" class="stage-card">
-          <template #subtitle>
-            <t-tag theme="primary" variant="light">第 {{ currentRound }} 公演</t-tag>
-          </template>
-          <div class="config-section">
-            <div class="config-header">
-              <span class="config-label">选择本轮歌曲池</span>
-              <t-button size="small" @click="showSongDialog = true">
-                添加歌曲
-              </t-button>
-            </div>
-
-            <div v-if="selectedSongs.length > 0" class="song-pool">
-              <div
-                v-for="song in selectedSongs"
-                :key="song.id"
-                class="song-item"
-              >
-                <span class="song-name">{{ song.name }}</span>
-                <span class="song-difficulty">难度 {{ song.difficulty }}</span>
-                <button class="remove-btn" @click="removeSong(song.id)">×</button>
-              </div>
-            </div>
-            <div v-else class="empty-songs">
-              <span>暂未选择歌曲</span>
-            </div>
-
-            <div class="config-summary">
-              <div class="summary-item">
-                <span class="summary-label">歌曲数量</span>
-                <span class="summary-value">{{ selectedSongs.length }} 首</span>
-              </div>
-              <div class="summary-item">
-                <span class="summary-label">队伍数量</span>
-                <span class="summary-value">{{ config.teamCount }} 队</span>
-              </div>
-            </div>
-
-            <t-alert v-if="selectedSongs.length < config.teamCount" theme="warning" style="margin-top: 16px">
-              歌曲数量应不少于队伍数量
-            </t-alert>
-          </div>
-        </t-card>
-      </t-col>
     </t-row>
 
     <t-row :gutter="16" style="margin-top: 16px">
       <!-- 训练配置 -->
-      <t-col :span="8">
+      <t-col :xs="24" :sm="8">
         <t-card title="训练配置" :bordered="false" class="stage-card">
           <div class="config-item">
             <span class="config-label">每人训练次数</span>
@@ -136,7 +89,7 @@
       </t-col>
 
       <!-- 公演配置 -->
-      <t-col :span="8">
+      <t-col :xs="24" :sm="8">
         <t-card title="公演配置" :bordered="false" class="stage-card">
           <div class="config-item">
             <span class="config-label">淘汰人数</span>
@@ -151,7 +104,7 @@
       </t-col>
 
       <!-- 危险线配置 -->
-      <t-col :span="8">
+      <t-col :xs="24" :sm="8">
         <t-card title="危险线配置" :bordered="false" class="stage-card">
           <div class="config-item">
             <span class="config-label">危险线比例</span>
@@ -187,38 +140,6 @@
         重置
       </t-button>
     </div>
-
-    <!-- 歌曲选择弹窗 -->
-    <t-dialog
-      v-model:visible="showSongDialog"
-      header="选择歌曲"
-      width="600px"
-    >
-      <div class="song-selector">
-        <t-input
-          v-model="songSearch"
-          placeholder="搜索歌曲"
-          style="margin-bottom: 16px"
-        />
-        <div class="song-list">
-          <div
-            v-for="song in filteredSongs"
-            :key="song.id"
-            class="song-option"
-            :class="{ selected: isSongSelected(song.id) }"
-            @click="toggleSong(song)"
-          >
-            <span class="song-name">{{ song.name }}</span>
-            <span class="song-info">{{ song.type }} | 难度 {{ song.difficulty }}</span>
-            <t-tag v-if="isSongSelected(song.id)" theme="primary" size="small">已选</t-tag>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <t-button @click="showSongDialog = false">取消</t-button>
-        <t-button theme="primary" @click="confirmSongSelection">确定</t-button>
-      </template>
-    </t-dialog>
   </div>
 </template>
 
@@ -228,25 +149,19 @@ import { MessagePlugin } from 'tdesign-vue-next'
 import { useRoute } from 'vue-router'
 import { useSeasonStore } from '../../stores/seasonStore'
 import { usePlayerStore } from '../../stores/playerStore'
-import { useSongStore } from '../../stores/songStore'
-import type { Song } from '../../types/song'
-import { updateTeamSetup, updateRound, addRoundSongs, getTrainingConfig, getRoundTeams, getRoundSongs } from '../../services/api'
+import { updateTeamSetup, updateRound, getTrainingConfig, getRoundTeams } from '../../services/api'
 
 const route = useRoute()
 const seasonStore = useSeasonStore()
 const playerStore = usePlayerStore()
-const songStore = useSongStore()
 
 const currentRound = computed(() => parseInt(route.params.round as string) || seasonStore.currentRoundNumber)
 const saving = ref(false)
-const showSongDialog = ref(false)
-const songSearch = ref('')
 
 // 配置数据
 const config = reactive({
   teamCount: 5,
   teamSizes: [6, 6, 6, 6, 6] as number[],
-  songPoolIds: [] as string[],
   trainingTimesAllowed: 5,
   eliminationCount: 5,
   dangerLineRatio: 0.2
@@ -262,25 +177,9 @@ const totalMembers = computed(() => {
   return config.teamSizes.reduce((sum, size) => sum + size, 0)
 })
 
-// 选择的歌曲
-const selectedSongs = computed(() => {
-  return songStore.songs.filter(song => config.songPoolIds.includes(song.id))
-})
-
-// 过滤后的歌曲列表
-const filteredSongs = computed(() => {
-  if (!songSearch.value) return songStore.songs
-  const keyword = songSearch.value.toLowerCase()
-  return songStore.songs.filter(song =>
-    song.name.toLowerCase().includes(keyword) ||
-    song.type.toLowerCase().includes(keyword)
-  )
-})
-
-// 是否可选
+// 是否可保存（仅需队伍结构与人数匹配）
 const canSave = computed(() => {
-  return totalMembers.value === availablePlayers.value &&
-         selectedSongs.value.length >= config.teamCount
+  return totalMembers.value === availablePlayers.value
 })
 
 // 获取队伍标签
@@ -301,35 +200,7 @@ function handleTeamCountChange(value: number) {
   }
 }
 
-// 检查歌曲是否已选
-function isSongSelected(songId: string): boolean {
-  return config.songPoolIds.includes(songId)
-}
-
-// 切换歌曲选择
-function toggleSong(song: Song) {
-  const index = config.songPoolIds.indexOf(song.id)
-  if (index === -1) {
-    config.songPoolIds.push(song.id)
-  } else {
-    config.songPoolIds.splice(index, 1)
-  }
-}
-
-// 确认歌曲选择
-function confirmSongSelection() {
-  showSongDialog.value = false
-}
-
-// 移除歌曲
-function removeSong(songId: string) {
-  const index = config.songPoolIds.indexOf(songId)
-  if (index !== -1) {
-    config.songPoolIds.splice(index, 1)
-  }
-}
-
-// 保存配置
+// 保存配置（只保存队伍结构与训练等参数；选曲在选歌页面进行）
 async function handleSave() {
   saving.value = true
   try {
@@ -344,13 +215,6 @@ async function handleSave() {
       updateRound({
         performanceRound: currentRound.value,
         drawsPerPlayer: config.trainingTimesAllowed
-      }),
-      addRoundSongs({
-        roundId,
-        songs: config.songPoolIds.map(songId => ({
-          songId,
-          songType: 'team_show'
-        }))
       })
     ])
 
@@ -366,7 +230,6 @@ async function handleSave() {
 function handleReset() {
   config.teamCount = 5
   config.teamSizes = [6, 6, 6, 6, 6]
-  config.songPoolIds = []
   config.trainingTimesAllowed = 5
   config.eliminationCount = 5
   config.dangerLineRatio = 0.2
@@ -376,8 +239,7 @@ function handleReset() {
 async function loadData() {
   await Promise.all([
     seasonStore.fetchProgress(),
-    playerStore.fetchUsers({ pageSize: 1000 }),
-    songStore.fetchSongs()
+    playerStore.fetchUsers({ pageSize: 1000 })
   ])
 
   // 加载已保存的配置
@@ -397,16 +259,6 @@ async function loadSavedConfig() {
     }
   } catch (e) {
     console.warn('[Preparation] 加载队伍配置失败:', e)
-  }
-
-  // 2. 加载歌曲池
-  try {
-    const roundSongs = await getRoundSongs(roundId)
-    if (roundSongs && roundSongs.length > 0) {
-      config.songPoolIds = roundSongs.map(rs => rs.songId)
-    }
-  } catch (e) {
-    console.warn('[Preparation] 加载歌曲池失败:', e)
   }
 
   // 3. 加载训练配置
@@ -430,21 +282,30 @@ watch(currentRound, () => {
 
 <style lang="scss" scoped>
 .admin-preparation {
-  max-width: 1400px;
+  max-width: 1800px;
+  margin: 0 auto;
+  padding: 8px 4px;
+  min-height: 100%;
+  width: 100%;
 }
 
 .stage-card {
-  border-radius: 8px;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--card-border);
 }
 
 .page-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
 
   h1 {
     margin: 0 0 4px;
-    font-size: 20px;
+    font-size: 22px;
+    font-weight: 700;
   }
 
   p {
@@ -467,7 +328,9 @@ watch(currentRound, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .config-label {
@@ -476,10 +339,11 @@ watch(currentRound, () => {
   color: var(--text-primary);
 }
 
+// 队伍结构：响应式多列，宽屏自动增多，窄屏回单列
 .team-structure {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
   margin-bottom: 16px;
 }
 
@@ -487,70 +351,29 @@ watch(currentRound, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  gap: 12px;
+  padding: 10px 14px;
   background: var(--bg-primary);
-  border-radius: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
 
   .team-label {
     font-size: 14px;
     color: var(--text-primary);
-  }
-}
-
-.song-pool {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.song-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  background: var(--bg-primary);
-  border-radius: 6px;
-
-  .song-name {
-    flex: 1;
-    font-size: 14px;
+    font-weight: 500;
   }
 
-  .song-difficulty {
-    font-size: 12px;
-    color: var(--text-secondary);
+  :deep(.t-input-number) {
+    width: 90px;
   }
-
-  .remove-btn {
-    width: 20px;
-    height: 20px;
-    border: none;
-    background: none;
-    color: var(--text-tertiary);
-    cursor: pointer;
-    font-size: 16px;
-
-    &:hover {
-      color: #e74c3c;
-    }
-  }
-}
-
-.empty-songs {
-  padding: 24px;
-  text-align: center;
-  color: var(--text-tertiary);
-  background: var(--bg-primary);
-  border-radius: 6px;
-  margin-bottom: 16px;
 }
 
 .config-summary {
   display: flex;
-  gap: 24px;
+  gap: 32px;
   padding-top: 16px;
   border-top: 1px solid var(--border-color);
+  flex-wrap: wrap;
 }
 
 .summary-item {
@@ -574,6 +397,11 @@ watch(currentRound, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+
+  :deep(.t-input-number) {
+    width: 120px;
+  }
 }
 
 .actions-bar {
@@ -581,45 +409,6 @@ watch(currentRound, () => {
   display: flex;
   gap: 12px;
   justify-content: center;
-}
-
-.song-selector {
-  .song-list {
-    max-height: 400px;
-    overflow-y: auto;
-  }
-}
-
-.song-option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  &:hover {
-    background: var(--bg-primary);
-  }
-
-  &.selected {
-    border-color: #0052d9;
-    background: rgba(0, 82, 217, 0.05);
-  }
-
-  .song-name {
-    flex: 1;
-    font-size: 14px;
-    font-weight: 500;
-  }
-
-  .song-info {
-    font-size: 12px;
-    color: var(--text-secondary);
-  }
 }
 
 @media (max-width: 768px) {
@@ -633,7 +422,27 @@ watch(currentRound, () => {
   }
 
   .config-summary {
-    flex-wrap: wrap;
+    gap: 20px;
+  }
+
+  .actions-bar {
+    flex-direction: column;
+    align-items: stretch;
+
+    :deep(.t-button) {
+      width: 100%;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-preparation {
+    padding: 4px 0;
+  }
+
+  .config-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

@@ -75,7 +75,7 @@
                       :key="seat.seatNumber"
                       class="check-seat"
                       :style="{ background: pkPlayerColor(seat.playerId) }"
-                      :title="`${seat.seatNumber}号评审 → ${pkPlayerNameById(seat.playerId)}`"
+                      :title="pkAudienceTooltip(seat)"
                     >
                       {{ seat.seatNumber }}
                     </span>
@@ -88,7 +88,50 @@
 
         <!-- 右：PK 操作区 -->
         <div class="pk-operations-card">
-          <div v-if="!currentPk" class="pk-start-panel">
+          <!-- 选手已提交的 PK 申请（待管理员选属性发起） -->
+          <div v-if="currentPk && currentPk.status === 'proposed'" class="pk-active-panel">
+            <div class="panel-title">⚔️ 选手已提交 PK 申请</div>
+            <div class="pk-propose-info">
+              <span class="propose-tag">申请人：{{ challengerName(currentPk.challengerId) }}</span>
+              <span class="propose-tag">属性未选择</span>
+            </div>
+
+            <!-- 3 名选手 -->
+            <div class="pk-players">
+              <div
+                v-for="p in currentPk.players"
+                :key="p.playerId"
+                class="pk-player"
+                :style="{ borderColor: pkPlayerColor(p.playerId) }"
+              >
+                <span class="pk-player-name">{{ p.playerName }}</span>
+                <span class="pk-player-team">{{ p.teamName || '未组队' }}</span>
+                <span class="pk-player-tag">{{ p.playerId === currentPk.challengerId ? '挑战者' : '对手' }}</span>
+              </div>
+            </div>
+
+            <!-- PK 属性（管理员选择） -->
+            <div class="pk-field">
+              <span class="field-label">选择 PK 属性（作为投票权重）</span>
+              <t-radio-group v-model="pkAttribute" variant="default-filled">
+                <t-radio-button value="vocal">🎤 声乐</t-radio-button>
+                <t-radio-button value="dance">💃 舞蹈</t-radio-button>
+                <t-radio-button value="charm">✨ 魅力</t-radio-button>
+              </t-radio-group>
+            </div>
+
+            <t-button
+              theme="primary"
+              block
+              :loading="pkStarting"
+              @click="handleLaunchFromProposal"
+            >
+              选择属性并发起 PK
+            </t-button>
+          </div>
+
+          <!-- 无待处理 PK：直接发起 -->
+          <div v-else-if="!currentPk" class="pk-start-panel">
             <div class="panel-title">发起一场 PK</div>
 
             <!-- 挑战者：队首 -->
@@ -102,19 +145,19 @@
               <t-empty v-else description="队列为空" :size="'small'" />
             </div>
 
-            <!-- 选择对手 -->
+            <!-- 选择对手（两个下拉框互斥去重） -->
             <div class="pk-field">
               <span class="field-label">选择 2 名对手（从危险队列中选择）</span>
               <div class="opponent-select">
                 <t-select
                   v-model="opponentId1"
-                  :options="opponentOptions"
+                  :options="opponentOptions1"
                   placeholder="选择第一名对手"
                   clearable
                 />
                 <t-select
                   v-model="opponentId2"
-                  :options="opponentOptions"
+                  :options="opponentOptions2"
                   placeholder="选择第二名对手"
                   clearable
                 />
@@ -142,7 +185,7 @@
             </t-button>
           </div>
 
-          <!-- PK 进行中 -->
+          <!-- PK 进行中（投票/裁定） -->
           <div v-else class="pk-active-panel">
             <div class="panel-title">
               第 {{ currentPk.pkIndex }} 场 PK · 属性：{{ attributeName(currentPk.attribute) }}
@@ -756,12 +799,20 @@ const voting = ref(false)
 const resolving = ref(false)
 const stopping = ref(false)
 
-const opponentOptions = computed(() => {
-  const ids = new Set([opponentId2.value])
+const opponentOptions1 = computed(() => {
+  const excluded = new Set([opponentId2.value])
   return pkQueue.value
     .filter(e => e.playerId !== pkQueue.value[0]?.playerId)
-    .filter(e => !ids.has(e.playerId))
-    .map(e => ({ label: `${e.playerName}（${e.popularityVotes}票）`, value: e.playerId }))
+    .filter(e => !excluded.has(e.playerId))
+    .map(e => ({ label: e.playerName, value: e.playerId }))
+})
+
+const opponentOptions2 = computed(() => {
+  const excluded = new Set([opponentId1.value])
+  return pkQueue.value
+    .filter(e => e.playerId !== pkQueue.value[0]?.playerId)
+    .filter(e => !excluded.has(e.playerId))
+    .map(e => ({ label: e.playerName, value: e.playerId }))
 })
 
 const canStartPk = computed(() => {
@@ -769,7 +820,7 @@ const canStartPk = computed(() => {
 })
 
 const hasPkVotes = computed(() => {
-  return !!currentPk.value && currentPk.value.players.some(p => p.votes > 0)
+  return !!currentPk.value && currentPk.value.players.some(p => p.votes && p.votes > 0)
 })
 
 const canResolve = computed(() => {
@@ -793,16 +844,14 @@ function segmentColor(playerId: string): string {
   return colors[Math.max(idx, 0) % colors.length]
 }
 
-// 危险区选手颜色（按队列顺序固定色板，三选一投票/查票区用）
+// 需求3：颜色从后端读取（固定不变，全员一致），兜底按队列顺序
 const PK_COLOR_PALETTE = ['#e74c3c', '#f39c12', '#27ae60', '#2980b9', '#8e44ad', '#16a085', '#c0392b', '#d35400', '#2c3e50', '#7f8c8d']
-const pkColorMap = new Map<string, string>()
 
 function pkPlayerColor(playerId: string): string {
-  if (!pkColorMap.has(playerId)) {
-    const idx = pkQueue.value.findIndex(e => e.playerId === playerId)
-    pkColorMap.set(playerId, PK_COLOR_PALETTE[(idx >= 0 ? idx : pkColorMap.size) % PK_COLOR_PALETTE.length])
-  }
-  return pkColorMap.get(playerId) || '#95a5a6'
+  const colors = store.dangerStatus?.colors
+  if (colors && colors[playerId]) return colors[playerId]
+  const idx = pkQueue.value.findIndex(e => e.playerId === playerId)
+  return PK_COLOR_PALETTE[(idx >= 0 ? idx : 0) % PK_COLOR_PALETTE.length]
 }
 
 function pkPlayerNameById(playerId: string): string {
@@ -816,9 +865,46 @@ function pkPlayerNameById(playerId: string): string {
   return playerId
 }
 
+// 需求1：选手提交的申请发起人姓名
+function challengerName(playerId: string): string {
+  const pk = currentPk.value
+  const p = pk?.players.find(x => x.playerId === playerId)
+  return p?.playerName || pkPlayerNameById(playerId)
+}
+
+// 需求2：管理端评审信息展示
+function pkAudienceTooltip(seat: { seatNumber: number; audienceName: string; gender?: string | null; age?: number | null; occupation?: string | null; playerId: string }): string {
+  const info = `${seat.seatNumber}号评审 ${seat.audienceName || ''}（${seat.gender || '-'} ${seat.age ?? '-'}岁 ${seat.occupation || '-'}）`
+  return `${info} → 投给 ${pkPlayerNameById(seat.playerId)}`
+}
+
 function votesPercent(p: { playerId: string; votes: number }): number {
   const total = currentPk.value?.players.reduce((s, x) => s + x.votes, 0) || 1
   return Math.round((p.votes / total) * 100)
+}
+
+// 需求1：管理员对选手已提交的申请选属性并发起
+async function handleLaunchFromProposal() {
+  if (!currentPk.value) return
+  pkStarting.value = true
+  try {
+    await store.doStartPk({
+      round: currentRound.value,
+      pkId: currentPk.value.id,
+      attribute: pkAttribute.value
+    })
+    currentPk.value = store.currentPk
+    decisions.value = {}
+    if (currentPk.value) {
+      currentPk.value.players.forEach(p => { decisions.value[p.playerId] = 'safe' })
+    }
+    MessagePlugin.success('PK 已发起，等待生成投票')
+    await store.fetchPkHistory(currentRound.value)
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '发起 PK 失败')
+  } finally {
+    pkStarting.value = false
+  }
 }
 
 async function handleStartPk() {
@@ -913,6 +999,8 @@ onMounted(async () => {
   min-height: 100%;
   padding: 20px;
   background: var(--bg-primary);
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .page-header {

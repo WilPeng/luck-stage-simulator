@@ -39,7 +39,33 @@
 
     <!-- 歌曲列表 -->
     <div class="section">
-      <h2>歌曲列表</h2>
+      <div class="section-head">
+        <h2>本轮公演曲目</h2>
+        <div class="section-actions">
+          <t-button variant="outline" size="small" :loading="adding" @click="openAddDialog">
+            ➕ 从歌曲库添加曲目
+          </t-button>
+          <t-button
+            variant="outline"
+            size="small"
+            theme="success"
+            :loading="randomAssigning"
+            :disabled="unassignedTeams.length === 0 || unassignedSongs.length === 0"
+            @click="handleRandomAssign"
+          >
+            🎲 一键随机分配剩余歌曲
+          </t-button>
+          <t-button
+            variant="outline"
+            size="small"
+            theme="danger"
+            :disabled="roundSongs.length === 0"
+            @click="handleClearRound"
+          >
+            🗑️ 清空本轮曲目
+          </t-button>
+        </div>
+      </div>
       <div class="songs-grid">
         <div v-for="song in roundSongs" :key="song.id" class="song-card">
           <div class="song-header">
@@ -86,38 +112,97 @@
             </div>
           </div>
           <div class="song-actions">
-            <t-button
-              v-if="!song.released && !song.assignedTeamId"
-              theme="primary"
-              block
-              @click="releaseSong(song.id)"
-            >
-              释放
-            </t-button>
-            <template v-else-if="song.released && !song.assignedTeamId">
+            <div v-if="!song.assignedTeamId" class="action-row">
               <t-button
+                v-if="!song.released"
+                theme="primary"
+                block
+                @click="releaseSong(song.id)"
+              >
+                释放
+              </t-button>
+              <t-button
+                v-else
                 theme="success"
                 block
                 @click="openAssignDialog(song)"
               >
                 直接分配
               </t-button>
-              <t-tag theme="warning" variant="light" style="margin-top: 8px; display: block; text-align: center;">
-                抢选中 - 也可直接分配
-              </t-tag>
-            </template>
-            <t-button
-              v-else
-              theme="default"
-              block
-              disabled
-            >
+              <t-button
+                theme="danger"
+                variant="outline"
+                size="small"
+                @click="handleRemoveSong(song)"
+              >
+                移出本轮
+              </t-button>
+            </div>
+            <t-button v-else theme="default" block disabled>
               已分配
             </t-button>
           </div>
         </div>
+        <t-empty v-if="roundSongs.length === 0" description="本轮还没有曲目，点击右上角从歌曲库添加" />
       </div>
     </div>
+
+    <!-- 添加曲目弹窗 -->
+    <t-dialog
+      v-model:visible="showAddDialog"
+      header="从歌曲库添加本轮曲目"
+      width="560px"
+      :close-on-overlay-click="false"
+      :destroy-on-close="true"
+      :footer="false"
+    >
+      <div class="add-form">
+        <div class="add-form-item">
+          <label>选择歌曲（可多选）</label>
+          <t-select
+            v-model="selectedAddSongIds"
+            :options="addableSongs"
+            multiple
+            placeholder="选择要加入本轮公演的歌曲"
+            style="width: 100%"
+          />
+        </div>
+        <div class="random-add-bar">
+          <span class="random-add-label">🎲 随机选曲：</span>
+          <t-input-number
+            v-model="randomAddCount"
+            :min="1"
+            :max="Math.max(addableSongs.length, 1)"
+            theme="normal"
+            size="small"
+            style="width: 80px"
+          />
+          <span class="random-add-hint">首（曲库可用 {{ addableSongs.length }} 首）</span>
+          <t-button
+            size="small"
+            theme="warning"
+            :disabled="addableSongs.length === 0"
+            @click="handleRandomAdd"
+          >
+            随机选 {{ randomAddCount }} 首
+          </t-button>
+        </div>
+        <div v-if="addableSongs.length === 0" class="add-empty">
+          歌曲库为空，请先到「歌曲管理」添加歌曲
+        </div>
+        <div class="assign-form-actions">
+          <t-button @click="showAddDialog = false">取消</t-button>
+          <t-button
+            theme="primary"
+            :loading="adding"
+            :disabled="selectedAddSongIds.length === 0"
+            @click="handleAddSongs"
+          >
+            添加 ({{ selectedAddSongIds.length }})
+          </t-button>
+        </div>
+      </div>
+    </t-dialog>
 
     <!-- 分配歌曲弹窗 -->
     <t-dialog
@@ -175,13 +260,43 @@ const selectedSong = ref<RoundSong | null>(null)
 const assignTeamId = ref('')
 const assigning = ref(false)
 
+// 添加曲目相关
+const showAddDialog = ref(false)
+const selectedAddSongIds = ref<string[]>([])
+const adding = ref(false)
+const randomAddCount = ref(5)
+
+// 一键随机分配相关
+const randomAssigning = ref(false)
+
 const teams = computed(() => teamStore.teams)
 const roundSongs = computed(() => songStore.roundSongs)
+
+// 可从歌曲库添加的歌曲（排除已在本轮的）
+const addableSongs = computed(() => {
+  const existingIds = new Set(roundSongs.value.map(rs => rs.songId))
+  return songStore.songs
+    .filter(s => !existingIds.has(s.id))
+    .map(s => ({ label: `${s.name}（${s.style || '未知风格'} · 难度${s.difficulty || '-'}）`, value: s.id }))
+})
 
 // 没有选歌的队伍
 const teamsWithoutSong = computed(() => {
   return teams.value.filter(team => !getTeamSong(team.id))
 })
+
+// 未选歌队伍（用于一键随机分配）
+const unassignedTeams = computed(() => teamsWithoutSong.value)
+
+// 未分配的轮次歌曲（用于一键随机分配）
+const unassignedSongs = computed(() => {
+  return roundSongs.value.filter(rs => !rs.assignedTeamId)
+})
+
+function getRoundId(): string {
+  const roundFromRoute = parseInt(route.params.round as string) || 0
+  return roundFromRoute > 0 ? `round-${roundFromRoute}` : seasonStore.currentRoundId
+}
 
 function getTeamName(teamId: string): string {
   if (!teams.value || teams.value.length === 0) {
@@ -238,13 +353,75 @@ function getSongWeightPercent(songId: string, type: 'vocal' | 'dance' | 'charm')
 
 async function releaseSong(roundSongId: string) {
   try {
-    // 从路由参数获取轮次号，确保使用正确的 roundId
-    const roundFromRoute = parseInt(route.params.round as string) || 0
-    const roundId = roundFromRoute > 0 ? `round-${roundFromRoute}` : seasonStore.currentRoundId
-    await songStore.releaseSong(roundSongId, roundId)
+    await songStore.releaseSong(roundSongId, getRoundId())
     MessagePlugin.success('歌曲已释放，队长可以抢选')
   } catch (error: any) {
     MessagePlugin.error(error.message || '释放失败')
+  }
+}
+
+function openAddDialog() {
+  selectedAddSongIds.value = []
+  showAddDialog.value = true
+}
+
+// 随机从曲库选 N 首加入本轮
+async function handleRandomAdd() {
+  const pool = addableSongs.value
+  const count = Math.min(Math.max(randomAddCount.value, 1), pool.length)
+  if (pool.length === 0) {
+    MessagePlugin.warning('曲库没有可选的歌曲')
+    return
+  }
+  // 随机打乱并取前 N 首
+  const shuffled = pool.map(s => s.value).sort(() => Math.random() - 0.5)
+  selectedAddSongIds.value = [...new Set([...selectedAddSongIds.value, ...shuffled.slice(0, count)])]
+  MessagePlugin.success(`已随机选中 ${count} 首`)
+}
+
+async function handleAddSongs() {
+  if (selectedAddSongIds.value.length === 0) {
+    MessagePlugin.warning('请选择要添加的歌曲')
+    return
+  }
+  adding.value = true
+  try {
+    await songStore.addRoundSongs(selectedAddSongIds.value, getRoundId())
+    MessagePlugin.success(`已添加 ${selectedAddSongIds.value.length} 首曲目到本轮`)
+    showAddDialog.value = false
+    await refreshData()
+  } catch (error: any) {
+    MessagePlugin.error(error.message || '添加失败')
+  } finally {
+    adding.value = false
+  }
+}
+
+async function handleRemoveSong(song: RoundSong) {
+  if (song.assignedTeamId) {
+    MessagePlugin.warning('该歌曲已被队伍选走，不能移出本轮')
+    return
+  }
+  const ok = window.confirm(`确定将「${getSongName(song.songId)}」移出本轮曲目吗？`)
+  if (!ok) return
+  try {
+    await songStore.removeRoundSong(song.id, getRoundId())
+    MessagePlugin.success('已移出本轮')
+    await refreshData()
+  } catch (error: any) {
+    MessagePlugin.error(error.message || '移除失败')
+  }
+}
+
+async function handleClearRound() {
+  const ok = window.confirm(`确定清空本轮全部曲目（${roundSongs.value.length} 首）吗？`)
+  if (!ok) return
+  try {
+    await songStore.clearRoundSongs(getRoundId())
+    MessagePlugin.success('已清空本轮曲目')
+    await refreshData()
+  } catch (error: any) {
+    MessagePlugin.error(error.message || '清空失败')
   }
 }
 
@@ -262,17 +439,12 @@ async function handleAdminAssign() {
   
   assigning.value = true
   try {
-    // 从路由参数获取轮次号
-    const roundFromRoute = parseInt(route.params.round as string) || 0
-    const roundId = roundFromRoute > 0 ? `round-${roundFromRoute}` : seasonStore.currentRoundId
-    // 调用后端接口直接分配
-    // 注意：selectedSong 是 RoundSong，需要用 songId 字段（歌曲库 ID）
     await songStore.assignTeamSongs([
       {
         teamId: assignTeamId.value,
         songId: selectedSong.value.songId
       }
-    ], roundId)
+    ], getRoundId())
     MessagePlugin.success('分配成功')
     showAssignDialog.value = false
     await refreshData()
@@ -280,6 +452,45 @@ async function handleAdminAssign() {
     MessagePlugin.error(error.message || '分配失败')
   } finally {
     assigning.value = false
+  }
+}
+
+// 一键随机分配剩余歌曲：把未分配歌曲随机分给未选歌队伍
+async function handleRandomAssign() {
+  const teams = unassignedTeams.value
+  const songs = unassignedSongs.value
+  if (teams.length === 0) {
+    MessagePlugin.warning('所有队伍都已选歌')
+    return
+  }
+  if (songs.length === 0) {
+    MessagePlugin.warning('本轮没有剩余未分配歌曲，请先从歌曲库添加')
+    return
+  }
+  if (songs.length < teams.length) {
+    MessagePlugin.warning(`剩余歌曲 ${songs.length} 首不足队伍数 ${teams.length}，将只分配给前 ${songs.length} 个队伍`)
+  }
+
+  const assignCount = Math.min(teams.length, songs.length)
+  const ok = window.confirm(`一键随机分配：将 ${songs.length} 首剩余歌曲随机分配给 ${teams.length} 个未选歌队伍（本次分配 ${assignCount} 个）？`)
+  if (!ok) return
+
+  randomAssigning.value = true
+  try {
+    // 随机打乱歌曲与队伍
+    const shuffledSongs = songs.map(s => s.songId).sort(() => Math.random() - 0.5)
+    const shuffledTeams = teams.map(t => t.id).sort(() => Math.random() - 0.5)
+    const assignments = []
+    for (let i = 0; i < assignCount; i++) {
+      assignments.push({ teamId: shuffledTeams[i], songId: shuffledSongs[i] })
+    }
+    await songStore.assignTeamSongs(assignments, getRoundId())
+    MessagePlugin.success(`已随机分配 ${assignCount} 首歌曲`)
+    await refreshData()
+  } catch (error: any) {
+    MessagePlugin.error(error.message || '随机分配失败')
+  } finally {
+    randomAssigning.value = false
   }
 }
 
@@ -351,6 +562,77 @@ onMounted(() => {
     font-size: 20px;
     font-weight: 600;
     margin-bottom: 16px;
+  }
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+
+  h2 {
+    margin: 0;
+  }
+
+  .section-actions {
+    display: flex;
+    gap: 8px;
+  }
+}
+
+.action-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.add-form {
+  padding: 16px 0;
+
+  .add-form-item {
+    margin-bottom: 16px;
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+  }
+
+  .add-empty {
+    font-size: 13px;
+    color: var(--text-tertiary);
+    padding: 12px;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    margin-bottom: 16px;
+  }
+
+  .random-add-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(243, 156, 18, 0.08);
+    border: 1px dashed rgba(243, 156, 18, 0.4);
+    border-radius: 8px;
+    margin-bottom: 12px;
+
+    .random-add-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #d35400;
+    }
+
+    .random-add-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      flex: 1;
+    }
   }
 }
 

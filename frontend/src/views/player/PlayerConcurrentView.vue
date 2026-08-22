@@ -148,6 +148,8 @@ async function checkPerfValueDrawn() {
 .player-concurrent {
   padding: 16px;
   min-height: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
 .page-header {

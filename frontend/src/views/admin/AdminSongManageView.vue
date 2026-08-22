@@ -534,6 +534,8 @@ onMounted(loadSongs)
   min-height: 100%;
   padding: 20px;
   background: var(--bg-primary);
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .page-header {
