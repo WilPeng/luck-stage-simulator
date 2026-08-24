@@ -265,6 +265,7 @@ const stageConfig: Record<StageType, { icon: string; name: string }> = {
   teaming: { icon: '👥', name: '组队' },
   song_select: { icon: '🎵', name: '选歌' },
   training: { icon: '💪', name: '训练' },
+  performance_draw: { icon: '🎲', name: '抽取发挥值' },
   performance: { icon: '🌟', name: '公演结果' },
   danger_confirm: { icon: '⚠️', name: '危险名单' },
   elimination: { icon: '📊', name: '淘汰结果' }
@@ -274,7 +275,8 @@ const stageConfig: Record<StageType, { icon: string; name: string }> = {
 const ACTION_TO_STAGE: Record<string, StageType> = {
   team: 'teaming',
   song: 'song_select',
-  training: 'training'
+  training: 'training',
+  performance: 'performance_draw'
 }
 
 // 主阶段列表（不含并发子行动）
@@ -336,6 +338,7 @@ function getStagePath(round: number, stage: StageType): string {
     teaming: `${prefix}/player/round/${round}/team`,
     song_select: `${prefix}/player/round/${round}/song-selection`,
     training: `${prefix}/player/round/${round}/training`,
+    performance_draw: `${prefix}/player/round/${round}/performance-draw`,
     performance: `${prefix}/player/round/${round}/performance`,
     danger_confirm: `${prefix}/player/round/${round}/elimination`,
     elimination: `${prefix}/player/round/${round}/elimination`

@@ -196,11 +196,11 @@ export const usePerformanceStore = defineStore('performance', () => {
     }
   }
 
-  // 获取选手公演结果
+  // 获取选手公演结果（使用公演结果接口，选手端可查看所有团队排名与评审矩阵）
   async function fetchPlayerPerformanceResults(roundId: string): Promise<void> {
     loading.value = true
     try {
-      const result = await doRequest<CalculatePerformanceResponse>(`/player/performance/result?roundId=${roundId}`, {
+      const result = await doRequest<CalculatePerformanceResponse>(`/performance/result?roundId=${roundId}`, {
         method: 'GET'
       })
       

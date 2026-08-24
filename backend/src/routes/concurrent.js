@@ -70,11 +70,12 @@ async function getConcurrentStatus(roundInfo) {
   const season = await getCurrentSeason()
   const drawsPerPlayer = (season && season.trainingDrawsPerPlayer) || 3
 
-  const [teams, members, teamSongs, trainingRecords, users] = await Promise.all([
+  const [teams, members, teamSongs, trainingRecords, performanceValues, users] = await Promise.all([
     RoundTeam.find({ roundId: roundFilter }),
     RoundTeamMember.find({ roundId: roundFilter }),
     TeamSong.find({ roundId: roundFilter }),
     TrainingRecord.find({ roundId: roundFilter }),
+    require('../models/PerformanceValue').find({ roundId: roundFilter }),
     User.find({ role: { $ne: 'admin' }, status: 'active' })
   ])
 
@@ -96,10 +97,14 @@ async function getConcurrentStatus(roundInfo) {
   const songCompletedCount = teams.filter(t => !!teamSongMap[t.id]).length
   // 训练：只要开始训练过 1 次（本次公演训练次数 > 0）即视为已参与训练环节
   const trainingCompletedCount = users.filter(u => (trainingCountByPlayer[u.id] || 0) > 0).length
+  // 发挥值：已抽取发挥值的选手数
+  const perfValueSet = new Set(performanceValues.map(v => v.playerId))
+  const performanceDrawnCount = users.filter(u => perfValueSet.has(u.id)).length
 
   const allTeamCompleted = teams.length > 0 && teamCompletedCount === teams.length
   const allSongCompleted = teams.length > 0 && songCompletedCount === teams.length
   const allTrainingCompleted = users.length > 0 && trainingCompletedCount === users.length
+  const allPerformanceDrawn = users.length > 0 && performanceDrawnCount === users.length
 
   return {
     roundId: frontRoundId,
@@ -115,7 +120,8 @@ async function getConcurrentStatus(roundInfo) {
       songCompleted: songCompletedCount,
       totalPlayers: users.length,
       trainingCompleted: trainingCompletedCount,
-      allCompleted: allTeamCompleted && allSongCompleted && allTrainingCompleted
+      performanceDrawn: performanceDrawnCount,
+      allCompleted: allTeamCompleted && allSongCompleted && allTrainingCompleted && allPerformanceDrawn
     }
   }
 }

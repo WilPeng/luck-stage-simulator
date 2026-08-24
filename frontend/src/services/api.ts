@@ -1590,6 +1590,27 @@ export async function openPerformance(roundId: string): Promise<{ opened: boolea
   )
 }
 
+// 管理员揭晓某个团队（持久化揭晓状态，选手端逐步展示评审矩阵）
+export async function revealTeam(roundId: string, teamId: string): Promise<any> {
+  return safeCall(
+    () => doRequest<any>('/performance/reveal-team', {
+      method: 'POST',
+      body: JSON.stringify({ roundId, teamId })
+    }),
+    async () => ({ success: true, data: { teamId } }),
+    'revealTeam'
+  )
+}
+
+// 获取已揭晓的团队列表（选手端据此展示评审矩阵）
+export async function getRevealedTeams(roundId: string): Promise<{ revealedTeamIds: string[]; allRevealed: boolean; revealedCount: number; totalTeams: number }> {
+  return safeCall(
+    () => doRequest<{ revealedTeamIds: string[]; allRevealed: boolean; revealedCount: number; totalTeams: number }>(`/performance/revealed-teams?roundId=${roundId}`),
+    async () => ({ revealedTeamIds: [], allRevealed: false, revealedCount: 0, totalTeams: 0 }),
+    'getRevealedTeams'
+  )
+}
+
 export async function getPerformanceResults(round?: number): Promise<TeamResult[]> {
   return safeCall(
     async () => {
@@ -1678,6 +1699,18 @@ export async function playerGeneratePerformance(params: { roundId: string; playe
   )
 }
 
+// 撤回发挥值：支持单个/批量/全部（不传 playerIds 表示全部）
+export async function revokePlayerPerformance(roundId: string, playerIds?: string[]): Promise<{ deletedCount: number }> {
+  return safeCall(
+    () => doRequest<{ deletedCount: number }>('/performance/player-status', {
+      method: 'DELETE',
+      body: JSON.stringify({ roundId, playerIds: playerIds || [] })
+    }),
+    async () => ({ deletedCount: playerIds?.length || 0 }),
+    'revokePlayerPerformance'
+  )
+}
+
 export async function startPerformance(roundId: string, generationMode: PerformanceGenerationMode = 'random'): Promise<void> {
   return safeCall(
     () => doRequest<void>('/performance/start', {
@@ -1694,24 +1727,11 @@ export async function startPerformance(roundId: string, generationMode: Performa
 }
 
 export async function savePerformancePlayerStatus(roundId: string, players: { playerId: string; performanceValue: number | null }[]): Promise<void> {
-  return safeCall(
-    () => doRequest<void>('/performance/player-status/save', {
-      method: 'POST',
-      body: JSON.stringify({ roundId, players })
-    }),
-    async () => {
-      const { savePlayerStatuses } = await import('./performanceService')
-      savePlayerStatuses(roundId, players.map(p => ({
-        playerId: p.playerId,
-        playerName: '',
-        teamId: '',
-        teamName: '',
-        generated: p.performanceValue !== null,
-        performanceValue: p.performanceValue
-      })))
-    },
-    'savePerformancePlayerStatus'
-  )
+  // 保存必须真实写入后端（否则刷新后 onMounted 查不到已生成，导致可反复抽取）
+  await doRequest<void>('/performance/player-status/save', {
+    method: 'POST',
+    body: JSON.stringify({ roundId, players })
+  })
 }
 
 export async function getPlayerPerformanceStatus(roundId: string): Promise<{ started: boolean; generationMode: PerformanceGenerationMode; players: any[] }> {
@@ -1838,6 +1858,15 @@ export async function getTeamAudienceMatrix(roundId: string, teamId: string): Pr
     () => doRequest<TeamAudienceMatrixResponse>(`/admin/audience-vote/team-matrix?roundId=${roundId}&teamId=${teamId}`),
     async () => ({ success: true, totalSeats: 0, yesCount: 0, teamId, seats: [] }),
     'getTeamAudienceMatrix'
+  )
+}
+
+// 选手端查看某团队的评审投票矩阵（不返回 yesCount 总数，只展示投票情况）
+export async function getPlayerTeamAudienceMatrix(roundId: string, teamId: string): Promise<TeamAudienceMatrixResponse> {
+  return safeCall(
+    () => doRequest<TeamAudienceMatrixResponse>(`/audience-vote/player-team-matrix?roundId=${roundId}&teamId=${teamId}`),
+    async () => ({ success: true, totalSeats: 0, yesCount: 0, teamId, seats: [] }),
+    'getPlayerTeamAudienceMatrix'
   )
 }
 

@@ -752,7 +752,7 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
 
 // ====================== GET /api/performance/result - 管理员端详细结果 ======================
 
-router.get('/result', auth, requireAdmin, async (req, res) => {
+router.get('/result', auth, async (req, res) => {
   try {
     const round = await resolveRoundFromQuery(req)
     const filter = buildRoundFilter(round)
@@ -1407,6 +1407,39 @@ router.post('/player-status/save', auth, async (req, res) => {
   }
 })
 
+// ===== DELETE /api/performance/player-status - 撤回发挥值（支持单个/批量/全部） =====
+// body: { roundId, playerIds?: string[] }  不传 playerIds 表示撤回全部
+router.delete('/player-status', auth, requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {}
+    const roundId = body.roundId || req.query.roundId
+    const playerIds = Array.isArray(body.playerIds) ? body.playerIds : null
+    if (!roundId) return res.status(400).json({ success: false, error: 'roundId 必填', code: 'MISSING_ROUND_ID' })
+
+    const round = await resolveRound(req)
+    if (!round) return res.status(400).json({ success: false, error: '未找到轮次（请传 roundId 或 roundIndex）', code: 'NO_ROUND' })
+
+    const filter = { roundId: round.id }
+    if (playerIds && playerIds.length > 0) {
+      filter.playerId = { $in: playerIds }
+    }
+
+    const result = await PerformanceValue.deleteMany(filter)
+
+    res.json({
+      success: true,
+      data: {
+        deletedCount: result.deletedCount || 0,
+        roundId: round.id,
+        playerIds: playerIds || []
+      }
+    })
+  } catch (e) {
+    console.error('Delete player status error:', e)
+    res.status(500).json({ success: false, error: '撤回发挥值失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // ===== GET /api/performance/round-status - 获取轮次公演状态（选手端用）=====
 router.get('/round-status', auth, async (req, res) => {
   try {
@@ -1529,21 +1562,24 @@ router.post('/reveal-team', auth, requireAdmin, async (req, res) => {
     const { roundId, teamId } = req.body
     if (!roundId || !teamId) return res.status(400).json({ success: false, error: 'roundId 和 teamId 必填', code: 'INVALID_PARAMS' })
 
-    const round = await Round.findOne({ id: roundId })
+    const round = await resolveRoundFromQuery(req)
     if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'ROUND_NOT_FOUND' })
+    // 若返回虚拟对象（无 seasonId），按 index 补查真实 Round
+    const realRound = await Round.findOne({ id: round.id })
+    const roundForQuery = realRound || (round.index != null ? await Round.findOne({ index: round.index }) : null) || round
 
     // 获取队伍信息
     const team = await RoundTeam.findOne({ id: teamId })
     if (!team) return res.status(404).json({ success: false, error: '队伍不存在', code: 'TEAM_NOT_FOUND' })
 
     // 获取歌曲
-    const teamSong = await TeamSong.findOne({ roundId: round.id, teamId })
+    const teamSong = await TeamSong.findOne({ roundId: roundForQuery.id, teamId })
     const song = teamSong ? await Song.findOne({ id: teamSong.songId }) : null
     if (!song) return res.status(400).json({ success: false, error: '该队伍未分配歌曲', code: 'NO_SONG' })
 
     // 获取成员发挥值
-    const members = await RoundTeamMember.find({ roundId: round.id, teamId })
-    const values = await PerformanceValue.find({ roundId: round.id, teamId })
+    const members = await RoundTeamMember.find({ roundId: roundForQuery.id, teamId })
+    const values = await PerformanceValue.find({ roundId: roundForQuery.id, teamId })
     const valueMap = {}
     for (const v of values) valueMap[v.playerId] = v.performanceValue
 
@@ -1571,6 +1607,30 @@ router.post('/reveal-team', auth, requireAdmin, async (req, res) => {
     const memberScores = membersWithPerf.map(m => m.playerScore)
     const { teamScore, teamRating, teamRatingText } = calcTeamScore(memberScores, team.name)
 
+    // 持久化揭晓状态：将本队加入 PerformanceRoundState.revealedTeamIds（选手端据此逐步展示）
+    try {
+      let state = await PerformanceRoundState.findOne({ roundId: roundForQuery.id })
+      if (!state) {
+        state = new PerformanceRoundState({
+          id: generateId(),
+          roundId: roundForQuery.id,
+          roundIndex: roundForQuery.index,
+          started: false,
+          generationMode: 'random',
+          revealedTeamIds: [],
+          updatedAt: new Date().toISOString()
+        })
+      }
+      if (!Array.isArray(state.revealedTeamIds)) state.revealedTeamIds = []
+      if (!state.revealedTeamIds.includes(teamId)) {
+        state.revealedTeamIds.push(teamId)
+      }
+      state.updatedAt = new Date().toISOString()
+      await state.save()
+    } catch (stateErr) {
+      console.warn('持久化揭晓状态失败:', stateErr.message)
+    }
+
     res.json({
       success: true,
       data: {
@@ -1595,17 +1655,18 @@ router.get('/revealed-teams', auth, async (req, res) => {
     const round = await resolveRoundFromQuery(req)
     if (!round) return res.status(400).json({ success: false, error: '未找到轮次（请传 roundId 或 round）', code: 'NO_ROUND' })
 
-    // 已结算的队伍（TeamPerformance 有记录 = 已揭晓）
+    // 已结算的队伍（TeamPerformance 有记录）
     const teamPerfs = await TeamPerformance.find({ roundId: round.id })
     const calcRevealedIds = teamPerfs.map(tp => tp.teamId)
 
-    // 从持久化状态获取已揭晓队伍
+    // 从持久化状态获取已揭晓队伍（管理员逐个点击揭晓，逐步展示）
     const state = await PerformanceRoundState.findOne({ roundId: round.id })
     const savedRevealedIds = state && Array.isArray(state.revealedTeamIds) ? state.revealedTeamIds : []
 
-    // 合并两种来源
-    const revealedTeamIds = [...new Set([...calcRevealedIds, ...savedRevealedIds])]
-    const teams = await RoundTeam.find({ roundId: round.id })
+    // 仅返回管理员已揭晓的队伍（不把所有已结算团队视为已揭晓）
+    const revealedTeamIds = [...new Set(savedRevealedIds)]
+    const frontRoundId = `round-${round.index || 1}`
+    const teams = await RoundTeam.find({ roundId: { $in: [round.id, frontRoundId] } })
 
     res.json({
       success: true,

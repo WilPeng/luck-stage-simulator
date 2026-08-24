@@ -1,17 +1,18 @@
 // ================== 赛程状态机类型定义 ==================
 
 // 阶段类型（前后端统一）
-// teaming / song_select / training 已从主阶段序列中移除，但在并发阶段内仍作为子行动使用
+// teaming / song_select / training / performance_draw 已从主阶段序列中移除，但在并发阶段内仍作为子行动使用
 export type StageType =
   | 'preparation'     // 预先准备
   | 'captain_vote'    // 队长选举
-  | 'concurrent'      // 并发行动（组队/选歌/训练）
+  | 'concurrent'      // 并发行动（组队/选歌/训练/抽取发挥值）
   | 'performance'     // 公演结算与结果展示
   | 'danger_confirm'  // 确认危险名单
   | 'elimination'     // 淘汰（PK淘汰）
   | 'teaming'         // 组队（并发子行动，兼容页面）
   | 'song_select'     // 选歌（并发子行动，兼容页面）
   | 'training'        // 训练（并发子行动，兼容页面）
+  | 'performance_draw' // 抽取发挥值（并发子行动，兼容页面）
 
 // 阶段顺序（固定，用于状态计算）
 export const STAGE_ORDER: StageType[] = [
@@ -24,7 +25,7 @@ export const STAGE_ORDER: StageType[] = [
 ]
 
 // 并发阶段包含的子行动
-export const CONCURRENT_ACTIONS: StageType[] = ['teaming', 'song_select', 'training']
+export const CONCURRENT_ACTIONS: StageType[] = ['teaming', 'song_select', 'training', 'performance_draw']
 
 // 阶段名称映射（用于显示）
 export const STAGE_NAMES: Record<StageType, string> = {
@@ -36,7 +37,8 @@ export const STAGE_NAMES: Record<StageType, string> = {
   elimination: '淘汰',
   teaming: '组队',
   song_select: '选歌',
-  training: '训练'
+  training: '训练',
+  performance_draw: '抽取发挥值'
 }
 
 // 阶段状态（动态计算）
@@ -110,6 +112,7 @@ export interface ConcurrentStatusResponse {
     songCompleted: number
     totalPlayers: number
     trainingCompleted: number
+    performanceDrawn: number
     allCompleted: boolean
   }
 }

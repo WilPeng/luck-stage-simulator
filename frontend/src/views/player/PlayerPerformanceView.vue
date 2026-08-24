@@ -18,50 +18,16 @@
       <div class="waiting-dots"><span></span><span></span><span></span></div>
     </div>
 
-    <!-- ===== Phase 2: 抽取发挥值 ===== -->
+    <!-- ===== Phase 2: 发挥值已提前抽取，此处仅展示或引导抽取 ===== -->
     <div v-else-if="phase === 2 && !hasDrawn" class="draw-stage">
       <div class="stage-badge">🌟 公演已开启</div>
       <div class="draw-area">
-        <div class="draw-icon">{{ generationMode === 'pointer' ? '🎯' : '⚡' }}</div>
-        <h2>{{ generationMode === 'pointer' ? '停下指针获取发挥值' : '抽取你的发挥值' }}</h2>
-        <p class="draw-hint">发挥值影响你的公演最终得分</p>
-
-        <!-- 随机模式：老虎机 -->
-        <template v-if="generationMode === 'random'">
-          <button v-if="!drawing && !revealed" class="draw-btn" @click="doDraw">🎲 抽取发挥值</button>
-          <div v-if="drawing" class="slot-machine">
-            <div class="slot-numbers">
-              <span v-for="n in slotNumbers" :key="n" class="slot-num" :class="{ active: n === currentSlot }">{{ n }}</span>
-            </div>
-          </div>
-        </template>
-
-        <!-- 指针模式：摆动指针 -->
-        <template v-else>
-          <div class="pointer-scale" ref="pointerScaleRef">
-            <div class="pointer-scale-track">
-              <div v-for="n in pointerNumbers" :key="n" class="pointer-tick" :class="{ major: n % 5 === 0 }">
-                <span class="tick-line"></span>
-                <span class="tick-label">{{ n }}</span>
-              </div>
-            </div>
-            <div class="pointer-cursor" :style="{ left: pointerPosition + '%' }">
-              <div class="cursor-head"></div>
-              <div class="cursor-value">{{ currentPointerValue }}</div>
-            </div>
-          </div>
-          <button v-if="!drawing && !revealed" class="draw-btn" @click="startPointer">🎯 开始摆动</button>
-          <button v-else-if="drawing" class="draw-btn stop-btn" @click="stopPointer">🛑 停下</button>
-        </template>
-
-        <div v-if="revealed" class="result-reveal" @animationend="onRevealEnd">
-          <div class="result-glow" :class="resultLevel"></div>
-          <div class="result-value" :class="resultLevel">{{ drawValue }}</div>
-          <div class="result-label" :class="resultLevel">{{ resultText }}</div>
-          <div class="result-bar">
-            <div class="bar-fill" :class="resultLevel" :style="{ width: barWidth + '%' }"></div>
-          </div>
-        </div>
+        <div class="draw-icon">🎲</div>
+        <h2>发挥值尚未抽取</h2>
+        <p class="draw-hint">发挥值已提前到并发行动阶段抽取，请前往抽取</p>
+        <router-link :to="`/games/${authStore.currentGameId}/player/round/${currentRound}/performance-draw`" class="draw-btn go-draw-btn">
+          🎲 前往抽取发挥值
+        </router-link>
       </div>
     </div>
 
@@ -92,42 +58,71 @@
         <div v-if="!teamResult && phase < 3" class="info-card dim"><span>等待公演结算</span></div>
       </div>
 
-      <!-- ===== 所有团队排名（释放后展示） ===== -->
-      <div v-if="phase >= 4 && performanceStore.sortedTeamPerformanceResults.length" class="teams-ranking-section">
+      <!-- ===== 已揭晓队伍的大众评审投票矩阵（管理员逐个揭晓后展示） ===== -->
+      <div v-if="phase >= 3" class="teams-ranking-section">
         <div class="section-title-bar">
-          <span class="section-icon">🏆</span>
-          <span>团队排名</span>
+          <span class="section-icon">🎭</span>
+          <span>已揭晓队伍 · 大众评审投票</span>
         </div>
-        <div class="teams-ranking-list">
+        <div v-if="revealedTeams.length === 0" class="no-revealed">
+          <p>管理员正在逐个揭晓队伍，请稍候...</p>
+        </div>
+        <div v-else class="revealed-list">
           <div
-            v-for="team in performanceStore.sortedTeamPerformanceResults"
+            v-for="team in revealedTeams"
             :key="team.teamId"
-            class="team-rank-card"
-            :class="{ 'is-my-team': team.teamId === currentTeam?.id, expanded: expandedTeamId === team.teamId }"
-            @click="toggleTeamExpand(team.teamId)"
+            class="revealed-card"
+            :class="{ 'is-my-team': team.teamId === currentTeam?.id }"
           >
-            <div class="team-rank-header">
-              <div class="team-rank-main">
-                <span class="team-rank-pos" :class="getTeamRankClass(team.rank)">{{ team.rank }}</span>
-                <div class="team-rank-info">
-                  <div class="team-rank-name">{{ team.teamName }}</div>
-                  <div class="team-rank-song">{{ team.songName }} · {{ team.playerPerformances.length }}人</div>
+            <div class="revealed-header" @click="toggleTeamExpand(team.teamId)">
+              <div class="revealed-title">
+                <span class="revealed-badge">🎭</span>
+                <div>
+                  <div class="revealed-name">{{ team.teamName }}</div>
+                  <div v-if="team.songName" class="revealed-song">{{ team.songName }}</div>
                 </div>
               </div>
-              <div class="team-rank-votes">
-                <span class="votes-value">{{ team.finalVotes }}</span>
-                <span class="votes-label">票</span>
-              </div>
+              <span class="revealed-toggle">{{ expandedTeamId === team.teamId ? '▲' : '▼' }}</span>
             </div>
+
             <div v-if="expandedTeamId === team.teamId" class="team-rank-detail" @click.stop>
-              <div class="detail-line">
-                团队得分 {{ team.teamScore }} · 评级 {{ team.teamRating }}<span v-if="team.teamRatingText">（{{ team.teamRatingText }}）</span>
-              </div>
               <div class="member-list">
-                <div v-for="p in team.playerPerformances" :key="p.playerId" class="member-item">
+                <div v-for="p in (team.players || team.playerPerformances || [])" :key="p.playerId" class="member-item">
                   <span class="member-name">{{ p.playerName }}</span>
-                  <span class="member-score">{{ p.playerScore }}分</span>
-                  <span class="member-contribution">+{{ p.contribution }}票</span>
+                </div>
+              </div>
+
+              <!-- 大众评审投票矩阵（与管理员端一致） -->
+              <div class="detail-item audience-matrix-block">
+                <div class="matrix-header">
+                  <span class="matrix-title">大众评审投票矩阵</span>
+                </div>
+                <div v-if="loadingTeamMatrix[team.teamId]" class="matrix-loading">
+                  <t-loading size="small" text="加载评审矩阵中..." />
+                </div>
+                <div v-else-if="!teamAudienceMatrices[team.teamId]?.length" class="matrix-empty">
+                  暂无大众评审投票记录
+                </div>
+                <div v-else class="audience-matrix">
+                  <div
+                    v-for="seat in teamAudienceMatrices[team.teamId]"
+                    :key="`${team.teamId}-${seat.seatNumber}`"
+                    class="matrix-seat"
+                    :class="{ yes: seat.votedYes }"
+                  >
+                    <t-tooltip placement="top">
+                      <template #content>
+                        <div>{{ seat.seatNumber }}号 · {{ seat.name || '未知评审' }}</div>
+                        <div style="font-size:12px;opacity:0.8">{{ seat.gender }} · {{ seat.age }}岁 · {{ seat.occupation }}</div>
+                        <div style="font-size:12px;opacity:0.8">{{ seat.votedYes ? '投了 YES' : '未投 YES' }}</div>
+                      </template>
+                      <div class="seat-inner">
+                        <div class="seat-name">{{ seat.name || '未知' }}</div>
+                        <div class="seat-gender-age">{{ seat.gender }} {{ seat.age }}岁</div>
+                        <div class="seat-occupation">{{ seat.occupation }}</div>
+                      </div>
+                    </t-tooltip>
+                  </div>
                 </div>
               </div>
             </div>
@@ -329,7 +324,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { useTeamStore } from '../../stores/teamStore'
@@ -586,15 +581,61 @@ const rankClass = computed(() => {
 
 // ===== 团队排名展开 =====
 const expandedTeamId = ref('')
-function toggleTeamExpand(teamId: string) {
-  expandedTeamId.value = expandedTeamId.value === teamId ? '' : teamId
+let revealedTimer: number | undefined
+// 各团队评审投票矩阵（选手端展示 yes/no 情况）
+const teamAudienceMatrices = ref<Record<string, any[]>>({})
+const loadingTeamMatrix = ref<Record<string, boolean>>({})
+// 已揭晓团队（管理员逐个点击揭晓后，选手端逐步展示）
+const revealedTeamIds = ref<string[]>([])
+
+// 已揭晓的团队对象（从全部团队结果中筛出已揭晓的）
+const revealedTeams = computed(() => {
+  const all = performanceStore.sortedTeamPerformanceResults
+  const idSet = new Set(revealedTeamIds.value)
+  return all.filter(t => idSet.has(t.teamId))
+})
+
+// 加载已揭晓团队并预加载它们的评审矩阵
+async function loadRevealedTeamsData() {
+  try {
+    const { getRevealedTeams } = await import('../../services/api')
+    const res = await getRevealedTeams(roundId.value)
+    if (res?.revealedTeamIds) {
+      revealedTeamIds.value = res.revealedTeamIds
+      // 为每个已揭晓团队加载评审矩阵
+      for (const teamId of res.revealedTeamIds) {
+        if (!teamAudienceMatrices.value[teamId] && !loadingTeamMatrix.value[teamId]) {
+          loadingTeamMatrix.value[teamId] = true
+          try {
+            const { getPlayerTeamAudienceMatrix } = await import('../../services/api')
+            const m = await getPlayerTeamAudienceMatrix(roundId.value, teamId)
+            if (m?.seats) {
+              teamAudienceMatrices.value[teamId] = m.seats
+            }
+          } catch (_) { /* 静默 */ } finally {
+            loadingTeamMatrix.value[teamId] = false
+          }
+        }
+      }
+    }
+  } catch (_) { /* 静默 */ }
 }
-function getTeamRankClass(rank: number) {
-  if (rank === 1) return 'rank-gold'
-  if (rank === 2) return 'rank-silver'
-  if (rank === 3) return 'rank-bronze'
-  if (rank <= 5) return 'rank-top'
-  return 'rank-normal'
+
+async function toggleTeamExpand(teamId: string) {
+  expandedTeamId.value = expandedTeamId.value === teamId ? '' : teamId
+  // 展开时加载该团评审投票矩阵（仅加载一次）
+  if (expandedTeamId.value === teamId && !teamAudienceMatrices.value[teamId] && !loadingTeamMatrix.value[teamId]) {
+    loadingTeamMatrix.value[teamId] = true
+    try {
+      const { getPlayerTeamAudienceMatrix } = await import('../../services/api')
+      const res = await getPlayerTeamAudienceMatrix(roundId.value, teamId)
+      if (res?.seats) {
+        teamAudienceMatrices.value[teamId] = res.seats
+      }
+    } catch (_) { /* 静默 */ } finally {
+      loadingTeamMatrix.value[teamId] = false
+    }
+  }
 }
 
 const maxVotes = computed(() => {
@@ -777,6 +818,16 @@ onMounted(async () => {
       fetchRankings()
     ])
   }
+
+  // 加载已揭晓队伍评审矩阵（管理员逐个揭晓后逐步展示）
+  await loadRevealedTeamsData()
+  // 轮询刷新：管理员揭晓新队伍后选手端自动更新
+  revealedTimer = window.setInterval(loadRevealedTeamsData, 8000)
+})
+
+onBeforeUnmount(() => {
+  if (revealedTimer) window.clearInterval(revealedTimer)
+  if (slotTimer !== null) window.clearInterval(slotTimer)
 })
 </script>
 
@@ -821,6 +872,25 @@ onMounted(async () => {
 }
 .draw-btn { padding: 16px 48px; font-size: 18px; font-weight: 700; background: linear-gradient(135deg, #ffd700, #ff6b6b); border: none; border-radius: 14px; color: var(--text-primary); cursor: pointer; transition: all 0.25s ease; letter-spacing: 1px; box-shadow: 0 6px 25px rgba(255,215,0,0.25); &:hover { transform: translateY(-3px); box-shadow: 0 10px 35px rgba(255,215,0,0.35); } &:active { transform: translateY(0); } }
 .draw-btn.stop-btn { background: linear-gradient(135deg, #ff6b6b, #e74c3c); box-shadow: 0 6px 25px rgba(231,76,60,0.25); }
+// 引导前往抽取按钮（router-link 表现得像按钮）
+.go-draw-btn {
+  display: inline-block;
+  padding: 14px 36px;
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  border-radius: 14px;
+  color: #fff;
+  letter-spacing: 1px;
+  box-shadow: 0 6px 25px rgba(108, 92, 231, 0.3);
+  transition: all 0.25s ease;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 35px rgba(108, 92, 231, 0.4);
+  }
+}
 
 // ===== 指针模式 =====
 .pointer-scale {
@@ -945,6 +1015,40 @@ onMounted(async () => {
 // ===== 团队排名 =====
 .teams-ranking-section { margin-top: 8px; }
 .teams-ranking-list { display: flex; flex-direction: column; gap: 10px; }
+
+// ===== 已揭晓队伍（评审矩阵） =====
+.no-revealed {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  background: var(--hover-bg);
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+}
+.revealed-list { display: flex; flex-direction: column; gap: 12px; }
+.revealed-card {
+  background: var(--hover-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  &.is-my-team { border-color: rgba(102, 126, 234, 0.5); box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.1); }
+}
+.revealed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  cursor: pointer;
+  &:hover { background: var(--bg-primary); }
+}
+.revealed-title { display: flex; align-items: center; gap: 12px; }
+.revealed-badge { font-size: 24px; }
+.revealed-name { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.revealed-song { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.revealed-toggle { color: var(--text-tertiary); font-size: 12px; }
+
 .team-rank-card {
   background: var(--hover-bg);
   border: 1px solid var(--border-color);
@@ -984,13 +1088,120 @@ onMounted(async () => {
   animation: revealIn 0.25s ease;
   .detail-line { font-size: 13px; color: var(--text-secondary); padding: 10px 0 6px; }
 }
-.member-list { display: flex; flex-direction: column; gap: 6px; }
+.member-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .member-item {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 10px; background: var(--card-bg); border-radius: 8px; font-size: 13px;
+  display: flex; align-items: center;
+  padding: 6px 12px; background: var(--card-bg); border-radius: 16px; font-size: 13px;
   .member-name { color: var(--text-primary); font-weight: 500; }
-  .member-score { color: var(--text-secondary); }
-  .member-contribution { color: #2ecc71; font-weight: 600; }
+}
+
+// ===== 大众评审投票矩阵（选手端，与管理员端一致） =====
+.audience-matrix-block {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-color);
+
+  .matrix-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+
+    .matrix-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+  }
+
+  .matrix-loading,
+  .matrix-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    background: #f7f8fa;
+    border-radius: 8px;
+  }
+
+  .audience-matrix {
+    display: grid;
+    grid-template-columns: repeat(20, 1fr);
+    gap: 3px;
+    max-height: 420px;
+    overflow-y: auto;
+    padding: 8px;
+    background: #f7f8fa;
+    border-radius: 8px;
+
+    .matrix-seat {
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      border: 1px solid #e5e6eb;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      overflow: hidden;
+      min-width: 0;
+
+      .seat-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        line-height: 1.1;
+        text-align: center;
+        width: 100%;
+        padding: 1px;
+      }
+
+      .seat-name {
+        font-size: 8px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .seat-gender-age {
+        font-size: 8px;
+        font-weight: 600;
+        color: #667eea;
+        white-space: nowrap;
+      }
+
+      .seat-occupation {
+        font-size: 7px;
+        color: var(--text-tertiary);
+        white-space: nowrap;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      &:hover {
+        transform: scale(1.15);
+        border-color: #0052d9;
+        z-index: 1;
+      }
+
+      &.yes {
+        background: #00a870;
+        border-color: #00a870;
+
+        .seat-name,
+        .seat-gender-age,
+        .seat-occupation {
+          color: #ffffff;
+        }
+      }
+    }
+  }
 }
 
 // ===== 通用区块标题 =====

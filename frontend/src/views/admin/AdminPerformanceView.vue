@@ -4,126 +4,6 @@
     <h1>第{{ currentRoundNumber }}次公演结算中心</h1>
     <div class="page-tabs">
       <t-tabs v-model="activeTab" @change="handleTabChange">
-        <t-tab-panel value="player-status" label="选手发挥">
-          <!-- ==================== 阶段一：选手发挥 ==================== -->
-          <div class="step-section">
-            <div class="overview-section">
-              <div class="overview-grid">
-                <div class="overview-item">
-                  <span class="label">当前轮次</span>
-                  <span class="value">第{{ currentRoundNumber }}次公演</span>
-                </div>
-                <div class="overview-item">
-                  <span class="label">参与队伍</span>
-                  <span class="value">{{ teamStore.teams.length }}支</span>
-                </div>
-                <div class="overview-item">
-                  <span class="label">参与选手</span>
-                  <span class="value">{{ allPlayers.length }}人</span>
-                </div>
-                <div class="overview-item">
-                  <span class="label">歌曲数量</span>
-                  <span class="value">{{ teamStore.teams.length }}首</span>
-                </div>
-              </div>
-              <div class="status-section">
-                <t-tag :theme="performanceStarted ? 'success' : 'warning'" variant="light">
-                  {{ performanceStarted ? '公演已开启' : '未开始' }}
-                </t-tag>
-                <span class="generated-count" v-if="performanceStarted">
-                  已生成：{{ generatedCount }} / {{ allPlayers.length }}
-                </span>
-              </div>
-            </div>
-
-            <div class="generation-mode-section">
-              <div class="mode-label">发挥值生成方式</div>
-              <t-radio-group
-                v-model="generationMode"
-                variant="default-filled"
-                :disabled="performanceStarted === true"
-                @change="handleGenerationModeChange"
-              >
-                <t-radio-button value="random">🎲 随机生成</t-radio-button>
-                <t-radio-button value="pointer">🎯 指针摆动</t-radio-button>
-              </t-radio-group>
-              <div class="mode-hint">
-                {{ generationMode === 'random' ? '选手端点击后系统随机给出发挥值' : '选手端通过点击停下指针获取发挥值' }}
-              </div>
-            </div>
-
-            <div class="action-section">
-              <t-button v-if="performanceStarted === false" theme="primary" size="large" block @click="handleStartPerformance">
-                选手开始公演
-              </t-button>
-              <t-space v-else-if="performanceStarted === true" style="width:100%">
-                <t-button theme="primary" :loading="bulkGenerating" @click="handleGenerateAll">
-                  一键全部生成
-                </t-button>
-                <t-button theme="success" block :disabled="generatedCount < allPlayers.length" @click="activeTab = 'settlement'">
-                  开始结算
-                </t-button>
-              </t-space>
-            </div>
-
-            <!-- 选手发挥表格 -->
-            <t-card title="选手实时发挥" class="player-table-card">
-              <div class="table-toolbar">
-                <t-pagination
-                  v-model="playerPage"
-                  :total="allPlayers.length"
-                  :page-size="5"
-                  :show-jumper="true"
-                  size="small"
-                />
-              </div>
-              <table class="player-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>选手</th>
-                    <th>队伍</th>
-                    <th>发挥值</th>
-                    <th>状态</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(player, idx) in pagedPlayers" :key="player.playerId">
-                    <td>{{ (playerPage - 1) * 5 + idx + 1 }}</td>
-                    <td class="player-name">{{ player.playerName }}</td>
-                    <td class="team-name">{{ player.teamName }}</td>
-                    <td class="performance-value">
-                      <span v-if="player.generated" :class="['value', player.performanceValue >= 0 ? 'positive' : 'negative']">
-                        {{ player.performanceValue >= 0 ? '+' : '' }}{{ player.performanceValue }}
-                      </span>
-                      <span v-else class="value pending">{{ performanceStarted ? '待生成' : '—' }}</span>
-                    </td>
-                    <td>
-                      <t-tag v-if="player.generated" theme="success" variant="light" size="small">已生成</t-tag>
-                      <t-tag v-else-if="performanceStarted" theme="warning" variant="light" size="small">待生成</t-tag>
-                      <t-tag v-else theme="default" variant="light" size="small">未开始</t-tag>
-                    </td>
-                    <td>
-                      <t-button
-                        v-if="!player.generated && performanceStarted"
-                        size="small"
-                        variant="outline"
-                        :loading="generatingPlayerId === player.playerId"
-                        @click="handleGeneratePlayer(player)"
-                      >
-                        代生成
-                      </t-button>
-                      <span v-else-if="player.generated" class="done-text">✓</span>
-                      <span v-else class="pending-text">—</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </t-card>
-          </div>
-        </t-tab-panel>
-
         <t-tab-panel value="settlement" label="公演结算">
           <!-- ==================== 阶段二：公演结算 ==================== -->
           <div class="step-section">
@@ -319,7 +199,7 @@ const songStore = useSongStore()
 const playerStore = usePlayerStore()
 
 // ==================== 阶段状态 ====================
-const activeTab = ref('player-status') // 'player-status'=选手发挥, 'settlement'=公演结算, 'audience-vote'=喜爱度票数, 'elimination'=淘汰
+const activeTab = ref('settlement') // 'settlement'=公演结算, 'audience-vote'=喜爱度票数, 'elimination'=淘汰（发挥值已独立为单独页面）
 
 function handleTabChange(value: string) {
   console.log('[Performance] Tab changed to:', value)
@@ -343,6 +223,12 @@ const playerStatuses = ref<any[]>([])
 const playerPage = ref(1)
 const generatingPlayerId = ref('')
 const bulkGenerating = ref(false)
+const revokingPlayerId = ref('')
+const bulkRevoking = ref(false)
+// 勾选撤回的选手
+const selectedRevokeIds = ref<string[]>([])
+
+const generatedPlayers = computed(() => playerStatuses.value.filter((p: any) => p.generated))
 
 // 从队伍数据中提取所有选手
 const allPlayers = computed(() => {
@@ -490,6 +376,114 @@ function handleGenerateAll() {
   }, 500)
 }
 
+// 撤回单个选手发挥值（清除本地 + 后端）
+async function handleRevokePlayer(player: any) {
+  revokingPlayerId.value = player.playerId
+  try {
+    const roundId = currentRoundIdComputed.value
+    if (roundId) {
+      const { revokePlayerPerformance } = await import('../../services/api')
+      await revokePlayerPerformance(roundId, [player.playerId])
+    }
+    const idx = playerStatuses.value.findIndex((p: any) => p.playerId === player.playerId)
+    if (idx !== -1) {
+      playerStatuses.value[idx].generated = false
+      playerStatuses.value[idx].performanceValue = null
+    }
+    // 同步清除 localStorage
+    const uid = player.playerId
+    const { loadPlayerStatuses, savePlayerStatuses } = await import('../../services/performanceService')
+    const statuses = loadPlayerStatuses(`round-${currentRoundNumber.value}`)
+    const filtered = statuses.filter((s: any) => s.playerId !== uid)
+    savePlayerStatuses(`round-${currentRoundNumber.value}`, filtered)
+    MessagePlugin.success(`已撤回 ${player.playerName || '该选手'} 的发挥值`)
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '撤回失败')
+  } finally {
+    revokingPlayerId.value = ''
+  }
+}
+
+// 撤回所选选手发挥值（批量）
+async function handleRevokeSelected() {
+  if (selectedRevokeIds.value.length === 0) {
+    MessagePlugin.warning('请先勾选要撤回的选手')
+    return
+  }
+  const ok = window.confirm(`确定撤回所选 ${selectedRevokeIds.value.length} 位选手的发挥值吗？`)
+  if (!ok) return
+  bulkRevoking.value = true
+  try {
+    const roundId = currentRoundIdComputed.value
+    if (roundId) {
+      const { revokePlayerPerformance } = await import('../../services/api')
+      await revokePlayerPerformance(roundId, selectedRevokeIds.value)
+    }
+    const idSet = new Set(selectedRevokeIds.value)
+    for (const p of playerStatuses.value) {
+      if (idSet.has(p.playerId)) {
+        p.generated = false
+        p.performanceValue = null
+      }
+    }
+    // 同步清除 localStorage
+    const { loadPlayerStatuses, savePlayerStatuses } = await import('../../services/performanceService')
+    const statuses = loadPlayerStatuses(`round-${currentRoundNumber.value}`)
+    const filtered = statuses.filter((s: any) => !idSet.has(s.playerId))
+    savePlayerStatuses(`round-${currentRoundNumber.value}`, filtered)
+    selectedRevokeIds.value = []
+    MessagePlugin.success(`已撤回 ${idSet.size} 位选手的发挥值`)
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '批量撤回失败')
+  } finally {
+    bulkRevoking.value = false
+  }
+}
+
+// 撤回全部选手发挥值
+async function handleRevokeAll() {
+  if (generatedCount.value === 0) {
+    MessagePlugin.warning('暂无已生成的发挥值')
+    return
+  }
+  const ok = window.confirm(`确定撤回全部 ${generatedCount.value} 位选手的发挥值吗？此操作不可撤销。`)
+  if (!ok) return
+  bulkRevoking.value = true
+  try {
+    const roundId = currentRoundIdComputed.value
+    if (roundId) {
+      const { revokePlayerPerformance } = await import('../../services/api')
+      await revokePlayerPerformance(roundId)
+    }
+    for (const p of playerStatuses.value) {
+      p.generated = false
+      p.performanceValue = null
+    }
+    const { savePlayerStatuses } = await import('../../services/performanceService')
+    savePlayerStatuses(`round-${currentRoundNumber.value}`, [])
+    selectedRevokeIds.value = []
+    MessagePlugin.success('已撤回全部选手的发挥值')
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '撤回全部失败')
+  } finally {
+    bulkRevoking.value = false
+  }
+}
+
+function toggleRevokeSelect(playerId: string) {
+  const idx = selectedRevokeIds.value.indexOf(playerId)
+  if (idx >= 0) selectedRevokeIds.value.splice(idx, 1)
+  else selectedRevokeIds.value.push(playerId)
+}
+
+function toggleSelectAllRevoke(checked: boolean) {
+  if (checked) {
+    selectedRevokeIds.value = generatedPlayers.value.map((p: any) => p.playerId)
+  } else {
+    selectedRevokeIds.value = []
+  }
+}
+
 function handleGoToSettlement() {
   activeTab.value = 'settlement'
 }
@@ -561,7 +555,7 @@ async function loadTeamAudienceMatrix(teamId: string) {
   }
 }
 
-function handleRevealTeam(team: any) {
+async function handleRevealTeam(team: any) {
   // 避免重复添加
   if (!selectedTeamForReveal.value.find((t: any) => t.teamId === team.teamId)) {
     selectedTeamForReveal.value.push(team)
@@ -574,7 +568,15 @@ function handleRevealTeam(team: any) {
   // 加载该队的大众评审投票矩阵
   loadTeamAudienceMatrix(team.teamId)
 
-  // 持久化已揭晓的队伍
+  // 持久化已揭晓的队伍到后端（选手端据此逐步展示）
+  try {
+    const { revealTeam } = await import('../../services/api')
+    await revealTeam(currentRoundIdComputed.value, team.teamId)
+  } catch (e: any) {
+    console.warn('持久化揭晓状态失败:', e.message)
+  }
+
+  // 本地 localStorage 兜底
   if (currentRoundIdComputed.value) {
     const revealed = teamPerformanceResults.value
       .filter((t: any) => t.status === 'confirmed')

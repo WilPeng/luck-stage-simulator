@@ -205,7 +205,8 @@ const stageConfig: Record<StageType, { icon: string; text: string }> = {
   elimination: { icon: '📝', text: '淘汰' },
   teaming: { icon: '👥', text: '组队' },
   song_select: { icon: '🎵', text: '选歌' },
-  training: { icon: '💪', text: '训练' }
+  training: { icon: '💪', text: '训练' },
+  performance_draw: { icon: '🎲', text: '抽取发挥值' }
 }
 
 // 显示的阶段列表（按 STAGE_ORDER 顺序，仅显示主阶段）
@@ -217,14 +218,16 @@ const stageList = computed(() => {
 const ACTION_TO_STAGE_KEY: Record<string, StageType> = {
   team: 'teaming',
   song: 'song_select',
-  training: 'training'
+  training: 'training',
+  performance: 'performance_draw'
 }
 
 // 菜单阶段 key → 并发子行动的反向映射
-const STAGE_TO_ACTION: Record<string, 'team' | 'song' | 'training'> = {
+const STAGE_TO_ACTION: Record<string, 'team' | 'song' | 'training' | 'performance'> = {
   teaming: 'team',
   song_select: 'song',
-  training: 'training'
+  training: 'training',
+  performance_draw: 'performance'
 }
 
 // 某轮的菜单列表：主阶段 + 该轮已开放的并发子行动（插在"并发行动"之后）

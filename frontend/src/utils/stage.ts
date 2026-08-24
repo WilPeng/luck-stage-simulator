@@ -22,6 +22,7 @@ export const STAGE_INFO_MAP: Record<StageType, Omit<StageInfo, 'status'>> = {
   team: { type: 'team', name: '组队阶段', description: '选手组队阶段' },
   song: { type: 'song', name: '选歌阶段', description: '选择公演歌曲' },
   training: { type: 'training', name: '训练阶段', description: '训练翻牌提升属性' },
+  performance_draw: { type: 'performance_draw', name: '抽取发挥值', description: '选手抽取公演发挥值' },
   performance: { type: 'performance', name: '公演阶段', description: '公演比拼' },
   danger_confirm: { type: 'danger_confirm', name: '确认危险名单', description: '管理员圈定危险选手' },
   elimination: { type: 'elimination', name: '淘汰阶段', description: '公布淘汰结果' },

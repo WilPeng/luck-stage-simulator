@@ -28,6 +28,10 @@
           <span class="overview-value">{{ status?.summary?.trainingCompleted ?? 0 }}</span>
           <span class="overview-label">训练完成</span>
         </div>
+        <div class="overview-item">
+          <span class="overview-value">{{ status?.summary?.performanceDrawn ?? 0 }}</span>
+          <span class="overview-label">已抽发挥值</span>
+        </div>
       </div>
 
       <div class="global-status">
@@ -192,8 +196,8 @@ const releaseItems = computed(() => {
       icon: '🎲',
       name: '发挥值抽取',
       released: s.performanceReleased,
-      progressText: '抽取方式由管理员设定',
-      description: '开放后选手可抽取公演发挥值（提前到并发阶段）'
+      progressText: `${summary.performanceDrawn || 0} / ${summary.totalPlayers} 选手已抽取`,
+      description: '开放后每位选手可各自抽取公演发挥值'
     }
   ]
 })
@@ -201,7 +205,8 @@ const releaseItems = computed(() => {
 const adminLinks = computed(() => [
   { path: `${gamePrefix.value}/admin/round/${roundIndex.value}/teaming`, icon: '👥', name: '组队管理' },
   { path: `${gamePrefix.value}/admin/round/${roundIndex.value}/song_select`, icon: '🎵', name: '选歌管理' },
-  { path: `${gamePrefix.value}/admin/round/${roundIndex.value}/training`, icon: '💪', name: '训练管理' }
+  { path: `${gamePrefix.value}/admin/round/${roundIndex.value}/training`, icon: '💪', name: '训练管理' },
+  { path: `${gamePrefix.value}/admin/round/${roundIndex.value}/performance_draw`, icon: '🎲', name: '发挥值管理' }
 ])
 
 async function loadData() {
@@ -380,7 +385,7 @@ onMounted(loadData)
 
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   margin-top: 16px;
 }

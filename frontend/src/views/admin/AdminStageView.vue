@@ -94,6 +94,14 @@
           进入下一阶段
         </t-button>
         <t-button
+          variant="outline"
+          :disabled="!canGoPrevStage"
+          :loading="stageChanging"
+          @click="handlePrevStage"
+        >
+          返回上一阶段
+        </t-button>
+        <t-button
           v-if="seasonStore.currentStage === 'concurrent'"
           theme="warning"
           :loading="stageChanging"
@@ -115,8 +123,8 @@
           <div>状态机说明：</div>
           <ul style="margin: 8px 0 0 0; padding-left: 20px;">
             <li>管理员只控制 <strong>当前轮次 + 当前阶段</strong></li>
-            <li>并发行动阶段：组队、选歌、训练可同时进行</li>
-            <li>所有页面状态由系统动态计算</li>
+            <li>并发行动阶段：组队、选歌、训练、抽取发挥值可同时进行</li>
+            <li>点击矩阵可前进到下一阶段，也可<strong>回退到已完成阶段</strong></li>
             <li>已完成 = 绿色，当前 = 蓝色，未开始 = 灰色</li>
           </ul>
         </template>
@@ -213,6 +221,11 @@ const currentRoundLabel = computed(() => {
 
 const canGoNextStage = computed(() => !!seasonStore.getNextStage())
 const canGoNextRound = computed(() => currentRoundNumber.value < totalRounds.value)
+// 当前阶段在 STAGE_ORDER 中有前一个阶段时才能返回
+const canGoPrevStage = computed(() => {
+  const idx = STAGE_ORDER.indexOf(seasonStore.currentStage)
+  return idx > 0
+})
 
 // 阶段列表
 const stageList = computed(() => {
@@ -253,19 +266,21 @@ function handleCellClick(round: number, stage: StageType) {
     return
   }
 
-  if (status === 'completed') {
-    MessagePlugin.warning('已完成阶段不可切换')
-    return
-  }
-
-  // 只能切换到当前轮次的下一个阶段，或者下一轮的第一个阶段
   const currentStageIndex = STAGE_ORDER.indexOf(seasonStore.currentStage)
   const targetStageIndex = STAGE_ORDER.indexOf(stage)
 
+  // 同一轮次：允许前进到下一阶段，也允许回退到已完成的阶段
   if (round === currentRoundNumber.value) {
-    // 当前轮次，只能切换到下一个阶段
-    if (targetStageIndex !== currentStageIndex + 1) {
-      MessagePlugin.warning('只能切换到下一个阶段')
+    if (targetStageIndex === currentStageIndex + 1) {
+      // 前进到下一阶段
+    } else if (status === 'completed' && targetStageIndex < currentStageIndex) {
+      // 回退到已完成阶段
+      confirmDialogVisible.value = true
+      targetRound.value = round
+      targetStage.value = stage
+      return
+    } else {
+      MessagePlugin.warning('只能切换到相邻阶段')
       return
     }
   } else if (round === currentRoundNumber.value + 1) {
@@ -274,6 +289,16 @@ function handleCellClick(round: number, stage: StageType) {
       MessagePlugin.warning('下一轮次只能从第一个阶段开始')
       return
     }
+  } else if (round < currentRoundNumber.value) {
+    // 回退到已完成的轮次（任意阶段）
+    if (status === 'completed') {
+      confirmDialogVisible.value = true
+      targetRound.value = round
+      targetStage.value = stage
+      return
+    }
+    MessagePlugin.warning('仅可回退到已完成的轮次')
+    return
   } else {
     MessagePlugin.warning('只能切换到相邻的轮次')
     return
@@ -309,6 +334,25 @@ async function handleNextStage() {
   try {
     await seasonStore.nextStage()
     MessagePlugin.success('已进入下一阶段')
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '切换失败')
+  } finally {
+    stageChanging.value = false
+  }
+}
+
+// 返回上一阶段
+async function handlePrevStage() {
+  const idx = STAGE_ORDER.indexOf(seasonStore.currentStage)
+  if (idx <= 0) {
+    MessagePlugin.warning('已经是第一个阶段')
+    return
+  }
+  const prevStage = STAGE_ORDER[idx - 1]
+  stageChanging.value = true
+  try {
+    await seasonStore.setStage(currentRoundNumber.value, prevStage)
+    MessagePlugin.success(`已返回上一阶段：${STAGE_NAMES[prevStage]}`)
   } catch (e: any) {
     MessagePlugin.error(e.message || '切换失败')
   } finally {

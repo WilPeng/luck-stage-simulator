@@ -5,22 +5,23 @@
       <p class="subtitle">第{{ currentRound }}公演 · 抽取你的公演发挥值（-10 ~ 20）</p>
     </div>
 
-    <!-- 未开放 -->
-    <div v-if="!isReleased" class="locked-panel">
+    <!-- 已抽取结果（选手不可重新抽取，需管理员代改） -->
+    <div v-if="myValue !== null" class="result-card">
+      <div class="result-icon">✨</div>
+      <div class="result-title">你的发挥值</div>
+      <div class="result-value" :class="valueClass">{{ myValue }}</div>
+      <div class="result-text">{{ resultText }}</div>
+      <p class="result-tip">本轮发挥值已生成，进入公演后将用于结算</p>
+    </div>
+
+    <!-- 未开放且未生成 -->
+    <div v-else-if="!isReleased" class="locked-panel">
       <div class="locked-icon">🔒</div>
       <h3>发挥值抽取尚未开放</h3>
       <p>请等待管理员在并发行动中心开放"发挥值抽取"</p>
     </div>
 
-    <!-- 已抽取结果（选手不可重新抽取，需管理员代改） -->
-    <div v-else-if="myValue !== null" class="result-card">
-      <div class="result-icon">✨</div>
-      <div class="result-title">你的发挥值</div>
-      <div class="result-value" :class="valueClass">{{ myValue }}</div>
-      <div class="result-text">{{ resultText }}</div>
-    </div>
-
-    <!-- 抽取面板 -->
+    <!-- 抽取面板（未生成且已开放） -->
     <div v-else class="draw-panel">
       <div class="mode-tabs">
         <span class="mode-label">{{ modeLabel }}</span>
@@ -41,27 +42,27 @@
         <p class="hint">纯随机抽取，结果完全看运气</p>
       </div>
 
-      <!-- 指针模式：横向长条指针快速左右移动（中心最高20，两端-10） -->
+      <!-- 指针模式：完整数字刻度（-10~20）指针快速摆动 -->
       <div v-else-if="mode === 'pointer'" class="pointer-mode">
-        <div class="pointer-track-wrap">
-          <!-- 刻度标签 -->
-          <div class="track-labels">
-            <span class="track-label end">-10</span>
-            <span class="track-label mid">20</span>
-            <span class="track-label end">-10</span>
-          </div>
-          <!-- 长条轨道 -->
-          <div class="pointer-track" @click="stopPointer">
-            <!-- 中轴与刻度线 -->
-            <div class="track-line"></div>
-            <div class="track-mid-marker"></div>
-            <!-- 指针 -->
-            <div class="track-pointer" :style="{ left: pointerPos + '%' }">
-              <div class="pointer-head"></div>
+        <div class="pointer-scale" @click="stopPointer">
+          <!-- 刻度 -->
+          <div class="pointer-scale-track">
+            <div
+              v-for="v in pointerValues"
+              :key="v"
+              class="pointer-tick"
+              :class="{ major: v % 5 === 0, active: displayValue === v }"
+            >
+              <span class="tick-line"></span>
+              <span class="tick-label">{{ v }}</span>
             </div>
           </div>
+          <!-- 指针 -->
+          <div class="pointer-cursor" :style="{ left: pointerPos + '%' }">
+            <div class="cursor-head"></div>
+            <div class="cursor-value">{{ displayValue }}</div>
+          </div>
         </div>
-        <div class="pointer-value" :class="pointerValueClass">{{ displayValue }}</div>
         <div class="pointer-tip" v-if="pointerRunning">指针快速移动中，点击轨道或按钮停止锁定结果！</div>
         <t-button
           v-if="!pointerRunning"
@@ -69,7 +70,7 @@
           size="large"
           @click="startPointer"
         >
-          开始移动
+          开始摆动
         </t-button>
         <t-button
           v-else
@@ -77,9 +78,9 @@
           size="large"
           @click="stopPointer"
         >
-          🛑 停止
+          🛑 停下
         </t-button>
-        <p class="hint">指针移动飞快，越靠近中心发挥值越高，在合适位置点击停止</p>
+        <p class="hint">指针在 -10 ~ 20 之间快速摆动，在合适数字出现时立刻停下</p>
       </div>
 
       <!-- 手速模式：限定时间内连击 -->
@@ -189,20 +190,15 @@ let pointerPos = 50             // 指针位置（0-100%，0=最左，100=最右
 let pointerDir = 1              // 指针移动方向（1=向右，-1=向左）
 let lastFrameTime = 0
 
-// 指针位置（0-100%）→ 发挥值：抛物线，中心(50%)最高20，两端(0/100%)最低-10
+// 指针刻度：-10 ~ 20 完整数字，均匀分布
+const pointerValues = Array.from({ length: 31 }, (_, i) => i - 10)
+
+// 指针位置（0-100%）→ 发挥值：线性映射，最左 -10，最右 20
 function posToValue(pos: number): number {
-  const ratio = pos / 100                        // 0 ~ 1
-  const centerDist = Math.abs(ratio - 0.5) * 2   // 0(中心) ~ 1(两端)
-  const value = 20 - 30 * centerDist * centerDist
+  const ratio = Math.max(0, Math.min(100, pos)) / 100   // 0 ~ 1
+  const value = -10 + ratio * 30
   return Math.max(-10, Math.min(20, Math.round(value)))
 }
-
-const pointerValueClass = computed(() => {
-  const v = displayValue.value
-  if (v >= 10) return 'high'
-  if (v >= 0) return 'good'
-  return 'low'
-})
 
 // ===== 手速模式 =====
 const SPEED_DURATION = 10
@@ -291,7 +287,8 @@ function startPointer() {
   lastFrameTime = performance.now()
   displayValue.value = posToValue(50)
 
-  const speed = 400            // 百分比/秒（非常快：0→100% 仅 0.25 秒）
+  // 指针速度：快慢交替，反弹时随机变化，让停下时机更难预测（更灵活）
+  let speed = 300            // 初始百分比/秒
   const step = (now: number) => {
     const dt = (now - lastFrameTime) / 1000
     lastFrameTime = now
@@ -299,9 +296,11 @@ function startPointer() {
     if (pointerPos >= 100) {
       pointerPos = 100
       pointerDir = -1
+      speed = 200 + Math.random() * 250       // 反弹后随机 200~450
     } else if (pointerPos <= 0) {
       pointerPos = 0
       pointerDir = 1
+      speed = 200 + Math.random() * 250
     }
     displayValue.value = posToValue(pointerPos)
     if (pointerRunning.value) {
@@ -311,7 +310,7 @@ function startPointer() {
   pointerFrame = requestAnimationFrame(step)
 }
 
-// 停止指针：锁定当前位置（离中心距离）对应的发挥值并保存
+// 停止指针：锁定当前位置对应的发挥值并保存
 function stopPointer() {
   if (!pointerRunning.value) return
   pointerRunning.value = false
@@ -400,14 +399,18 @@ async function finishDraw(value: number) {
   drawing.value = false
   pointerRunning.value = false
   if (pointerFrame) cancelAnimationFrame(pointerFrame)
-  myValue.value = value
+  if (speedTimer) window.clearInterval(speedTimer)
+  if (reflexTimer) window.clearTimeout(reflexTimer)
+  speedRunning.value = false
   try {
     await savePerformancePlayerStatus(`round-${currentRound.value}`, [
       { playerId: authStore.currentUser?.id || '', performanceValue: value }
     ])
-    MessagePlugin.success(`已保存发挥值 ${value}`)
+    // 保存成功后才锁定发挥值（一轮只能抽一次）
+    myValue.value = value
+    MessagePlugin.success(`已保存发挥值 ${value}，本轮不可重复抽取`)
   } catch (e: any) {
-    MessagePlugin.error(e.message || '保存失败')
+    MessagePlugin.error(e.message || '保存失败，请重试')
   }
 }
 
@@ -421,7 +424,16 @@ onBeforeUnmount(() => {
 onMounted(async () => {
   try {
     const roundId = `round-${currentRound.value}`
-    // 读取释放状态与抽取方式（由管理员端设定）
+    // 1. 先请求本轮是否已生成发挥值
+    const status = await getPlayerPerformanceStatus(roundId).catch(() => null)
+    const me = status?.players?.find(p => p.playerId === authStore.currentUser?.id)
+    if (me?.generated && me.performanceValue !== null) {
+      // 已生成：只显示发挥值，不再显示抽取界面
+      myValue.value = me.performanceValue
+      return
+    }
+
+    // 2. 未生成：读取释放状态与抽取方式（由管理员端设定），判断是否显示抽取界面
     const [release, roundStatus] = await Promise.all([
       getConcurrentReleaseStatus(roundId).catch(() => null),
       getPerformanceRoundStatus(roundId).catch(() => null)
@@ -430,12 +442,6 @@ onMounted(async () => {
     const validModes = ['random', 'pointer', 'speed', 'strategy', 'reflex']
     if (roundStatus?.generationMode && validModes.includes(roundStatus.generationMode)) {
       mode.value = roundStatus.generationMode
-    }
-    if (!isReleased.value) return
-    const status = await getPlayerPerformanceStatus(roundId)
-    const me = status?.players?.find(p => p.playerId === authStore.currentUser?.id)
-    if (me?.generated && me.performanceValue !== null) {
-      myValue.value = me.performanceValue
     }
   } catch {
     // ignore
@@ -541,96 +547,117 @@ onMounted(async () => {
   gap: 16px;
   width: 100%;
 
-  .pointer-track-wrap {
+  // 刻度面板（-10 ~ 20 完整数字）
+  .pointer-scale {
+    position: relative;
     width: 100%;
-    max-width: 420px;
+    max-width: 620px;
+    margin: 8px auto 0;
+    padding: 30px 12px 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    cursor: pointer;
+    user-select: none;
   }
 
-  // 刻度标签（两端-10，中心20）
-  .track-labels {
+  .pointer-scale-track {
     display: flex;
     justify-content: space-between;
-    padding: 0 4px;
-    margin-bottom: 6px;
+    align-items: flex-end;
+    height: 42px;
+    position: relative;
+  }
 
-    .track-label {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text-secondary);
+  .pointer-tick {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
 
-      &.mid {
-        color: #0052d9;
-        font-size: 15px;
+    .tick-line {
+      width: 1px;
+      height: 8px;
+      background: var(--text-muted);
+      opacity: 0.5;
+      transition: all 0.08s;
+    }
+
+    .tick-label {
+      font-size: 9px;
+      color: var(--text-tertiary);
+      margin-top: 4px;
+      white-space: nowrap;
+      transition: all 0.08s;
+    }
+
+    &.major {
+      .tick-line {
+        width: 2px;
+        height: 14px;
+        background: var(--text-secondary);
+        opacity: 0.8;
+      }
+
+      .tick-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+    }
+
+    &.active {
+      .tick-line {
+        width: 3px;
+        height: 18px;
+        background: #ffd700;
+        opacity: 1;
+      }
+
+      .tick-label {
+        font-size: 13px;
+        font-weight: 800;
+        color: #ffd700;
+        transform: scale(1.25);
       }
     }
   }
 
-  // 长条轨道
-  .pointer-track {
-    position: relative;
-    width: 100%;
-    height: 56px;
-    background: linear-gradient(to right, #ff6b6b 0%, #f39c12 25%, #2ba471 50%, #f39c12 75%, #ff6b6b 100%);
-    border-radius: 12px;
-    border: 2px solid var(--border-color);
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.15);
-    cursor: pointer;
-    overflow: hidden;
-    user-select: none;
-  }
-
-  .track-line {
+  // 指针（金色）
+  .pointer-cursor {
     position: absolute;
-    top: 50%;
+    top: 0;
     left: 0;
-    right: 0;
-    height: 2px;
-    background: rgba(255, 255, 255, 0.4);
-    transform: translateY(-50%);
-  }
-
-  .track-mid-marker {
-    position: absolute;
-    top: 0;
-    left: 50%;
-    width: 2px;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.7);
     transform: translateX(-50%);
-  }
-
-  // 指针（在轨道上左右移动）
-  .track-pointer {
-    position: absolute;
-    top: 0;
-    width: 0;
-    height: 100%;
-    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: left 0.02s linear;
     z-index: 2;
-    transition: none;
+    pointer-events: none;
 
-    .pointer-head {
-      position: absolute;
-      top: -4px;
-      left: -8px;
-      width: 16px;
-      height: 64px;
-      background: linear-gradient(to bottom, #e74c3c, #ff6b6b);
-      border: 2px solid #fff;
-      border-radius: 6px;
-      box-shadow: 0 0 8px rgba(231, 76, 60, 0.7);
+    .cursor-head {
+      width: 0;
+      height: 0;
+      border-left: 10px solid transparent;
+      border-right: 10px solid transparent;
+      border-top: 14px solid #ffd700;
+      filter: drop-shadow(0 2px 4px rgba(255, 215, 0, 0.4));
     }
-  }
 
-  .pointer-value {
-    font-size: 48px;
-    font-weight: 800;
-    min-width: 80px;
-    text-align: center;
-
-    &.high { color: #2ba471; }
-    &.good { color: #0052d9; }
-    &.low { color: #e74c3c; }
+    .cursor-value {
+      margin-top: 2px;
+      padding: 2px 10px;
+      background: rgba(255, 215, 0, 0.15);
+      border: 1px solid rgba(255, 215, 0, 0.3);
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #ffd700;
+      min-width: 32px;
+      text-align: center;
+    }
   }
 
   .pointer-tip {
@@ -850,6 +877,12 @@ onMounted(async () => {
     font-size: 14px;
     color: var(--text-primary);
     margin-bottom: 8px;
+  }
+
+  .result-tip {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin: 0;
   }
 }
 </style>

@@ -2,7 +2,7 @@
   <div class="player-concurrent">
     <div class="page-header">
       <h1>⚡ 并发行动中心</h1>
-      <p class="subtitle">第{{ currentRound }}公演 · 组队、选歌、训练可同时进行</p>
+      <p class="subtitle">第{{ currentRound }}公演 · 组队、选歌、训练、抽取发挥值可同时进行</p>
     </div>
 
     <div class="actions-grid">
@@ -43,7 +43,7 @@
       >
         <span class="action-icon">🎲</span>
         <span class="action-title">抽取发挥值</span>
-        <span class="action-desc">{{ isPerformanceReleased ? '提前抽取公演发挥值' : '管理员尚未开放（未开放）' }}</span>
+        <span class="action-desc">{{ isPerformanceReleased ? '每位选手各自抽取公演发挥值' : '管理员尚未开放（未开放）' }}</span>
         <span class="action-arrow">→</span>
       </router-link>
     </div>
@@ -100,16 +100,16 @@ const hasSong = computed(() => {
   return songStore.teamSongs.some(ts => ts.teamId === myTeam.value!.id)
 })
 const trainingCompleted = computed(() => {
-  // 简单判断：训练次数达到要求，这里从 authStore 当前用户读取
+  // 训练：只要训练过 1 次即视为已参与训练环节（与后端并发统计一致）
   const user = authStore.currentUser
   if (!user) return false
-  const drawsPerPlayer = 3 // 默认值，实际可从赛季配置读取
-  return (user.trainingCount || 0) >= drawsPerPlayer
+  return (user.trainingCount || 0) > 0
 })
 const perfValueDrawn = ref(false)
 const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
 const isPerformanceReleased = computed(() => !!releaseStatus.value?.performanceReleased)
 let releaseTimer: number | undefined
+let progressTimer: number | undefined
 
 onMounted(() => {
   teamStore.fetchTeams(String(currentRound.value))
@@ -117,10 +117,13 @@ onMounted(() => {
   checkPerfValueDrawn()
   loadReleaseStatus()
   releaseTimer = window.setInterval(loadReleaseStatus, 8000)
+  // 轮询刷新发挥值状态：抽取后回到本页能自动更新
+  progressTimer = window.setInterval(checkPerfValueDrawn, 8000)
 })
 
 onBeforeUnmount(() => {
   if (releaseTimer) window.clearInterval(releaseTimer)
+  if (progressTimer) window.clearInterval(progressTimer)
 })
 
 async function loadReleaseStatus() {

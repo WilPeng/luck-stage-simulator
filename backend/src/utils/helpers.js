@@ -53,7 +53,7 @@ const STAGE_NAME = {
 }
 
 // 并发阶段内包含的子行动（用于前端页面兼容与完成状态推断）
-const CONCURRENT_ACTIONS = ['teaming', 'song_select', 'training']
+const CONCURRENT_ACTIONS = ['teaming', 'song_select', 'training', 'performance_draw']
 
 // ===== 状态计算 =====
 /**

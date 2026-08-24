@@ -26,6 +26,7 @@
         <div class="queue-list">
           <div v-for="(entry, idx) in dangerStatus.queue" :key="entry.playerId" class="queue-item">
             <span class="queue-order">{{ idx + 1 }}</span>
+            <span class="queue-color-dot" :style="{ background: playerColor(entry.playerId) }"></span>
             <span class="queue-name">{{ entry.playerName }}</span>
             <span class="queue-team">{{ entry.teamName || '未组队' }}</span>
             <span class="queue-votes">
@@ -60,6 +61,7 @@
           :class="{ selected: selectedIds.includes(player.playerId) }"
           @click="toggleSelect(player.playerId)"
         >
+          <div class="player-color-dot" :style="{ background: playerColor(player.playerId) }"></div>
           <div class="player-rank">
             <span class="rank-num">{{ player.rank }}</span>
             <span class="rank-label">喜爱度排名</span>
@@ -118,6 +120,17 @@ const rankedPlayers = computed(() => {
     rank: r.rank ?? idx + 1
   }))
 })
+
+// 危险区选手固定色板（与选手端/后端一致）
+const COLOR_PALETTE = ['#e74c3c', '#f39c12', '#27ae60', '#2980b9', '#8e44ad', '#16a085', '#c0392b', '#d35400', '#2c3e50', '#7f8c8d']
+
+// 为选手取颜色：优先后端分配的固定颜色（确认后），否则按喜爱度排名稳定分配
+function playerColor(playerId: string): string {
+  const colors = store.dangerStatus?.colors
+  if (colors && colors[playerId]) return colors[playerId]
+  const idx = rankedPlayers.value.findIndex(p => p.playerId === playerId)
+  return COLOR_PALETTE[(idx >= 0 ? idx : 0) % COLOR_PALETTE.length]
+}
 
 function toggleSelect(playerId: string) {
   const idx = selectedIds.value.indexOf(playerId)
@@ -240,6 +253,15 @@ onMounted(loadData)
       flex-shrink: 0;
     }
 
+    .queue-color-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      border: 2px solid #fff;
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+    }
+
     .queue-name {
       font-size: 14px;
       font-weight: 600;
@@ -318,6 +340,15 @@ onMounted(loadData)
   &.selected {
     background: rgba(255, 107, 107, 0.08);
     border-color: #ff6b6b;
+  }
+
+  .player-color-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 2px solid #fff;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
   }
 }
 

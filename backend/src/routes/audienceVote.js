@@ -559,6 +559,55 @@ router.get('/team-matrix', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// ===== GET /api/audience-vote/player-team-matrix - 选手端查看某支队伍的评审投票矩阵（不返回总数）=====
+router.get('/player-team-matrix', auth, async (req, res) => {
+  try {
+    const round = await resolveRoundFromQuery(req)
+    if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
+
+    const { teamId } = req.query
+    if (!teamId) return res.status(400).json({ success: false, error: '缺少 teamId', code: 'MISSING_TEAM_ID' })
+
+    const [members, teamVotes] = await Promise.all([
+      AudienceMember.find({ roundId: round.id }),
+      AudienceTeamVote.find({ roundId: round.id, teamId })
+    ])
+
+    const memberMap = {}
+    for (const m of members) memberMap[m.seatNumber] = m
+
+    const voteMap = {}
+    for (const tv of teamVotes) voteMap[tv.seatNumber] = tv.votedYes
+
+    let yesCount = 0
+    for (const tv of teamVotes) if (tv.votedYes) yesCount++
+
+    const seats = []
+    for (let i = 1; i <= AUDIENCE_COUNT; i++) {
+      const m = memberMap[i]
+      seats.push({
+        seatNumber: i,
+        votedYes: voteMap[i] === true,
+        name: m ? m.name : null,
+        gender: m ? m.gender : null,
+        age: m ? m.age : null,
+        occupation: m ? m.occupation : null
+      })
+    }
+
+    res.json({
+      success: true,
+      totalSeats: AUDIENCE_COUNT,
+      yesCount,
+      teamId,
+      seats
+    })
+  } catch (e) {
+    console.error('Get player team matrix error:', e)
+    res.status(500).json({ success: false, error: '获取评审投票矩阵失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // ===== GET /api/audience-vote/player-seat/:seatNumber - 选手端查看某个评审投票详情 =====
 router.get('/player-seat/:seatNumber', auth, async (req, res) => {
   try {
