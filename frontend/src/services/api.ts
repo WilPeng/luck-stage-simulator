@@ -1477,6 +1477,8 @@ export async function getTrainingRecords(params?: TrainingRecordQuery): Promise<
   const query = new URLSearchParams()
   if (params?.userId) query.append('userId', params.userId)
   if (params?.round !== undefined) query.append('roundId', `round-${params.round}`)
+  if (params?.startDate) query.append('startTime', params.startDate)
+  if (params?.endDate) query.append('endTime', params.endDate)
   // 传一个足够大的 pageSize 以获取全部记录（后端默认 limit=10）
   query.append('pageSize', '999')
   if (params?.page !== undefined) query.append('page', String(params.page))
@@ -1492,6 +1494,25 @@ export async function getTrainingRecords(params?: TrainingRecordQuery): Promise<
       return { list: filtered, total: filtered.length, page: 1, pageSize: filtered.length, totalPages: 1 }
     },
     'getTrainingRecords'
+  )
+}
+
+export async function deleteTrainingRecord(recordId: string): Promise<void> {
+  return safeCall(
+    () => doRequest<void>(`/training/records/${recordId}`, { method: 'DELETE' }),
+    async () => { throw new Error('Mock not supported for deleteTrainingRecord') },
+    'deleteTrainingRecord'
+  )
+}
+
+export async function batchDeleteTrainingRecords(ids: string[]): Promise<{ deletedCount: number }> {
+  return safeCall(
+    () => doRequest<{ deletedCount: number }>('/training/records/batch', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids })
+    }),
+    async () => { throw new Error('Mock not supported for batchDeleteTrainingRecords') },
+    'batchDeleteTrainingRecords'
   )
 }
 

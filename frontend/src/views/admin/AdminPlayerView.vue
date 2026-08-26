@@ -56,6 +56,14 @@
           <template #icon><span>📤</span></template>
           导入CSV
         </t-button>
+        <t-button variant="outline" theme="success" @click="triggerAvatarExport">
+          <template #icon><span>📦</span></template>
+          导出头像打包
+        </t-button>
+        <t-button variant="outline" theme="success" @click="triggerAvatarImport">
+          <template #icon><span>📥</span></template>
+          导入头像打包
+        </t-button>
         <t-button variant="outline" theme="danger" @click="handleClearNonAdmin">
           <template #icon><span>🗑️</span></template>
           清空所有玩家
@@ -66,6 +74,13 @@
           accept=".csv"
           style="display: none"
           @change="handleImportFile"
+        />
+        <input
+          ref="avatarExportInput"
+          type="file"
+          accept=".zip"
+          style="display: none"
+          @change="importAvatarsFromZip"
         />
       </div>
     </div>
@@ -316,6 +331,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive, h } from 'vue'
 import { MessagePlugin, DialogPlugin, Input, Checkbox } from 'tdesign-vue-next'
+import JSZip from 'jszip'
+import { saveAs } from 'file-saver'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { getAvatarUrl, uploadAvatar, deleteAvatar, batchCreateUsers, createUser, getUsers, clearNonAdminUsers } from '../../services/api'
@@ -353,6 +370,7 @@ const editFormData = reactive({
 
 const editFileInput = ref<HTMLInputElement | null>(null)
 const importFileInput = ref<HTMLInputElement | null>(null)
+const avatarExportInput = ref<HTMLInputElement | null>(null)
 const editAvatarUrl = computed(() => getAvatarUrl(editFormData.avatar))
 
 const formRules: Record<string, FormRule[]> = {
@@ -758,6 +776,166 @@ async function handleClearNonAdmin() {
       }
     }
   })
+}
+
+// ===== 头像批量导出/导入 =====
+
+async function exportAvatarsToZip() {
+  try {
+    const loading = MessagePlugin.loading('正在获取所有选手数据...')
+    const res = await getUsers({ pageSize: 10000 })
+    MessagePlugin.close(loading)
+    const allUsers = res.list
+    
+    const usersWithAvatar = allUsers.filter((u: any) => u.avatar)
+    if (usersWithAvatar.length === 0) {
+      MessagePlugin.warning('没有带头像的选手')
+      return
+    }
+
+    const zip = new JSZip()
+    let successCount = 0
+    let failCount = 0
+
+    for (const user of usersWithAvatar) {
+      try {
+        const avatarUrl = getAvatarUrl(user.avatar)
+        if (!avatarUrl) continue
+
+        const response = await fetch(avatarUrl)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const blob = await response.blob()
+        
+        const ext = user.avatar.split('.').pop() || 'jpg'
+        const fileName = `${user.loginCode}_${user.name}.${ext}`
+        zip.file(fileName, blob)
+        successCount++
+      } catch (e) {
+        failCount++
+        console.warn(`Failed to fetch avatar for ${user.name}:`, e)
+      }
+    }
+
+    if (successCount === 0) {
+      MessagePlugin.error('没有成功获取任何头像')
+      return
+    }
+
+    const loading2 = MessagePlugin.loading('正在生成 ZIP 文件...')
+    const content = await zip.generateAsync({ type: 'blob' })
+    MessagePlugin.close(loading2)
+
+    const dateStr = new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')
+    saveAs(content, `avatars_${dateStr}.zip`)
+    
+    MessagePlugin.success(`导出完成：成功 ${successCount} 个${failCount ? `，失败 ${failCount} 个` : ''}`)
+  } catch (err: any) {
+    MessagePlugin.error('导出失败: ' + (err.message || '未知错误'))
+  }
+}
+
+async function importAvatarsFromZip(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  if (!file.name.endsWith('.zip')) {
+    MessagePlugin.error('请上传 .zip 格式文件')
+    target.value = ''
+    return
+  }
+
+  try {
+    const loading = MessagePlugin.loading('正在读取 ZIP 文件...')
+    const zip = await JSZip.loadAsync(file)
+    MessagePlugin.close(loading)
+
+    const files = Object.keys(zip.files).filter(name => !zip.files[name].dir)
+    if (files.length === 0) {
+      MessagePlugin.warning('ZIP 文件为空')
+      target.value = ''
+      return
+    }
+
+    // 获取所有选手建立映射
+    const res = await getUsers({ pageSize: 10000 })
+    const allUsers = res.list
+    const userByLoginCode = new Map(allUsers.map((u: any) => [u.loginCode, u]))
+    const userById = new Map(allUsers.map((u: any) => [u.id, u]))
+
+    let successCount = 0
+    let failCount = 0
+    const errors: string[] = []
+
+    const loading2 = MessagePlugin.loading(`正在上传 ${files.length} 个头像...`)
+    for (const fileName of files) {
+      const zipEntry = zip.files[fileName]
+      if (!zipEntry || zipEntry.dir) continue
+
+      try {
+        // 从文件名解析 loginCode 或 userId
+        // 格式: loginCode_name.ext 或 userId.ext
+        const baseName = fileName.substring(0, fileName.lastIndexOf('.'))
+        let user: any = null
+
+        // 尝试按 loginCode 匹配（下划线前部分）
+        const loginCodeFromFile = baseName.split('_')[0]
+        if (userByLoginCode.has(loginCodeFromFile)) {
+          user = userByLoginCode.get(loginCodeFromFile)
+        } else if (userById.has(baseName)) {
+          user = userById.get(baseName)
+        } else {
+          // 尝试模糊匹配
+          const possibleUser = allUsers.find((u: any) => 
+            u.name === baseName || 
+            u.loginCode === baseName ||
+            baseName.includes(u.loginCode)
+          )
+          if (possibleUser) user = possibleUser
+        }
+
+        if (!user) {
+          errors.push(`${fileName}: 未找到匹配的选手`)
+          failCount++
+          continue
+        }
+
+        const blob = await zipEntry.async('blob')
+        const newFile = new File([blob], fileName, { type: blob.type || 'image/jpeg' })
+        
+        await uploadAvatar(user.id, newFile)
+        successCount++
+      } catch (e: any) {
+        failCount++
+        errors.push(`${fileName}: ${e.message || '上传失败'}`)
+      }
+      
+      if (successCount + failCount >= 10) {
+        loading2.update?.(`正在上传... (${successCount + failCount}/${files.length})`)
+      }
+    }
+    MessagePlugin.close(loading2)
+
+    await loadData()
+    
+    let msg = `导入完成：成功 ${successCount} 个${failCount ? `，失败 ${failCount} 个` : ''}`
+    if (failCount > 0) {
+      msg += '\n失败详情：' + errors.slice(0, 5).join('; ') + (errors.length > 5 ? '...' : '')
+    }
+    MessagePlugin[failCount > 0 ? 'warning' : 'success'](msg)
+  } catch (err: any) {
+    MessagePlugin.error('导入失败: ' + (err.message || '未知错误'))
+  } finally {
+    target.value = ''
+  }
+}
+
+function triggerAvatarExport() {
+  exportAvatarsToZip()
+}
+
+function triggerAvatarImport() {
+  avatarExportInput.value?.click()
 }
 
 onMounted(async () => {

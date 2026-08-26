@@ -701,10 +701,10 @@ router.delete('/clear-user-records', auth, requireAdmin, async (req, res) => {
   }
 })
 
-// ===== GET /api/training/records - 训练记录列表（分页） =====
+// ===== GET /api/training/records - 训练记录列表（分页，支持时间筛选） =====
 router.get('/records', auth, async (req, res) => {
   try {
-    const { roundId, playerId, userId, cardId, page = 1, pageSize = 10 } = req.query
+    const { roundId, playerId, userId, cardId, page = 1, pageSize = 10, startTime, endTime } = req.query
     const pid = playerId || userId
 
     if (!roundId) return res.status(400).json({ success: false, error: 'roundId 必填', code: 'MISSING_ROUND_ID' })
@@ -713,14 +713,20 @@ router.get('/records', auth, async (req, res) => {
     const rId = round.id
 
     // 兼容 roundId 查询：使用 DB UUID 和前端 roundId 两种格式
-    // 训练记录可能以 "round-1" 或 DB UUID 两种格式保存
     const orConditions = [{ roundId: rId }]
     if (rId !== roundId) {
       orConditions.push({ roundId: roundId })
     }
-    const filter = orConditions.length > 1 ? { $or: orConditions } : { roundId: rId }
-    if (pid) filter.playerId = pid
-    if (cardId) filter.cardId = cardId
+    const roundFilter = orConditions.length > 1 ? { $or: orConditions } : { roundId: rId }
+    const filter = { $and: [roundFilter] }
+    if (pid) filter.$and.push({ playerId: pid })
+    if (cardId) filter.$and.push({ cardId: cardId })
+    if (startTime || endTime) {
+      const timeFilter = {}
+      if (startTime) timeFilter.$gte = startTime
+      if (endTime) timeFilter.$lte = endTime
+      filter.$and.push({ createdAt: timeFilter })
+    }
 
     const allRecords = await TrainingRecord.find(filter)
     allRecords.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
@@ -891,13 +897,73 @@ router.delete('/records/user/:userId', auth, requireAdmin, async (req, res) => {
   }
 })
 
-// ===== DELETE /api/training/records/:id =====
+// ===== DELETE /api/training/records/:id - 单条记录撤销（回滚属性） =====
 router.delete('/records/:id', auth, requireAdmin, async (req, res) => {
   try {
+    const record = await TrainingRecord.findOne({ id: req.params.id })
+    if (!record) {
+      return res.status(404).json({ success: false, error: '记录不存在', code: 'NOT_FOUND' })
+    }
+
+    const user = await User.findOne({ id: record.playerId })
+    if (user && user.attributes) {
+      const delta = record.attrDelta || record.effect || {}
+      user.attributes.vocal = (user.attributes.vocal || 0) - (delta.vocal || 0)
+      user.attributes.dance = (user.attributes.dance || 0) - (delta.dance || 0)
+      user.attributes.charm = (user.attributes.charm || 0) - (delta.charm || 0)
+      await user.save()
+    }
+
     await TrainingRecord.deleteOne({ id: req.params.id })
+    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TRAINING_CONFIG, 'trainingRecord', record.playerId, `撤销训练记录 ${record.cardName}`)
     res.json({ success: true })
   } catch (e) {
-    res.status(500).json({ success: false, error: '删除失败', code: 'SERVER_ERROR' })
+    console.error(e)
+    res.status(500).json({ success: false, error: '撤销失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== DELETE /api/training/records/batch - 批量撤销训练记录 =====
+router.delete('/records/batch', auth, requireAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: '请提供要撤销的记录 ID 列表', code: 'INVALID_PARAMS' })
+    }
+
+    const records = await TrainingRecord.find({ id: { $in: ids } })
+    if (records.length === 0) {
+      return res.json({ success: true, data: { deletedCount: 0 } })
+    }
+
+    // 按用户分组计算总属性变化
+    const userDeltas = {}
+    for (const r of records) {
+      const pid = r.playerId
+      if (!userDeltas[pid]) userDeltas[pid] = { vocal: 0, dance: 0, charm: 0 }
+      const delta = r.attrDelta || r.effect || {}
+      userDeltas[pid].vocal += delta.vocal || 0
+      userDeltas[pid].dance += delta.dance || 0
+      userDeltas[pid].charm += delta.charm || 0
+    }
+
+    // 回滚用户属性
+    for (const [userId, delta] of Object.entries(userDeltas)) {
+      const user = await User.findOne({ id: userId })
+      if (user && user.attributes) {
+        user.attributes.vocal = (user.attributes.vocal || 0) - delta.vocal
+        user.attributes.dance = (user.attributes.dance || 0) - delta.dance
+        user.attributes.charm = (user.attributes.charm || 0) - delta.charm
+        await user.save()
+      }
+    }
+
+    const result = await TrainingRecord.deleteMany({ id: { $in: ids } })
+    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TRAINING_CONFIG, 'trainingRecord', 'batch', `批量撤销训练记录 ${records.length} 条`)
+    res.json({ success: true, data: { deletedCount: result.deletedCount || records.length } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '批量撤销失败', code: 'SERVER_ERROR' })
   }
 })
 

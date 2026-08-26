@@ -134,6 +134,138 @@
         </div>
       </div>
 
+      <!-- 训练日志 -->
+      <div class="training-logs-section">
+        <div class="section-header">
+          <h2>训练日志</h2>
+          <t-space>
+            <t-date-picker
+              v-model="logsStartDate"
+              mode="date"
+              placeholder="开始日期"
+              size="small"
+              value-format="YYYY-MM-DD"
+              style="width: 160px"
+            />
+            <span>至</span>
+            <t-date-picker
+              v-model="logsEndDate"
+              mode="date"
+              placeholder="结束日期"
+              size="small"
+              value-format="YYYY-MM-DD"
+              style="width: 160px"
+            />
+            <t-button theme="primary" size="small" :loading="logsLoading" @click="fetchTrainingLogs">
+              查询
+            </t-button>
+            <t-button variant="outline" size="small" @click="clearLogsFilter">
+              重置
+            </t-button>
+            <t-tag theme="primary" variant="light">
+              共 {{ logsTotal }} 条记录
+            </t-tag>
+          </t-space>
+        </div>
+
+        <div v-if="logsLoading" class="logs-loading">
+          <t-loading text="加载中..." size="small" />
+        </div>
+
+        <div v-else-if="trainingLogs.length === 0" class="empty-logs">
+          <t-empty description="暂无训练日志" />
+        </div>
+
+        <div v-else>
+          <div class="logs-batch-actions" v-if="logsSelectedIds.length > 0">
+            <t-space>
+              <span class="selected-count">已选 {{ logsSelectedIds.length }} 条</span>
+              <t-button theme="danger" size="small" :loading="deletingLogIds.length > 0" @click="handleBatchDeleteLogs">
+                批量撤销
+              </t-button>
+              <t-button variant="text" size="small" @click="clearLogsSelection">
+                取消全选
+              </t-button>
+            </t-space>
+          </div>
+
+          <div class="training-logs-table">
+            <div class="table-header">
+              <span class="col-select" style="width: 50px;"></span>
+              <span class="col-time" style="width: 160px;">时间</span>
+              <span class="col-player" style="width: 140px;">选手</span>
+              <span class="col-card">卡牌</span>
+              <span class="col-effect" style="width: 200px;">效果</span>
+              <span class="col-attrs" style="width: 200px;">训练后属性</span>
+              <span class="col-actions" style="width: 100px;">操作</span>
+            </div>
+            <div
+              v-for="record in trainingLogs"
+              :key="record.id"
+              class="table-row"
+            >
+              <div class="col-select">
+                <t-checkbox
+                  :checked="logsSelectedIds.includes(record.id)"
+                  :indeterminate="logsSelectedIds.length > 0 && logsSelectedIds.length < trainingLogs.length"
+                  @change="(checked) => toggleLogSelection(record.id, checked)"
+                />
+              </div>
+              <div class="col-time">{{ formatDateTime(record.createdAt) }}</div>
+              <div class="col-player">
+                <span class="player-name">{{ record.userName }}</span>
+              </div>
+              <div class="col-card">
+                <t-tag theme="primary" variant="light" size="small">
+                  {{ record.cardName }}
+                </t-tag>
+                <t-tag :theme="getTypeTheme(record.cardType)" variant="outline" size="small">
+                  {{ getTypeText(record.cardType) }}
+                </t-tag>
+              </div>
+              <div class="col-effect">
+                <span class="effect-text">{{ getRecordTooltip(record) }}</span>
+              </div>
+              <div class="col-attrs">
+                <t-tag theme="danger" variant="light" size="small">
+                  声乐 {{ record.attributesAfter?.vocal || 0 }}
+                </t-tag>
+                <t-tag theme="success" variant="light" size="small">
+                  舞蹈 {{ record.attributesAfter?.dance || 0 }}
+                </t-tag>
+                <t-tag theme="primary" variant="light" size="small">
+                  魅力 {{ record.attributesAfter?.charm || 0 }}
+                </t-tag>
+              </div>
+              <div class="col-actions">
+                <t-button
+                  theme="danger"
+                  variant="outline"
+                  size="small"
+                  :loading="deletingLogIds.includes(record.id)"
+                  @click="handleDeleteLog(record)"
+                >
+                  撤销
+                </t-button>
+              </div>
+            </div>
+          </div>
+
+          <div class="pagination-wrapper">
+            <t-pagination
+              v-model="logsPage"
+              v-model:pageSize="logsPageSize"
+              :total="logsTotal"
+              :pageSizeOptions="[10, 20, 50]"
+              size="small"
+              showJumper
+              @change="onLogsPageChange"
+              @page-size-change="onLogsPageSizeChange"
+            />
+          </div>
+        </div>
+      </div>
+
       <!-- 卡牌列表 -->
       <div class="cards-section">
         <div class="section-header">
@@ -378,7 +510,7 @@ import { useRoute } from 'vue-router'
 import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
 import { useTrainingCardStore } from '../../stores/trainingCardStore'
 import { useSeasonStore } from '../../stores/seasonStore'
-import { getUsers, doRequest } from '../../services/api'
+import { getUsers, doRequest, deleteTrainingRecord, batchDeleteTrainingRecords } from '../../services/api'
 import type { TrainingCard, AutoCompleteResult, TrainingRecord, TrainingRecordListResponse } from '../../types/training'
 import type { User } from '../../types/user'
 
@@ -399,6 +531,17 @@ const recordsLoading = ref(false)
 const trainingRecords = ref<TrainingRecord[]>([])
 const players = ref<User[]>([])
 const playersLoading = ref(false)
+
+// 训练日志状态
+const logsLoading = ref(false)
+const trainingLogs = ref<TrainingRecord[]>([])
+const logsTotal = ref(0)
+const logsPage = ref(1)
+const logsPageSize = ref(20)
+const logsStartDate = ref('')
+const logsEndDate = ref('')
+const logsSelectedIds = ref<string[]>([])
+const deletingLogIds = ref<string[]>([])
 
 // 期望训练次数（页面可临时调整，初始化时从配置读取）
 const expectedTrainingCount = ref(3)
@@ -818,6 +961,131 @@ async function handleAutoCompleteAll(): Promise<void> {
         autoCompleting.value = false
       }
     }
+  })
+}
+
+// ===== 训练日志功能 =====
+
+async function fetchTrainingLogs(): Promise<void> {
+  logsLoading.value = true
+  try {
+    const params = {
+      round: currentRound.value,
+      page: logsPage.value,
+      pageSize: logsPageSize.value,
+      startDate: logsStartDate.value,
+      endDate: logsEndDate.value
+    }
+    const res = await getTrainingRecords(params)
+    trainingLogs.value = res.list
+    logsTotal.value = res.total
+    logsSelectedIds.value = []
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '获取训练日志失败')
+    trainingLogs.value = []
+    logsTotal.value = 0
+  } finally {
+    logsLoading.value = false
+  }
+}
+
+function clearLogsFilter(): void {
+  logsStartDate.value = ''
+  logsEndDate.value = ''
+  logsPage.value = 1
+  fetchTrainingLogs()
+}
+
+function onLogsPageChange(pageInfo: { current: number }): void {
+  logsPage.value = pageInfo.current
+  fetchTrainingLogs()
+}
+
+function onLogsPageSizeChange(pageSize: number): void {
+  logsPageSize.value = pageSize
+  logsPage.value = 1
+  fetchTrainingLogs()
+}
+
+function toggleLogSelection(recordId: string, checked: boolean): void {
+  if (checked) {
+    if (!logsSelectedIds.value.includes(recordId)) {
+      logsSelectedIds.value.push(recordId)
+    }
+  } else {
+    const idx = logsSelectedIds.value.indexOf(recordId)
+    if (idx >= 0) logsSelectedIds.value.splice(idx, 1)
+  }
+}
+
+function clearLogsSelection(): void {
+  logsSelectedIds.value = []
+}
+
+async function handleDeleteLog(record: TrainingRecord): Promise<void> {
+  const confirm = DialogPlugin.confirm({
+    header: '确认撤销',
+    body: `确定要撤销「${record.userName}」的训练记录「${record.cardName}」吗？这将回滚该次训练带来的属性变化。`,
+    confirmBtn: '确定撤销',
+    cancelBtn: '取消',
+    theme: 'danger',
+    onConfirm: async () => {
+      confirm.destroy()
+      deletingLogIds.value.push(record.id)
+      try {
+        await deleteTrainingRecord(record.id)
+        // 刷新训练记录和玩家属性
+        await fetchTrainingRecords()
+        await fetchPlayers()
+        await fetchTrainingLogs()
+        MessagePlugin.success('撤销成功，已回滚属性')
+      } catch (e: any) {
+        MessagePlugin.error(e.message || '撤销失败')
+      } finally {
+        const idx = deletingLogIds.value.indexOf(record.id)
+        if (idx >= 0) deletingLogIds.value.splice(idx, 1)
+      }
+    }
+  })
+}
+
+async function handleBatchDeleteLogs(): Promise<void> {
+  if (logsSelectedIds.value.length === 0) return
+
+  const confirm = DialogPlugin.confirm({
+    header: '确认批量撤销',
+    body: `确定要批量撤销选中的 ${logsSelectedIds.value.length} 条训练记录吗？这将回滚这些训练带来的属性变化。`,
+    confirmBtn: '确定批量撤销',
+    cancelBtn: '取消',
+    theme: 'danger',
+    onConfirm: async () => {
+      confirm.destroy()
+      deletingLogIds.value = [...logsSelectedIds.value]
+      try {
+        const result = await batchDeleteTrainingRecords(logsSelectedIds.value)
+        await fetchTrainingRecords()
+        await fetchPlayers()
+        await fetchTrainingLogs()
+        MessagePlugin.success(`批量撤销成功，共 ${result.deletedCount} 条记录，已回滚属性`)
+      } catch (e: any) {
+        MessagePlugin.error(e.message || '批量撤销失败')
+      } finally {
+        deletingLogIds.value = []
+        logsSelectedIds.value = []
+      }
+    }
+  })
+}
+
+function formatDateTime(isoString?: string): string {
+  if (!isoString) return '-'
+  const date = new Date(isoString)
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
   })
 }
 
@@ -1329,5 +1597,136 @@ onMounted(async () => {
     font-size: 12px;
     color: var(--text-tertiary);
   }
+}
+
+// ===== 训练日志区 =====
+.training-logs-section {
+  margin-bottom: 16px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.logs-loading,
+.empty-logs {
+  padding: 32px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.logs-batch-actions {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: #fff3f0;
+  border-radius: 8px;
+  border: 1px solid #ffccc7;
+}
+
+.selected-count {
+  font-size: 13px;
+  color: #cf1322;
+  font-weight: 500;
+}
+
+.training-logs-table {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+
+  .table-header {
+    display: grid;
+    grid-template-columns: 50px 160px 140px 1fr 200px 200px 100px;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-primary);
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+
+    @media (max-width: 1024px) {
+      display: none;
+    }
+  }
+
+  .table-row {
+    display: grid;
+    grid-template-columns: 50px 160px 140px 1fr 200px 200px 100px;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    align-items: center;
+    transition: background 0.2s ease;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &:hover {
+      background: var(--table-header-bg);
+    }
+
+    @media (max-width: 1024px) {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+  }
+
+  .col-select {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .col-time {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .col-player {
+    .player-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+  }
+
+  .col-card {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .col-effect {
+    .effect-text {
+      font-size: 12px;
+      color: var(--text-secondary);
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .col-attrs {
+    .attr-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+  }
+
+  .col-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+}
+
+.pagination-wrapper {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>
