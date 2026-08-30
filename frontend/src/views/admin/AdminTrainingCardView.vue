@@ -47,8 +47,33 @@
         </div>
 
         <div v-else>
+          <!-- 批量排练操作区 -->
+          <div class="batch-train-bar" v-if="selectedUserCount > 0 || paginatedUsers.length > 0">
+            <span class="batch-selected">已选 <strong>{{ selectedUserCount }}</strong> 位选手</span>
+            <t-button
+              theme="success"
+              size="small"
+              :loading="batchTrainingUserId === 'batch'"
+              :disabled="selectedUserCount === 0"
+              @click="handleBatchRandomTrain"
+            >
+              🎲 随机排练所选（每人 1~{{ expectedTrainingCount }} 次）
+            </t-button>
+            <t-button variant="text" size="small" @click="toggleUserSelectAll(selectedUserCount === 0)">
+              {{ selectedUserCount === paginatedUsers.length && paginatedUsers.length > 0 ? '取消全选' : '全选本页' }}
+            </t-button>
+            <t-button variant="text" size="small" @click="clearUserSelection">清空选择</t-button>
+          </div>
+
           <div class="training-users-table">
             <div class="table-header">
+              <span class="col-select" style="width: 44px">
+                <t-checkbox
+                  :checked="selectedUserCount > 0 && selectedUserCount === paginatedUsers.length"
+                  :indeterminate="selectedUserCount > 0 && selectedUserCount < paginatedUsers.length"
+                  @change="(checked: any) => toggleUserSelectAll(checked)"
+                />
+              </span>
               <span class="col-player">选手</span>
               <span class="col-records">本轮训练卡牌</span>
               <span class="col-attributes">训练后数值</span>
@@ -58,10 +83,23 @@
               v-for="user in paginatedUsers"
               :key="user.userId"
               class="table-row"
-              :class="{ completed: user.recordCount >= expectedTrainingCount }"
+              :class="{
+                completed: user.recordCount >= expectedTrainingCount,
+                eliminated: user.eliminated,
+                selected: selectedUserIds.has(user.userId)
+              }"
             >
+              <div class="col-select">
+                <t-checkbox
+                  :checked="selectedUserIds.has(user.userId)"
+                  @change="(checked: any) => toggleUserSelect(user.userId, checked)"
+                />
+              </div>
               <div class="col-player">
-                <span class="player-name">{{ user.userName || user.userId }}</span>
+                <span class="player-name">
+                  {{ user.userName || user.userId }}
+                  <t-tag v-if="user.eliminated" theme="danger" variant="light" size="small" class="eliminated-tag">已淘汰</t-tag>
+                </span>
                 <t-tag
                   :theme="user.recordCount >= expectedTrainingCount ? 'success' : 'warning'"
                   variant="light"
@@ -267,7 +305,6 @@
               <div class="col-select">
                 <t-checkbox
                   :checked="logsSelectedIds.includes(record.id)"
-                  :indeterminate="logsSelectedIds.length > 0 && logsSelectedIds.length < trainingLogs.length"
                   @change="(checked) => toggleLogSelection(record.id, checked)"
                 />
               </div>
@@ -629,7 +666,7 @@ const trainingUsers = computed(() => {
   const playerMap = new Map<string, User>()
   players.value.forEach(player => playerMap.set(player.id, player))
 
-  const map = new Map<string, { userId: string; userName: string; records: TrainingRecord[]; recordCount: number; attributes: { vocal: number; dance: number; charm: number } }>()
+  const map = new Map<string, { userId: string; userName: string; records: TrainingRecord[]; recordCount: number; attributes: { vocal: number; dance: number; charm: number }; status?: string; eliminated: boolean }>()
 
   // 先插入所有选手
   players.value.forEach(player => {
@@ -638,7 +675,9 @@ const trainingUsers = computed(() => {
       userName: player.name || player.id,
       records: [],
       recordCount: 0,
-      attributes: player.attributes || { vocal: 0, dance: 0, charm: 0 }
+      attributes: player.attributes || { vocal: 0, dance: 0, charm: 0 },
+      status: player.status || 'active',
+      eliminated: player.status === 'eliminated'
     })
   })
 
@@ -650,7 +689,9 @@ const trainingUsers = computed(() => {
         userId,
         userName: record.userName || userId,
         records: [],
-        recordCount: 0
+        recordCount: 0,
+        status: 'active',
+        eliminated: false
       })
     }
     const user = map.get(userId)!
@@ -658,14 +699,71 @@ const trainingUsers = computed(() => {
     user.recordCount++
   })
 
-  // 已完成训练放前面，再按记录数降序
+  // 排序：已淘汰放最后；其余已完成训练放前面，再按记录数降序
   return Array.from(map.values()).sort((a, b) => {
+    if (a.eliminated !== b.eliminated) return a.eliminated ? 1 : -1
     const aCompleted = a.recordCount >= expectedTrainingCount.value ? 1 : 0
     const bCompleted = b.recordCount >= expectedTrainingCount.value ? 1 : 0
     if (bCompleted !== aCompleted) return bCompleted - aCompleted
     return b.recordCount - a.recordCount
   })
 })
+
+// 选手训练情况的多选状态
+const selectedUserIds = ref<Set<string>>(new Set())
+const batchTrainingUserId = ref<string | null>(null)
+
+const selectedUserCount = computed(() =>
+  paginatedUsers.value.filter(u => selectedUserIds.value.has(u.userId)).length
+)
+
+function toggleUserSelect(userId: string, checked: boolean) {
+  if (checked) selectedUserIds.value.add(userId)
+  else selectedUserIds.value.delete(userId)
+  selectedUserIds.value = new Set(selectedUserIds.value)
+}
+
+function toggleUserSelectAll(checked: boolean) {
+  if (checked) {
+    paginatedUsers.value.forEach(u => selectedUserIds.value.add(u.userId))
+  } else {
+    paginatedUsers.value.forEach(u => selectedUserIds.value.delete(u.userId))
+  }
+  selectedUserIds.value = new Set(selectedUserIds.value)
+}
+
+function clearUserSelection() {
+  selectedUserIds.value = new Set()
+}
+
+// 对选中的选手，每人随机排练 1~期望次数 之间的随机整数次
+async function handleBatchRandomTrain() {
+  const targetUsers = paginatedUsers.value.filter(u => selectedUserIds.value.has(u.userId))
+  if (targetUsers.length === 0) {
+    MessagePlugin.warning('请先选择要排练的选手')
+    return
+  }
+  const confirmed = window.confirm(`将为选中的 ${targetUsers.length} 位选手每人随机排练 1~${expectedTrainingCount.value} 次。是否继续？`)
+  if (!confirmed) return
+  batchTrainingUserId.value = 'batch'
+  let totalDraws = 0
+  try {
+    for (const user of targetUsers) {
+      const times = 1 + Math.floor(Math.random() * expectedTrainingCount.value)
+      for (let i = 0; i < times; i++) {
+        await store.doDraw(user.userId, currentRound.value)
+        totalDraws++
+      }
+    }
+    MessagePlugin.success(`已为 ${targetUsers.length} 位选手排练，共 ${totalDraws} 次`)
+    await fetchTrainingRecords()
+    clearUserSelection()
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '批量排练失败')
+  } finally {
+    batchTrainingUserId.value = null
+  }
+}
 
 // 分页
 const currentPage = ref(1)
@@ -1524,14 +1622,38 @@ onMounted(async () => {
   justify-content: center;
 }
 
+// 批量排练操作区
+.batch-train-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: rgba(102, 126, 234, 0.08);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 8px;
+
+  .batch-selected {
+    font-size: 13px;
+
+    strong {
+      color: #667eea;
+    }
+  }
+}
+
 .training-users-table {
   border: 1px solid var(--border-color);
   border-radius: 10px;
   overflow: hidden;
 
+  .eliminated-tag {
+    margin-left: 6px;
+  }
   .table-header {
     display: grid;
-    grid-template-columns: 140px 1fr 180px 200px;
+    grid-template-columns: 44px 140px 1fr 180px 200px;
     gap: 12px;
     padding: 12px 16px;
     background: var(--bg-primary);
@@ -1547,7 +1669,7 @@ onMounted(async () => {
 
   .table-row {
     display: grid;
-    grid-template-columns: 140px 1fr 180px 200px;
+    grid-template-columns: 44px 140px 1fr 180px 200px;
     gap: 12px;
     padding: 12px 16px;
     border-bottom: 1px solid var(--border-color);
@@ -1568,6 +1690,22 @@ onMounted(async () => {
       &:hover {
         background: #e6f7ed;
       }
+    }
+
+    &.eliminated {
+      background: #fff1f0;
+
+      &:hover {
+        background: #ffecec;
+      }
+
+      .player-name {
+        color: #e74c3c;
+      }
+    }
+
+    &.selected {
+      background: rgba(102, 126, 234, 0.08);
     }
 
     @media (max-width: 768px) {
