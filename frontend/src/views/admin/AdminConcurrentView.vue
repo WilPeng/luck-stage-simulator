@@ -109,6 +109,8 @@
             <t-option value="reflex" label="🔴 反应力（变灯点击）" />
             <t-option value="memory" label="🃏 记忆配对（翻牌）" />
             <t-option value="bomb" label="💣 数字炸弹（猜数）" />
+            <t-option value="spot_diff" label="🔍 找不同（限时）" />
+            <t-option value="math" label="🧮 算术挑战（限时）" />
           </t-select>
           <t-button theme="primary" size="small" :loading="savingMode" @click="handleSaveMode">保存设置</t-button>
         </div>
@@ -148,7 +150,7 @@ const seasonStore = useSeasonStore()
 const loading = ref(false)
 const toggling = ref<ConcurrentActionType | ''>('')
 const status = ref<ConcurrentStatusResponse | null>(null)
-const genMode = ref<'random' | 'pointer' | 'speed' | 'strategy' | 'reflex' | 'memory' | 'bomb'>('random')
+const genMode = ref<'random' | 'pointer' | 'speed' | 'strategy' | 'reflex' | 'memory' | 'bomb' | 'spot_diff' | 'math'>('random')
 const savingMode = ref(false)
 
 const roundIndex = computed(() => {
@@ -221,7 +223,7 @@ async function loadData() {
     // 读取发挥值抽取方式（实时回显当前设置，支持全部 7 种模式）
     try {
       const rs = await getPerformanceRoundStatus(roundId.value)
-      const validModes = ['random', 'pointer', 'speed', 'strategy', 'reflex', 'memory', 'bomb']
+      const validModes = ['random', 'pointer', 'speed', 'strategy', 'reflex', 'memory', 'bomb', 'spot_diff', 'math']
       if (rs?.generationMode && validModes.includes(rs.generationMode)) {
         genMode.value = rs.generationMode
       }
@@ -241,7 +243,9 @@ const MODE_NAMES: Record<string, { name: string; icon: string; desc: string }> =
   strategy: { name: '策略抉择', icon: '🧠', desc: '风险权衡' },
   reflex: { name: '反应力', icon: '🔴', desc: '变灯点击' },
   memory: { name: '记忆配对', icon: '🃏', desc: '翻牌找相同' },
-  bomb: { name: '数字炸弹', icon: '💣', desc: '缩小范围猜数' }
+  bomb: { name: '数字炸弹', icon: '💣', desc: '缩小范围猜数' },
+  spot_diff: { name: '找不同', icon: '🔍', desc: '两矩阵找10处不同' },
+  math: { name: '算术挑战', icon: '🧮', desc: '限时答算术题' }
 }
 
 const currentModeInfo = computed(() => {
@@ -259,7 +263,9 @@ async function handleSaveMode() {
       strategy: '策略抉择',
       reflex: '反应力',
       memory: '记忆配对',
-      bomb: '数字炸弹'
+      bomb: '数字炸弹',
+      spot_diff: '找不同',
+      math: '算术挑战'
     }
     MessagePlugin.success(`抽取方式已设置为 ${modeName[genMode.value] || genMode.value}`)
   } catch (e: any) {

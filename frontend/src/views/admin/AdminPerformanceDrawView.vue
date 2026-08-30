@@ -73,6 +73,8 @@
             <t-option value="reflex" label="🔴 反应力（变灯点击）" />
             <t-option value="memory" label="🃏 记忆配对（翻牌）" />
             <t-option value="bomb" label="💣 数字炸弹（猜数）" />
+            <t-option value="spot_diff" label="🔍 找不同（限时）" />
+            <t-option value="math" label="🧮 算术挑战（限时）" />
           </t-select>
         </div>
       </t-card>
@@ -263,7 +265,9 @@ const MODE_HINTS: Record<string, string> = {
   strategy: '选择风险档位，档位内随机',
   reflex: '变绿后点击，反应越快区间越高',
   memory: '翻牌配对，翻牌越少发挥值越高',
-  bomb: '猜数字缩小范围，逼近越多发挥值越高'
+  bomb: '猜数字缩小范围，逼近越多发挥值越高',
+  spot_diff: '两个10×10矩阵找10处不同，限时30秒',
+  math: '限时30秒算术题，答对越多发挥值越高'
 }
 const modeHint = computed(() => MODE_HINTS[generationMode.value] || '')
 

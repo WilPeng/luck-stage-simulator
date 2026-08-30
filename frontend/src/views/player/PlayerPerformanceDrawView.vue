@@ -163,10 +163,11 @@
       <!-- 记忆模式：翻牌配对 -->
       <div v-else-if="mode === 'memory'" class="memory-mode">
         <div class="memory-status">
+          <span>⏱️ {{ memoryTimeText }}</span>
           <span>配对 {{ memoryMatched }}/{{ memoryPairs }} 对</span>
           <span>翻牌 {{ memoryFlips }} 次</span>
         </div>
-        <div class="memory-tip">找出所有相同的数字配对，翻牌越少发挥值越高！</div>
+        <div class="memory-tip">找出所有相同的数字配对，翻牌越少、用时越短，发挥值越高！</div>
         <div class="memory-grid" :class="{ ended: memoryEnded }">
           <div
             v-for="(card, idx) in memoryCards"
@@ -197,7 +198,7 @@
       </div>
 
       <!-- 数字炸弹模式：缩小范围猜数字 -->
-      <div v-else class="bomb-mode">
+      <div v-else-if="mode === 'bomb'" class="bomb-mode">
         <div class="bomb-status">
           <span>范围：{{ bombLow }} ~ {{ bombHigh }}</span>
           <span>剩余 {{ bombAttempts }} 次机会</span>
@@ -251,6 +252,110 @@
         </t-button>
       </div>
 
+      <!-- 找不同模式：两个 10x10 彩色矩阵，找 10 处不同 -->
+      <div v-else-if="mode === 'spot_diff'" class="spot-mode">
+        <div class="spot-status">
+          <span>⏱️ {{ spotTimeText }}</span>
+          <span>已找 {{ spotFound }} / {{ SPOT_DIFF_COUNT }}</span>
+          <span>找错 {{ spotWrong }} 次</span>
+        </div>
+        <div class="spot-tip" v-if="!spotStarted">
+          🔍 两个 10×10 彩色矩阵中有 {{ SPOT_DIFF_COUNT }} 处颜色不同（红橙黄绿青蓝紫），限时 {{ SPOT_DURATION }} 秒。点击下方矩阵中不同的格子！
+        </div>
+        <div class="spot-boards">
+          <!-- 上矩阵（展示，不点击） -->
+          <div class="spot-board">
+            <div class="board-label">展示矩阵</div>
+            <div class="spot-grid">
+              <div
+                v-for="(cell, i) in spotTop"
+                :key="`t${i}`"
+                class="spot-cell"
+                :style="{ background: cell }"
+              ></div>
+            </div>
+          </div>
+          <!-- 下矩阵（点击找不同） -->
+          <div class="spot-board">
+            <div class="board-label">点击下方矩阵中不同的格子</div>
+            <div class="spot-grid">
+              <div
+                v-for="(cell, i) in spotBottom"
+                :key="`b${i}`"
+                class="spot-cell"
+                :class="{
+                  marked: spotMarked[i],
+                  wrong: spotWrongSet.has(i)
+                }"
+                :style="{ background: cell }"
+                @click="handleSpotClick(i)"
+              ></div>
+            </div>
+          </div>
+        </div>
+        <t-button
+          v-if="!spotStarted && !spotEnded"
+          theme="primary"
+          size="large"
+          @click="startSpotDiff"
+        >
+          🔍 开始找不同
+        </t-button>
+        <t-button
+          v-else-if="spotEnded"
+          theme="success"
+          size="large"
+          @click="finishSpotDiff"
+        >
+          查看发挥值结果
+        </t-button>
+      </div>
+
+      <!-- 算术题模式：限时30秒，答对跳下一题，答错结束 -->
+      <div v-else-if="mode === 'math'" class="math-mode">
+        <div class="math-status">
+          <span>⏱️ {{ mathTimeText }}</span>
+          <span>答对 {{ mathCorrect }}</span>
+        </div>
+        <div class="math-tip" v-if="!mathStarted && !mathEnded">
+          🧮 限时 {{ MATH_DURATION }} 秒，答对跳下一题，答错直接结束！
+        </div>
+        <div class="math-question" v-if="mathStarted && !mathEnded">
+          <span class="math-expr">{{ mathCurrentExpr }}</span>
+          <span class="math-eq">= ?</span>
+        </div>
+        <div class="math-options" v-if="mathStarted && !mathEnded">
+          <button
+            v-for="opt in mathOptions"
+            :key="opt"
+            class="math-option"
+            @click="handleMathAnswer(opt)"
+          >
+            {{ opt }}
+          </button>
+        </div>
+        <div class="math-result" v-if="mathEnded">
+          <span class="math-icon">🏁</span>
+          <span>本次答对 {{ mathCorrect }} 题</span>
+        </div>
+        <t-button
+          v-if="!mathStarted && !mathEnded"
+          theme="primary"
+          size="large"
+          @click="startMath"
+        >
+          🧮 开始算术挑战
+        </t-button>
+        <t-button
+          v-else-if="mathEnded"
+          theme="success"
+          size="large"
+          @click="finishMath"
+        >
+          查看发挥值结果
+        </t-button>
+      </div>
+
       <p class="hint">发挥值将用于公演结算，范围 -10 ~ 20</p>
     </div>
   </div>
@@ -267,7 +372,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const currentRound = computed(() => parseInt(route.params.round as string, 10) || 1)
-const mode = ref<'random' | 'pointer' | 'speed' | 'strategy' | 'reflex' | 'memory' | 'bomb'>('random')
+const mode = ref<'random' | 'pointer' | 'speed' | 'strategy' | 'reflex' | 'memory' | 'bomb' | 'spot_diff' | 'math'>('random')
 const drawing = ref(false)
 const displayValue = ref(0)
 const myValue = ref<number | null>(null)
@@ -320,7 +425,9 @@ const modeLabel = computed(() => {
     strategy: '🧠 策略抉择（风险权衡）',
     reflex: '🔴 反应力测试（变灯点击）',
     memory: '🃏 记忆配对（翻牌找相同）',
-    bomb: '💣 数字炸弹（缩小范围）'
+    bomb: '💣 数字炸弹（缩小范围）',
+    spot_diff: '🔍 找不同（限时30秒）',
+    math: '🧮 算术挑战（限时30秒）'
   }
   return map[mode.value] || mode.value
 })
@@ -498,6 +605,18 @@ const memoryMatched = ref(0)
 const memoryPairs = MEMORY_PAIRS
 let firstFlipIdx: number | null = null
 let memoryLock = false
+// 记忆模式计时（从第一次翻牌开始计时，全部配对完成停止）
+const memoryElapsed = ref(0)                  // 已用秒数
+let memoryTimer: number | undefined
+let memoryStartTime = 0
+
+// 格式化用时 mm:ss
+const memoryTimeText = computed(() => {
+  const s = Math.floor(memoryElapsed.value)
+  const mm = Math.floor(s / 60)
+  const ss = s % 60
+  return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
+})
 
 function startMemory() {
   const values = Array.from({ length: MEMORY_PAIRS }, (_, i) => i)
@@ -507,7 +626,20 @@ function startMemory() {
   memoryEnded.value = false
   memoryFlips.value = 0
   memoryMatched.value = 0
+  memoryElapsed.value = 0
   firstFlipIdx = null
+  if (memoryTimer) window.clearInterval(memoryTimer)
+  memoryTimer = undefined
+}
+
+// 第一次翻牌时启动计时
+function ensureMemoryTimer() {
+  if (memoryTimer !== undefined) return
+  memoryStartTime = Date.now()
+  memoryElapsed.value = 0
+  memoryTimer = window.setInterval(() => {
+    memoryElapsed.value = (Date.now() - memoryStartTime) / 1000
+  }, 200)
 }
 
 function flipMemoryCard(idx: number) {
@@ -515,6 +647,7 @@ function flipMemoryCard(idx: number) {
   const card = memoryCards.value[idx]
   if (card.flipped || card.matched) return
 
+  ensureMemoryTimer()
   card.flipped = true
   memoryFlips.value++
 
@@ -535,6 +668,9 @@ function flipMemoryCard(idx: number) {
     memoryLock = false
     if (memoryMatched.value >= MEMORY_PAIRS) {
       memoryEnded.value = true
+      // 停止计时
+      if (memoryTimer) window.clearInterval(memoryTimer)
+      memoryTimer = undefined
     }
   } else {
     setTimeout(() => {
@@ -546,12 +682,28 @@ function flipMemoryCard(idx: number) {
 }
 
 function finishMemory() {
-  // 翻牌越少发挥值越高：8次内配对完为高手
+  // 综合 翻牌次数 与 用时 决定发挥值：
+  // 翻牌越少、用时越短，发挥值越高
   const ratio = memoryFlips.value / (MEMORY_PAIRS * 2)   // 下限 1（全部一次配中）
+  const elapsed = Math.max(1, memoryElapsed.value)       // 秒
+  // 用时标准：6对牌，约 20 秒内配对完为快
+  const timeRatio = elapsed / 20
+
   let min = -10, max = 5
+  // 先按翻牌次数定基准
   if (ratio <= 1.5) { min = 10; max = 20 }
   else if (ratio <= 2) { min = 0; max = 15 }
   else if (ratio <= 2.5) { min = -5; max = 10 }
+
+  // 用时调整：快（<=15s）向高档区间靠，慢（>=40s）降档
+  if (timeRatio <= 0.75) {
+    min = Math.min(20, min + 5)
+    max = Math.min(20, max + 5)
+  } else if (timeRatio >= 2) {
+    min = Math.max(-10, min - 8)
+    max = Math.max(-10, max - 8)
+  }
+
   const value = Math.floor(Math.random() * (max - min + 1)) + min
   finishDraw(value)
 }
@@ -609,6 +761,242 @@ function finishBomb() {
   finishDraw(value)
 }
 
+// ===== 找不同模式：两个 10x10 彩色矩阵找 10 处不同 =====
+const SPOT_DIFF_COUNT = 10
+const SPOT_DURATION = 30
+const SPOT_COLORS = ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#f39c12']
+const spotStarted = ref(false)
+const spotEnded = ref(false)
+const spotTop = ref<string[]>([])
+const spotBottom = ref<string[]>([])
+const spotDiffIndexes = ref<number[]>([])
+const spotMarked = ref<Record<number, boolean>>({})
+const spotWrongSet = ref<Set<number>>(new Set())
+const spotFound = ref(0)
+const spotWrong = ref(0)
+const spotElapsed = ref(0)
+let spotTimer: number | undefined
+let spotStartTime = 0
+
+const spotTimeText = computed(() => {
+  const remain = Math.max(0, SPOT_DURATION - Math.floor(spotElapsed.value))
+  return `${String(Math.floor(remain / 60)).padStart(2, '0')}:${String(remain % 60).padStart(2, '0')}`
+})
+
+// 生成两个矩阵：基础全同色，随机选 SPOT_DIFF_COUNT 个格子改色
+function generateSpotBoards() {
+  const size = 100
+  const base = Array.from({ length: size }, () => SPOT_COLORS[Math.floor(Math.random() * SPOT_COLORS.length)])
+  const bottom = [...base]
+  // 随机选 10 个不同位置，改为不同颜色
+  const idxs = new Set<number>()
+  while (idxs.size < SPOT_DIFF_COUNT) {
+    idxs.add(Math.floor(Math.random() * size))
+  }
+  const diffIdx = Array.from(idxs)
+  for (const i of diffIdx) {
+    let newColor = SPOT_COLORS[Math.floor(Math.random() * SPOT_COLORS.length)]
+    let guard = 0
+    while (newColor === base[i] && guard < 10) {
+      newColor = SPOT_COLORS[Math.floor(Math.random() * SPOT_COLORS.length)]
+      guard++
+    }
+    bottom[i] = newColor
+  }
+  spotTop.value = base
+  spotBottom.value = bottom
+  spotDiffIndexes.value = diffIdx
+  spotMarked.value = {}
+  spotWrongSet.value = new Set()
+  spotFound.value = 0
+  spotWrong.value = 0
+}
+
+function startSpotDiff() {
+  generateSpotBoards()
+  spotStarted.value = true
+  spotEnded.value = false
+  spotElapsed.value = 0
+  spotStartTime = Date.now()
+  if (spotTimer) window.clearInterval(spotTimer)
+  spotTimer = window.setInterval(() => {
+    spotElapsed.value = (Date.now() - spotStartTime) / 1000
+    if (spotElapsed.value >= SPOT_DURATION) {
+      if (spotTimer) window.clearInterval(spotTimer)
+      spotTimer = undefined
+      spotEnded.value = true
+    }
+  }, 100)
+}
+
+function handleSpotClick(i: number) {
+  if (!spotStarted.value || spotEnded.value) return
+  if (spotMarked.value[i] || spotWrongSet.value.has(i)) return
+  if (spotDiffIndexes.value.includes(i)) {
+    // 找对了
+    spotMarked.value[i] = true
+    spotFound.value++
+    if (spotFound.value >= SPOT_DIFF_COUNT) {
+      // 找齐：立即结束，记录时间
+      if (spotTimer) window.clearInterval(spotTimer)
+      spotTimer = undefined
+      spotElapsed.value = (Date.now() - spotStartTime) / 1000
+      spotEnded.value = true
+    }
+  } else {
+    // 找错
+    spotWrongSet.value.add(i)
+    spotWrong.value++
+    // 找错太多也结束（可选，这里不强制）
+  }
+}
+
+function finishSpotDiff() {
+  const found = spotFound.value
+  const wrong = spotWrong.value
+  const elapsed = Math.max(1, spotElapsed.value)
+  const allFound = found >= SPOT_DIFF_COUNT
+  let min = -10, max = 5
+
+  if (allFound) {
+    // 找齐：时间越短越高
+    if (elapsed <= 10) { min = 12; max = 20 }
+    else if (elapsed <= 20) { min = 5; max = 17 }
+    else if (elapsed <= 30) { min = 0; max = 12 }
+    else { min = -3; max = 8 }
+  } else {
+    // 未找齐：按找到的数量
+    if (found >= 8) { min = 0; max = 10 }
+    else if (found >= 5) { min = -5; max = 6 }
+    else if (found >= 3) { min = -8; max = 2 }
+    else { min = -10; max = -2 }
+  }
+  // 找错扣分：每错一次降档
+  if (wrong >= 5) { min = Math.max(-10, min - 6); max = Math.max(-10, max - 6) }
+  else if (wrong >= 3) { min = Math.max(-10, min - 3); max = Math.max(-10, max - 3) }
+
+  const value = Math.floor(Math.random() * (max - min + 1)) + min
+  finishDraw(value)
+}
+
+// ===== 算术题模式：限时30秒，答对跳下一题，答错结束 =====
+const MATH_DURATION = 30
+const mathStarted = ref(false)
+const mathEnded = ref(false)
+const mathCorrect = ref(0)
+const mathElapsed = ref(0)
+const mathCurrentExpr = ref('')
+const mathOptions = ref<number[]>([])
+let mathTimer: number | undefined
+let mathStartTime = 0
+
+const mathTimeText = computed(() => {
+  const remain = Math.max(0, MATH_DURATION - Math.floor(mathElapsed.value))
+  return `${String(Math.floor(remain / 60)).padStart(2, '0')}:${String(remain % 60).padStart(2, '0')}`
+})
+
+// 生成一道算术题（30以内，答案为正整数）
+function generateMathQuestion() {
+  const ops = ['+', '-', '×', '÷']
+  const op = ops[Math.floor(Math.random() * ops.length)]
+  let a = 0, b = 0, answer = 0
+
+  if (op === '+') {
+    a = Math.floor(Math.random() * 25) + 1
+    b = Math.floor(Math.random() * (30 - a)) + 1
+    answer = a + b
+  } else if (op === '-') {
+    a = Math.floor(Math.random() * 29) + 2
+    b = Math.floor(Math.random() * (a - 1)) + 1
+    answer = a - b
+  } else if (op === '×') {
+    a = Math.floor(Math.random() * 6) + 1   // 1~6
+    b = Math.floor(Math.random() * 5) + 1   // 1~5，保证 ≤30
+    answer = a * b
+  } else { // ÷
+    b = Math.floor(Math.random() * 5) + 2   // 除数 2~6
+    answer = Math.floor(Math.random() * 6) + 1
+    a = b * answer
+  }
+
+  mathCurrentExpr.value = `${a} ${op} ${b}`
+  // 生成 5 个不同选项（含正确答案）
+  const options = new Set<number>([answer])
+  let guard = 0
+  while (options.size < 5 && guard < 100) {
+    options.add(answer + Math.floor(Math.random() * 9) - 4)
+    guard++
+  }
+  // 确保答案为正整数
+  const opts = Array.from(options).filter(v => v > 0 && v <= 60)
+  while (opts.length < 5) {
+    const v = Math.max(1, answer + Math.floor(Math.random() * 9) - 4)
+    if (!opts.includes(v)) opts.push(v)
+  }
+  // 打乱
+  for (let i = opts.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[opts[i], opts[j]] = [opts[j], opts[i]]
+  }
+  mathOptions.value = opts
+}
+
+function startMath() {
+  mathStarted.value = true
+  mathEnded.value = false
+  mathCorrect.value = 0
+  mathElapsed.value = 0
+  mathStartTime = Date.now()
+  generateMathQuestion()
+  if (mathTimer) window.clearInterval(mathTimer)
+  mathTimer = window.setInterval(() => {
+    mathElapsed.value = (Date.now() - mathStartTime) / 1000
+    if (mathElapsed.value >= MATH_DURATION) {
+      if (mathTimer) window.clearInterval(mathTimer)
+      mathTimer = undefined
+      mathEnded.value = true
+    }
+  }, 100)
+}
+
+function handleMathAnswer(opt: number) {
+  if (!mathStarted.value || mathEnded.value) return
+  const answer = evalAnswer(mathCurrentExpr.value)
+  if (opt === answer) {
+    // 答对：下一题
+    mathCorrect.value++
+    generateMathQuestion()
+  } else {
+    // 答错：结束
+    if (mathTimer) window.clearInterval(mathTimer)
+    mathTimer = undefined
+    mathEnded.value = true
+  }
+}
+
+// 计算表达式的答案
+function evalAnswer(expr: string): number {
+  const m = expr.match(/(\d+)\s*([+\-×÷])\s*(\d+)/)
+  if (!m) return 0
+  const a = parseInt(m[1]), op = m[2], b = parseInt(m[3])
+  if (op === '+') return a + b
+  if (op === '-') return a - b
+  if (op === '×') return a * b
+  if (op === '÷') return Math.floor(a / b)
+  return 0
+}
+
+function finishMath() {
+  const correct = mathCorrect.value
+  let min = -10, max = 5
+  if (correct >= 10) { min = 10; max = 20 }
+  else if (correct >= 6) { min = 2; max = 15 }
+  else if (correct >= 3) { min = -5; max = 8 }
+  else { min = -10; max = 0 }
+  const value = Math.floor(Math.random() * (max - min + 1)) + min
+  finishDraw(value)
+}
+
 async function finishDraw(value: number) {
   drawing.value = false
   pointerRunning.value = false
@@ -633,6 +1021,9 @@ onBeforeUnmount(() => {
   if (pointerFrame) cancelAnimationFrame(pointerFrame)
   if (speedTimer) window.clearInterval(speedTimer)
   if (reflexTimer) window.clearTimeout(reflexTimer)
+  if (memoryTimer) window.clearInterval(memoryTimer)
+  if (spotTimer) window.clearInterval(spotTimer)
+  if (mathTimer) window.clearInterval(mathTimer)
 })
 
 onMounted(async () => {
@@ -653,7 +1044,7 @@ onMounted(async () => {
       getPerformanceRoundStatus(roundId).catch(() => null)
     ])
     isReleased.value = !!release?.performanceReleased
-    const validModes = ['random', 'pointer', 'speed', 'strategy', 'reflex', 'memory', 'bomb']
+    const validModes = ['random', 'pointer', 'speed', 'strategy', 'reflex', 'memory', 'bomb', 'spot_diff', 'math']
     if (roundStatus?.generationMode && validModes.includes(roundStatus.generationMode)) {
       mode.value = roundStatus.generationMode
     }
@@ -1181,6 +1572,158 @@ onMounted(async () => {
       background: rgba(231, 76, 60, 0.15);
       border-color: #e74c3c;
       color: #e74c3c;
+    }
+  }
+}
+
+// ===== 找不同模式 =====
+.spot-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+
+  .spot-status {
+    display: flex;
+    gap: 20px;
+    font-size: 16px;
+    font-weight: 700;
+
+    span:first-child { color: #e74c3c; }
+  }
+
+  .spot-tip {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  .spot-boards {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .spot-board {
+    .board-label {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-bottom: 6px;
+    }
+  }
+
+  .spot-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 2px;
+    padding: 6px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+  }
+
+  .spot-cell {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+
+    &:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+    }
+
+    &.marked {
+      box-shadow: inset 0 0 0 3px #fff, 0 0 0 2px #0052d9;
+    }
+
+    &.wrong {
+      box-shadow: inset 0 0 0 3px #fff, 0 0 0 2px #e74c3c;
+      opacity: 0.6;
+    }
+  }
+}
+
+// ===== 算术题模式 =====
+.math-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+
+  .math-status {
+    display: flex;
+    gap: 24px;
+    font-size: 16px;
+    font-weight: 700;
+
+    span:first-child { color: #e74c3c; }
+  }
+
+  .math-tip {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  .math-question {
+    font-size: 34px;
+    font-weight: 800;
+    color: var(--text-primary);
+
+    .math-eq {
+      color: #667eea;
+      margin-left: 8px;
+    }
+  }
+
+  .math-options {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    width: 100%;
+    max-width: 480px;
+
+    @media (max-width: 480px) {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .math-option {
+    padding: 14px 0;
+    font-size: 22px;
+    font-weight: 700;
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+
+    &:hover {
+      border-color: #667eea;
+      background: rgba(102, 126, 234, 0.1);
+      transform: translateY(-2px);
+    }
+
+    &:active {
+      transform: scale(0.96);
+    }
+  }
+
+  .math-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 18px;
+    font-weight: 700;
+
+    .math-icon {
+      font-size: 28px;
     }
   }
 }

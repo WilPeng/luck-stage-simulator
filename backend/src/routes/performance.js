@@ -1126,7 +1126,7 @@ router.post('/start', auth, requireAdmin, async (req, res) => {
 
     const { roundId, generationMode } = req.body
     const frontRoundId = roundId || `round-${round.index}`
-    const mode = ['random', 'pointer', 'speed', 'strategy', 'reflex', 'memory', 'bomb'].includes(generationMode) ? generationMode : 'random'
+    const mode = ['random', 'pointer', 'speed', 'strategy', 'reflex', 'memory', 'bomb', 'spot_diff', 'math'].includes(generationMode) ? generationMode : 'random'
 
     const season = await getCurrentSeason()
     if (season) {
@@ -1166,7 +1166,7 @@ router.post('/generation-mode', auth, requireAdmin, async (req, res) => {
     if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
 
     const { generationMode } = req.body
-    if (!['random', 'pointer', 'speed', 'strategy', 'reflex', 'memory', 'bomb'].includes(generationMode)) {
+    if (!['random', 'pointer', 'speed', 'strategy', 'reflex', 'memory', 'bomb', 'spot_diff', 'math'].includes(generationMode)) {
       return res.status(400).json({ success: false, error: '生成方式只能是 random/pointer/speed/strategy/reflex', code: 'INVALID_MODE' })
     }
 
@@ -1344,9 +1344,15 @@ router.get('/player-status', auth, async (req, res) => {
       ? { $or: [{ roundId: round.id }, { roundId: frontRoundId }] }
       : { roundId: round.id }
 
-    // 所有选手
+    // 所有选手（含未入队：未入队选手也能抽取发挥值）
     const members = await RoundTeamMember.find(roundIdFilter)
-    const userIds = [...new Set(members.map(m => m.playerId))]
+    // 建立 playerId → teamId 映射（未入队的没有）
+    const teamIdByPlayer = {}
+    for (const m of members) {
+      if (!teamIdByPlayer[m.playerId]) teamIdByPlayer[m.playerId] = m.teamId
+    }
+    const allActiveUsers = await User.find({ role: { $ne: 'admin' }, status: { $ne: 'eliminated' } })
+    const userIds = [...new Set(allActiveUsers.map(u => u.id))]
     const users = await User.find({ id: { $in: userIds } })
     const userMap = {}
     for (const u of users) userMap[u.id] = u
@@ -1362,14 +1368,17 @@ router.get('/player-status', auth, async (req, res) => {
     const valueMap = {}
     for (const v of values) valueMap[v.playerId] = v.performanceValue
 
-    const players = members.map(m => ({
-      playerId: m.playerId,
-      playerName: userMap[m.playerId] ? userMap[m.playerId].name : null,
-      teamId: m.teamId,
-      teamName: teamMap[m.teamId] ? teamMap[m.teamId].name : null,
-      generated: generatedSet.has(m.playerId),
-      performanceValue: valueMap[m.playerId] != null ? valueMap[m.playerId] : null
-    }))
+    const players = allActiveUsers.map(u => {
+      const teamId = teamIdByPlayer[u.id] || null
+      return {
+        playerId: u.id,
+        playerName: userMap[u.id] ? userMap[u.id].name : u.name,
+        teamId,
+        teamName: teamId && teamMap[teamId] ? teamMap[teamId].name : null,
+        generated: generatedSet.has(u.id),
+        performanceValue: valueMap[u.id] != null ? valueMap[u.id] : null
+      }
+    })
 
     res.json({
       success: true,
