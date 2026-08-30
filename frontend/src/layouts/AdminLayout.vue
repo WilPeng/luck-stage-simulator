@@ -77,7 +77,7 @@
                   v-show="isStageVisible(round, stage.key)"
                   class="nav-item"
                   :class="{ active: isActive(round, stage.key) }"
-                  @click="navigateTo(`${gamePrefix}/admin/round/${round}/${stage.key}`)"
+                  @click="navigateTo(`${gamePrefix}/admin/round/${round}/${getStageRoute(round, stage.key)}`)"
                 >
                   <span class="nav-icon">{{ stage.icon }}</span>
                   <span class="nav-text">{{ stage.text }}</span>
@@ -230,12 +230,51 @@ const STAGE_TO_ACTION: Record<string, 'team' | 'song' | 'training' | 'performanc
   performance_draw: 'performance'
 }
 
+// 各轮次的分组模式缓存（按歌分组时组队入口指向选歌分组页，不显示独立选歌）
+const groupingModeCache = ref<Record<number, 'captain' | 'song' | 'captain_choice'>>({})
+
+async function loadGroupingMode(round: number) {
+  try {
+    const { getGroupingMode } = await import('../services/api')
+    groupingModeCache.value[round] = await getGroupingMode(`round-${round}`)
+  } catch (e) {
+    groupingModeCache.value[round] = 'captain'
+  }
+}
+
+function getGroupingMode(round: number): 'captain' | 'song' | 'captain_choice' {
+  return groupingModeCache.value[round] || 'captain'
+}
+
+// 管理员端分组模式页面对应的路由段
+function getStageRoute(round: number, stage: StageType): string {
+  const groupingMode = getGroupingMode(round)
+  if (stage === 'teaming') {
+    return groupingMode === 'song'
+      ? 'song-group'
+      : groupingMode === 'captain_choice'
+        ? 'captain-choice'
+        : 'teaming'
+  }
+  if (stage === 'song_select') {
+    return groupingMode === 'song' ? 'song-group' : 'song_select'
+  }
+  return stage
+}
+
 // 某轮的菜单列表：主阶段 + 该轮已开放的并发子行动（插在"并发行动"之后）
 function getRoundStageList(round: number): { key: StageType; icon: string; text: string }[] {
   const released = seasonStore.getReleasedConcurrentActions(round)
-  const releasedKeys: StageType[] = released
+  const groupingMode = getGroupingMode(round)
+  let releasedKeys: StageType[] = released
     .map(action => ACTION_TO_STAGE_KEY[action])
     .filter(Boolean)
+
+  // 按歌分组：组队环节即选歌，隐藏独立"选歌"管理入口
+  if (groupingMode === 'song') {
+    releasedKeys = releasedKeys.filter(s => s !== 'song_select')
+  }
+
   const ordered: StageType[] = []
   for (const stage of stageList.value) {
     ordered.push(stage.key)
@@ -294,7 +333,7 @@ function isStageVisible(round: number, stage: StageType): boolean {
 
 // 检查路由是否激活
 function isActive(round: number, stage: StageType): boolean {
-  const stagePath = `${gamePrefix.value}/admin/round/${round}/${stage}`
+  const stagePath = `${gamePrefix.value}/admin/round/${round}/${getStageRoute(round, stage)}`
   return route.path.startsWith(stagePath)
 }
 
@@ -323,6 +362,10 @@ onMounted(async () => {
   try {
     await seasonStore.fetchProgress()
     initCollapsedRounds()
+    // 加载各轮分组模式（决定组队/选歌管理入口）
+    for (let r = 1; r <= rounds.value.length; r++) {
+      loadGroupingMode(r)
+    }
   } catch (e) {
     console.error('[AdminLayout] 初始化加载失败:', e)
   }

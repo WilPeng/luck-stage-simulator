@@ -138,34 +138,91 @@
       <div class="training-logs-section">
         <div class="section-header">
           <h2>训练日志</h2>
-          <t-space>
-            <t-date-picker
-              v-model="logsStartDate"
-              mode="date"
-              placeholder="开始日期"
+          <t-tag theme="primary" variant="light">
+            共 {{ logsTotal }} 条记录
+          </t-tag>
+        </div>
+
+        <!-- 筛选工具栏 -->
+        <div class="logs-filter-bar">
+          <t-date-picker
+            v-model="logsStartDate"
+            mode="date"
+            enable-time-picker
+            placeholder="开始时间"
+            size="small"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            style="width: 170px"
+          />
+          <span class="filter-sep">至</span>
+          <t-date-picker
+            v-model="logsEndDate"
+            mode="date"
+            enable-time-picker
+            placeholder="结束时间"
+            size="small"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            style="width: 170px"
+          />
+          <t-select
+            v-model="logsFilterPlayer"
+            placeholder="全部选手"
+            clearable
+            filterable
+            size="small"
+            style="width: 160px"
+          >
+            <t-option v-for="p in players" :key="p.id" :value="p.id" :label="p.name" />
+          </t-select>
+          <t-select
+            v-model="logsFilterType"
+            placeholder="全部类型"
+            clearable
+            size="small"
+            style="width: 130px"
+          >
+            <t-option v-for="t in logsTypeOptions" :key="t" :value="t" :label="getTypeText(t)" />
+          </t-select>
+          <t-button theme="primary" size="small" :loading="logsLoading" @click="onLogsSearch">
+            查询
+          </t-button>
+          <t-button variant="outline" size="small" @click="clearLogsFilter">
+            重置
+          </t-button>
+          <t-button variant="outline" theme="success" size="small" @click="exportTrainingLogsCsv">
+            导出CSV
+          </t-button>
+        </div>
+
+        <!-- 统计概览 -->
+        <div class="logs-stats">
+          <div class="logs-stat-item">
+            <span class="stat-num">{{ logsStats.total }}</span>
+            <span class="stat-label">训练次数</span>
+          </div>
+          <div class="logs-stat-item">
+            <span class="stat-num">{{ logsStats.players }}</span>
+            <span class="stat-label">参与选手</span>
+          </div>
+          <div class="logs-stat-item">
+            <span class="stat-num">{{ logsStats.cards }}</span>
+            <span class="stat-label">卡牌种类</span>
+          </div>
+          <div class="logs-stat-item">
+            <span class="stat-num">{{ logsStats.avgPerPlayer }}</span>
+            <span class="stat-label">人均次数</span>
+          </div>
+          <div class="logs-stat-types">
+            <t-tag
+              v-for="(count, type) in logsStats.types"
+              :key="type"
+              :theme="getTypeTheme(type)"
+              variant="light"
               size="small"
-              value-format="YYYY-MM-DD"
-              style="width: 160px"
-            />
-            <span>至</span>
-            <t-date-picker
-              v-model="logsEndDate"
-              mode="date"
-              placeholder="结束日期"
-              size="small"
-              value-format="YYYY-MM-DD"
-              style="width: 160px"
-            />
-            <t-button theme="primary" size="small" :loading="logsLoading" @click="fetchTrainingLogs">
-              查询
-            </t-button>
-            <t-button variant="outline" size="small" @click="clearLogsFilter">
-              重置
-            </t-button>
-            <t-tag theme="primary" variant="light">
-              共 {{ logsTotal }} 条记录
+            >
+              {{ getTypeText(type) }} {{ count }}
             </t-tag>
-          </t-space>
+          </div>
         </div>
 
         <div v-if="logsLoading" class="logs-loading">
@@ -177,14 +234,17 @@
         </div>
 
         <div v-else>
-          <div class="logs-batch-actions" v-if="logsSelectedIds.length > 0">
+          <div class="logs-batch-actions" v-if="logsSelectedIds.length > 0 || trainingLogs.length > 0">
             <t-space>
               <span class="selected-count">已选 {{ logsSelectedIds.length }} 条</span>
               <t-button theme="danger" size="small" :loading="deletingLogIds.length > 0" @click="handleBatchDeleteLogs">
                 批量撤销
               </t-button>
+              <t-button variant="text" size="small" @click="toggleLogsSelectAll">
+                {{ logsSelectedIds.length === trainingLogs.length && trainingLogs.length > 0 ? '取消全选' : '全选本页' }}
+              </t-button>
               <t-button variant="text" size="small" @click="clearLogsSelection">
-                取消全选
+                清空选择
               </t-button>
             </t-space>
           </div>
@@ -270,9 +330,24 @@
       <div class="cards-section">
         <div class="section-header">
           <h2>卡牌列表</h2>
-          <t-tag theme="primary" variant="light">
-            {{ store.enabledCards.length }} / {{ store.cards.length }} 启用
-          </t-tag>
+          <t-space>
+            <t-tag theme="primary" variant="light">
+              {{ store.enabledCards.length }} / {{ store.cards.length }} 启用
+            </t-tag>
+            <t-button theme="primary" variant="outline" size="small" @click="exportCards">
+              导出卡牌
+            </t-button>
+            <t-button theme="success" variant="outline" size="small" @click="triggerImportCards">
+              导入卡牌
+            </t-button>
+            <input
+              ref="cardsImportInput"
+              type="file"
+              accept=".json"
+              style="display: none"
+              @change="handleImportCards"
+            />
+          </t-space>
         </div>
         <div class="cards-grid">
           <div
@@ -510,7 +585,7 @@ import { useRoute } from 'vue-router'
 import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
 import { useTrainingCardStore } from '../../stores/trainingCardStore'
 import { useSeasonStore } from '../../stores/seasonStore'
-import { getUsers, doRequest, deleteTrainingRecord, batchDeleteTrainingRecords } from '../../services/api'
+import { getUsers, doRequest, getTrainingRecords, deleteTrainingRecord, batchDeleteTrainingRecords } from '../../services/api'
 import type { TrainingCard, AutoCompleteResult, TrainingRecord, TrainingRecordListResponse } from '../../types/training'
 import type { User } from '../../types/user'
 
@@ -540,6 +615,8 @@ const logsPage = ref(1)
 const logsPageSize = ref(20)
 const logsStartDate = ref('')
 const logsEndDate = ref('')
+const logsFilterPlayer = ref('')
+const logsFilterType = ref('')
 const logsSelectedIds = ref<string[]>([])
 const deletingLogIds = ref<string[]>([])
 
@@ -643,6 +720,10 @@ const deletingCard = ref<TrainingCard | null>(null)
 
 // 重置弹窗
 const resetDialogVisible = ref(false)
+
+// 卡牌导入 input
+const cardsImportInput = ref<HTMLInputElement | null>(null)
+const importingCards = ref(false)
 
 // 方法
 function getTypeText(type: string): string {
@@ -931,6 +1012,101 @@ async function confirmReset(): Promise<void> {
   }
 }
 
+// ===== 卡牌导出/导入 =====
+
+function exportCards(): void {
+  try {
+    if (store.cards.length === 0) {
+      MessagePlugin.warning('没有卡牌可导出')
+      return
+    }
+    // 导出字段：name/type/description/effect/weight/enabled/icon（去掉服务端生成的 id）
+    const exportData = store.cards.map(c => ({
+      name: c.name,
+      type: c.type,
+      description: c.description,
+      effect: c.effect || {},
+      weight: c.weight,
+      enabled: c.enabled !== false,
+      icon: c.icon
+    }))
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const dateStr = new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')
+    a.href = url
+    a.download = `训练卡牌_${dateStr}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    MessagePlugin.success(`已导出 ${exportData.length} 张卡牌`)
+  } catch (e: any) {
+    MessagePlugin.error('导出失败: ' + (e.message || '未知错误'))
+  }
+}
+
+function triggerImportCards(): void {
+  cardsImportInput.value?.click()
+}
+
+async function handleImportCards(e: Event): Promise<void> {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  try {
+    const text = await file.text()
+    const parsed = JSON.parse(text)
+    const cardsArr = Array.isArray(parsed) ? parsed : parsed.cards
+    if (!Array.isArray(cardsArr) || cardsArr.length === 0) {
+      MessagePlugin.warning('文件中没有有效的卡牌数据')
+      return
+    }
+
+    // 校验并规范化导入的卡牌
+    const validTypes = ['vocal', 'dance', 'charm', 'mixed', 'event', 'self_select']
+    const cardsData = cardsArr
+      .filter(c => c && typeof c === 'object')
+      .map((c: any) => ({
+        name: String(c.name || '').trim(),
+        type: validTypes.includes(c.type) ? c.type : 'mixed',
+        description: String(c.description || ''),
+        effect: (c.effect && typeof c.effect === 'object') ? c.effect : {},
+        weight: typeof c.weight === 'number' && c.weight > 0 ? c.weight : 10,
+        enabled: c.enabled !== false
+      }))
+      .filter(c => c.name)
+
+    if (cardsData.length === 0) {
+      MessagePlugin.warning('没有有效的卡牌数据可导入')
+      return
+    }
+
+    const confirm = DialogPlugin.confirm({
+      header: '确认导入',
+      body: `将导入 ${cardsData.length} 张卡牌（新增，不清除现有卡牌）。是否继续？`,
+      confirmBtn: '确认导入',
+      cancelBtn: '取消',
+      onConfirm: async () => {
+        confirm.destroy()
+        importingCards.value = true
+        try {
+          await store.addCardsBatch(cardsData as any)
+          await store.fetchCards()
+          MessagePlugin.success(`成功导入 ${cardsData.length} 张卡牌`)
+        } catch (err: any) {
+          MessagePlugin.error('导入失败: ' + (err.message || '未知错误'))
+        } finally {
+          importingCards.value = false
+        }
+      }
+    })
+  } catch (err: any) {
+    MessagePlugin.error('解析文件失败: ' + (err.message || '未知错误'))
+  }
+
+  target.value = ''
+}
+
 async function handleSaveExpectedCount(): Promise<void> {
   try {
     await store.saveConfig({ drawsPerPlayer: expectedTrainingCount.value })
@@ -974,10 +1150,12 @@ async function fetchTrainingLogs(): Promise<void> {
       page: logsPage.value,
       pageSize: logsPageSize.value,
       startDate: logsStartDate.value,
-      endDate: logsEndDate.value
+      endDate: logsEndDate.value,
+      userId: logsFilterPlayer.value || undefined,
+      cardType: logsFilterType.value || undefined
     }
     const res = await getTrainingRecords(params)
-    trainingLogs.value = res.list
+    trainingLogs.value = res.list || []
     logsTotal.value = res.total
     logsSelectedIds.value = []
   } catch (e: any) {
@@ -989,11 +1167,101 @@ async function fetchTrainingLogs(): Promise<void> {
   }
 }
 
+// 日志统计概览（基于当前筛选条件下的全量记录，用大 pageSize 拉取计算）
+const logsStats = ref<{ total: number; players: number; cards: number; types: Record<string, number>; avgPerPlayer: number }>({
+  total: 0, players: 0, cards: 0, types: {}, avgPerPlayer: 0
+})
+
+async function refreshLogsStats(): Promise<void> {
+  try {
+    const params = {
+      round: currentRound.value,
+      pageSize: 999,
+      startDate: logsStartDate.value,
+      endDate: logsEndDate.value,
+      userId: logsFilterPlayer.value || undefined,
+      cardType: logsFilterType.value || undefined
+    }
+    const res = await getTrainingRecords(params)
+    const list = res.list || []
+    const players = new Set(list.map(r => r.userId || r.userName))
+    const cards = new Set(list.map(r => r.cardName))
+    const types: Record<string, number> = {}
+    for (const r of list) {
+      const t = r.cardType || 'mixed'
+      types[t] = (types[t] || 0) + 1
+    }
+    logsStats.value = {
+      total: list.length,
+      players: players.size,
+      cards: cards.size,
+      types,
+      avgPerPlayer: players.size ? +(list.length / players.size).toFixed(1) : 0
+    }
+  } catch {
+    logsStats.value = { total: 0, players: 0, cards: 0, types: {}, avgPerPlayer: 0 }
+  }
+}
+
+const logsTypeOptions = computed(() => {
+  const types = new Set((store.cards || []).map(c => c.type))
+  store.cards.forEach(c => { if (c.type) types.add(c.type) })
+  return Array.from(types)
+})
+
 function clearLogsFilter(): void {
   logsStartDate.value = ''
   logsEndDate.value = ''
+  logsFilterPlayer.value = ''
+  logsFilterType.value = ''
   logsPage.value = 1
   fetchTrainingLogs()
+}
+
+function onLogsSearch(): void {
+  logsPage.value = 1
+  fetchTrainingLogs()
+  refreshLogsStats()
+}
+
+function toggleLogsSelectAll(): void {
+  if (logsSelectedIds.value.length === trainingLogs.value.length && trainingLogs.value.length > 0) {
+    logsSelectedIds.value = []
+  } else {
+    logsSelectedIds.value = trainingLogs.value.map(r => r.id)
+  }
+}
+
+function exportTrainingLogsCsv(): void {
+  try {
+    if (trainingLogs.value.length === 0) {
+      MessagePlugin.warning('当前没有可导出的日志')
+      return
+    }
+    const header = ['时间', '选手', '卡牌', '类型', '效果', '声乐', '舞蹈', '魅力']
+    const rows = trainingLogs.value.map(r => [
+      formatDateTime(r.createdAt),
+      r.userName || r.userId,
+      r.cardName,
+      getTypeText(r.cardType),
+      getRecordTooltip(r),
+      r.attributesAfter?.vocal ?? '',
+      r.attributesAfter?.dance ?? '',
+      r.attributesAfter?.charm ?? ''
+    ])
+    const csv = [header.join(','), ...rows.map(row => row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))].join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const dateStr = new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')
+    a.href = url
+    a.download = `训练日志_${dateStr}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    MessagePlugin.success(`已导出 ${rows.length} 条训练日志`)
+  } catch (e: any) {
+    MessagePlugin.error('导出失败: ' + (e.message || '未知错误'))
+  }
 }
 
 function onLogsPageChange(pageInfo: { current: number }): void {
@@ -1038,6 +1306,7 @@ async function handleDeleteLog(record: TrainingRecord): Promise<void> {
         await fetchTrainingRecords()
         await fetchPlayers()
         await fetchTrainingLogs()
+        await refreshLogsStats()
         MessagePlugin.success('撤销成功，已回滚属性')
       } catch (e: any) {
         MessagePlugin.error(e.message || '撤销失败')
@@ -1066,6 +1335,7 @@ async function handleBatchDeleteLogs(): Promise<void> {
         await fetchTrainingRecords()
         await fetchPlayers()
         await fetchTrainingLogs()
+        await refreshLogsStats()
         MessagePlugin.success(`批量撤销成功，共 ${result.deletedCount} 条记录，已回滚属性`)
       } catch (e: any) {
         MessagePlugin.error(e.message || '批量撤销失败')
@@ -1094,6 +1364,10 @@ onMounted(async () => {
   await seasonStore.fetchRounds()
   await fetchPlayers()
   await fetchTrainingRecords()
+
+  // 训练日志
+  await fetchTrainingLogs()
+  await refreshLogsStats()
 
   // 从配置初始化期望训练次数
   if (store.config?.drawsPerPlayer) {
@@ -1606,6 +1880,64 @@ onMounted(async () => {
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+// 日志筛选工具栏
+.logs-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+
+  .filter-sep {
+    font-size: 13px;
+    color: var(--text-tertiary);
+  }
+}
+
+// 日志统计概览
+.logs-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.06));
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 10px;
+
+  .logs-stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 64px;
+
+    .stat-num {
+      font-size: 22px;
+      font-weight: 800;
+      color: #667eea;
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 2px;
+    }
+  }
+
+  .logs-stat-types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-left: auto;
+    max-width: 60%;
+  }
 }
 
 .logs-loading,

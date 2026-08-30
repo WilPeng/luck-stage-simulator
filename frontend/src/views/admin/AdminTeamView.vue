@@ -18,6 +18,11 @@
 
     <!-- 操作按钮区 -->
     <div class="action-section">
+      <t-button v-if="groupingMode === 'captain_choice'" theme="primary" block :loading="matchingPreferences" @click="handleMatchPreferences">
+        <template #icon><span>🤝</span></template>
+        按意向匹配分组
+        <span v-if="preferenceCount > 0" class="match-count">{{ preferenceCount }} 人已提交意向</span>
+      </t-button>
       <t-button theme="warning" block @click="handleAutoDistribute">
         <template #icon><RefreshIcon /></template>
         自动分配
@@ -430,7 +435,7 @@ import { SettingIcon, RefreshIcon } from 'tdesign-icons-vue-next'
 import { useTeamStore } from '../../stores/teamStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useSeasonStore } from '../../stores/seasonStore'
-import { getAvatarUrl, getCurrentCaptains } from '../../services/api'
+import { getAvatarUrl, getCurrentCaptains, matchCaptainPreferences, getAllCaptainPreferences, getGroupingMode } from '../../services/api'
 import { getTeams as dsGetTeams } from '../../services/dataService'
 import type { RoundTeam, RoundTeamMember } from '../../types/round'
 import type { User } from '../../types/user'
@@ -468,6 +473,54 @@ const currentRoundId = computed(() => {
   return r > 0 ? `round-${r}` : seasonStore.currentRoundId
 })
 const loading = computed(() => teamStore.loading)
+
+// 分组模式（意向队长匹配）
+const groupingMode = ref<'captain' | 'song' | 'captain_choice'>('captain')
+const matchingPreferences = ref(false)
+const preferenceCount = ref(0)
+
+// 加载分组模式与意向数量
+async function loadGroupingMode() {
+  try {
+    groupingMode.value = await getGroupingMode(currentRoundId.value || `round-${roundFromRoute.value || 1}`)
+  } catch (e) {
+    groupingMode.value = 'captain'
+  }
+  if (groupingMode.value === 'captain_choice') {
+    try {
+      const res = await getAllCaptainPreferences(currentRoundId.value)
+      preferenceCount.value = res.count || 0
+    } catch (e) {
+      preferenceCount.value = 0
+    }
+  }
+}
+
+// 按意向匹配分组
+async function handleMatchPreferences() {
+  const confirm = DialogPlugin.confirm({
+    header: '确认按意向匹配',
+    body: `将根据选手提交的意向队长进行分组匹配，未提交意向的选手随机补位。是否继续？`,
+    confirmBtn: '开始匹配',
+    cancelBtn: '取消',
+    theme: 'primary',
+    onConfirm: async () => {
+      confirm.destroy()
+      matchingPreferences.value = true
+      try {
+        const result = await matchCaptainPreferences(currentRoundId.value)
+        MessagePlugin.success(`匹配完成：${result.matchedByPreference} 人按意向，${result.randomFill} 人随机补位`)
+        // 刷新队伍
+        await teamStore.fetchTeams(currentRoundId.value)
+        await loadGroupingMode()
+      } catch (e: any) {
+        MessagePlugin.error(e.message || '匹配失败')
+      } finally {
+        matchingPreferences.value = false
+      }
+    }
+  })
+}
 
 const TEAM_MANAGEMENT_USER_PAGE_SIZE = 1000
 
@@ -1017,6 +1070,8 @@ onMounted(async () => {
     await seasonStore.fetchSeason()
   }
 
+  await loadGroupingMode()
+
   if (currentRoundId.value) {
     // 加载玩家数据和队伍数据
     await Promise.all([
@@ -1088,8 +1143,19 @@ onMounted(async () => {
 // 操作按钮区
 .action-section {
   display: flex;
+  flex-direction: column;
   gap: 10px;
   margin-bottom: 12px;
+
+  .t-button {
+    width: 100%;
+  }
+}
+
+.match-count {
+  margin-left: 8px;
+  font-size: 12px;
+  opacity: 0.9;
 }
 
 // 区块头部

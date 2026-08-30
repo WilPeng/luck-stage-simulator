@@ -6,17 +6,22 @@
     </div>
 
     <div class="actions-grid">
+      <!-- 组队 / 按歌分组 / 意向队长入口（按分组模式跳转） -->
       <router-link
-        :to="`${gamePrefix}/player/round/${currentRound}/team`"
+        :to="`${gamePrefix}/player/round/${currentRound}/${groupingMode === 'song' ? 'song-group' : groupingMode === 'captain_choice' ? 'captain-choice' : 'team'}`"
         class="action-card"
       >
-        <span class="action-icon">👥</span>
-        <span class="action-title">组队</span>
-        <span class="action-desc">申请入队或管理队伍</span>
+        <span class="action-icon">{{ groupingMode === 'song' ? '🎵' : groupingMode === 'captain_choice' ? '🤝' : '👥' }}</span>
+        <span class="action-title">{{ groupingMode === 'song' ? '按歌分组' : groupingMode === 'captain_choice' ? '选择意向队长' : '组队' }}</span>
+        <span class="action-desc">
+          {{ groupingMode === 'song' ? '选手直接选歌，同歌自动成组' : groupingMode === 'captain_choice' ? '选择你的意向队长' : '申请入队或管理队伍' }}
+        </span>
         <span class="action-arrow">→</span>
       </router-link>
 
+      <!-- 选歌（按歌分组时已并入组队；其余模式显示队长抢选） -->
       <router-link
+        v-if="groupingMode !== 'song'"
         :to="`${gamePrefix}/player/round/${currentRound}/song-selection`"
         class="action-card"
       >
@@ -53,11 +58,11 @@
       <div class="progress-list">
         <div class="progress-item" :class="{ done: hasTeam }">
           <span class="progress-icon">{{ hasTeam ? '✓' : '○' }}</span>
-          <span class="progress-label">已加入队伍</span>
+          <span class="progress-label">{{ groupingMode === 'song' ? '已选择歌曲成组' : '已加入队伍' }}</span>
         </div>
         <div class="progress-item" :class="{ done: hasSong }">
           <span class="progress-icon">{{ hasSong ? '✓' : '○' }}</span>
-          <span class="progress-label">队伍已选歌</span>
+          <span class="progress-label">{{ groupingMode === 'song' ? '已加入歌曲小组' : '队伍已选歌' }}</span>
         </div>
         <div class="progress-item" :class="{ done: trainingCompleted }">
           <span class="progress-icon">{{ trainingCompleted ? '✓' : '○' }}</span>
@@ -78,7 +83,7 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { useSongStore } from '../../stores/songStore'
-import { getPlayerPerformanceStatus, getConcurrentReleaseStatus } from '../../services/api'
+import { getPlayerPerformanceStatus, getConcurrentReleaseStatus, getGroupingMode } from '../../services/api'
 import type { ConcurrentReleaseStatusResponse } from '../../types/season'
 
 const route = useRoute()
@@ -97,6 +102,8 @@ const myTeam = computed(() => {
 const hasTeam = computed(() => !!myTeam.value)
 const hasSong = computed(() => {
   if (!myTeam.value) return false
+  // 按歌分组模式：已入组即已选歌
+  if (groupingMode.value === 'song') return true
   return songStore.teamSongs.some(ts => ts.teamId === myTeam.value!.id)
 })
 const trainingCompleted = computed(() => {
@@ -108,10 +115,12 @@ const trainingCompleted = computed(() => {
 const perfValueDrawn = ref(false)
 const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
 const isPerformanceReleased = computed(() => !!releaseStatus.value?.performanceReleased)
+const groupingMode = ref<'captain' | 'song' | 'captain_choice'>('captain')
 let releaseTimer: number | undefined
 let progressTimer: number | undefined
 
 onMounted(() => {
+  loadGroupingMode()
   teamStore.fetchTeams(String(currentRound.value))
   songStore.fetchRoundSongs(String(currentRound.value))
   checkPerfValueDrawn()
@@ -131,6 +140,14 @@ async function loadReleaseStatus() {
     releaseStatus.value = await getConcurrentReleaseStatus(`round-${currentRound.value}`)
   } catch {
     releaseStatus.value = null
+  }
+}
+
+async function loadGroupingMode() {
+  try {
+    groupingMode.value = await getGroupingMode(`round-${currentRound.value}`)
+  } catch (e) {
+    groupingMode.value = 'captain'
   }
 }
 

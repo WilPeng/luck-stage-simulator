@@ -137,7 +137,7 @@
       </div>
 
       <!-- 反应力模式：等待变灯后点击 -->
-      <div v-else class="reflex-mode">
+      <div v-else-if="mode === 'reflex'" class="reflex-mode">
         <div class="reflex-stage" :class="reflexStage" @click="handleReflexClick">
           <div class="reflex-icon">{{ reflexIcon }}</div>
           <div class="reflex-text">{{ reflexText }}</div>
@@ -160,6 +160,97 @@
         </t-button>
       </div>
 
+      <!-- 记忆模式：翻牌配对 -->
+      <div v-else-if="mode === 'memory'" class="memory-mode">
+        <div class="memory-status">
+          <span>配对 {{ memoryMatched }}/{{ memoryPairs }} 对</span>
+          <span>翻牌 {{ memoryFlips }} 次</span>
+        </div>
+        <div class="memory-tip">找出所有相同的数字配对，翻牌越少发挥值越高！</div>
+        <div class="memory-grid" :class="{ ended: memoryEnded }">
+          <div
+            v-for="(card, idx) in memoryCards"
+            :key="idx"
+            class="memory-card"
+            :class="{ flipped: card.flipped, matched: card.matched }"
+            @click="flipMemoryCard(idx)"
+          >
+            <span class="card-face">{{ card.flipped || card.matched ? card.value : '?' }}</span>
+          </div>
+        </div>
+        <t-button
+          v-if="!memoryStarted"
+          theme="primary"
+          size="large"
+          @click="startMemory"
+        >
+          🃏 开始记忆挑战
+        </t-button>
+        <t-button
+          v-else-if="memoryEnded"
+          theme="success"
+          size="large"
+          @click="finishMemory"
+        >
+          查看发挥值结果
+        </t-button>
+      </div>
+
+      <!-- 数字炸弹模式：缩小范围猜数字 -->
+      <div v-else class="bomb-mode">
+        <div class="bomb-status">
+          <span>范围：{{ bombLow }} ~ {{ bombHigh }}</span>
+          <span>剩余 {{ bombAttempts }} 次机会</span>
+        </div>
+        <div class="bomb-tip" v-if="!bombEnded">每次输入一个数字，猜中炸弹则中招！范围越小发挥值越高</div>
+        <div class="bomb-result" v-else>
+          <span class="bomb-icon">💣</span>
+          <span>炸弹藏在 {{ bombTarget }}，你用 {{ BOMB_ATTEMPTS - bombAttempts }} 次逼近</span>
+        </div>
+        <div class="bomb-input-row">
+          <t-input-number
+            v-model="bombGuess"
+            :min="bombLow"
+            :max="bombHigh"
+            :disabled="bombEnded"
+            style="width: 140px"
+          />
+          <t-button
+            theme="primary"
+            :disabled="bombEnded || bombGuess === null || bombGuess < bombLow || bombGuess > bombHigh"
+            @click="submitBombGuess"
+          >
+            猜！
+          </t-button>
+        </div>
+        <div class="bomb-guesses" v-if="bombGuesses.length">
+          <span
+            v-for="(g, i) in bombGuesses"
+            :key="i"
+            class="bomb-guess-tag"
+            :class="{ hit: g === bombTarget }"
+          >
+            {{ g }}
+          </span>
+        </div>
+        <t-button
+          v-if="!bombStarted"
+          theme="primary"
+          size="large"
+          @click="startBomb"
+        >
+          💣 开始数字炸弹
+        </t-button>
+        <t-button
+          v-else-if="bombEnded"
+          theme="success"
+          size="large"
+          @click="finishBomb"
+        >
+          查看发挥值结果
+        </t-button>
+      </div>
+
       <p class="hint">发挥值将用于公演结算，范围 -10 ~ 20</p>
     </div>
   </div>
@@ -176,7 +267,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const currentRound = computed(() => parseInt(route.params.round as string, 10) || 1)
-const mode = ref<'random' | 'pointer' | 'speed' | 'strategy' | 'reflex'>('random')
+const mode = ref<'random' | 'pointer' | 'speed' | 'strategy' | 'reflex' | 'memory' | 'bomb'>('random')
 const drawing = ref(false)
 const displayValue = ref(0)
 const myValue = ref<number | null>(null)
@@ -227,7 +318,9 @@ const modeLabel = computed(() => {
     pointer: '🎯 摆动指针（反应与时机）',
     speed: '⚡ 手速挑战（快速连击）',
     strategy: '🧠 策略抉择（风险权衡）',
-    reflex: '🔴 反应力测试（变灯点击）'
+    reflex: '🔴 反应力测试（变灯点击）',
+    memory: '🃏 记忆配对（翻牌找相同）',
+    bomb: '💣 数字炸弹（缩小范围）'
   }
   return map[mode.value] || mode.value
 })
@@ -395,6 +488,127 @@ function handleReflexClick() {
   }
 }
 
+// ===== 记忆模式：翻牌配对，翻牌次数越少发挥值越高 =====
+const MEMORY_PAIRS = 6                       // 6 对（12 张牌）
+const memoryStarted = ref(false)
+const memoryEnded = ref(false)
+const memoryCards = ref<{ value: number; flipped: boolean; matched: boolean }[]>([])
+const memoryFlips = ref(0)
+const memoryMatched = ref(0)
+const memoryPairs = MEMORY_PAIRS
+let firstFlipIdx: number | null = null
+let memoryLock = false
+
+function startMemory() {
+  const values = Array.from({ length: MEMORY_PAIRS }, (_, i) => i)
+  const deck = [...values, ...values].sort(() => Math.random() - 0.5)
+  memoryCards.value = deck.map(v => ({ value: v, flipped: false, matched: false }))
+  memoryStarted.value = true
+  memoryEnded.value = false
+  memoryFlips.value = 0
+  memoryMatched.value = 0
+  firstFlipIdx = null
+}
+
+function flipMemoryCard(idx: number) {
+  if (memoryLock || memoryEnded.value || !memoryStarted.value) return
+  const card = memoryCards.value[idx]
+  if (card.flipped || card.matched) return
+
+  card.flipped = true
+  memoryFlips.value++
+
+  if (firstFlipIdx === null) {
+    firstFlipIdx = idx
+    return
+  }
+
+  const second = idx
+  const first = firstFlipIdx
+  firstFlipIdx = null
+  memoryLock = true
+
+  if (memoryCards.value[first].value === memoryCards.value[second].value) {
+    memoryCards.value[first].matched = true
+    memoryCards.value[second].matched = true
+    memoryMatched.value++
+    memoryLock = false
+    if (memoryMatched.value >= MEMORY_PAIRS) {
+      memoryEnded.value = true
+    }
+  } else {
+    setTimeout(() => {
+      memoryCards.value[first].flipped = false
+      memoryCards.value[second].flipped = false
+      memoryLock = false
+    }, 800)
+  }
+}
+
+function finishMemory() {
+  // 翻牌越少发挥值越高：8次内配对完为高手
+  const ratio = memoryFlips.value / (MEMORY_PAIRS * 2)   // 下限 1（全部一次配中）
+  let min = -10, max = 5
+  if (ratio <= 1.5) { min = 10; max = 20 }
+  else if (ratio <= 2) { min = 0; max = 15 }
+  else if (ratio <= 2.5) { min = -5; max = 10 }
+  const value = Math.floor(Math.random() * (max - min + 1)) + min
+  finishDraw(value)
+}
+
+// ===== 数字炸弹模式：猜数字缩小范围，逼近越多发挥值越高 =====
+const BOMB_ATTEMPTS = 8
+const bombStarted = ref(false)
+const bombEnded = ref(false)
+const bombTarget = ref(0)
+const bombLow = ref(-10)
+const bombHigh = ref(20)
+const bombAttempts = ref(BOMB_ATTEMPTS)
+const bombGuess = ref<number | null>(null)
+const bombGuesses = ref<number[]>([])
+
+function startBomb() {
+  bombStarted.value = true
+  bombEnded.value = false
+  bombTarget.value = Math.floor(Math.random() * 31) - 10   // -10 ~ 20
+  bombLow.value = -10
+  bombHigh.value = 20
+  bombAttempts.value = BOMB_ATTEMPTS
+  bombGuess.value = null
+  bombGuesses.value = []
+}
+
+function submitBombGuess() {
+  if (bombEnded.value || bombGuess.value === null) return
+  const g = bombGuess.value
+  if (g < bombLow.value || g > bombHigh.value) return
+
+  bombGuesses.value.push(g)
+  if (g === bombTarget.value) {
+    // 猜中炸弹，中招
+    bombEnded.value = true
+    return
+  }
+  // 缩小范围
+  if (g < bombTarget.value) bombLow.value = Math.max(bombLow.value, g + 1)
+  else bombHigh.value = Math.min(bombHigh.value, g - 1)
+  bombAttempts.value--
+  bombGuess.value = null
+  if (bombAttempts.value <= 0 || bombLow.value >= bombHigh.value) {
+    bombEnded.value = true
+  }
+}
+
+function finishBomb() {
+  const narrowed = (20 - (-10)) - (bombHigh.value - bombLow.value)   // 初始31 → 当前范围差值，越大说明逼近越多
+  let min = -10, max = 5
+  if (narrowed >= 25) { min = 10; max = 20 }
+  else if (narrowed >= 18) { min = 0; max = 15 }
+  else if (narrowed >= 10) { min = -5; max = 10 }
+  const value = Math.floor(Math.random() * (max - min + 1)) + min
+  finishDraw(value)
+}
+
 async function finishDraw(value: number) {
   drawing.value = false
   pointerRunning.value = false
@@ -439,7 +653,7 @@ onMounted(async () => {
       getPerformanceRoundStatus(roundId).catch(() => null)
     ])
     isReleased.value = !!release?.performanceReleased
-    const validModes = ['random', 'pointer', 'speed', 'strategy', 'reflex']
+    const validModes = ['random', 'pointer', 'speed', 'strategy', 'reflex', 'memory', 'bomb']
     if (roundStatus?.generationMode && validModes.includes(roundStatus.generationMode)) {
       mode.value = roundStatus.generationMode
     }
@@ -831,6 +1045,142 @@ onMounted(async () => {
     .reflex-text {
       font-size: 14px;
       font-weight: 600;
+    }
+  }
+}
+
+// ===== 记忆模式 =====
+.memory-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+
+  .memory-status {
+    display: flex;
+    gap: 24px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .memory-tip {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .memory-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    width: 100%;
+    max-width: 360px;
+    opacity: 1;
+    transition: opacity 0.3s;
+
+    &.ended {
+      opacity: 0.85;
+    }
+  }
+
+  .memory-card {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--text-tertiary);
+    transition: all 0.2s;
+    user-select: none;
+
+    &:hover:not(.flipped):not(.matched) {
+      border-color: #0052d9;
+      transform: translateY(-2px);
+    }
+
+    &.flipped,
+    &.matched {
+      background: rgba(0, 82, 217, 0.1);
+      border-color: #0052d9;
+      color: #0052d9;
+    }
+
+    &.matched {
+      background: rgba(39, 174, 96, 0.15);
+      border-color: #27ae60;
+      color: #27ae60;
+      cursor: default;
+    }
+  }
+}
+
+// ===== 数字炸弹模式 =====
+.bomb-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+
+  .bomb-status {
+    display: flex;
+    gap: 24px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .bomb-tip {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  .bomb-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+
+    .bomb-icon {
+      font-size: 24px;
+    }
+  }
+
+  .bomb-input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .bomb-guesses {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    max-width: 100%;
+  }
+
+  .bomb-guess-tag {
+    padding: 4px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+
+    &.hit {
+      background: rgba(231, 76, 60, 0.15);
+      border-color: #e74c3c;
+      color: #e74c3c;
     }
   }
 }

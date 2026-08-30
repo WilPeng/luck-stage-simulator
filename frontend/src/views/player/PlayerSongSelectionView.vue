@@ -10,6 +10,15 @@
       <p class="subtitle">{{ isCaptain ? '从已释放的歌曲中为队伍抢选一首' : '查看本轮公演歌曲' }}</p>
     </div>
 
+    <!-- 按歌分组模式提示 -->
+    <div v-if="groupingMode === 'song'" class="grouping-mode-banner">
+      <span class="banner-icon">🎵</span>
+      <div class="banner-text">
+        <div class="banner-title">本轮采用「按歌分组」</div>
+        <div class="banner-desc">请前往「组队 → 选择歌曲」页面选择歌曲，选到同一首歌的选手自动成组，此处仅展示本轮公演歌曲</div>
+      </div>
+    </div>
+
     <!-- 未开放提示 -->
     <div v-if="!isSongReleased" class="release-locked-banner">
       <span class="lock-icon">🔒</span>
@@ -153,11 +162,11 @@
           </div>
         </div>
       </div>
-      <!-- 等待中 -->
+      <!-- 等待中 / 按歌分组未选歌 -->
       <div v-else class="member-waiting">
-        <div class="waiting-icon">⏳</div>
-        <h3>等待队长选歌</h3>
-        <p>队长正在为本轮公演选择歌曲，请稍候</p>
+        <div class="waiting-icon">{{ groupingMode === 'song' ? '🎵' : '⏳' }}</div>
+        <h3>{{ groupingMode === 'song' ? '尚未选择歌曲' : '等待队长选歌' }}</h3>
+        <p>{{ groupingMode === 'song' ? '请前往「组队 → 选择歌曲」页面选择歌曲，同歌选手自动成组' : '队长正在为本轮公演选择歌曲，请稍候' }}</p>
       </div>
     </div>
 
@@ -208,7 +217,7 @@ import { useSeasonStore } from '../../stores/seasonStore'
 import { useSongStore } from '../../stores/songStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useTeamStore } from '../../stores/teamStore'
-import { getConcurrentReleaseStatus } from '../../services/api'
+import { getConcurrentReleaseStatus, getGroupingMode } from '../../services/api'
 import type { ConcurrentReleaseStatusResponse } from '../../types/season'
 import StageStatusView from '../../components/StageStatusView.vue'
 
@@ -223,6 +232,9 @@ const round = computed(() => Number(route.params.round))
 // 并发阶段释放状态
 const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
 const isSongReleased = computed(() => !!releaseStatus.value?.songReleased)
+
+// 分组模式
+const groupingMode = ref<'captain' | 'song' | 'captain_choice'>('captain')
 
 // 队长判定：通过 team.captainId 匹配，不依赖 user.role 字段
 const isCaptain = computed(() => {
@@ -254,14 +266,33 @@ const myTeam = computed(() => {
 
 const hasClaimedSong = computed(() => {
   if (!myTeam.value) return false
+  // 按歌分组：已入组即已选歌
+  if (groupingMode.value === 'song') return true
   return songStore.teamSongs.some(ts => ts.teamId === myTeam.value!.id)
 })
 
 const claimedSong = computed(() => {
   if (!myTeam.value) return null
+  // 按歌分组：找到与我队伍对应的歌曲
+  if (groupingMode.value === 'song') {
+    // 尝试从 songOptions 映射（队伍 → 歌曲），或从 roundSongs 按队伍顺序匹配
+    return songGroupClaimed.value || null
+  }
   const ts = songStore.teamSongs.find(t => t.teamId === myTeam.value!.id)
   if (!ts) return null
   return roundSongs.value.find(rs => rs.id === ts.songId || rs.songId === ts.songId) || null
+})
+
+// 按歌分组模式下，我队伍对应的歌曲（通过歌→队映射）
+const songGroupClaimed = computed(() => {
+  if (!myTeam.value) return null
+  // 从轮次歌曲中找分配给当前队伍的那首（assignedTeamId === myTeam.id）
+  const matched = roundSongs.value.find(rs => rs.assignedTeamId === myTeam.value!.id)
+  if (matched) return matched
+  // 回退：按队伍序号匹配歌曲
+  const teamIdx = parseInt(String(myTeam.value!.id).match(/-team-(\d+)$/)?.[1] || '0', 10)
+  if (teamIdx > 0) return roundSongs.value[teamIdx - 1] || null
+  return null
 })
 
 // 抢选歌曲
@@ -324,6 +355,14 @@ async function loadReleaseStatus() {
   }
 }
 
+async function loadGroupingMode() {
+  try {
+    groupingMode.value = await getGroupingMode(`round-${round.value}`)
+  } catch (e) {
+    groupingMode.value = 'captain'
+  }
+}
+
 let releaseTimer: number | undefined
 
 onMounted(async () => {
@@ -333,7 +372,8 @@ onMounted(async () => {
     songStore.fetchRoundSongs(roundId),
     songStore.fetchTeamSongs(roundId),
     teamStore.fetchTeams(roundId),
-    loadReleaseStatus()
+    loadReleaseStatus(),
+    loadGroupingMode()
   ])
   // 调试：检查 isCaptain 判定所需的数据
   const me = authStore.currentUser
@@ -363,6 +403,18 @@ color: var(--text-primary);
 }
 
 // ===== 页面头部 =====
+.grouping-mode-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; margin-bottom: 20px;
+  background: rgba(102, 126, 234, 0.08);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 12px;
+  .banner-icon { font-size: 24px; }
+  .banner-text { flex: 1; }
+  .banner-title { font-size: 14px; font-weight: 600; color: #667eea; }
+  .banner-desc { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+}
+
 .release-locked-banner {
   display: flex; align-items: center; gap: 12px;
   padding: 14px 16px; margin-bottom: 20px;

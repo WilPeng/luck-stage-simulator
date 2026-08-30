@@ -79,8 +79,9 @@ export const usePerformanceStore = defineStore('performance', () => {
     sortedPlayerResults.value.slice(0, 10)
   )
 
+  // 展示顺序遵循后端返回（按队长选举顺序排列，而非得票/名次），留悬念
   const sortedTeamPerformanceResults = computed(() =>
-    [...teamPerformanceResults.value].sort((a, b) => a.rank - b.rank)
+    [...teamPerformanceResults.value]
   )
 
   const sortedPlayerPerformanceResults = computed(() =>

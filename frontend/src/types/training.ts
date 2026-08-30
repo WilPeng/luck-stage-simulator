@@ -101,6 +101,7 @@ export interface TrainingRecordQuery {
   round?: number
   userId?: string
   cardId?: string
+  cardType?: string
   startDate?: string
   endDate?: string
   page?: number

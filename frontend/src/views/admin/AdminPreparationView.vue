@@ -21,6 +21,35 @@
           <template #subtitle>
             <t-tag theme="primary" variant="light">第 {{ currentRound }} 公演</t-tag>
           </template>
+
+          <!-- 组队模式选择 -->
+          <div class="config-section grouping-mode-section">
+            <div class="config-header">
+              <span class="config-label">本轮组队方式</span>
+            </div>
+            <div class="grouping-mode-options">
+              <div
+                v-for="mode in groupingModes"
+                :key="mode.value"
+                class="grouping-mode-card"
+                :class="{ selected: config.groupingMode === mode.value }"
+                @click="config.groupingMode = mode.value"
+              >
+                <span class="mode-icon">{{ mode.icon }}</span>
+                <div class="mode-info">
+                  <span class="mode-name">{{ mode.name }}</span>
+                  <span class="mode-desc">{{ mode.desc }}</span>
+                </div>
+              </div>
+            </div>
+            <t-alert v-if="config.groupingMode === 'song'" theme="info" style="margin-top: 12px">
+              按歌分组：选手直接选择歌曲，选到同一首歌曲的选手自动成组。队伍数量与歌曲池歌曲数量需一致。
+            </t-alert>
+            <t-alert v-if="config.groupingMode === 'captain_choice'" theme="info" style="margin-top: 12px">
+              意向队长分组：先完成队长选举/指定，选手选择意向队长，管理员在组队阶段点击"按意向匹配"完成分组。
+            </t-alert>
+          </div>
+
           <div class="config-section">
             <div class="config-header">
               <span class="config-label">设置本轮队伍数量</span>
@@ -149,7 +178,7 @@ import { MessagePlugin } from 'tdesign-vue-next'
 import { useRoute } from 'vue-router'
 import { useSeasonStore } from '../../stores/seasonStore'
 import { usePlayerStore } from '../../stores/playerStore'
-import { updateTeamSetup, updateRound, getTrainingConfig, getRoundTeams } from '../../services/api'
+import { updateTeamSetup, updateRound, getTrainingConfig, getRoundTeams, doRequest } from '../../services/api'
 
 const route = useRoute()
 const seasonStore = useSeasonStore()
@@ -164,8 +193,15 @@ const config = reactive({
   teamSizes: [6, 6, 6, 6, 6] as number[],
   trainingTimesAllowed: 5,
   eliminationCount: 5,
-  dangerLineRatio: 0.2
+  dangerLineRatio: 0.2,
+  groupingMode: 'captain' as 'captain' | 'song' | 'captain_choice'
 })
+
+// 组队模式（当前启用：队长选歌组队 / 意向队长分组）
+const groupingModes = [
+  { value: 'captain', icon: '👑', name: '队长选歌组队', desc: '队长选举 → 队员申请/邀请入队 → 队长选歌' },
+  { value: 'captain_choice', icon: '🤝', name: '意向队长分组', desc: '先选队长，选手选意向队长，按匹配分组' }
+]
 
 // 可用选手数量（排除管理员和已淘汰的选手）
 const availablePlayers = computed(() => {
@@ -210,11 +246,13 @@ async function handleSave() {
       updateTeamSetup({
         roundId,
         teamCount: config.teamCount,
-        teamSizes: config.teamSizes
+        teamSizes: config.teamSizes,
+        groupingMode: config.groupingMode
       }),
       updateRound({
         performanceRound: currentRound.value,
-        drawsPerPlayer: config.trainingTimesAllowed
+        drawsPerPlayer: config.trainingTimesAllowed,
+        groupingMode: config.groupingMode
       })
     ])
 
@@ -249,6 +287,16 @@ async function loadData() {
 // 加载已保存的配置并回填表单
 async function loadSavedConfig() {
   const roundId = `round-${currentRound.value}`
+
+  // 0. 加载分组模式（从 preparation 配置）
+  try {
+    const prep = await doRequest<any>(`/admin/round/${currentRound.value}/preparation`, { method: 'GET' })
+    if (prep?.groupingMode) {
+      config.groupingMode = ['captain', 'song', 'captain_choice'].includes(prep.groupingMode) ? prep.groupingMode : 'captain'
+    }
+  } catch (e) {
+    console.warn('[Preparation] 加载分组模式失败:', e)
+  }
 
   // 1. 加载队伍配置
   try {
@@ -337,6 +385,66 @@ watch(currentRound, () => {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
+}
+
+// 组队模式选择
+.grouping-mode-section {
+  margin-bottom: 8px;
+}
+
+.grouping-mode-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.grouping-mode-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-primary);
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: rgba(102, 126, 234, 0.5);
+    transform: translateY(-2px);
+  }
+
+  &.selected {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.08);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  }
+
+  .mode-icon {
+    font-size: 28px;
+  }
+
+  .mode-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    .mode-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .mode-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+  }
 }
 
 // 队伍结构：响应式多列，宽屏自动增多，窄屏回单列

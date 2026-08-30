@@ -577,9 +577,19 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
       }
     }
 
-    // 队伍排名（按 finalVotes）
-    teamResults.sort((a, b) => b.finalVotes - a.finalVotes)
-    for (let i = 0; i < teamResults.length; i++) teamResults[i].rank = i + 1
+    // 名次（rank）按公演票数计算，用于最终排名；但数组顺序按队伍序号（teamId 尾号 team-1/team-2/...）排列，
+    // 保证队伍总览不提前暴露按分数高低的排名，保留悬念。
+    const rankedByVotes = [...teamResults].sort((a, b) => b.finalVotes - a.finalVotes)
+    for (let i = 0; i < rankedByVotes.length; i++) rankedByVotes[i].rank = i + 1
+    for (const tr of teamResults) {
+      const found = rankedByVotes.find(x => x.teamId === tr.teamId)
+      if (found) tr.rank = found.rank
+    }
+    const teamSeqNum = (teamId) => {
+      const m = String(teamId || '').match(/-team-(\d+)$/)
+      return m ? parseInt(m[1]) : 99999
+    }
+    teamResults.sort((a, b) => teamSeqNum(a.teamId) - teamSeqNum(b.teamId))
 
     // 全场选手排名（按 playerScore）
     allPlayerResults.sort((a, b) => b.playerScore - a.playerScore)
@@ -787,6 +797,14 @@ router.get('/result', auth, async (req, res) => {
         })
       }
     })
+
+    // 留悬念：结果展示顺序按队伍序号（teamId 尾号 team-1/team-2/...，即队伍设立/队长选举顺序）排列，
+    // 而不是按得票/名次高低，避免提前暴露排名。名次字段（rank）保持不变供最终排名使用。
+    const teamSeq = (teamId) => {
+      const m = String(teamId || '').match(/-team-(\d+)$/)
+      return m ? parseInt(m[1]) : 99999
+    }
+    teamsData.sort((a, b) => teamSeq(a.teamId) - teamSeq(b.teamId))
 
     // 安全/危险队伍（直接用 resolveRoundFromQuery 返回的 round，避免重新查询）
     const season = await getCurrentSeason()
@@ -1108,7 +1126,7 @@ router.post('/start', auth, requireAdmin, async (req, res) => {
 
     const { roundId, generationMode } = req.body
     const frontRoundId = roundId || `round-${round.index}`
-    const mode = ['random', 'pointer', 'speed', 'strategy', 'reflex'].includes(generationMode) ? generationMode : 'random'
+    const mode = ['random', 'pointer', 'speed', 'strategy', 'reflex', 'memory', 'bomb'].includes(generationMode) ? generationMode : 'random'
 
     const season = await getCurrentSeason()
     if (season) {
@@ -1148,7 +1166,7 @@ router.post('/generation-mode', auth, requireAdmin, async (req, res) => {
     if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
 
     const { generationMode } = req.body
-    if (!['random', 'pointer', 'speed', 'strategy', 'reflex'].includes(generationMode)) {
+    if (!['random', 'pointer', 'speed', 'strategy', 'reflex', 'memory', 'bomb'].includes(generationMode)) {
       return res.status(400).json({ success: false, error: '生成方式只能是 random/pointer/speed/strategy/reflex', code: 'INVALID_MODE' })
     }
 

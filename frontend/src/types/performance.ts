@@ -123,7 +123,7 @@ export interface PlayerResult {
 }
 
 // 发挥值生成方式
-export type PerformanceGenerationMode = 'random' | 'pointer' | 'speed' | 'strategy' | 'reflex'
+export type PerformanceGenerationMode = 'random' | 'pointer' | 'speed' | 'strategy' | 'reflex' | 'memory' | 'bomb'
 
 // 公演配置
 export interface PerformanceConfig {

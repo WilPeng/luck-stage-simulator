@@ -161,7 +161,8 @@ router.get('/round/:round/preparation', auth, requireAdmin, async (req, res) => 
         trainingTimesAllowed: round.trainingTimesAllowed || 5,
         eliminationCount: round.eliminationCount || 5,
         dangerLineRatio: round.dangerLineRatio || 0.2,
-        teamStructures: round.teamStructures || []
+        teamStructures: round.teamStructures || [],
+        groupingMode: round.groupingMode || 'captain'
       }
     })
   } catch (e) {
@@ -174,7 +175,7 @@ router.get('/round/:round/preparation', auth, requireAdmin, async (req, res) => 
 router.post('/round/:round/preparation', auth, requireAdmin, async (req, res) => {
   try {
     const roundIdx = parseInt(req.params.round)
-    const { teamCount, teamSizes, songPoolIds, trainingTimesAllowed, eliminationCount, dangerLineRatio, teamStructures } = req.body
+    const { teamCount, teamSizes, songPoolIds, trainingTimesAllowed, eliminationCount, dangerLineRatio, teamStructures, groupingMode } = req.body
 
     if (typeof teamCount !== 'number' || teamCount < 2 || teamCount > 20) {
       return res.status(400).json({ success: false, error: 'teamCount 必须为 2-20 之间的整数', code: 'INVALID_TEAM_COUNT' })
@@ -225,6 +226,7 @@ router.post('/round/:round/preparation', auth, requireAdmin, async (req, res) =>
     round.eliminationCount = eliminationCount !== undefined ? eliminationCount : 5
     round.dangerLineRatio = dangerLineRatio !== undefined ? dangerLineRatio : 0.2
     round.teamStructures = Array.isArray(teamStructures) ? teamStructures : []
+    round.groupingMode = ['captain', 'song', 'captain_choice'].includes(groupingMode) ? groupingMode : 'captain'
     round.updatedAt = new Date().toISOString()
 
     await round.save()
@@ -702,8 +704,21 @@ async function calculatePerformance(round, frontRoundId) {
     allPlayerResults.push(...teamPlayerResults)
   }
 
-  teamResults.sort((a, b) => b.finalVotes - a.finalVotes)
-  for (let i = 0; i < teamResults.length; i++) teamResults[i].rank = i + 1
+  // 名次仍按公演票数计算（用于最终排名展示），但数组顺序按队伍序号（队伍设立/队长选举顺序）排列，
+  // 保证队伍总览不提前暴露按分数高低的排名，保留悬念。
+  const rankedByVotes = [...teamResults].sort((a, b) => b.finalVotes - a.finalVotes)
+  for (let i = 0; i < rankedByVotes.length; i++) rankedByVotes[i].rank = i + 1
+  // 按 rank 写回
+  for (const tr of teamResults) {
+    const found = rankedByVotes.find(x => x.teamId === tr.teamId)
+    if (found) tr.rank = found.rank
+  }
+  // 按队伍序号（teamId 尾号 team-1/team-2/...）升序重排展示顺序，稳定且不泄露名次
+  const teamSeq = (teamId) => {
+    const m = String(teamId || '').match(/-team-(\d+)$/)
+    return m ? parseInt(m[1]) : 99999
+  }
+  teamResults.sort((a, b) => teamSeq(a.teamId) - teamSeq(b.teamId))
 
   allPlayerResults.sort((a, b) => b.performanceValue - a.performanceValue)
   for (let i = 0; i < allPlayerResults.length; i++) allPlayerResults[i].rank = i + 1

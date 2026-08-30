@@ -21,6 +21,8 @@ class Round extends BaseModel {
     this.trainingTimesAllowed = 5
     this.eliminationCount = 5
     this.dangerLineRatio = 0.2
+    // 分组模式: captain(现有: 队长选举+申请/邀请) | song(选手选歌同歌成组) | captain_choice(选手选意向队长匹配)
+    this.groupingMode = 'captain'
     // 并发阶段释放开关：控制各子行动是否对选手/队长开放
     this.teamReleased = false
     this.songReleased = false

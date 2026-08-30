@@ -107,6 +107,8 @@
             <t-option value="speed" label="⚡ 手速挑战（连击）" />
             <t-option value="strategy" label="🧠 策略抉择（风险）" />
             <t-option value="reflex" label="🔴 反应力（变灯点击）" />
+            <t-option value="memory" label="🃏 记忆配对（翻牌）" />
+            <t-option value="bomb" label="💣 数字炸弹（猜数）" />
           </t-select>
           <t-button theme="primary" size="small" :loading="savingMode" @click="handleSaveMode">保存设置</t-button>
         </div>
@@ -146,7 +148,7 @@ const seasonStore = useSeasonStore()
 const loading = ref(false)
 const toggling = ref<ConcurrentActionType | ''>('')
 const status = ref<ConcurrentStatusResponse | null>(null)
-const genMode = ref<'random' | 'pointer' | 'speed' | 'strategy' | 'reflex'>('random')
+const genMode = ref<'random' | 'pointer' | 'speed' | 'strategy' | 'reflex' | 'memory' | 'bomb'>('random')
 const savingMode = ref(false)
 
 const roundIndex = computed(() => {
@@ -216,10 +218,10 @@ async function loadData() {
     if (status.value) {
       seasonStore.applyConcurrentStatus(roundIndex.value, status.value)
     }
-    // 读取发挥值抽取方式（实时回显当前设置，支持全部 5 种模式）
+    // 读取发挥值抽取方式（实时回显当前设置，支持全部 7 种模式）
     try {
       const rs = await getPerformanceRoundStatus(roundId.value)
-      const validModes = ['random', 'pointer', 'speed', 'strategy', 'reflex']
+      const validModes = ['random', 'pointer', 'speed', 'strategy', 'reflex', 'memory', 'bomb']
       if (rs?.generationMode && validModes.includes(rs.generationMode)) {
         genMode.value = rs.generationMode
       }
@@ -237,7 +239,9 @@ const MODE_NAMES: Record<string, { name: string; icon: string; desc: string }> =
   pointer: { name: '摆动指针', icon: '🎯', desc: '反应与时机' },
   speed: { name: '手速挑战', icon: '⚡', desc: '快速连击' },
   strategy: { name: '策略抉择', icon: '🧠', desc: '风险权衡' },
-  reflex: { name: '反应力', icon: '🔴', desc: '变灯点击' }
+  reflex: { name: '反应力', icon: '🔴', desc: '变灯点击' },
+  memory: { name: '记忆配对', icon: '🃏', desc: '翻牌找相同' },
+  bomb: { name: '数字炸弹', icon: '💣', desc: '缩小范围猜数' }
 }
 
 const currentModeInfo = computed(() => {
@@ -253,7 +257,9 @@ async function handleSaveMode() {
       pointer: '摆动指针',
       speed: '手速挑战',
       strategy: '策略抉择',
-      reflex: '反应力'
+      reflex: '反应力',
+      memory: '记忆配对',
+      bomb: '数字炸弹'
     }
     MessagePlugin.success(`抽取方式已设置为 ${modeName[genMode.value] || genMode.value}`)
   } catch (e: any) {

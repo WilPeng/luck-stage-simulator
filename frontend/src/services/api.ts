@@ -992,6 +992,140 @@ export async function getPlayerInvites(playerId: string, roundId: string): Promi
   )
 }
 
+// ================== 分组模式：按歌分组 / 意向队长 ==================
+
+export interface SongGroupOption {
+  songId: string
+  songName: string
+  style: string
+  index: number
+  teamId: string | null
+  teamName: string
+  memberCount: number
+  maxMembers: number
+  released: boolean
+}
+
+export interface SongGroupOptionsResponse {
+  roundId: string
+  roundIndex: number
+  groupingMode: string
+  songReleased: boolean
+  options: SongGroupOption[]
+}
+
+export async function getSongGroupOptions(roundId: string): Promise<SongGroupOptionsResponse> {
+  return safeCall(
+    () => doRequest<SongGroupOptionsResponse>(`/teams/song-options?roundId=${roundId}`),
+    async () => ({ roundId, roundIndex: 1, groupingMode: 'captain', songReleased: false, options: [] }),
+    'getSongGroupOptions'
+  )
+}
+
+export async function selectSongForGroup(roundId: string, songId: string): Promise<{ teamId: string; teamName: string; songId: string; songName: string }> {
+  return safeCall(
+    () => doRequest<{ teamId: string; teamName: string; songId: string; songName: string }>('/teams/select-song', {
+      method: 'POST',
+      body: JSON.stringify({ roundId, songId })
+    }),
+    async () => { throw new Error('Mock not supported for selectSongForGroup') },
+    'selectSongForGroup'
+  )
+}
+
+export async function submitCaptainPreference(roundId: string, preferredCaptainId: string): Promise<{ preferredCaptainId: string; teamId: string }> {
+  return safeCall(
+    () => doRequest<{ preferredCaptainId: string; teamId: string }>('/teams/preference', {
+      method: 'POST',
+      body: JSON.stringify({ roundId, preferredCaptainId })
+    }),
+    async () => { throw new Error('Mock not supported for submitCaptainPreference') },
+    'submitCaptainPreference'
+  )
+}
+
+export async function getMyCaptainPreference(roundId: string): Promise<{ preferredCaptainId: string | null; preferredCaptainName: string | null; teamId: string | null } | null> {
+  return safeCall(
+    () => doRequest<{ preferredCaptainId: string | null; preferredCaptainName: string | null; teamId: string | null }>(`/teams/my-preference?roundId=${roundId}`),
+    async () => null,
+    'getMyCaptainPreference'
+  )
+}
+
+// 获取本轮分组模式（选手/管理员均可读）
+export async function getGroupingMode(roundId: string): Promise<'captain' | 'song' | 'captain_choice'> {  return safeCall(
+    () => doRequest<{ groupingMode: string }>(`/teams/grouping-mode?roundId=${roundId}`),
+    async () => ({ groupingMode: 'captain' }),
+    'getGroupingMode'
+  ).then(res => {
+    const mode = res?.groupingMode
+    return ['captain', 'song', 'captain_choice'].includes(mode) ? mode : 'captain'
+  })
+}
+
+export async function getAllCaptainPreferences(roundId: string): Promise<{ preferences: { playerId: string; playerName: string; preferredCaptainId: string; preferredCaptainName: string; teamId: string }[]; count: number }> {
+  return safeCall(
+    () => doRequest<{ preferences: { playerId: string; playerName: string; preferredCaptainId: string; preferredCaptainName: string; teamId: string }[]; count: number }>(`/teams/preferences?roundId=${roundId}`),
+    async () => ({ preferences: [], count: 0 }),
+    'getAllCaptainPreferences'
+  )
+}
+
+// 管理员逐条/批量分配意向（带容量校验）
+export async function assignCaptainPreferences(roundId: string, playerIds: string[]): Promise<{ assignedCount: number; errorCount: number; assigned: any[]; errors: any[] }> {
+  return safeCall(
+    () => doRequest<{ assignedCount: number; errorCount: number; assigned: any[]; errors: any[] }>('/teams/assign-preferences', {
+      method: 'POST',
+      body: JSON.stringify({ roundId, playerIds })
+    }),
+    async () => { throw new Error('Mock not supported for assignCaptainPreferences') },
+    'assignCaptainPreferences'
+  )
+}
+
+export async function matchCaptainPreferences(roundId: string): Promise<{ matchedByPreference: number; randomFill: number; matched: any[]; randomFilled: any[] }> {
+  return safeCall(
+    () => doRequest<{ matchedByPreference: number; randomFill: number; matched: any[]; randomFilled: any[] }>('/teams/match-preferences', {
+      method: 'POST',
+      body: JSON.stringify({ roundId })
+    }),
+    async () => { throw new Error('Mock not supported for matchCaptainPreferences') },
+    'matchCaptainPreferences'
+  )
+}
+
+// ================== 统一分组结果 ==================
+
+export interface GroupTeam {  teamId: string
+  teamName: string
+  teamIndex: number | null
+  maxMembers: number
+  captainId: string | null
+  captainName: string | null
+  songId: string | null
+  songName: string | null
+  songReleased: boolean
+  memberCount: number
+  members: { playerId: string; playerName: string }[]
+  locked: boolean
+}
+
+export interface GroupResult {
+  roundId: string
+  roundIndex: number
+  groupingMode: string
+  totalTeams: number
+  teams: GroupTeam[]
+}
+
+export async function getGroupResult(roundId: string): Promise<GroupResult> {
+  return safeCall(
+    () => doRequest<GroupResult>(`/teams/group-result?roundId=${roundId}`),
+    async () => ({ roundId, roundIndex: 1, groupingMode: 'captain', totalTeams: 0, teams: [] }),
+    'getGroupResult'
+  )
+}
+
 // ================== 队长 ==================
 
 export async function getCurrentCaptains(roundId: string): Promise<{ success: boolean; data: { id: string; playerId: string; playerName: string; playerAvatar: string | null; teamId: string; teamName: string | null }[]; total: number }> {
@@ -1477,11 +1611,13 @@ export async function getTrainingRecords(params?: TrainingRecordQuery): Promise<
   const query = new URLSearchParams()
   if (params?.userId) query.append('userId', params.userId)
   if (params?.round !== undefined) query.append('roundId', `round-${params.round}`)
-  if (params?.startDate) query.append('startTime', params.startDate)
-  if (params?.endDate) query.append('endTime', params.endDate)
-  // 传一个足够大的 pageSize 以获取全部记录（后端默认 limit=10）
-  query.append('pageSize', '999')
+  if (params?.cardType) query.append('cardType', params.cardType)
+  // 将 "YYYY-MM-DD HH:mm:ss" 转为 ISO 字符串（与 DB 中 createdAt 的存储格式一致，保证字符串比较正确）
+  if (params?.startDate) query.append('startTime', toIsoTime(params.startDate))
+  if (params?.endDate) query.append('endTime', toIsoTime(params.endDate))
   if (params?.page !== undefined) query.append('page', String(params.page))
+  // 传一个足够大的 pageSize 以获取全部记录（后端默认 limit=10）
+  query.append('pageSize', params?.pageSize ? String(params.pageSize) : '999')
   const qs = query.toString()
 
   return safeCall(
@@ -1495,6 +1631,16 @@ export async function getTrainingRecords(params?: TrainingRecordQuery): Promise<
     },
     'getTrainingRecords'
   )
+}
+
+// 把 "YYYY-MM-DD HH:mm:ss"（或 "YYYY-MM-DD"）转为 ISO 字符串
+function toIsoTime(input?: string): string {
+  if (!input) return ''
+  const s = input.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return new Date(`${s}T00:00:00.000Z`).toISOString()
+  }
+  return new Date(s.replace(' ', 'T') + 'Z').toISOString()
 }
 
 export async function deleteTrainingRecord(recordId: string): Promise<void> {

@@ -41,8 +41,114 @@
           </div>
         </div>
 
-        <!-- ===== 队长视图 ===== -->
-        <div v-if="isCurrentUserCaptain && myTeam" class="captain-view">
+        <!-- ===== 按歌分组模式 ===== -->
+        <div v-if="groupingMode === 'song'" class="song-group-view">
+          <div class="section-title-bar">
+            <span class="section-icon">🎵</span>
+            <span>选择歌曲 · 同歌自动成组</span>
+            <t-tag v-if="!songReleased" theme="default" variant="light" size="small">未开放</t-tag>
+          </div>
+          <p class="subtitle" style="margin: -8px 0 16px">选择一首你想演唱的歌曲，选到同一首歌的选手会自动组成一队</p>
+
+          <!-- 我已选歌曲 -->
+          <div v-if="myTeam" class="section-card">
+            <div class="section-title-bar"><span class="section-icon">🏠</span><span>我的队伍</span></div>
+            <div class="team-card-modern">
+              <div class="team-card-header">
+                <span class="team-name-large">{{ myTeam.name }}</span>
+                <span class="team-capacity">{{ myTeam.members?.length || 0 }} / {{ myTeam.maxMembers }} 人</span>
+              </div>
+              <div class="member-chips">
+                <div v-for="member in myTeam.members" :key="member.playerId" class="member-chip" :class="{ 'chip-captain': member.playerId === myTeam.captainId }">
+                  <div class="chip-avatar">{{ getAvatarIcon(member.player?.name) }}</div>
+                  <span class="chip-name">{{ member.player?.name || '未知' }}</span>
+                  <span v-if="member.playerId === myTeam.captainId" class="chip-badge">👑</span>
+                </div>
+                <div v-if="!myTeam.members || myTeam.members.length === 0" class="no-data">暂无成员</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 歌曲选择 -->
+          <div class="song-options-grid">
+            <div
+              v-for="opt in songOptions"
+              :key="opt.songId"
+              class="song-option-card"
+              :class="{
+                selected: myTeam && songOptions.find(o => o.teamId === myTeam.id)?.songId === opt.songId,
+                full: opt.memberCount >= opt.maxMembers
+              }"
+            >
+              <div class="song-option-icon">🎵</div>
+              <div class="song-option-info">
+                <span class="song-option-name">{{ opt.songName }}</span>
+                <span class="song-option-style">{{ opt.style }}</span>
+                <span class="song-option-count">{{ opt.memberCount }}/{{ opt.maxMembers }} 人</span>
+              </div>
+              <t-button
+                v-if="songReleased && !(myTeam && songOptions.find(o => o.teamId === myTeam.id)?.songId === opt.songId)"
+                theme="primary"
+                size="small"
+                :loading="selectingSongId === opt.songId"
+                :disabled="opt.memberCount >= opt.maxMembers"
+                @click="handleSelectSong(opt)"
+              >
+                选这首
+              </t-button>
+              <t-tag v-else-if="myTeam && songOptions.find(o => o.teamId === myTeam.id)?.songId === opt.songId" theme="success" variant="light">已选</t-tag>
+              <t-tag v-else theme="default" variant="light">满员</t-tag>
+            </div>
+          </div>
+          <div v-if="songOptions.length === 0" class="empty-tip">暂无可选歌曲</div>
+        </div>
+
+        <!-- ===== 意向队长分组模式 ===== -->
+        <div v-else-if="groupingMode === 'captain_choice'" class="captain-choice-view">
+          <div class="section-title-bar">
+            <span class="section-icon">🤝</span>
+            <span>选择意向队长</span>
+            <t-tag v-if="!isTeamReleased" theme="default" variant="light" size="small">未开放</t-tag>
+          </div>
+          <p class="subtitle" style="margin: -8px 0 16px">选择你希望加入的队长，管理员将根据所有选手的意向进行匹配分组</p>
+
+          <!-- 已提交意向 -->
+          <div v-if="myPreference && myPreference.preferredCaptainId" class="section-card">
+            <div class="section-title-bar"><span class="section-icon">✅</span><span>我的意向</span></div>
+            <p style="margin:0">已选择意向队长：<strong style="color:#f39c12">{{ myPreference.preferredCaptainName || '未知' }}</strong></p>
+          </div>
+
+          <!-- 队长列表 -->
+          <div class="captain-options-grid">
+            <div
+              v-for="cap in captainOptions"
+              :key="cap.playerId"
+              class="captain-option-card"
+              :class="{ selected: myPreference && myPreference.preferredCaptainId === cap.playerId }"
+            >
+              <div class="captain-option-avatar">{{ getAvatarIcon(cap.playerName) }}</div>
+              <div class="captain-option-info">
+                <span class="captain-option-name">{{ cap.playerName }}</span>
+                <span class="captain-option-team">{{ cap.teamName || '待分配队伍' }}</span>
+              </div>
+              <t-button
+                v-if="!myPreference || myPreference.preferredCaptainId !== cap.playerId"
+                theme="primary"
+                size="small"
+                :disabled="!isTeamReleased"
+                :loading="submittingPreference"
+                @click="handleSubmitPreference(cap.playerId)"
+              >
+                选择
+              </t-button>
+              <t-tag v-else theme="success" variant="light">已选</t-tag>
+            </div>
+          </div>
+          <div v-if="captainOptions.length === 0" class="empty-tip">暂无队长，请等待队长选举完成</div>
+        </div>
+
+        <!-- ===== 队长视图（仅 captain 模式） ===== -->
+        <div v-if="groupingMode === 'captain' && isCurrentUserCaptain && myTeam" class="captain-view">
           <!-- 我的队伍 -->
           <div class="section-card">
             <div class="section-title-bar"><span class="section-icon">🏠</span><span>我的队伍</span></div>
@@ -105,8 +211,8 @@
           </div>
         </div>
 
-        <!-- ===== 队员视图 ===== -->
-        <div v-else class="member-view">
+        <!-- ===== 队员视图（仅 captain 模式） ===== -->
+        <div v-else-if="groupingMode === 'captain'" class="member-view">
           <!-- 我已加入的队伍 -->
           <div v-if="myTeam" class="section-card">
             <div class="section-title-bar"><span class="section-icon">🏠</span><span>我的队伍</span></div>
@@ -195,9 +301,16 @@ import {
   rejectTeamInvite as apiRejectInvite,
   getTeamApplications,
   getPlayerInvites,
-  getConcurrentReleaseStatus
+  getConcurrentReleaseStatus,
+  getGroupingMode,
+  getSongGroupOptions,
+  selectSongForGroup,
+  submitCaptainPreference,
+  getMyCaptainPreference,
+  getCurrentCaptains
 } from '../../services/api'
 import type { ConcurrentReleaseStatusResponse } from '../../types/season'
+import type { SongGroupOption } from '../../services/api'
 import StageStatusView from '../../components/StageStatusView.vue'
 
 const route = useRoute()
@@ -212,6 +325,19 @@ const searchKeyword = ref('')
 // 并发阶段释放状态
 const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
 const isTeamReleased = computed(() => !!releaseStatus.value?.teamReleased)
+
+// 分组模式
+const groupingMode = ref<'captain' | 'song' | 'captain_choice'>('captain')
+
+// ===== 按歌分组模式 =====
+const songOptions = ref<SongGroupOption[]>([])
+const songReleased = ref(false)
+const selectingSongId = ref<string | null>(null)
+
+// ===== 意向队长模式 =====
+const captainOptions = ref<any[]>([])
+const myPreference = ref<{ preferredCaptainId: string | null; preferredCaptainName: string | null; teamId: string | null } | null>(null)
+const submittingPreference = ref(false)
 
 // 当前选手
 const currentUser = computed(() => authStore.currentUser)
@@ -434,6 +560,77 @@ async function loadReleaseStatus() {
   }
 }
 
+// 加载分组模式（从 Round 配置读取）
+async function loadGroupingMode() {
+  try {
+    groupingMode.value = await getGroupingMode(`round-${currentRound.value}`)
+  } catch (e) {
+    groupingMode.value = 'captain'
+  }
+}
+
+// ===== 按歌分组 =====
+async function loadSongOptions() {
+  try {
+    const res = await getSongGroupOptions(`round-${currentRound.value}`)
+    songOptions.value = res.options || []
+    songReleased.value = !!res.songReleased
+  } catch (e) {
+    songOptions.value = []
+  }
+}
+
+async function handleSelectSong(option: SongGroupOption) {
+  if (selectingSongId.value) return
+  if (option.memberCount >= option.maxMembers && !myTeam.value?.id) {
+    MessagePlugin.warning('该歌曲队伍已满员')
+    return
+  }
+  selectingSongId.value = option.songId
+  try {
+    await selectSongForGroup(`round-${currentRound.value}`, option.songId)
+    MessagePlugin.success(`已加入「${option.songName}」组`)
+    await loadAll()
+    await loadSongOptions()
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '选歌失败')
+  } finally {
+    selectingSongId.value = null
+  }
+}
+
+// ===== 意向队长 =====
+async function loadCaptainOptions() {
+  try {
+    const res = await getCurrentCaptains(`round-${currentRound.value}`)
+    captainOptions.value = res.data || []
+  } catch (e) {
+    captainOptions.value = []
+  }
+}
+
+async function loadMyPreference() {
+  try {
+    myPreference.value = await getMyCaptainPreference(`round-${currentRound.value}`)
+  } catch (e) {
+    myPreference.value = null
+  }
+}
+
+async function handleSubmitPreference(captainId: string) {
+  if (submittingPreference.value) return
+  submittingPreference.value = true
+  try {
+    await submitCaptainPreference(`round-${currentRound.value}`, captainId)
+    MessagePlugin.success('意向已提交')
+    await loadMyPreference()
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '提交失败')
+  } finally {
+    submittingPreference.value = false
+  }
+}
+
 async function loadAll() {
   await loadTeams()
   await loadApplications()
@@ -446,9 +643,17 @@ onMounted(async () => {
   await Promise.all([
     playerStore.fetchUsers({ pageSize: 1000 }),
     seasonStore.fetchSeason(),
-    loadReleaseStatus()
+    loadReleaseStatus(),
+    loadGroupingMode()
   ])
   await loadAll()
+  // 按分组模式加载对应数据
+  if (groupingMode.value === 'song') {
+    await loadSongOptions()
+  } else if (groupingMode.value === 'captain_choice') {
+    await loadCaptainOptions()
+    await loadMyPreference()
+  }
   // 轮询释放状态：管理员开放后选手端自动解锁
   releaseTimer = window.setInterval(loadReleaseStatus, 8000)
 })
@@ -578,6 +783,134 @@ onBeforeUnmount(() => {
   .lock-text { flex: 1; }
   .lock-title { font-size: 14px; font-weight: 600; color: #ffd700; }
   .lock-desc { font-size: 12px; color: var(--text-tertiary); }
+}
+
+// ===== 按歌分组模式 =====
+.song-options-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+
+  @media (min-width: 480px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.song-option-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: var(--hover-bg);
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  transition: all 0.2s;
+
+  &.selected {
+    border-color: #2ba471;
+    background: rgba(43, 164, 113, 0.08);
+  }
+
+  &.full {
+    opacity: 0.7;
+  }
+
+  .song-option-icon {
+    font-size: 28px;
+  }
+
+  .song-option-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+
+    .song-option-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .song-option-style {
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+
+    .song-option-count {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+  }
+}
+
+// ===== 意向队长模式 =====
+.captain-options-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+
+  @media (min-width: 480px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.captain-option-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: var(--hover-bg);
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  transition: all 0.2s;
+
+  &.selected {
+    border-color: #2ba471;
+    background: rgba(43, 164, 113, 0.08);
+  }
+
+  .captain-option-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+
+  .captain-option-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+
+    .captain-option-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .captain-option-team {
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+  }
 }
 
 // ===== 移动端适配 =====

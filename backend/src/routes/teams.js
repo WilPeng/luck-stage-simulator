@@ -8,6 +8,8 @@ const User = require('../models/User')
 const Round = require('../models/Round')
 const TeamInvite = require('../models/TeamInvite')
 const TeamApplication = require('../models/TeamApplication')
+const Song = require('../models/Song')
+const RoundSong = require('../models/RoundSong')
 
 const router = express.Router()
 
@@ -148,7 +150,7 @@ router.get('/stats/summary', auth, async (req, res) => {
 // ===== 共享: 创建/更新轮次队伍配置 =====
 async function setupTeams(req, res) {
   try {
-    const { roundId, teamCount, teamSizes, teamNames } = req.body
+    const { roundId, teamCount, teamSizes, teamNames, groupingMode } = req.body
     if (!teamCount || !Array.isArray(teamSizes)) {
       return res.status(400).json({ success: false, error: 'teamCount 和 teamSizes 必填', code: 'INVALID_PARAMS' })
     }
@@ -157,10 +159,19 @@ async function setupTeams(req, res) {
     const rId = round ? round.id : (roundId || 'default-round')
     const rIdx = round ? round.index : null
 
+    // 保存分组模式到 Round（如传入）
+    if (round && ['captain', 'song', 'captain_choice'].includes(groupingMode)) {
+      round.groupingMode = groupingMode
+      round.updatedAt = new Date().toISOString()
+      await round.save()
+    }
+
     // 兼容两种 roundId 格式：UUID 或前端格式（如 "round-1"）
     // 同时删除两种格式下的旧数据，避免重复
     await RoundTeam.deleteMany({ roundId: { $in: [rId, roundId].filter(Boolean) } })
     await RoundTeamMember.deleteMany({ roundId: { $in: [rId, roundId].filter(Boolean) } })
+    // 按歌分组模式下选歌后可能遗留的申请/意向也清理
+    await TeamApplication.deleteMany({ roundId: { $in: [rId, roundId].filter(Boolean) } })
 
     // 批量创建新队伍，id 格式: {roundId}-team-{N}
     const newTeams = []
@@ -883,6 +894,601 @@ router.get('/invites', auth, async (req, res) => {
   } catch (e) {
     console.error('Get invites error:', e)
     res.status(500).json({ success: false, error: '获取邀请列表失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ================================================================
+// 分组模式：按歌分组（groupingMode = 'song'）
+// 选手直接选歌，选到同一首歌的选手自动成组（歌 → 队伍一一对应）
+// ================================================================
+
+// 获取队伍集合（兼容 roundId 双格式）
+async function findTeamsForRound(rId, roundId) {
+  let teams = await RoundTeam.find({ roundId: rId })
+  if (teams.length === 0 && rId !== roundId) {
+    teams = await RoundTeam.find({ roundId: roundId })
+  }
+  return teams
+}
+
+// 根据队伍创建顺序建立 歌→队 映射：第 i 支队伍对应第 i 首歌
+async function buildSongTeamMapping(rId, roundId) {
+  const round = await getRound(roundId)
+  const roundIdx = round ? round.index : null
+  const frontRoundId = `round-${roundIdx}`
+  const songPoolIds = round && Array.isArray(round.songPoolIds) ? round.songPoolIds : []
+
+  // 获取本轮所有轮次歌曲（用于选歌展示）
+  let roundSongs = []
+  if (round && round.id) {
+    roundSongs = await RoundSong.find({ roundId: { $in: [round.id, frontRoundId] } })
+  }
+
+  const teams = await findTeamsForRound(rId, roundId)
+  // 歌曲按 pool 顺序排列；不足则用 RoundSong 补充
+  const orderedSongIds = [...songPoolIds]
+  for (const rs of roundSongs) {
+    if (!orderedSongIds.includes(rs.songId)) orderedSongIds.push(rs.songId)
+  }
+  return { teams, orderedSongIds, round, frontRoundId }
+}
+
+// ===== GET /api/teams/song-options - 获取本轮可选的歌曲（按歌分组模式） =====
+router.get('/song-options', auth, async (req, res) => {
+  try {
+    const { roundId } = req.query
+    if (!roundId) return res.status(400).json({ success: false, error: 'roundId 必填', code: 'MISSING_ROUND_ID' })
+    const round = await getRound(roundId)
+    if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'ROUND_NOT_FOUND' })
+    const rId = round.id
+    const frontRoundId = `round-${round.index}`
+
+    const { orderedSongIds, teams } = await buildSongTeamMapping(rId, roundId)
+    const allSongs = await Song.find({})
+    const songMap = {}
+    for (const s of allSongs) songMap[s.id] = s
+
+    const roundSongs = await RoundSong.find({ roundId: { $in: [rId, frontRoundId] } })
+    const releasedIds = new Set(roundSongs.filter(rs => rs.released).map(rs => rs.songId))
+
+    // 队伍容量统计
+    const members = await RoundTeamMember.find({ roundId: { $in: [rId, frontRoundId] } })
+    const countByTeam = {}
+    for (const m of members) countByTeam[m.teamId] = (countByTeam[m.teamId] || 0) + 1
+
+    const options = orderedSongIds.map((songId, i) => {
+      const team = teams[i] || null
+      const song = songMap[songId] || null
+      return {
+        songId,
+        songName: song ? song.name : '未知歌曲',
+        style: song ? song.style : '',
+        index: i,
+        teamId: team ? team.id : null,
+        teamName: team ? team.name : `第${i + 1}团`,
+        memberCount: team ? (countByTeam[team.id] || 0) : 0,
+        maxMembers: team ? team.maxMembers : 0,
+        released: releasedIds.has(songId) || round.songReleased || round.teamReleased
+      }
+    })
+
+    res.json({ success: true, data: { roundId: round.id, roundIndex: round.index, groupingMode: round.groupingMode || 'captain', songReleased: round.songReleased || round.teamReleased, options } })
+  } catch (e) {
+    console.error('Get song options error:', e)
+    res.status(500).json({ success: false, error: '获取歌曲选项失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== POST /api/teams/select-song - 选手选歌（按歌分组模式），选同一首歌自动成组 =====
+router.post('/select-song', auth, async (req, res) => {
+  try {
+    const { roundId, songId } = req.body
+    if (!roundId || !songId) return res.status(400).json({ success: false, error: 'roundId 和 songId 必填', code: 'INVALID_PARAMS' })
+
+    const round = await getRound(roundId)
+    if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'ROUND_NOT_FOUND' })
+    const rId = round.id
+    const frontRoundId = `round-${round.index}`
+    const roundFilter = { $in: [rId, frontRoundId] }
+
+    // 释放校验
+    const roundDoc = await Round.findOne({ id: rId })
+    if (!roundDoc.teamReleased && !roundDoc.songReleased) {
+      return res.status(403).json({ success: false, error: '选歌尚未开放', code: 'TEAM_NOT_RELEASED' })
+    }
+
+    const { orderedSongIds, teams } = await buildSongTeamMapping(rId, roundId)
+    const songIdx = orderedSongIds.indexOf(songId)
+    if (songIdx === -1) return res.status(404).json({ success: false, error: '该歌曲不在本轮选歌池', code: 'SONG_NOT_IN_POOL' })
+    const team = teams[songIdx]
+    if (!team) return res.status(404).json({ success: false, error: '该歌曲对应的队伍不存在', code: 'TEAM_NOT_FOUND' })
+    if (team.locked) return res.status(403).json({ success: false, error: '该队伍已锁定', code: 'TEAM_LOCKED' })
+
+    // 容量校验
+    const members = await RoundTeamMember.find({ roundId: roundFilter })
+    const countByTeam = {}
+    for (const m of members) countByTeam[m.teamId] = (countByTeam[m.teamId] || 0) + 1
+    if ((countByTeam[team.id] || 0) >= team.maxMembers) {
+      return res.status(409).json({ success: false, error: '该歌曲队伍已满员', code: 'TEAM_FULL' })
+    }
+
+    const pid = req.user.userId
+    // 移除该选手本轮的旧组队记录（如果有）
+    const existing = await RoundTeamMember.find({ roundId: roundFilter, playerId: pid })
+    for (const e of existing) await RoundTeamMember.deleteOne({ id: e.id })
+    // 清理旧申请/邀请
+    await TeamApplication.deleteMany({ playerId: pid, roundId: { $in: [rId, frontRoundId] } })
+    await TeamInvite.deleteMany({ targetPlayerId: pid, roundId: { $in: [rId, frontRoundId] } })
+
+    // 加入队伍
+    const member = new RoundTeamMember({
+      id: generateId(), roundId: frontRoundId, roundIndex: round.index,
+      teamId: team.id, playerId: pid, createdAt: new Date().toISOString()
+    })
+    await member.save()
+
+    // 建立歌→队正式分配（与结算/展示逻辑一致），并写入 TeamSong 记录
+    const roundSong = await RoundSong.findOne({ roundId: { $in: [rId, frontRoundId] }, songId })
+    if (roundSong && !roundSong.assignedTeamId) {
+      roundSong.assignedTeamId = team.id
+      roundSong.updatedAt = new Date().toISOString()
+      await roundSong.save()
+    }
+    const existingTeamSong = await require('../models/TeamSong').findOne({ roundId: { $in: [rId, frontRoundId] }, teamId: team.id })
+    if (!existingTeamSong) {
+      const TeamSong = require('../models/TeamSong')
+      const ts = new TeamSong({
+        id: generateId(), roundId: frontRoundId, roundIndex: round.index,
+        teamId: team.id, songId, assignedBy: req.user.userId, createdAt: new Date().toISOString()
+      })
+      await ts.save()
+    }
+
+    logAction(pid, req.user.name || pid, req.user.role, ACTION_TYPES.TEAM_EDIT, 'roundTeam', team.id, `按歌分组选择歌曲`)
+    res.json({ success: true, data: { teamId: team.id, teamName: team.name, songId, songName: orderedSongIds.includes(songId) ? (await Song.findOne({ id: songId }))?.name || '' : '' } })
+  } catch (e) {
+    console.error('Select song error:', e)
+    res.status(500).json({ success: false, error: '选歌失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ================================================================
+// 分组模式：意向队长（groupingMode = 'captain_choice'）
+// 先选队长，选手选择意向队长，管理员触发按意向匹配分组
+// ================================================================
+
+// ===== POST /api/teams/preference - 选手提交意向队长 =====
+router.post('/preference', auth, async (req, res) => {
+  try {
+    const { roundId, preferredCaptainId } = req.body
+    if (!roundId || !preferredCaptainId) return res.status(400).json({ success: false, error: 'roundId 和 preferredCaptainId 必填', code: 'INVALID_PARAMS' })
+
+    const round = await getRound(roundId)
+    if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'ROUND_NOT_FOUND' })
+    const rId = round.id
+    const frontRoundId = `round-${round.index}`
+    const roundFilter = { $in: [rId, frontRoundId] }
+
+    const pid = req.user.userId
+    if (pid === preferredCaptainId) return res.status(400).json({ success: false, error: '不能选择自己作为意向队长', code: 'SELF_PREFERENCE' })
+
+    // 已提交过意向则不允许修改（每位选手只能提交一次）
+    const existingPref = await TeamApplication.findOne({ roundId: roundFilter, playerId: pid, status: 'pending' })
+    if (existingPref) {
+      const existingUsers = await User.find({})
+      const existingUserMap = {}
+      for (const u of existingUsers) existingUserMap[u.id] = u
+      return res.status(409).json({
+        success: false,
+        error: '你已提交过意向队长，不可修改',
+        code: 'PREFERENCE_ALREADY_SUBMITTED',
+        data: {
+          preferredCaptainId: existingPref.preferredCaptainId || existingPref.playerName || null,
+          preferredCaptainName: existingUserMap[existingPref.preferredCaptainId] ? existingUserMap[existingPref.preferredCaptainId].name : null
+        }
+      })
+    }
+
+    // 校验目标队长存在（RoundCaptain 记录或对应队伍）
+    const captains = await RoundCaptain.find({ roundId: roundFilter })
+    const captainPlayerIds = new Set(captains.map(c => c.playerId))
+    const captainTeams = await RoundTeam.find({ roundId: roundFilter })
+    const captainTeamIds = new Set(captainTeams.filter(t => t.captainId).map(t => t.captainId))
+    if (!captainPlayerIds.has(preferredCaptainId) && !captainTeamIds.has(preferredCaptainId)) {
+      return res.status(404).json({ success: false, error: '目标队长不存在', code: 'CAPTAIN_NOT_FOUND' })
+    }
+
+    // 存储意向：使用 RoundTeamMember 之外的自定义表（TeamApplication 复用作"意向队长"，teamId 存队长对应队伍）
+    // 简化：直接用 TeamApplication 表，teamId 存队长的队伍 id，preferredCaptainId 存于 playerName 字段标记
+    // 更清晰方案：写入 TeamApplication { playerId, teamId: 队长队伍, status:'pending' }
+    let captainTeam = null
+    for (const t of captainTeams) {
+      if (t.captainId === preferredCaptainId) { captainTeam = t; break }
+    }
+    if (!captainTeam) {
+      // 队长没有队伍时，找第一个可用的空队伍（或报错）
+      const availableTeams = captainTeams.filter(t => !t.captainId)
+      if (availableTeams.length === 0) return res.status(409).json({ success: false, error: '队长尚未分配队伍，请先设置队伍', code: 'NO_TEAM_FOR_CAPTAIN' })
+      captainTeam = availableTeams[0]
+    }
+
+    // 删除旧意向
+    await TeamApplication.deleteMany({ playerId: pid, roundId: { $in: [rId, frontRoundId] } })
+    const app = new TeamApplication({
+      id: generateId(), teamId: captainTeam.id, playerId: pid, playerName: preferredCaptainId,
+      roundId: frontRoundId, status: 'pending', preferredCaptainId,
+      createdAt: new Date().toISOString()
+    })
+    await app.save()
+
+    res.json({ success: true, data: { preferredCaptainId, teamId: captainTeam.id } })
+  } catch (e) {
+    console.error('Submit preference error:', e)
+    res.status(500).json({ success: false, error: '提交意向失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== GET /api/teams/preferences - 查询本轮所有意向（管理员/选手） =====
+router.get('/preferences', auth, async (req, res) => {
+  try {
+    const { roundId } = req.query
+    if (!roundId) return res.status(400).json({ success: false, error: 'roundId 必填', code: 'MISSING_ROUND_ID' })
+    const round = await getRound(roundId)
+    if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'ROUND_NOT_FOUND' })
+    const rId = round.id
+    const frontRoundId = `round-${round.index}`
+    const roundFilter = { $in: [rId, frontRoundId] }
+
+    const apps = await TeamApplication.find({ roundId: roundFilter, status: 'pending' })
+    const users = await User.find({})
+    const userMap = {}
+    for (const u of users) userMap[u.id] = u
+    const captains = await RoundCaptain.find({ roundId: roundFilter })
+    const captainTeamMap = {}
+    for (const c of captains) captainTeamMap[c.playerId] = c.teamId
+
+    const list = apps.map(a => {
+      // 意向队长 ID：优先 preferredCaptainId 字段；旧数据回退 playerName（且 playerName 不能等于提交者自己）
+      let prefCaptainId = a.preferredCaptainId || null
+      if (!prefCaptainId && a.playerName && a.playerName !== a.playerId) {
+        prefCaptainId = a.playerName
+      }
+      const prefUser = prefCaptainId ? userMap[prefCaptainId] : null
+      return {
+        playerId: a.playerId,
+        playerName: userMap[a.playerId] ? userMap[a.playerId].name : a.playerId,
+        preferredCaptainId: prefCaptainId,
+        preferredCaptainName: prefUser ? prefUser.name : (prefCaptainId || null),
+        teamId: a.teamId
+      }
+    })
+
+    res.json({ success: true, data: { roundId: round.id, preferences: list, count: list.length } })
+  } catch (e) {
+    console.error('Get preferences error:', e)
+    res.status(500).json({ success: false, error: '获取意向失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== GET /api/teams/my-preference - 选手查询自己的意向 =====
+router.get('/my-preference', auth, async (req, res) => {
+  try {
+    const { roundId } = req.query
+    if (!roundId) return res.status(400).json({ success: false, error: 'roundId 必填', code: 'MISSING_ROUND_ID' })
+    const round = await getRound(roundId)
+    if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'ROUND_NOT_FOUND' })
+    const rId = round.id
+    const frontRoundId = `round-${round.index}`
+    const roundFilter = { $in: [rId, frontRoundId] }
+
+    const app = await TeamApplication.findOne({ roundId: roundFilter, playerId: req.user.userId, status: 'pending' })
+    if (!app) return res.json({ success: true, data: null })
+    const users = await User.find({})
+    const userMap = {}
+    for (const u of users) userMap[u.id] = u
+    // 意向队长 ID：优先 preferredCaptainId 字段；旧数据回退 playerName（不能等于提交者自己）
+    let prefCaptainId = app.preferredCaptainId || null
+    if (!prefCaptainId && app.playerName && app.playerName !== app.playerId) {
+      prefCaptainId = app.playerName
+    }
+    const prefUser = prefCaptainId ? userMap[prefCaptainId] : null
+    res.json({
+      success: true,
+      data: {
+        preferredCaptainId: prefCaptainId,
+        preferredCaptainName: prefUser ? prefUser.name : (prefCaptainId || null),
+        teamId: app.teamId
+      }
+    })
+  } catch (e) {
+    console.error('Get my preference error:', e)
+    res.status(500).json({ success: false, error: '获取意向失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== POST /api/teams/match-preferences - 管理员触发按意向匹配分组 =====
+router.post('/match-preferences', auth, requireAdmin, async (req, res) => {
+  try {
+    const { roundId } = req.body
+    if (!roundId) return res.status(400).json({ success: false, error: 'roundId 必填', code: 'INVALID_PARAMS' })
+    const round = await getRound(roundId)
+    if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'ROUND_NOT_FOUND' })
+    const rId = round.id
+    const frontRoundId = `round-${round.index}`
+    const roundFilter = { $in: [rId, frontRoundId] }
+
+    // 1. 清理旧组队
+    await RoundTeamMember.deleteMany({ roundId: roundFilter })
+
+    // 2. 收集所有意向（按提交顺序）
+    const apps = await TeamApplication.find({ roundId: roundFilter, status: 'pending' })
+    const allUsers = await User.find({ role: { $ne: 'admin' }, status: 'active' })
+    const userMap = {}
+    for (const u of allUsers) userMap[u.id] = u
+
+    // 3. 队伍及其容量
+    const teams = await findTeamsForRound(rId, roundId)
+    const teamById = {}
+    const capacity = {}
+    for (const t of teams) {
+      teamById[t.id] = t
+      capacity[t.id] = t.maxMembers
+    }
+    // 初始占用：队长占自己的队伍
+    const captains = await RoundCaptain.find({ roundId: roundFilter })
+    const occupied = {}
+    const captainUserId = {}
+    for (const c of captains) {
+      if (c.teamId && teamById[c.teamId]) {
+        occupied[c.teamId] = [c.playerId]
+        capacity[c.teamId] = Math.max(0, capacity[c.teamId] - 1)
+        captainUserId[c.playerId] = c.teamId
+      }
+    }
+    // 兜底：队伍 captainId 字段
+    for (const t of teams) {
+      if (t.captainId && !occupied[t.id]) {
+        occupied[t.id] = [t.captainId]
+        capacity[t.id] = Math.max(0, capacity[t.id] - 1)
+        captainUserId[t.captainId] = t.id
+      }
+    }
+
+    const placed = new Set()
+    for (const t of teams) for (const p of (occupied[t.id] || [])) placed.add(p)
+
+    // 4. 按意向匹配（贪心：先到先得）
+    const addedMembers = []
+    for (const app of apps) {
+      let prefCaptainId = app.preferredCaptainId || null
+      if (!prefCaptainId && app.playerName && app.playerName !== app.playerId) {
+        prefCaptainId = app.playerName
+      }
+      if (!prefCaptainId) continue
+      const pid = app.playerId
+      if (placed.has(pid)) continue
+      const targetTeamId = captainUserId[prefCaptainId]
+      if (!targetTeamId || !teamById[targetTeamId]) continue
+      if (capacity[targetTeamId] <= 0) continue
+      // 加入目标队伍
+      const member = new RoundTeamMember({
+        id: generateId(), roundId: frontRoundId, roundIndex: round.index,
+        teamId: targetTeamId, playerId: pid, createdAt: new Date().toISOString()
+      })
+      await member.save()
+      capacity[targetTeamId]--
+      placed.add(pid)
+      addedMembers.push({ playerId: pid, playerName: userMap[pid] ? userMap[pid].name : pid, teamId: targetTeamId, teamName: teamById[targetTeamId].name })
+    }
+
+    // 5. 未匹配的选手随机补位到有空位的队伍
+    const randomFill = []
+    for (const u of allUsers) {
+      if (placed.has(u.id)) continue
+      const available = teams.filter(t => capacity[t.id] > 0)
+      if (available.length === 0) break
+      const team = available[Math.floor(Math.random() * available.length)]
+      const member = new RoundTeamMember({
+        id: generateId(), roundId: frontRoundId, roundIndex: round.index,
+        teamId: team.id, playerId: u.id, createdAt: new Date().toISOString()
+      })
+      await member.save()
+      capacity[team.id]--
+      placed.add(u.id)
+      randomFill.push({ playerId: u.id, playerName: u.name, teamId: team.id, teamName: team.name })
+    }
+
+    // 6. 清理意向记录
+    await TeamApplication.deleteMany({ roundId: roundFilter, status: 'pending' })
+
+    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TEAM_CHANGE, 'round', rId, `按意向队长匹配：${addedMembers.length} 人按意向，${randomFill.length} 人随机补位`)
+    res.json({
+      success: true,
+      data: {
+        matchedByPreference: addedMembers.length,
+        randomFill: randomFill.length,
+        matched: addedMembers,
+        randomFilled: randomFill
+      }
+    })
+  } catch (e) {
+    console.error('Match preferences error:', e)
+    res.status(500).json({ success: false, error: '匹配失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== POST /api/teams/assign-preferences - 管理员逐条/批量分配意向（带容量校验） =====
+router.post('/assign-preferences', auth, requireAdmin, async (req, res) => {
+  try {
+    const { roundId, playerIds } = req.body
+    if (!roundId || !Array.isArray(playerIds) || playerIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'roundId 和 playerIds 必填', code: 'INVALID_PARAMS' })
+    }
+    const round = await getRound(roundId)
+    if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'ROUND_NOT_FOUND' })
+    const rId = round.id
+    const frontRoundId = `round-${round.index}`
+    const roundFilter = { $in: [rId, frontRoundId] }
+
+    // 收集这些选手的意向
+    const apps = await TeamApplication.find({ roundId: roundFilter, status: 'pending', playerId: { $in: playerIds } })
+    const appByPlayer = {}
+    for (const a of apps) {
+      let prefCaptainId = a.preferredCaptainId || null
+      if (!prefCaptainId && a.playerName && a.playerName !== a.playerId) prefCaptainId = a.playerName
+      appByPlayer[a.playerId] = prefCaptainId
+    }
+
+    // 意向队长 → 队伍映射
+    const captains = await RoundCaptain.find({ roundId: roundFilter })
+    const captainTeamMap = {}
+    for (const c of captains) captainTeamMap[c.playerId] = c.teamId
+    const teams = await RoundTeam.find({ roundId: roundFilter })
+    const teamByCaptain = {}
+    for (const t of teams) if (t.captainId) teamByCaptain[t.captainId] = t
+    for (const t of teams) if (!t.captainId && captainTeamMap[t.id]) teamByCaptain[captainTeamMap[t.id]] = t
+
+    const users = await User.find({})
+    const userMap = {}
+    for (const u of users) userMap[u.id] = u
+
+    // 逐条分配（校验容量）
+    const assigned = []
+    const errors = []
+    const assignedTeamCap = {}
+    for (const pid of playerIds) {
+      const prefCaptainId = appByPlayer[pid]
+      let team = null
+      if (prefCaptainId) {
+        team = teamByCaptain[prefCaptainId] || (captainTeamMap[prefCaptainId] ? teams.find(t => t.id === captainTeamMap[prefCaptainId]) : null)
+      }
+      if (!team) {
+        errors.push({ playerId: pid, playerName: userMap[pid] ? userMap[pid].name : pid, error: '该选手未提交有效意向或意向队长未分配队伍' })
+        continue
+      }
+      // 容量检查（含本次已分配）
+      const currentCount = (await RoundTeamMember.find({ teamId: team.id })).length
+      const alreadyAssigned = assignedTeamCap[team.id] || 0
+      if (currentCount + alreadyAssigned >= team.maxMembers) {
+        errors.push({ playerId: pid, playerName: userMap[pid] ? userMap[pid].name : pid, error: `队伍「${team.name}」已满员` })
+        continue
+      }
+      try {
+        await addMemberToTeam(team, pid)
+        assignedTeamCap[team.id] = alreadyAssigned + 1
+        assigned.push({ playerId: pid, playerName: userMap[pid] ? userMap[pid].name : pid, teamId: team.id, teamName: team.name })
+        // 分配成功后删除该意向
+        await TeamApplication.deleteMany({ roundId: roundFilter, playerId: pid, status: 'pending' })
+      } catch (e) {
+        errors.push({ playerId: pid, playerName: userMap[pid] ? userMap[pid].name : pid, error: e.message })
+      }
+    }
+
+    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TEAM_CHANGE, 'round', rId, `分配意向：成功 ${assigned.length} 条，失败 ${errors.length} 条`)
+    res.json({ success: true, data: { assignedCount: assigned.length, errorCount: errors.length, assigned, errors } })
+  } catch (e) {
+    console.error('Assign preferences error:', e)
+    res.status(500).json({ success: false, error: '分配失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== GET /api/teams/grouping-mode - 获取本轮分组模式（选手/管理员均可读） =====
+router.get('/grouping-mode', auth, async (req, res) => {
+  try {
+    const { roundId } = req.query
+    if (!roundId) return res.status(400).json({ success: false, error: 'roundId 必填', code: 'MISSING_ROUND_ID' })
+    const round = await getRound(roundId)
+    if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'ROUND_NOT_FOUND' })
+    res.json({ success: true, data: { roundId: round.id, roundIndex: round.index, groupingMode: round.groupingMode || 'captain' } })
+  } catch (e) {
+    console.error('Get grouping mode error:', e)
+    res.status(500).json({ success: false, error: '获取分组模式失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ================================================================
+// 统一分组结果：三种分组模式最终都产出统一结构
+// 若干队伍（每队配置人数、队长、对应一首歌曲）
+// ================================================================
+
+// ===== GET /api/teams/group-result - 获取本轮统一的分组结果 =====
+router.get('/group-result', auth, async (req, res) => {
+  try {
+    const { roundId } = req.query
+    if (!roundId) return res.status(400).json({ success: false, error: 'roundId 必填', code: 'MISSING_ROUND_ID' })
+    const round = await getRound(roundId)
+    if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'ROUND_NOT_FOUND' })
+    const rId = round.id
+    const frontRoundId = `round-${round.index}`
+    const roundFilter = { $in: [rId, frontRoundId] }
+
+    const [teams, members, teamSongs, roundSongs, allSongs, allUsers, captains] = await Promise.all([
+      RoundTeam.find({ roundId: roundFilter }),
+      RoundTeamMember.find({ roundId: roundFilter }),
+      require('../models/TeamSong').find({ roundId: roundFilter }),
+      RoundSong.find({ roundId: roundFilter }),
+      Song.find({}),
+      User.find({}),
+      RoundCaptain.find({ roundId: roundFilter })
+    ])
+
+    const songMap = {}
+    for (const s of allSongs) songMap[s.id] = s
+    const userMap = {}
+    for (const u of allUsers) userMap[u.id] = u
+    const captainTeamMap = {}
+    for (const c of captains) captainTeamMap[c.playerId] = c.teamId
+
+    const membersByTeam = {}
+    for (const m of members) {
+      if (!membersByTeam[m.teamId]) membersByTeam[m.teamId] = []
+      membersByTeam[m.teamId].push(m)
+    }
+    const teamSongByTeam = {}
+    for (const ts of teamSongs) teamSongByTeam[ts.teamId] = ts
+    const roundSongBySongId = {}
+    for (const rs of roundSongs) roundSongBySongId[rs.songId] = rs
+
+    const result = teams.map(team => {
+      const ts = teamSongByTeam[team.id]
+      const songId = ts ? ts.songId : null
+      const roundSong = songId ? roundSongBySongId[songId] : null
+      const song = songId ? songMap[songId] : null
+      const teamMembers = (membersByTeam[team.id] || []).map(m => ({
+        playerId: m.playerId,
+        playerName: userMap[m.playerId] ? userMap[m.playerId].name : m.playerId
+      }))
+      // 队长：优先 team.captainId，回退 RoundCaptain
+      const captainId = team.captainId || (teamMembers.find(mm => captainTeamMap[mm.playerId] === team.id)?.playerId || null)
+      return {
+        teamId: team.id,
+        teamName: team.name,
+        teamIndex: team.index || null,
+        maxMembers: team.maxMembers,
+        captainId,
+        captainName: captainId && userMap[captainId] ? userMap[captainId].name : null,
+        songId,
+        songName: song ? song.name : (roundSong && songMap[roundSong.songId] ? songMap[roundSong.songId].name : null),
+        songReleased: roundSong ? !!roundSong.released : (round.songReleased || round.teamReleased),
+        memberCount: teamMembers.length,
+        members: teamMembers,
+        locked: team.locked || false
+      }
+    })
+
+    res.json({
+      success: true,
+      data: {
+        roundId: round.id,
+        roundIndex: round.index,
+        groupingMode: round.groupingMode || 'captain',
+        totalTeams: result.length,
+        teams: result
+      }
+    })
+  } catch (e) {
+    console.error('Get group result error:', e)
+    res.status(500).json({ success: false, error: '获取分组结果失败', code: 'SERVER_ERROR' })
   }
 })
 

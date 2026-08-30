@@ -71,6 +71,8 @@
             <t-option value="speed" label="⚡ 手速挑战（连击）" />
             <t-option value="strategy" label="🧠 策略抉择（风险）" />
             <t-option value="reflex" label="🔴 反应力（变灯点击）" />
+            <t-option value="memory" label="🃏 记忆配对（翻牌）" />
+            <t-option value="bomb" label="💣 数字炸弹（猜数）" />
           </t-select>
         </div>
       </t-card>
@@ -259,7 +261,9 @@ const MODE_HINTS: Record<string, string> = {
   pointer: '选手端通过点击停下指针获取发挥值',
   speed: '限时快速点击，次数映射发挥值',
   strategy: '选择风险档位，档位内随机',
-  reflex: '变绿后点击，反应越快区间越高'
+  reflex: '变绿后点击，反应越快区间越高',
+  memory: '翻牌配对，翻牌越少发挥值越高',
+  bomb: '猜数字缩小范围，逼近越多发挥值越高'
 }
 const modeHint = computed(() => MODE_HINTS[generationMode.value] || '')
 

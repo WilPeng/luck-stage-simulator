@@ -315,7 +315,7 @@ async function handleGenerationModeChange(value: string | number | boolean) {
   generationMode.value = mode
   try {
     await setPerformanceGenerationMode(currentRoundIdComputed.value, mode)
-    MessagePlugin.success(`已切换到${mode === 'random' ? '随机生成' : '指针摆动'}模式`)
+    MessagePlugin.success(`已切换到${mode === 'random' ? '随机生成' : '互动小游戏'}模式`)
   } catch (e: any) {
     MessagePlugin.error(e.message || '切换生成方式失败')
   }
@@ -504,7 +504,10 @@ function getTeamPlayers(team: any): any[] {
 }
 
 const teamPerformanceResults = computed(() => performanceStore.teamPerformanceResults)
-const sortedTeamResults = computed(() => performanceStore.sortedTeamPerformanceResults)
+// 最终排名：按 rank（公演名次）升序展示
+const sortedTeamResults = computed(() =>
+  [...performanceStore.teamPerformanceResults].sort((a: any, b: any) => (a.rank || 999) - (b.rank || 999))
+)
 const hasCalculated = computed(() => teamPerformanceResults.value.length > 0)
 
 // 各队的大众评审投票矩阵 { [teamId]: TeamAudienceMatrixSeat[] }

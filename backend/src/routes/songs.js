@@ -484,11 +484,16 @@ router.post('/claim', auth, async (req, res) => {
       return res.status(403).json({ success: false, error: '只有队长才能抢选歌曲', code: 'NOT_CAPTAIN' })
     }
     // 校验歌曲
-    const roundSong = await RoundSong.findOne({ id: roundSongId, roundId })
+    const round = await getRound(roundId)
+    const dbRoundId = round ? round.id : roundId
+    // 兼容 roundId 格式：同时匹配 DB UUID 和前端 round-N 两种格式
+    const roundSong = await RoundSong.findOne({
+      id: roundSongId,
+      $or: [{ roundId: dbRoundId }, { roundId: roundId }]
+    })
     if (!roundSong) {
       return res.status(404).json({ success: false, error: '歌曲不存在', code: 'SONG_NOT_FOUND' })
     }
-    const round = await getRound(roundId)
     const songReleased = roundSong.released || (round && round.songReleased)
     if (!songReleased) {
       return res.status(400).json({ success: false, error: '该歌曲尚未释放', code: 'SONG_NOT_RELEASED' })
@@ -496,17 +501,17 @@ router.post('/claim', auth, async (req, res) => {
     if (roundSong.assignedTeamId) {
       return res.status(409).json({ success: false, error: '该歌曲已被其他队伍抢选', code: 'SONG_ALREADY_CLAIMED' })
     }
-    // 校验队伍是否已选歌
-    const existingTeamSong = await TeamSong.findOne({ roundId, teamId })
+    // 校验队伍是否已选歌（兼容 roundId 格式）
+    const existingTeamSong = await TeamSong.findOne({ roundId: { $in: [dbRoundId, roundId] }, teamId })
     if (existingTeamSong) {
       return res.status(400).json({ success: false, error: '你的队伍已经选过歌了', code: 'TEAM_ALREADY_HAS_SONG' })
     }
-    // 原子操作：更新 RoundSong + 插入 TeamSong
+    // 原子操作：更新 RoundSong + 插入 TeamSong（统一用 DB UUID roundId）
     roundSong.assignedTeamId = teamId
     roundSong.updatedAt = new Date().toISOString()
     await roundSong.save()
     const teamSong = new TeamSong({
-      id: generateId(), roundId, roundIndex: roundSong.roundIndex,
+      id: generateId(), roundId: dbRoundId, roundIndex: roundSong.roundIndex,
       teamId, songId: roundSong.songId, assignedBy: req.user.userId,
       createdAt: new Date().toISOString()
     })
@@ -526,11 +531,15 @@ router.post('/admin-assign', auth, requireAdmin, async (req, res) => {
     if (!roundId || !roundSongId || !teamId) {
       return res.status(400).json({ success: false, error: '缺少 roundId、roundSongId 或 teamId', code: 'MISSING_PARAM' })
     }
-    const roundSong = await RoundSong.findOne({ id: roundSongId, roundId })
+    const round = await getRound(roundId)
+    const dbRoundId = round ? round.id : roundId
+    const roundSong = await RoundSong.findOne({
+      id: roundSongId,
+      $or: [{ roundId: dbRoundId }, { roundId: roundId }]
+    })
     if (!roundSong) {
       return res.status(404).json({ success: false, error: '歌曲不存在', code: 'SONG_NOT_FOUND' })
     }
-    const round = await getRound(roundId)
     const songReleased = roundSong.released || (round && round.songReleased)
     if (!songReleased) {
       return res.status(400).json({ success: false, error: '该歌曲尚未释放', code: 'SONG_NOT_RELEASED' })
@@ -538,17 +547,17 @@ router.post('/admin-assign', auth, requireAdmin, async (req, res) => {
     if (roundSong.assignedTeamId) {
       return res.status(400).json({ success: false, error: '该歌曲已被分配', code: 'SONG_ALREADY_ASSIGNED' })
     }
-    // 校验队伍是否已选歌
-    const existingTeamSong = await TeamSong.findOne({ roundId, teamId })
+    // 校验队伍是否已选歌（兼容 roundId 格式）
+    const existingTeamSong = await TeamSong.findOne({ roundId: { $in: [dbRoundId, roundId] }, teamId })
     if (existingTeamSong) {
       return res.status(400).json({ success: false, error: '该队伍已经选过歌了', code: 'TEAM_ALREADY_HAS_SONG' })
     }
-    // 更新 RoundSong + 插入 TeamSong
+    // 更新 RoundSong + 插入 TeamSong（统一用 DB UUID roundId）
     roundSong.assignedTeamId = teamId
     roundSong.updatedAt = new Date().toISOString()
     await roundSong.save()
     const teamSong = new TeamSong({
-      id: generateId(), roundId, roundIndex: roundSong.roundIndex,
+      id: generateId(), roundId: dbRoundId, roundIndex: roundSong.roundIndex,
       teamId, songId: roundSong.songId, assignedBy: req.user.userId,
       createdAt: new Date().toISOString()
     })

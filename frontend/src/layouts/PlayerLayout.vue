@@ -279,6 +279,22 @@ const ACTION_TO_STAGE: Record<string, StageType> = {
   performance: 'performance_draw'
 }
 
+// 各轮次的分组模式（按歌分组时组队入口指向选歌页，不显示独立选歌）
+const groupingModeCache = ref<Record<number, 'captain' | 'song' | 'captain_choice'>>({})
+
+async function loadGroupingMode(round: number) {
+  try {
+    const { getGroupingMode } = await import('../services/api')
+    groupingModeCache.value[round] = await getGroupingMode(`round-${round}`)
+  } catch (e) {
+    groupingModeCache.value[round] = 'captain'
+  }
+}
+
+function getGroupingMode(round: number): 'captain' | 'song' | 'captain_choice' {
+  return groupingModeCache.value[round] || 'captain'
+}
+
 // 主阶段列表（不含并发子行动）
 const MAIN_STAGES: StageType[] = STAGE_ORDER.filter(
   type => !CONCURRENT_ACTIONS.includes(type)
@@ -287,9 +303,16 @@ const MAIN_STAGES: StageType[] = STAGE_ORDER.filter(
 // 某轮的阶段列表：主阶段 + 该轮已开放的并发子行动（插在"并发行动"之后）
 function getRoundStages(round: number): { type: StageType; icon: string; name: string }[] {
   const released = seasonStore.getReleasedConcurrentActions(round)
-  const releasedStages: StageType[] = released
+  const groupingMode = getGroupingMode(round)
+  let releasedStages: StageType[] = released
     .map(action => ACTION_TO_STAGE[action])
     .filter(Boolean)
+
+  // 按歌分组：组队环节即选歌，隐藏独立"选歌"入口
+  if (groupingMode === 'song') {
+    releasedStages = releasedStages.filter(s => s !== 'song_select')
+  }
+
   const ordered: StageType[] = []
   for (const stage of MAIN_STAGES) {
     ordered.push(stage)
@@ -331,11 +354,16 @@ const tabItems = computed(() => {
 // 获取阶段路径
 function getStagePath(round: number, stage: StageType): string {
   const prefix = gamePrefix.value
+  const groupingMode = getGroupingMode(round)
   const pathMap: Record<StageType, string> = {
     preparation: `${prefix}/player/round/${round}/preparation`,
     captain_vote: `${prefix}/player/round/${round}/captain`,
     concurrent: `${prefix}/player/round/${round}/concurrent`,
-    teaming: `${prefix}/player/round/${round}/team`,
+    teaming: groupingMode === 'song'
+      ? `${prefix}/player/round/${round}/song-group`
+      : groupingMode === 'captain_choice'
+        ? `${prefix}/player/round/${round}/captain-choice`
+        : `${prefix}/player/round/${round}/team`,
     song_select: `${prefix}/player/round/${round}/song-selection`,
     training: `${prefix}/player/round/${round}/training`,
     performance_draw: `${prefix}/player/round/${round}/performance-draw`,
@@ -420,6 +448,10 @@ onMounted(async () => {
     initCollapsedRounds()
     // 拉取各轮并发行动开放状态（侧边栏菜单依赖），失败不影响主流程
     seasonStore.fetchAllConcurrentRelease().catch(() => {})
+    // 加载各轮分组模式（决定组队/选歌入口路径）
+    for (let r = 1; r <= totalRounds.value; r++) {
+      loadGroupingMode(r)
+    }
   } catch (e) {
     console.error('[PlayerLayout] 初始化加载失败:', e)
   }
