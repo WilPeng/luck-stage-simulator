@@ -13,6 +13,7 @@ export type StageType =
   | 'song_select'     // 选歌（并发子行动，兼容页面）
   | 'training'        // 训练（并发子行动，兼容页面）
   | 'performance_draw' // 抽取发挥值（并发子行动，兼容页面）
+  | 'captain_choice'  // 意向队长匹配（仅管理员端菜单项，非阶段）
 
 // 阶段顺序（固定，用于状态计算）
 export const STAGE_ORDER: StageType[] = [
@@ -37,6 +38,7 @@ export const STAGE_NAMES: Record<StageType, string> = {
   elimination: '淘汰',
   teaming: '组队',
   song_select: '选歌',
+  captain_choice: '意向匹配',
   training: '训练',
   performance_draw: '抽取发挥值'
 }

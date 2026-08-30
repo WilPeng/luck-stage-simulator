@@ -264,6 +264,7 @@ const stageConfig: Record<StageType, { icon: string; name: string }> = {
   concurrent: { icon: '⚡', name: '并发行动' },
   teaming: { icon: '👥', name: '组队' },
   song_select: { icon: '🎵', name: '选歌' },
+  captain_choice: { icon: '🤝', name: '意向匹配' },
   training: { icon: '💪', name: '训练' },
   performance_draw: { icon: '🎲', name: '抽取发挥值' },
   performance: { icon: '🌟', name: '公演结果' },
@@ -365,6 +366,7 @@ function getStagePath(round: number, stage: StageType): string {
         ? `${prefix}/player/round/${round}/captain-choice`
         : `${prefix}/player/round/${round}/team`,
     song_select: `${prefix}/player/round/${round}/song-selection`,
+    captain_choice: `${prefix}/player/round/${round}/captain-choice`,
     training: `${prefix}/player/round/${round}/training`,
     performance_draw: `${prefix}/player/round/${round}/performance-draw`,
     performance: `${prefix}/player/round/${round}/performance`,

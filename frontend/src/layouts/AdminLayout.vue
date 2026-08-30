@@ -203,8 +203,9 @@ const stageConfig: Record<StageType, { icon: string; text: string }> = {
   performance: { icon: '🌟', text: '公演' },
   danger_confirm: { icon: '⚠️', text: '危险名单' },
   elimination: { icon: '📝', text: '淘汰' },
-  teaming: { icon: '👥', text: '组队' },
+  teaming: { icon: '👥', text: '队伍管理' },
   song_select: { icon: '🎵', text: '选歌' },
+  captain_choice: { icon: '🤝', text: '意向匹配' },
   training: { icon: '💪', text: '训练' },
   performance_draw: { icon: '🎲', text: '抽取发挥值' }
 }
@@ -250,14 +251,13 @@ function getGroupingMode(round: number): 'captain' | 'song' | 'captain_choice' {
 function getStageRoute(round: number, stage: StageType): string {
   const groupingMode = getGroupingMode(round)
   if (stage === 'teaming') {
-    return groupingMode === 'song'
-      ? 'song-group'
-      : groupingMode === 'captain_choice'
-        ? 'captain-choice'
-        : 'teaming'
+    return groupingMode === 'song' ? 'song-group' : 'teaming'
   }
   if (stage === 'song_select') {
     return groupingMode === 'song' ? 'song-group' : 'song_select'
+  }
+  if (stage === 'captain_choice') {
+    return 'captain-choice'
   }
   return stage
 }
@@ -273,6 +273,14 @@ function getRoundStageList(round: number): { key: StageType; icon: string; text:
   // 按歌分组：组队环节即选歌，隐藏独立"选歌"管理入口
   if (groupingMode === 'song') {
     releasedKeys = releasedKeys.filter(s => s !== 'song_select')
+  }
+
+  // 意向队长分组：组队之外追加独立的"意向匹配"管理入口
+  if (groupingMode === 'captain_choice') {
+    const idx = releasedKeys.indexOf('teaming')
+    if (idx >= 0) {
+      releasedKeys.splice(idx + 1, 0, 'captain_choice' as StageType)
+    }
   }
 
   const ordered: StageType[] = []
@@ -314,16 +322,22 @@ function getRoundStatusText(round: number): string {
 
 // 检查阶段是否完成
 function isCompleted(round: number, stage: StageType): boolean {
+  if (stage === 'captain_choice') return false
   return seasonStore.getStageStatus(round, stage) === 'completed'
 }
 
 // 检查阶段是否当前
 function isCurrent(round: number, stage: StageType): boolean {
+  if (stage === 'captain_choice') return false
   return seasonStore.getStageStatus(round, stage) === 'current'
 }
 
 // 检查阶段是否可见（已完成或当前；并发子行动由开放状态控制，进入列表即显示）
 function isStageVisible(round: number, stage: StageType): boolean {
+  // 意向匹配管理入口：组队释放即显示
+  if (stage === 'captain_choice') {
+    return seasonStore.isConcurrentActionReleased(round, 'team')
+  }
   if (CONCURRENT_ACTIONS.includes(stage)) {
     return seasonStore.isConcurrentActionReleased(round, STAGE_TO_ACTION[stage])
   }

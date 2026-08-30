@@ -16,57 +16,102 @@
           </div>
         </div>
 
-        <!-- 已提交意向（不可修改） -->
-        <div v-if="myPreference && myPreference.preferredCaptainId" class="section-card submitted-card">
-          <div class="section-title-bar"><span class="section-icon">✅</span><span>我的意向（已提交，不可修改）</span></div>
-          <p style="margin:0">已选择意向队长：<strong style="color:#f39c12">{{ myPreference.preferredCaptainName || '未知' }}</strong></p>
-          <p class="submitted-hint">每位选手只能提交一次意向，提交后不可修改</p>
-        </div>
-
-        <!-- 所有队伍（供选择意向队长） -->
-        <div class="section-title-bar">
-          <span class="section-icon">👥</span>
-          <span>所有队伍</span>
-          <span class="sub-count">{{ teams.length }} 支</span>
-        </div>
-        <div class="teams-grid">
-          <div
-            v-for="team in teams"
-            :key="team.id"
-            class="team-card"
-            :class="{
-              selected: myPreference && myPreference.teamId === team.id,
-              disabled: submitted
-            }"
-          >
-            <div class="team-header">
-              <span class="team-name">{{ team.name }}</span>
-              <span class="team-count">{{ team.members?.length || 0 }}/{{ team.maxMembers }} 人</span>
+        <!-- 队长视角：不选意向，只查看分组情况 -->
+        <template v-if="isCurrentUserCaptain">
+          <div class="section-card my-team-card">
+            <div class="section-title-bar"><span class="section-icon">🏠</span><span>我的队伍</span></div>
+            <div class="my-team-info">
+              <span class="my-team-name">{{ myTeam?.name || '未知' }}</span>
+              <span class="my-team-count">{{ myTeam?.members?.length || 0 }} / {{ myTeam?.maxMembers || 0 }} 人</span>
             </div>
-            <div class="team-captain">队长：<strong>{{ getCaptainName(team) || '未指定' }}</strong></div>
             <div class="team-members">
-              <div v-for="m in team.members || []" :key="m.playerId" class="team-member">
+              <div v-for="m in myTeam?.members || []" :key="m.playerId" class="team-member">
                 <span class="member-dot"></span>{{ m.player?.name || '未知' }}
+                <span v-if="m.playerId === myTeam?.captainId" class="captain-badge">👑</span>
               </div>
-              <div v-if="!team.members || team.members.length === 0" class="no-members">暂无成员</div>
+              <div v-if="!myTeam?.members || myTeam.members.length === 0" class="no-members">暂无成员</div>
             </div>
-            <template v-if="submitted">
-              <t-tag v-if="myPreference && myPreference.teamId === team.id" theme="success" variant="light">已选</t-tag>
-              <t-tag v-else theme="default" variant="light">已提交</t-tag>
-            </template>
-            <t-button
-              v-else
-              theme="primary"
-              size="small"
-              :disabled="!isTeamReleased || !team.captainId"
-              :loading="submittingPreference"
-              @click="handleSubmitPreference(team.captainId)"
-            >
-              {{ team.captainId ? `选择队长` : '暂无队长' }}
-            </t-button>
+            <p class="captain-hint">你是本轮队长，将由选手选择你作为意向队长。无需提交意向。</p>
           </div>
-        </div>
-        <div v-if="teams.length === 0" class="empty-tip">暂无队伍</div>
+
+          <div class="section-title-bar">
+            <span class="section-icon">👥</span>
+            <span>当前分组情况</span>
+            <span class="sub-count">{{ teams.length }} 支</span>
+          </div>
+          <div class="teams-grid">
+            <div v-for="team in teams" :key="team.id" class="team-card view-only">
+              <div class="team-header">
+                <span class="team-name">{{ team.name }}</span>
+                <span class="team-count">{{ team.members?.length || 0 }}/{{ team.maxMembers }} 人</span>
+              </div>
+              <div class="team-captain">队长：<strong>{{ getCaptainName(team) || '未指定' }}</strong></div>
+              <div class="team-members">
+                <div v-for="m in team.members || []" :key="m.playerId" class="team-member">
+                  <span class="member-dot"></span>{{ m.player?.name || '未知' }}
+                  <span v-if="m.playerId === team.captainId" class="captain-badge">👑</span>
+                </div>
+                <div v-if="!team.members || team.members.length === 0" class="no-members">暂无成员</div>
+              </div>
+            </div>
+          </div>
+          <div v-if="teams.length === 0" class="empty-tip">暂无队伍</div>
+        </template>
+
+        <!-- 队员视角：选择意向队长 -->
+        <template v-else>
+          <!-- 已提交意向（不可修改） -->
+          <div v-if="myPreference && myPreference.preferredCaptainId" class="section-card submitted-card">
+            <div class="section-title-bar"><span class="section-icon">✅</span><span>我的意向（已提交，不可修改）</span></div>
+            <p style="margin:0">已选择意向队长：<strong style="color:#f39c12">{{ myPreference.preferredCaptainName || '未知' }}</strong></p>
+            <p class="submitted-hint">每位选手只能提交一次意向，提交后不可修改</p>
+          </div>
+
+          <!-- 所有队伍（供选择意向队长） -->
+          <div class="section-title-bar">
+            <span class="section-icon">👥</span>
+            <span>所有队伍</span>
+            <span class="sub-count">{{ teams.length }} 支</span>
+          </div>
+          <div class="teams-grid">
+            <div
+              v-for="team in teams"
+              :key="team.id"
+              class="team-card"
+              :class="{
+                selected: myPreference && myPreference.teamId === team.id,
+                disabled: submitted
+              }"
+            >
+              <div class="team-header">
+                <span class="team-name">{{ team.name }}</span>
+                <span class="team-count">{{ team.members?.length || 0 }}/{{ team.maxMembers }} 人</span>
+              </div>
+              <div class="team-captain">队长：<strong>{{ getCaptainName(team) || '未指定' }}</strong></div>
+              <div class="team-members">
+                <div v-for="m in team.members || []" :key="m.playerId" class="team-member">
+                  <span class="member-dot"></span>{{ m.player?.name || '未知' }}
+                </div>
+                <div v-if="!team.members || team.members.length === 0" class="no-members">暂无成员</div>
+              </div>
+              <template v-if="submitted">
+                <t-tag v-if="myPreference && myPreference.teamId === team.id" theme="success" variant="light">已选</t-tag>
+                <t-tag v-else theme="default" variant="light">已提交</t-tag>
+              </template>
+              <t-button
+                v-else
+                theme="primary"
+                size="small"
+                :disabled="!isTeamReleased || !team.captainId"
+                :loading="submittingPreference"
+                @click="handleSubmitPreference(team.captainId)"
+              >
+                {{ team.captainId ? `选择队长` : '暂无队长' }}
+              </t-button>
+            </div>
+          </div>
+          <div v-if="teams.length === 0" class="empty-tip">暂无队伍</div>
+        </template>
       </template>
     </StageStatusView>
   </div>
@@ -98,6 +143,20 @@ let releaseTimer: number | undefined
 
 // 队伍列表（从接口加载）
 const teams = computed(() => teamStore.teams)
+
+// 当前用户是否为队长（队长不选意向，只查看分组情况）
+const isCurrentUserCaptain = computed(() => {
+  const uid = authStore.currentUser?.id
+  if (!uid) return false
+  return teamStore.teams.some(t => t.captainId === uid)
+})
+
+// 当前用户自己的队伍（队长用）
+const myTeam = computed(() => {
+  const uid = authStore.currentUser?.id
+  if (!uid) return null
+  return teamStore.teams.find(t => t.captainId === uid) || null
+})
 
 // 是否已提交（提交后锁定，不可修改）
 const submitted = computed(() => !!myPreference.value?.preferredCaptainId)
@@ -229,6 +288,34 @@ onBeforeUnmount(() => {
   }
 }
 
+// 队长视角
+.my-team-card {
+  border-color: rgba(102, 126, 234, 0.4);
+
+  .my-team-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+
+    .my-team-name {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .my-team-count {
+      font-size: 13px;
+      color: var(--text-tertiary);
+    }
+  }
+
+  .captain-hint {
+    margin: 12px 0 0;
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+}
+
 .team-card {
   display: flex;
   flex-direction: column;
@@ -238,6 +325,15 @@ onBeforeUnmount(() => {
   border: 2px solid var(--border-color);
   border-radius: 12px;
   transition: all 0.2s;
+
+  &.view-only {
+    cursor: default;
+  }
+
+  .captain-badge {
+    margin-left: 4px;
+    font-size: 12px;
+  }
 
   &.selected {
     border-color: #2ba471;
