@@ -187,14 +187,10 @@
         >
           🃏 开始记忆挑战
         </t-button>
-        <t-button
-          v-else-if="memoryEnded"
-          theme="success"
-          size="large"
-          @click="finishMemory"
-        >
-          查看发挥值结果
-        </t-button>
+        <div v-else-if="memoryEnded" class="auto-save-tip">
+          <span class="tip-icon">🎉</span>
+          <span>完成！发挥值已自动保存，正在锁定结果...</span>
+        </div>
       </div>
 
       <!-- 数字炸弹模式：缩小范围猜数字 -->
@@ -246,9 +242,8 @@
           v-else-if="bombEnded"
           theme="success"
           size="large"
-          @click="finishBomb"
         >
-          查看发挥值结果
+          结果已自动保存
         </t-button>
       </div>
 
@@ -305,9 +300,9 @@
           v-else-if="spotEnded"
           theme="success"
           size="large"
-          @click="finishSpotDiff"
+          disabled
         >
-          查看发挥值结果
+          结果已自动保存
         </t-button>
       </div>
 
@@ -350,9 +345,9 @@
           v-else-if="mathEnded"
           theme="success"
           size="large"
-          @click="finishMath"
+          disabled
         >
-          查看发挥值结果
+          结果已自动保存
         </t-button>
       </div>
 
@@ -377,6 +372,8 @@ const drawing = ref(false)
 const displayValue = ref(0)
 const myValue = ref<number | null>(null)
 const isReleased = ref(false)
+// 是否已完成一次抽取（防重复提交，避免不点结果按钮反复重试）
+const finished = ref(false)
 
 const slotValues = [-10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 let slotTimer: number | undefined
@@ -671,6 +668,10 @@ function flipMemoryCard(idx: number) {
       // 停止计时
       if (memoryTimer) window.clearInterval(memoryTimer)
       memoryTimer = undefined
+      // 自动保存发挥值（不依赖"查看结果"按钮，避免反复重试）
+      setTimeout(() => {
+        if (!finished.value) finishMemory()
+      }, 600)
     }
   } else {
     setTimeout(() => {
@@ -738,7 +739,7 @@ function submitBombGuess() {
   bombGuesses.value.push(g)
   if (g === bombTarget.value) {
     // 猜中炸弹，中招
-    bombEnded.value = true
+    endBomb()
     return
   }
   // 缩小范围
@@ -747,7 +748,17 @@ function submitBombGuess() {
   bombAttempts.value--
   bombGuess.value = null
   if (bombAttempts.value <= 0 || bombLow.value >= bombHigh.value) {
-    bombEnded.value = true
+    endBomb()
+  }
+}
+
+// 结束炸弹并自动保存发挥值（不依赖"查看结果"按钮）
+function endBomb() {
+  bombEnded.value = true
+  if (!finished.value) {
+    setTimeout(() => {
+      if (!finished.value) finishBomb()
+    }, 400)
   }
 }
 
@@ -824,9 +835,19 @@ function startSpotDiff() {
     if (spotElapsed.value >= SPOT_DURATION) {
       if (spotTimer) window.clearInterval(spotTimer)
       spotTimer = undefined
-      spotEnded.value = true
+      endSpotDiff()
     }
   }, 100)
+}
+
+// 结束找不同并自动保存发挥值（不依赖"查看结果"按钮）
+function endSpotDiff() {
+  spotEnded.value = true
+  if (!finished.value) {
+    setTimeout(() => {
+      if (!finished.value) finishSpotDiff()
+    }, 400)
+  }
 }
 
 function handleSpotClick(i: number) {
@@ -841,13 +862,12 @@ function handleSpotClick(i: number) {
       if (spotTimer) window.clearInterval(spotTimer)
       spotTimer = undefined
       spotElapsed.value = (Date.now() - spotStartTime) / 1000
-      spotEnded.value = true
+      endSpotDiff()
     }
   } else {
     // 找错
     spotWrongSet.value.add(i)
     spotWrong.value++
-    // 找错太多也结束（可选，这里不强制）
   }
 }
 
@@ -954,9 +974,19 @@ function startMath() {
     if (mathElapsed.value >= MATH_DURATION) {
       if (mathTimer) window.clearInterval(mathTimer)
       mathTimer = undefined
-      mathEnded.value = true
+      endMath()
     }
   }, 100)
+}
+
+// 结束算术并自动保存发挥值（不依赖"查看结果"按钮）
+function endMath() {
+  mathEnded.value = true
+  if (!finished.value) {
+    setTimeout(() => {
+      if (!finished.value) finishMath()
+    }, 400)
+  }
 }
 
 function handleMathAnswer(opt: number) {
@@ -970,7 +1000,7 @@ function handleMathAnswer(opt: number) {
     // 答错：结束
     if (mathTimer) window.clearInterval(mathTimer)
     mathTimer = undefined
-    mathEnded.value = true
+    endMath()
   }
 }
 
@@ -998,6 +1028,9 @@ function finishMath() {
 }
 
 async function finishDraw(value: number) {
+  // 防重复：一旦保存过（无论成功与否都锁住），不再重复提交，避免未入队选手反复重试
+  if (finished.value) return
+  finished.value = true
   drawing.value = false
   pointerRunning.value = false
   if (pointerFrame) cancelAnimationFrame(pointerFrame)
@@ -1725,6 +1758,19 @@ onMounted(async () => {
     .math-icon {
       font-size: 28px;
     }
+  }
+}
+
+.auto-save-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+
+  .tip-icon {
+    font-size: 22px;
   }
 }
 
