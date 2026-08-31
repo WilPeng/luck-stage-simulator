@@ -15,6 +15,16 @@
         <template #icon><span class="export-icon">📷</span></template>
         导出图片
       </t-button>
+      <t-button
+        v-if="tableData.length > 0"
+        theme="primary"
+        variant="outline"
+        class="export-btn"
+        @click="exportRanksCsv"
+      >
+        <template #icon><span class="export-icon">📊</span></template>
+        导出排名表格
+      </t-button>
     </div>
 
     <div class="ranking-table-container" v-if="!loading && tableData.length > 0">
@@ -284,6 +294,43 @@ onMounted(async () => {
   await seasonStore.fetchPerformanceRound()
   await loadRankings()
 })
+
+// 导出排名表格为 CSV：每列是各轮的排名和票数（不显示队伍）
+function exportRanksCsv() {
+  if (tableData.value.length === 0) {
+    MessagePlugin.warning('暂无数据可导出')
+    return
+  }
+
+  const header = ['姓名', ...Array.from({ length: totalRounds.value }, (_, i) => `第${i + 1}次公演`)]
+  const rows = tableData.value.map(row => {
+    const cells = [row.userName]
+    for (let round = 1; round <= totalRounds.value; round++) {
+      const rank = row.ranks[round]
+      const votes = row.popularity[round]
+      if (rank !== undefined && votes !== undefined) {
+        cells.push(`${rank} / ${votes}票`)
+      } else if (rank !== undefined) {
+        cells.push(`${rank} / -`)
+      } else {
+        cells.push('-')
+      }
+    }
+    return cells
+  })
+
+  const csv = [header.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const now = new Date()
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  a.href = url
+  a.download = `选手排名_${dateStr}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  MessagePlugin.success(`已导出 ${rows.length} 位选手的排名`)
+}
 
 // 导出表格为图片
 async function exportAsImage() {
