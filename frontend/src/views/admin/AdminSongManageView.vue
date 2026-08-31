@@ -14,6 +14,21 @@
           <template #icon><RocketIcon /></template>
           随机添加女歌手歌曲
         </t-button>
+        <t-button theme="primary" variant="outline" @click="exportSongsCsv">
+          <template #icon><span>📥</span></template>
+          导出表格
+        </t-button>
+        <t-button theme="primary" variant="outline" @click="triggerImportCsv">
+          <template #icon><span>📤</span></template>
+          导入表格
+        </t-button>
+        <input
+          ref="csvImportInput"
+          type="file"
+          accept=".csv,text/csv"
+          style="display: none"
+          @change="handleImportCsv"
+        />
         <t-button theme="primary" variant="outline" @click="showBatchDialog = true">
           <template #icon><FileIcon /></template>
           批量导入
@@ -289,6 +304,145 @@ const pagination = reactive({
 // 批量导入
 const showBatchDialog = ref(false)
 const batchSaving = ref(false)
+
+// 表格导入导出
+const csvImportInput = ref<HTMLInputElement | null>(null)
+const csvImporting = ref(false)
+
+// CSV 导出：把当前歌曲列表导出为表格（UTF-8 BOM，兼容 Excel 中文）
+function exportSongsCsv() {
+  if (songs.value.length === 0) {
+    MessagePlugin.warning('没有可导出的歌曲')
+    return
+  }
+  const header = ['歌名', '类型', '歌手性别', '风格', '难度', '声乐权重', '舞蹈权重', '魅力权重', '基础分', '风险系数']
+  const typeText: Record<string, string> = { solo: '独唱', duet: '合唱', group: '团秀', team_show: '公演' }
+  const genderText: Record<string, string> = { male: '男歌手', female: '女歌手' }
+  const rows = songs.value.map(s => [
+    s.name,
+    typeText[s.type || 'team_show'] || s.type || '公演',
+    genderText[s.singerGender || ''] || '',
+    s.style || '',
+    s.difficulty ?? 3,
+    s.vocalWeight ?? 3,
+    s.danceWeight ?? 3,
+    s.charmWeight ?? 3,
+    s.baseScore ?? 100,
+    s.riskFactor ?? 0.2
+  ])
+  const csv = [header.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const dateStr = new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')
+  a.href = url
+  a.download = `歌曲库_${dateStr}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  MessagePlugin.success(`已导出 ${rows.length} 首歌曲`)
+}
+
+function triggerImportCsv() {
+  csvImportInput.value?.click()
+}
+
+// CSV 导入：解析后追加导入（不覆盖原有）
+async function handleImportCsv(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  try {
+    const buffer = await file.arrayBuffer()
+    const uint8 = new Uint8Array(buffer)
+    let text = new TextDecoder('utf-8', { fatal: false }).decode(uint8)
+    if (text.includes('\uFFFD')) {
+      text = new TextDecoder('gbk', { fatal: false }).decode(uint8)
+    }
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l)
+    if (lines.length < 2) {
+      MessagePlugin.warning('CSV 文件为空或格式不正确')
+      return
+    }
+
+    // 解析表头（去掉 BOM）
+    const headers = lines[0].replace(/^\uFEFF/, '').split(',').map(h => h.trim())
+    const typeTextReverse: Record<string, string> = { 独唱: 'solo', 合唱: 'duet', 团秀: 'group', 公演: 'team_show' }
+    const genderTextReverse: Record<string, string> = { 男歌手: 'male', 女歌手: 'female' }
+
+    // 解析一行（支持带引号）
+    function parseLine(line: string): string[] {
+      const result: string[] = []
+      let cur = ''
+      let inQuote = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (inQuote) {
+          if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++ }
+          else if (ch === '"') inQuote = false
+          else cur += ch
+        } else {
+          if (ch === '"') inQuote = true
+          else if (ch === ',') { result.push(cur); cur = '' }
+          else cur += ch
+        }
+      }
+      result.push(cur)
+      return result.map(v => v.trim())
+    }
+
+    const idx = (h: string) => headers.findIndex(x => x.trim() === h)
+    const songsToImport: any[] = []
+    const errors: string[] = []
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseLine(lines[i])
+      const nameIdx = idx('歌名')
+      const name = cols[nameIdx] || ''
+      if (!name) {
+        errors.push(`第 ${i + 1} 行: 缺少歌名`)
+        continue
+      }
+      const typeVal = idx('类型') >= 0 ? (cols[idx('类型')] || '') : ''
+      const genderVal = idx('歌手性别') >= 0 ? (cols[idx('歌手性别')] || '') : ''
+      songsToImport.push({
+        name,
+        type: typeTextReverse[typeVal] || typeVal || 'team_show',
+        singerGender: genderTextReverse[genderVal] || genderVal || '',
+        style: idx('风格') >= 0 ? cols[idx('风格')] : '流行',
+        difficulty: idx('难度') >= 0 ? (parseInt(cols[idx('难度')]) || 3) : 3,
+        vocalWeight: idx('声乐权重') >= 0 ? (parseInt(cols[idx('声乐权重')]) || 3) : 3,
+        danceWeight: idx('舞蹈权重') >= 0 ? (parseInt(cols[idx('舞蹈权重')]) || 3) : 3,
+        charmWeight: idx('魅力权重') >= 0 ? (parseInt(cols[idx('魅力权重')]) || 3) : 3,
+        baseScore: idx('基础分') >= 0 ? (parseInt(cols[idx('基础分')]) || 100) : 100,
+        riskFactor: idx('风险系数') >= 0 ? (parseFloat(cols[idx('风险系数')]) || 0.2) : 0.2
+      })
+    }
+
+    if (songsToImport.length === 0) {
+      MessagePlugin.warning('没有有效的歌曲数据可导入')
+      return
+    }
+
+    const confirmed = window.confirm(`将从表格导入 ${songsToImport.length} 首歌曲（追加到现有歌曲库，不覆盖原有）${errors.length ? `，${errors.length} 行跳过` : ''}。是否继续？`)
+    if (!confirmed) return
+
+    csvImporting.value = true
+    try {
+      await batchCreateSongs(songsToImport)
+      MessagePlugin.success(`成功导入 ${songsToImport.length} 首歌曲${errors.length ? `，${errors.length} 行跳过` : ''}`)
+      await loadSongs()
+    } catch (err: any) {
+      MessagePlugin.error(err.message || '导入失败')
+    } finally {
+      csvImporting.value = false
+    }
+  } catch (err: any) {
+    MessagePlugin.error('读取 CSV 文件失败: ' + (err.message || '未知错误'))
+  }
+
+  target.value = ''
+}
 
 // 随机产生歌曲
 const randomSongLoading = ref(false)
