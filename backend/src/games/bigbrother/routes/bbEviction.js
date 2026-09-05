@@ -5,13 +5,19 @@ const BBEviction = require('../models/BBEviction')
 const BBHouseguest = require('../models/BBHouseguest')
 const { generateId, logAction, getCurrentSeason, BB_ACTION_TYPES, hasTwist, getEvictCountForRound } = require('../helpers')
 
-// GET /votes - 获取当前轮次投票汇总
+// GET /votes - 获取当前轮次投票汇总（HOH 票不计入总票型，仅作平票裁决）
 router.get('/votes', async (req, res) => {
   try {
     const season = await getCurrentSeason()
-    const votes = await BBEvictionVote.find({ gameId: 'bigbrother', roundId: `round-${season.currentRound}` })
+    const roundId = `round-${season.currentRound}`
+    const votes = await BBEvictionVote.find({ gameId: 'bigbrother', roundId })
+    const { getCollection } = require('../../../config/db')
+    const hohCol = getCollection('BBHohRecord')
+    const currentHoh = await hohCol.findOne({ gameId: 'bigbrother', roundId })
+    const hohId = currentHoh?.winnerId || null
+    const castVotes = hohId ? votes.filter(v => v.voterId !== hohId) : votes
     const voteMap = new Map()
-    votes.forEach(v => {
+    castVotes.forEach(v => {
       const key = v.targetId
       voteMap.set(key, (voteMap.get(key) || 0) + 1)
     })
@@ -20,7 +26,8 @@ router.get('/votes', async (req, res) => {
       data: {
         votes: votes.map(v => v.toObject()),
         tally: Array.from(voteMap.entries()).map(([targetId, count]) => ({ targetId, count })),
-        totalVotes: votes.length
+        totalVotes: castVotes.length,
+        hohVote: hohId ? (votes.find(v => v.voterId === hohId)?.targetId || null) : null
       }
     })
   } catch (e) {
@@ -176,7 +183,8 @@ router.post('/result', async (req, res) => {
     if (tiedEntries.length >= 2 && currentHoh && evictCount === 1) {
       const hohVote = votes.find(v => v.voterId === currentHoh.winnerId)
       if (hohVote) {
-        evictedTargets.push({ id: hohVote.targetId, name: hohVote.targetName, count: maxCount + 1 })
+        // HOH 裁决：被投者淘汰，但 HOH 票不计入其得票数
+        evictedTargets.push({ id: hohVote.targetId, name: hohVote.targetName, count: maxCount, hohDecided: true })
       } else {
         evictedTargets.push(tiedEntries[Math.floor(Math.random() * tiedEntries.length)])
       }
@@ -189,13 +197,27 @@ router.post('/result', async (req, res) => {
 
     // 标记房客淘汰
     const evictedResults = []
-    for (const target of evictedTargets) {
+    // 陪审团判定：普通淘汰轮只产生 (jurySize-1) 位陪审；
+    // 名次第 3（finalSize+1）的那位会在 F3 特殊轮被淘汰并成为最后一位陪审，
+    // 因此普通轮里名次 ∈ (finalSize, finalSize+jurySize]（即 4..9）的被淘汰者为陪审，其余 evicted
+    const jurySize = season.jurySize || 7
+    const finalSize = season.finalSize || 2
+    const hgColTotal = getCollection('BBHouseguest')
+    const totalHouseguests = await hgColTotal.countDocuments({ gameId: 'bigbrother', role: 'houseguest' })
+    // 本轮之前已淘汰人数（累计名次基准）
+    const priorEvictions = await getCollection('BBEviction').countDocuments({ gameId: 'bigbrother', roundId: { $ne: roundId } })
+    for (let ei = 0; ei < evictedTargets.length; ei++) {
+      const target = evictedTargets[ei]
       const evicted = await BBHouseguest.findOne({ id: target.id })
       if (evicted) {
-        evicted.status = 'evicted'
+        // 名次 = 总人数 - 之前已淘汰人数 - 本轮淘汰的顺序（第1个淘汰名次最大）
+        const rank = totalHouseguests - priorEvictions - ei
+        // 靠近冠军（名次小）的 (jurySize-1) 位进陪审；名次恰为 finalSize+1(第3) 属于 F3 特殊轮，不算普通轮
+        const isJury = rank > finalSize && rank <= finalSize + jurySize
+        evicted.status = isJury ? 'jury' : 'evicted'
         await evicted.save()
       }
-      evictedResults.push({ id: target.id, name: target.name, votes: target.count })
+      evictedResults.push({ id: target.id, name: target.name, votes: target.count, rank: totalHouseguests - priorEvictions - ei, status: evicted?.status || 'evicted' })
     }
 
     // Twist #18 因果报应：被提名但未被淘汰的幸存者自动成为下轮 HOH
@@ -232,7 +254,8 @@ router.post('/result', async (req, res) => {
     await BBEviction.deleteMany({ gameId: 'bigbrother', roundId })
 
     // 保存淘汰结果
-    for (const target of evictedTargets) {
+    for (let i = 0; i < evictedTargets.length; i++) {
+      const target = evictedTargets[i]
       const result = new BBEviction({
         id: generateId(),
         roundId,
@@ -241,6 +264,7 @@ router.post('/result', async (req, res) => {
         evictedName: target.name,
         voteCount: target.count,
         totalVotes: votes.length,
+        isJury: evictedResults[i]?.status === 'jury',
         gameId: 'bigbrother',
         createdAt: new Date().toISOString()
       })

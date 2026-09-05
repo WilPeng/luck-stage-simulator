@@ -20,8 +20,16 @@ const BB_STAGE_NAME = {
   veto_ceremony: '否决权会议',
   replacement_nom: '替换提名',
   eviction_vote: '淘汰投票',
-  eviction: '淘汰结果'
+  eviction: '淘汰结果',
+  final3: 'F3终局',
+  champion_vote: '冠军投票'
 }
+
+// 普通轮阶段（逐轮淘汰）
+const BB_NORMAL_STAGES = [...BB_STAGE_ORDER]
+
+// 终局特殊"轮状态"（不作为普通阶段推进；由 /season 终局接口驱动）
+const BB_ENDGAME_STAGES = ['final3', 'champion_vote']
 
 // ===== Twist（反转/变数）定义 =====
 const TWIST_DEFINITIONS = {
@@ -176,6 +184,16 @@ const getStageName = (stage) => BB_STAGE_NAME[stage] || stage || ''
 
 const getStageIndex = (stage) => BB_STAGE_ORDER.indexOf(stage)
 
+// 终局两轮（F3 / 冠军投票）的状态：只与轮次先后有关，无 7 阶段细分
+const getEndgameStatus = (round, stage, currentRound, currentStage) => {
+  if (currentRound == null) return 'future'
+  if (round < currentRound) return 'completed'
+  if (round > currentRound) return 'future'
+  if (currentStage === stage) return 'current'
+  // 同轮但阶段不同：例如已在冠军轮，F3 行 → 已完成
+  return 'completed'
+}
+
 const getNextStage = (stage) => {
   const idx = BB_STAGE_ORDER.indexOf(stage)
   if (idx < 0 || idx >= BB_STAGE_ORDER.length - 1) return null
@@ -219,11 +237,14 @@ module.exports = {
   randomInt,
   getCurrentSeason,
   getStageStatus,
+  getEndgameStatus,
   getStageName,
   getStageIndex,
   getNextStage,
   BB_STAGE_ORDER,
   BB_STAGE_NAME,
+  BB_NORMAL_STAGES,
+  BB_ENDGAME_STAGES,
   BB_ACTION_TYPES,
   TWIST_DEFINITIONS,
   getTwistDef,

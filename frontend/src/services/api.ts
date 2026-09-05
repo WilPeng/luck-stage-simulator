@@ -1733,6 +1733,7 @@ export async function getPerformanceRoundStatus(roundId: string): Promise<{
   opened: boolean
   seasonStage: string | null
   generationMode: PerformanceGenerationMode
+  yesRateDenominator?: number
 }> {
   return safeCall(
     () => doRequest<{
@@ -1742,9 +1743,22 @@ export async function getPerformanceRoundStatus(roundId: string): Promise<{
       opened: boolean
       seasonStage: string | null
       generationMode: PerformanceGenerationMode
+      yesRateDenominator?: number
     }>(`/performance/round-status?roundId=${roundId}`),
     async () => ({ started: false, settled: false, released: false, opened: false, seasonStage: null, generationMode: 'random' }),
     'getPerformanceRoundStatus'
+  )
+}
+
+// 保存公演结算配置（队伍得票率除数）
+export async function savePerformanceConfig(roundId: string, yesRateDenominator: number): Promise<void> {
+  return safeCall(
+    () => doRequest<void>('/performance/config', {
+      method: 'POST',
+      body: JSON.stringify({ roundId, yesRateDenominator })
+    }),
+    async () => {},
+    'savePerformanceConfig'
   )
 }
 

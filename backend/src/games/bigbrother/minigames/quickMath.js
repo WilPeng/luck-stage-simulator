@@ -107,5 +107,29 @@ registerGame({
       lastResult: ps.answers.length > 0 ? ps.answers[ps.answers.length - 1] : null,
       status: state.status
     }
+  },
+
+  // 所有玩家的实时进度
+  getAllStates(state) {
+    const result = {}
+    for (const [pid, ps] of Object.entries(state.playerStates)) {
+      const done = ps.currentIndex >= TOTAL_QUESTIONS
+      result[pid] = {
+        score: ps.currentIndex,
+        progress: ps.currentIndex,
+        max: TOTAL_QUESTIONS,
+        done,
+        label: `答对 ${ps.currentIndex}/${TOTAL_QUESTIONS}`
+      }
+    }
+    return result
+  },
+
+  // 目标判定：答对 targetScore 题即达成
+  checkTarget(state, playerId, targetScore) {
+    const ps = state.playerStates[playerId]
+    if (!ps) return false
+    if (!targetScore || targetScore <= 0) return ps.currentIndex >= TOTAL_QUESTIONS
+    return ps.currentIndex >= targetScore
   }
 })

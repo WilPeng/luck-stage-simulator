@@ -4,7 +4,7 @@ import type {
   BBNomination, BBVetoRecord, BBEvictionVote, BBEviction,
   BBChatMessage, BBVoteResult, BBStageType,
   BBTwistRoundConfig, BBTwistDef, BBRoundConfig,
-  MinigameDef, MinigameRoom
+  MinigameDef, MinigameRoom, MinigameProgress, BBSettlement, BBEndgameStatus
 } from '../types/bigbrother'
 
 function getApiRoot(): string {
@@ -143,6 +143,49 @@ export async function bbSaveSeasonConfig(params: { roundConfigs: BBRoundConfig[]
   })
 }
 
+// 季终结算汇总（管理端）
+export async function bbGetSeasonSettlement(): Promise<BBSettlement> {
+  return doRequest<BBSettlement>('/season/settlement')
+}
+
+// ===== 终局（F3 / 冠军投票） =====
+export async function bbGetEndgameStatus(): Promise<BBEndgameStatus> {
+  return doRequest<BBEndgameStatus>('/season/endgame/status')
+}
+
+export async function bbResetEndgame(): Promise<any> {
+  return doRequest('/season/endgame/reset', { method: 'POST' })
+}
+
+export async function bbFinal3Round(params: {
+  roundIndex: number; winnerId: string; winnerName?: string
+}): Promise<any> {
+  return doRequest('/season/endgame/final3', {
+    method: 'POST',
+    body: JSON.stringify(params)
+  })
+}
+
+export async function bbFhohPick(pickedId: string, pickedName?: string): Promise<any> {
+  return doRequest('/season/endgame/fhoh-pick', {
+    method: 'POST',
+    body: JSON.stringify({ pickedId, pickedName })
+  })
+}
+
+export async function bbChampionVote(targetId: string, targetName?: string, voterId?: string, voterName?: string): Promise<any> {
+  const body: any = { targetId, targetName }
+  if (voterId) { body.voterId = voterId; body.voterName = voterName || '' }
+  return doRequest('/season/endgame/champion-vote', {
+    method: 'POST',
+    body: JSON.stringify(body)
+  })
+}
+
+export async function bbChampionResult(): Promise<any> {
+  return doRequest('/season/endgame/champion-result', { method: 'POST' })
+}
+
 // ===== 直接民主投票 =====
 export async function bbVoteNominees(votes: { voterId: string; voterName: string; targetId: string; targetName: string }[]): Promise<any> {
   return doRequest('/nomination/vote-nominees', {
@@ -168,6 +211,14 @@ export async function bbGetHouseguestStats(): Promise<BBHouseguestStats> {
 
 export async function bbGetActiveHouseguests(): Promise<{ id: string; name: string; avatar: string | null; status: string }[]> {
   return doRequest('/houseguests/active')
+}
+
+// HOH 竞赛可参赛名单（活跃房客，排除上一轮 HOH）
+export async function bbGetHohEligible(): Promise<{
+  candidates: { id: string; name: string; avatar: string | null }[]
+  excludedHoh: { id: string; name: string } | null
+}> {
+  return doRequest('/hoh/eligible')
 }
 
 export async function bbCreateHouseguest(data: { name: string; loginCode: string }): Promise<BBHouseguest> {
@@ -426,11 +477,12 @@ export async function bbGetMinigameList(): Promise<MinigameDef[]> {
 export async function bbCreateMinigameRoom(
   gameType: 'hoh' | 'veto',
   minigameId: string,
-  participants: { playerId: string; playerName: string; avatar?: string | null }[]
+  participants: { playerId: string; playerName: string; avatar?: string | null }[],
+  targetScore?: number | null
 ): Promise<MinigameRoom> {
   return doRequest<MinigameRoom>('/minigame/create-room', {
     method: 'POST',
-    body: JSON.stringify({ gameType, minigameId, participants })
+    body: JSON.stringify({ gameType, minigameId, participants, targetScore })
   })
 }
 
@@ -447,6 +499,19 @@ export async function bbGetMinigameRoom(roomId: string): Promise<MinigameRoom | 
 
 export async function bbGetActiveMinigameRoom(gameType: 'hoh' | 'veto'): Promise<MinigameRoom | null> {
   return doRequest<MinigameRoom | null>(`/minigame/active-room/${gameType}`)
+}
+
+// 管理员手动指定胜者并结束比赛
+export async function bbSetMinigameWinner(roomId: string, playerId: string): Promise<{ winner: { playerId: string; playerName: string } }> {
+  return doRequest<{ winner: { playerId: string; playerName: string } }>('/minigame/set-winner', {
+    method: 'POST',
+    body: JSON.stringify({ roomId, playerId })
+  })
+}
+
+// 获取房间实时进度（管理员轮询）
+export async function bbGetMinigameRoomProgress(roomId: string): Promise<MinigameProgress | null> {
+  return doRequest<MinigameProgress | null>(`/minigame/room-progress/${roomId}`)
 }
 
 

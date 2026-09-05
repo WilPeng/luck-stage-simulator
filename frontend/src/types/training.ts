@@ -20,6 +20,8 @@ export interface TrainingEffect {
   selfSelect?: number   // 自选属性 +/-N，由前端弹出选择
   multiply?: number     // 随机一项属性乘以该倍数（1.5=+50%, 2=翻倍, 0.5=减半），自动转换为加减值
   multiplyAll?: number  // 三项属性全部乘以该倍数，自动转换为加减值
+  roundUp?: number      // 随机一项属性向上取整至该数的倍数（如 97→120, 倍率30）
+  roundDown?: number    // 随机一项属性向下取整至该数的倍数（如 97→90, 倍率30）
 }
 
 export interface TrainingConfig {

@@ -79,6 +79,25 @@ function computeAttrDelta(drawn, user) {
     }
   }
 
+  // 取整效果：随机一项属性向上/向下取整至指定倍数的整数，结算时转化为加减数量
+  // 例：属性97，roundDown=30 → 向下取整至30的倍数=90，delta=90-97=-7
+  //     roundUp=30 → 向上取整至30的倍数=120，delta=120-97=+23
+  if (typeof eff.roundDown === 'number' && eff.roundDown > 0) {
+    const keys = ['vocal', 'dance', 'charm']
+    const k = keys[Math.floor(Math.random() * 3)]
+    const m = Math.max(1, Math.floor(eff.roundDown))
+    const newVal = Math.floor(cur[k] / m) * m
+    attrDelta[k] += newVal - cur[k]
+  }
+
+  if (typeof eff.roundUp === 'number' && eff.roundUp > 0) {
+    const keys = ['vocal', 'dance', 'charm']
+    const k = keys[Math.floor(Math.random() * 3)]
+    const m = Math.max(1, Math.floor(eff.roundUp))
+    const newVal = Math.ceil(cur[k] / m) * m
+    attrDelta[k] += newVal - cur[k]
+  }
+
   // 均衡化：向三者均值靠拢，缩小属性差距
   // balance>0 时提高最低项、降低最高项各 balance 点；balance<0 时反向拉大差距
   if (typeof eff.balance === 'number' && eff.balance !== 0) {
@@ -185,8 +204,8 @@ router.put('/config', auth, requireAdmin, async (req, res) => {
   try {
     const { drawsPerPlayer, currentRound, totalRounds } = req.body
 
-    if (drawsPerPlayer !== undefined && (typeof drawsPerPlayer !== 'number' || drawsPerPlayer < 1 || drawsPerPlayer > 10)) {
-      return res.status(400).json({ success: false, error: 'drawsPerPlayer 必须在 1-10 之间', code: 'INVALID_DRAWS' })
+    if (drawsPerPlayer !== undefined && (typeof drawsPerPlayer !== 'number' || drawsPerPlayer < 1)) {
+      return res.status(400).json({ success: false, error: 'drawsPerPlayer 必须 >= 1', code: 'INVALID_DRAWS' })
     }
     if (currentRound !== undefined && (typeof currentRound !== 'number' || currentRound < 1)) {
       return res.status(400).json({ success: false, error: 'currentRound 必须 >= 1', code: 'INVALID_ROUND' })

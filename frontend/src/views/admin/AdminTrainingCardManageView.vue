@@ -168,6 +168,16 @@
                 <t-input-number v-model="form.effect.teamAll" :min="-10" :max="10" size="small" />
                 <span class="field-hint">三项等额提升</span>
               </div>
+              <div class="effect-field">
+                <label>向上取整至倍数</label>
+                <t-input-number v-model="form.effect.roundUp" :min="1" :max="100" size="small" />
+                <span class="field-hint">随机一项取整至该倍数（如97→120,倍率30）</span>
+              </div>
+              <div class="effect-field">
+                <label>向下取整至倍数</label>
+                <t-input-number v-model="form.effect.roundDown" :min="1" :max="100" size="small" />
+                <span class="field-hint">随机一项取整至该倍数（如97→90,倍率30）</span>
+              </div>
             </div>
 
             <!-- 自选 -->
@@ -223,7 +233,9 @@ const form = reactive({
     selfSelect: 0,
     multiply: 0,
     multiplyAll: 0,
-    teamAll: 0
+    teamAll: 0,
+    roundUp: 0,
+    roundDown: 0
   },
   weight: 10,
   enabled: true
@@ -258,7 +270,8 @@ function effectLabel(key: string): string {
     vocal: '声乐', dance: '舞蹈', charm: '魅力',
     randomOne: '随机单', randomTwo: '随机双', lucky: '幸运',
     lowest: '补弱', highest: '增强', balance: '均衡',
-    selfSelect: '自选', multiply: '随机倍率', multiplyAll: '全体倍率', teamAll: '团队共振'
+    selfSelect: '自选', multiply: '随机倍率', multiplyAll: '全体倍率', teamAll: '团队共振',
+    roundUp: '向上取整', roundDown: '向下取整'
   }
   return map[key] || key
 }
@@ -302,7 +315,9 @@ function editCard(card: TrainingCard) {
     selfSelect: (card.effect as any)?.selfSelect ?? 0,
     multiply: (card.effect as any)?.multiply ?? 0,
     multiplyAll: (card.effect as any)?.multiplyAll ?? 0,
-    teamAll: (card.effect as any)?.teamAll ?? 0
+    teamAll: (card.effect as any)?.teamAll ?? 0,
+    roundUp: (card.effect as any)?.roundUp ?? 0,
+    roundDown: (card.effect as any)?.roundDown ?? 0
   }
   form.weight = card.weight ?? 10
   form.enabled = card.enabled !== false
@@ -314,7 +329,7 @@ function resetForm() {
   form.name = ''
   form.type = 'mixed'
   form.description = ''
-  form.effect = { vocal: 0, dance: 0, charm: 0, randomOne: 0, randomTwo: 0, lucky: 0, lowest: 0, highest: 0, balance: 0, selfSelect: 0, multiply: 0, multiplyAll: 0, teamAll: 0 }
+  form.effect = { vocal: 0, dance: 0, charm: 0, randomOne: 0, randomTwo: 0, lucky: 0, lowest: 0, highest: 0, balance: 0, selfSelect: 0, multiply: 0, multiplyAll: 0, teamAll: 0, roundUp: 0, roundDown: 0 }
   form.weight = 10
   form.enabled = true
 }

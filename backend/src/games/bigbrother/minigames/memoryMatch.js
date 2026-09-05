@@ -136,5 +136,28 @@ registerGame({
       finishTime: ps.finishTime,
       status: state.status
     }
+  },
+
+  // 所有玩家的实时进度
+  getAllStates(state) {
+    const result = {}
+    for (const [pid, ps] of Object.entries(state.playerStates)) {
+      const done = ps.matched.length >= 16
+      result[pid] = {
+        score: ps.matched.length / 2,
+        progress: ps.matched.length / 2,
+        max: 8,
+        done,
+        label: `配对 ${ps.matched.length / 2}/8`
+      }
+    }
+    return result
+  },
+
+  // 目标判定：完成全部配对即达成
+  checkTarget(state, playerId) {
+    const ps = state.playerStates[playerId]
+    if (!ps) return false
+    return ps.matched.length >= 16
   }
 })

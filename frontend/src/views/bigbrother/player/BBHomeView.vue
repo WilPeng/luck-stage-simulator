@@ -104,6 +104,8 @@ const currentActions = computed(() => {
     veto_ceremony: { icon: '⚖️', title: '否决权会议', desc: '查看否决权使用情况', path: `/games/bigbrother/player/round/${round}/veto` },
     eviction_vote: { icon: '🗳️', title: '淘汰投票', desc: '参与本周淘汰投票', path: `/games/bigbrother/player/round/${round}/eviction` },
     eviction: { icon: '🚪', title: '淘汰结果', desc: '查看本周淘汰结果', path: `/games/bigbrother/player/round/${round}/eviction` },
+    final3: { icon: '🏁', title: 'F3 终局挑战', desc: '参与 F3 终局小游戏', path: `/games/bigbrother/player/finale` },
+    champion_vote: { icon: '🏆', title: '冠军投票', desc: '为冠军投出神圣一票', path: `/games/bigbrother/player/finale` },
   }
   return actions[stage] ? [actions[stage]] : []
 })

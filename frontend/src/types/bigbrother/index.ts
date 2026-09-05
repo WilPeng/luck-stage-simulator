@@ -8,6 +8,10 @@ export type BBStageType =
   | 'eviction_vote'
   | 'eviction'
 
+// 终局特殊阶段（独立周状态，不占 7 阶段列）
+export type BBEndgameStageType = 'final3' | 'champion_vote'
+export type BBAllStageType = BBStageType | BBEndgameStageType
+
 export const BB_STAGE_ORDER: BBStageType[] = [
   'hoh_competition',
   'nomination',
@@ -18,14 +22,18 @@ export const BB_STAGE_ORDER: BBStageType[] = [
   'eviction'
 ]
 
-export const BB_STAGE_NAME: Record<BBStageType, string> = {
+export const BB_ENDGAME_STAGES: BBEndgameStageType[] = ['final3', 'champion_vote']
+
+export const BB_STAGE_NAME: Record<BBStageType | BBEndgameStageType, string> = {
   hoh_competition: 'HOH竞争',
   nomination: '提名',
   veto_competition: '否决权竞争',
   veto_ceremony: '否决权会议',
   replacement_nom: '替换提名',
   eviction_vote: '淘汰投票',
-  eviction: '淘汰结果'
+  eviction: '淘汰结果',
+  final3: 'F3终局',
+  champion_vote: '冠军投票'
 }
 
 export type BBStageStatus = 'completed' | 'current' | 'future'
@@ -127,7 +135,7 @@ export interface BBSeason {
   name: string
   gameId: string
   currentRound: number
-  currentStage: BBStageType
+  currentStage: BBAllStageType
   totalRounds: number
   status: string
   houseguestsCount?: number
@@ -137,41 +145,143 @@ export interface BBSeason {
   nextHohPlayerName?: string
   jurySize?: number
   finalSize?: number
+  final3Round?: number | null
+  championRound?: number | null
+  fhohId?: string | null
+  fhohName?: string
+  finalTwo?: { playerId: string; playerName: string }[]
+  lastJuryId?: string | null
+  lastJuryName?: string
+  final3Winners?: Record<string, { playerId: string; name: string }>
+  championId?: string | null
+  championName?: string
+  runnerUpId?: string | null
+  runnerUpName?: string
   createdAt: string
   updatedAt: string
 }
 
+// 季终结算汇总
+export interface BBSettlementRound {
+  round: number
+  kind?: 'normal' | 'final3' | 'champion'
+  f3RoundWinners?: { round: number; playerId: string | null; name: string }[]
+  fhohId?: string | null
+  fhohName?: string
+  finalTwo?: { playerId: string; playerName: string; name?: string }[]
+  eliminated?: { id: string; name: string } | null
+  champion?: { playerId: string; name: string } | null
+  runnerUp?: { playerId: string; name: string } | null
+  juryVotes?: { juryId: string; juryName: string; voted: boolean; targetId: string | null; targetName: string }[]
+  hohId: string | null
+  hohName: string
+  initialNomineeIds: string[]
+  initialNomineeNames: string[]
+  povId: string | null
+  povName: string
+  povUsed: boolean
+  povUsedOnName: string
+  povUsedOnId: string | null
+  finalNomineeIds: string[]
+  finalNomineeNames: string[]
+  replacementName: string
+  vetoUsed: boolean
+  ticketText: string
+  evicted: { id: string; name: string; votes: number }[]
+  hohDecided: boolean
+  hohVoteTargetId: string | null
+  hohVoteTargetName: string
+  votesDetail: { voterId: string; voterName: string; targetName: string; targetId: string }[]
+}
+
+export interface BBSettlementPlayer {
+  playerId: string
+  name: string
+  avatar: string | null
+  status: string
+  rank: number
+  evictedRound: number | null
+}
+
+export interface BBSettlement {
+  currentRound: number
+  totalRounds: number
+  final3Round?: number | null
+  championRound?: number | null
+  seasonStatus: string
+  totalPlayers: number
+  endgame?: {
+    final3Round?: number | null
+    championRound?: number | null
+    fhoh?: { playerId: string; name: string } | null
+    finalTwo?: { playerId: string; playerName: string }[]
+    lastJury?: { playerId: string; name: string } | null
+    final3Winners?: Record<string, { playerId: string; name: string }>
+    champion?: { playerId: string; name: string } | null
+    runnerUp?: { playerId: string; name: string } | null
+  }
+  rounds: BBSettlementRound[]
+  players: BBSettlementPlayer[]
+}
+
+// 终局进度（F3 / 冠军投票）
+export interface BBEndgameStatus {
+  currentRound: number
+  currentStage: BBAllStageType
+  status: string
+  final3Round: number | null
+  championRound: number | null
+  totalRounds: number
+  activePlayers: { playerId: string; name: string }[]
+  juryPlayers: { playerId: string; name: string }[]
+  evictedPlayers: { playerId: string; name: string }[]
+  fhoh: { playerId: string; name: string } | null
+  finalTwo: { playerId: string; playerName: string; name?: string }[]
+  lastJury: { playerId: string; name: string } | null
+  final3Winners: Record<string, { playerId: string; name: string }>
+  champion: { playerId: string; name: string } | null
+  runnerUp: { playerId: string; name: string } | null
+  championVotes: Record<string, number>
+  juryVotes: { juryId: string; juryName: string; voted: boolean; targetId: string | null; targetName: string }[]
+  myChampionVote?: { targetId: string; targetName: string } | null
+}
+
 export interface BBMenuItem {
   round: number
-  stage: BBStageType
+  stage: BBStageType | BBEndgameStageType
   stageName: string
   status: BBStageStatus
   clickable: boolean
   editable: boolean
 }
 
+
 export interface BBMenuData {
   currentRound: number
-  currentStage: BBStageType
+  currentStage: BBAllStageType
   currentStageName: string
   currentStageIndex: number
   totalRounds: number
+  final3Round?: number | null
+  championRound?: number | null
   isAdmin: boolean
   menu: BBMenuItem[]
 }
 
 export interface BBMatrixCell {
   round: number
-  stage: BBStageType
+  stage: BBStageType | BBEndgameStageType
   stageName: string
   status: BBStageStatus
 }
 
 export interface BBSeasonProgress {
   currentRound: number
-  currentStage: BBStageType
+  currentStage: BBAllStageType
   currentStageName: string
   totalRounds: number
+  final3Round?: number | null
+  championRound?: number | null
   stageOrder: BBStageType[]
   stageNameMap: Record<string, string>
   matrix: BBMatrixCell[]
@@ -182,7 +292,7 @@ export interface BBHouseguest {
   name: string
   loginCode: string
   role: 'admin' | 'houseguest'
-  status: 'active' | 'evicted' | 'jury'
+  status: 'active' | 'evicted' | 'jury' | 'f2'
   hasLogin: boolean
   avatar: string | null
   gameId: string
@@ -328,14 +438,22 @@ export function calculateBBStageStatus(
   return 'future'
 }
 
-export function getBBStageName(stage: BBStageType): string {
-  return BB_STAGE_NAME[stage] || stage
+export function getBBStageName(stage: BBStageType | BBEndgameStageType | string): string {
+  return BB_STAGE_NAME[stage as BBStageType] || stage
 }
 
 export function getNextBBStage(stage: BBStageType): BBStageType | null {
   const idx = BB_STAGE_ORDER.indexOf(stage)
   if (idx < 0 || idx >= BB_STAGE_ORDER.length - 1) return null
   return BB_STAGE_ORDER[idx + 1]
+}
+
+// 终局行状态：仅按轮次先后判断
+export function getEndgameStatus(currentRound: number, currentStage: BBAllStageType, targetRound: number, targetStage: BBEndgameStageType): BBStageStatus {
+  if (targetRound < currentRound) return 'completed'
+  if (targetRound > currentRound) return 'future'
+  if (currentStage === targetStage) return 'current'
+  return 'completed'
 }
 
 // ===== 小游戏相关类型 =====
@@ -372,6 +490,28 @@ export interface MinigameRoom {
   status: MinigameRoomStatus
   startTime: number | null
   winner: { playerId: string; playerName: string } | null
+  targetScore?: number | null
+}
+
+// 单个玩家的实时进度
+export interface MinigamePlayerState {
+  score: number
+  progress?: number
+  max?: number
+  done?: boolean
+  label?: string
+}
+
+// 房间实时进度（管理员观察）
+export interface MinigameProgress {
+  roomId: string
+  gameType: 'hoh' | 'veto'
+  minigameId: MinigameId
+  status: MinigameRoomStatus
+  targetScore: number | null
+  winner: { playerId: string; playerName: string } | null
+  participants: MinigameParticipant[]
+  states: Record<string, MinigamePlayerState>
 }
 
 export interface MinigameSocketEvents {

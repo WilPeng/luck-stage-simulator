@@ -21,7 +21,7 @@ router.get('/list', (req, res) => {
 // POST /create-room - 管理员创建比赛房间
 router.post('/create-room', async (req, res) => {
   try {
-    const { gameType, minigameId, participants } = req.body
+    const { gameType, minigameId, participants, targetScore } = req.body
 
     if (!gameType || !['hoh', 'veto'].includes(gameType)) {
       return res.status(400).json({ success: false, error: '无效的比赛类型' })
@@ -47,7 +47,16 @@ router.post('/create-room', async (req, res) => {
       })
     }
 
-    const room = minigameNs.createRoom(gameType, minigameId, participants)
+    // 校验目标值（可选）
+    let target = null
+    if (targetScore !== undefined && targetScore !== null && targetScore !== '') {
+      target = parseInt(targetScore, 10)
+      if (isNaN(target) || target <= 0) {
+        return res.status(400).json({ success: false, error: '目标值必须为正整数' })
+      }
+    }
+
+    const room = minigameNs.createRoom(gameType, minigameId, participants, target)
 
     res.json({
       success: true,
@@ -56,6 +65,7 @@ router.post('/create-room', async (req, res) => {
         gameType: room.gameType,
         minigameId: room.minigameId,
         participants: room.participants,
+        targetScore: room.targetScore,
         status: room.status
       }
     })
@@ -148,6 +158,43 @@ router.get('/active-room/:gameType', (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '获取活跃房间失败' })
+  }
+})
+
+// POST /set-winner - 管理员手动指定胜者并结束比赛
+router.post('/set-winner', async (req, res) => {
+  try {
+    const { roomId, playerId } = req.body
+    if (!roomId || !playerId) {
+      return res.status(400).json({ success: false, error: '缺少 roomId 或 playerId' })
+    }
+    const minigameNs = req.app.get('io')?.of('/bigbrother-minigame')
+    if (!minigameNs || !minigameNs.setWinner) {
+      return res.status(500).json({ success: false, error: '小游戏服务未就绪' })
+    }
+    const result = minigameNs.setWinner(roomId, playerId)
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error })
+    }
+    res.json({ success: true, data: { winner: result.winner } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '设置胜者失败' })
+  }
+})
+
+// GET /room-progress/:roomId - 获取房间实时进度（管理员轮询兜底）
+router.get('/room-progress/:roomId', async (req, res) => {
+  try {
+    const minigameNs = req.app.get('io')?.of('/bigbrother-minigame')
+    if (!minigameNs || !minigameNs.getRoomProgress) {
+      return res.status(500).json({ success: false, error: '小游戏服务未就绪' })
+    }
+    const progress = minigameNs.getRoomProgress(req.params.roomId)
+    res.json({ success: true, data: progress })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取房间进度失败' })
   }
 })
 

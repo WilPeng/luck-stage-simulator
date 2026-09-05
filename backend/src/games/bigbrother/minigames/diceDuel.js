@@ -92,5 +92,29 @@ registerGame({
       totalScore: ps.totalScore,
       status: state.status
     }
+  },
+
+  // 所有玩家的实时进度
+  getAllStates(state) {
+    const result = {}
+    for (const [pid, ps] of Object.entries(state.playerStates)) {
+      const done = ps.currentRound >= TOTAL_ROUNDS
+      result[pid] = {
+        score: ps.totalScore,
+        progress: ps.currentRound,
+        max: TOTAL_ROUNDS,
+        done,
+        label: `第${ps.currentRound}/${TOTAL_ROUNDS}轮 · ${ps.totalScore}分`
+      }
+    }
+    return result
+  },
+
+  // 目标判定：总分达到 targetScore 即达成
+  checkTarget(state, playerId, targetScore) {
+    const ps = state.playerStates[playerId]
+    if (!ps) return false
+    if (!targetScore || targetScore <= 0) return ps.currentRound >= TOTAL_ROUNDS
+    return ps.totalScore >= targetScore
   }
 })

@@ -110,6 +110,8 @@ const fixedItems = [
 
 const stageItems = [
   { icon: '🎯', text: '赛季设置', path: '/games/bigbrother/admin/stage' },
+  { icon: '🏁', text: '终局F3 / 冠军', path: '/games/bigbrother/admin/endgame' },
+  { icon: '🏆', text: '季终结算', path: '/games/bigbrother/admin/season-result' },
 ]
 
 const stageList = [
@@ -128,7 +130,10 @@ const otherItems = [
 ]
 
 const rounds = computed(() => {
-  const n = seasonStore.totalRounds
+  // 普通轮列至最后一普通轮（final3Round-1）；终局两轮通过“终局F3/冠军”菜单进入
+  const n = seasonStore.final3Round
+    ? Math.min(seasonStore.final3Round - 1, seasonStore.totalRounds)
+    : seasonStore.totalRounds
   return Array.from({ length: n }, (_, i) => i + 1)
 })
 

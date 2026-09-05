@@ -60,8 +60,14 @@ router.post('/draw', async (req, res) => {
     if (hohId) defaultIds.add(hohId)
     nomineeIds.forEach(id => defaultIds.add(id))
 
+    // 总参与人数目标 = 6
+    const TARGET_COUNT = 6
+
+    // 活跃房客不足或恰好 6 人时：无需抽取，全员参与 POV
+    const everyoneParticipates = allActive.length <= TARGET_COUNT
+
     const defaultParticipants = allActive
-      .filter(h => defaultIds.has(h.id))
+      .filter(h => everyoneParticipates || defaultIds.has(h.id))
       .map(h => ({
         playerId: h.id,
         playerName: h.name,
@@ -70,18 +76,8 @@ router.post('/draw', async (req, res) => {
       }))
 
     const defaultCount = defaultParticipants.length
-
-    // 总参与人数目标 = 6
-    const TARGET_COUNT = 6
-    const needDraw = Math.max(0, TARGET_COUNT - defaultCount)
-
-    if (allActive.length < TARGET_COUNT) {
-      return res.status(400).json({
-        success: false,
-        error: `活跃房客不足${TARGET_COUNT}人（当前${allActive.length}人），无法抽取`,
-        code: 'NOT_ENOUGH_PLAYERS'
-      })
-    }
+    // 全员参与时无需再抽（needDraw=0）；人数>6 时补足至 6 人
+    const needDraw = everyoneParticipates ? 0 : Math.max(0, TARGET_COUNT - defaultCount)
 
     // 从所有活跃房客中随机抽取 needDraw 人（不排除HOH/提名者）
     const shuffled = [...allActive]
@@ -112,7 +108,7 @@ router.post('/draw', async (req, res) => {
     const participantIds = new Set(participantList.map(p => p.playerId))
 
     // 判断哪些被抽中的HOH/提名者可以自选
-    // 条件：在drawn中 且 是HOH或提名者
+    // 条件：在drawn中 且 是HOH或提名者（全员参与时无抽中者，自选列表为空）
     const canPick = []
     for (const p of drawnParticipantList) {
       if (p.playerId === hohId) {
@@ -282,8 +278,7 @@ router.post('/competition', async (req, res) => {
       existingRecord.competitionName = game ? `${game.name}` : '小游戏竞争'
     } else {
       // 从已有参与者中随机选赢家
-      const participants = existingRecord.participants
-      winner = participants[Math.floor(Math.random() * participants.length)]
+      winner = existingRecord.participants[Math.floor(Math.random() * existingRecord.participants.length)]
     }
 
     // 更新记录
@@ -297,7 +292,7 @@ router.post('/competition', async (req, res) => {
       success: true,
       data: {
         ...existingRecord.toObject(),
-        participants,
+        participants: existingRecord.participants,
         drawMode: 'houseguest_choice'
       }
     })

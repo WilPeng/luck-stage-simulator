@@ -10,6 +10,7 @@ class BBEviction extends BaseModel {
     this.voteCount = data?.voteCount || 0
     this.totalVotes = data?.totalVotes || 0
     this.voteResults = data?.voteResults || [] // [{ playerId, playerName, votes }]
+    this.isJury = data?.isJury ?? false   // 该被淘汰者是否进入陪审团
     this.gameId = data?.gameId || 'bigbrother'
     this.createdAt = data?.createdAt || new Date().toISOString()
     this.updatedAt = data?.updatedAt || new Date().toISOString()

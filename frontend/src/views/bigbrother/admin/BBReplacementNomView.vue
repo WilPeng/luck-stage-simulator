@@ -104,7 +104,7 @@ const savedPlayerName = ref('')
 // 排除 HOH、已被提名的房客、POV 赢家、被拯救者
 const baseAvailable = computed(() => {
   const hohId = nomination.value?.hohId || ''
-  const vetoWinnerId = (nomination.value as any)?.vetoWinnerId || ''
+  const vetoWinnerId = veto.value?.winnerId || (nomination.value as any)?.vetoWinnerId || ''
   const nomineeIdSet = new Set(nomination.value?.nomineeIds || [])
   const excludeSet = new Set([hohId, vetoWinnerId, savedPlayerId.value])
   return activeList.value.filter(h =>

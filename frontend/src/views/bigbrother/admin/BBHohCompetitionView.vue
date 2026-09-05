@@ -28,6 +28,11 @@
       <span v-if="twistInfo.isSerpentMark" class="twist-item">🐍 毒蛇标记：每位玩家将被秘密分配目标</span>
     </div>
 
+    <!-- 上一轮 HOH 豁免提示 -->
+    <div v-if="excludedHoh" class="rule-bar">
+      🚫 规则：上一轮 HOH <strong>{{ excludedHoh.name }}</strong> 不能参加本轮 HOH 竞争（不能连任）。
+    </div>
+
     <div class="action-section">
       <h3>操作</h3>
       <div class="action-buttons">
@@ -86,7 +91,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { bbGetCurrentHoh, bbGetHohHistory, bbRunHohCompetition, bbAssignHoh, bbGetActiveHouseguests } from '../../../services/bbApi'
+import { bbGetCurrentHoh, bbGetHohHistory, bbRunHohCompetition, bbAssignHoh, bbGetHohEligible, bbGetActiveHouseguests } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBHohRecord } from '../../../types/bigbrother'
 
@@ -95,6 +100,7 @@ const currentHoh = ref<BBHohRecord | null>(null)
 const twistInfo = ref<any>(null)
 const history = ref<BBHohRecord[]>([])
 const activeHouseguests = ref<{ id: string; name: string; avatar: string | null }[]>([])
+const excludedHoh = ref<{ id: string; name: string } | null>(null)
 const showAssignModal = ref(false)
 const selectedPlayerId = ref('')
 
@@ -111,7 +117,14 @@ async function fetchData() {
     twistInfo.value = (result as any)?.twists || null
   } catch {}
   try { history.value = await bbGetHohHistory() } catch {}
-  try { activeHouseguests.value = await bbGetActiveHouseguests() } catch {}
+  // 可参赛名单（排除上一轮 HOH——不能连任）
+  try {
+    const eligible = await bbGetHohEligible()
+    activeHouseguests.value = eligible.candidates as any
+    excludedHoh.value = eligible.excludedHoh
+  } catch {
+    try { activeHouseguests.value = await bbGetActiveHouseguests() } catch {}
+  }
 }
 
 async function runCompetition() {
@@ -162,6 +175,8 @@ onMounted(fetchData)
 .current-hoh-card.empty { border-color: #444; }
 .twist-info-bar { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 6px; }
 .twist-item { font-size: 13px; color: #aaa; }
+.rule-bar { background: #ff444414; border: 1px solid #ff444466; border-radius: 10px; padding: 12px 18px; margin-bottom: 20px; font-size: 13px; color: #ff8888; }
+.rule-bar strong { color: #ff5555; }
 .twist-item.highlight { color: #00ff88; font-weight: 600; }
 .hoh-icon { font-size: 48px; }
 .hoh-label { font-size: 12px; color: #888; text-transform: uppercase; }

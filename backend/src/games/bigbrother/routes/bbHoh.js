@@ -83,6 +83,47 @@ router.get('/history', async (req, res) => {
   }
 })
 
+// GET /eligible - 本轮可参加 HOH 竞赛的名单（活跃房客，排除上一轮 HOH——不能连任）
+router.get('/eligible', async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const candidates = await getEligibleForHoh(season)
+    res.json({
+      success: true,
+      data: {
+        candidates: candidates.map(c => ({ id: c.id, name: c.name, avatar: c.avatar || null })),
+        excludedHoh: candidates.excludedHoh || null
+      }
+    })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取可参赛名单失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// 上一轮 HOH 不能参加本轮 HOH 竞赛（不能连任）；F3 终局的 FHOH 不属于普通 HOH，不在此约束内
+async function getEligibleForHoh(season) {
+  const { getCollection } = require('../../../config/db')
+  const col = getCollection('BBHouseguest')
+  const hohCol = getCollection('BBHohRecord')
+
+  // 找当前轮之前最近的 HOH 记录（roundId 序号 < currentRound）
+  const allHoh = await hohCol.find({ gameId: 'bigbrother' }).toArray()
+  const prev = allHoh
+    .map(h => ({ ...h, n: Number(String(h.roundId).replace('round-', '')) || 0 }))
+    .filter(h => h.n > 0 && h.n < season.currentRound)
+    .sort((a, b) => b.n - a.n)[0]
+
+  const excludedHoh = prev ? { id: prev.winnerId, name: prev.winnerName || '' } : null
+
+  const actives = await col.find({ gameId: 'bigbrother', status: 'active', role: 'houseguest' }).toArray()
+  const candidates = excludedHoh
+    ? actives.filter(h => h.id !== excludedHoh.id)
+    : actives
+  candidates.excludedHoh = excludedHoh
+  return candidates
+}
+
 // POST /competition - 模拟 HOH 竞争（随机选择一位活跃房客，排除管理员）
 // 支持 minigameResult 参数：当通过小游戏产生结果时传入 { winnerId, winnerName, minigameId, scores }
 router.post('/competition', async (req, res) => {
@@ -133,9 +174,10 @@ router.post('/competition', async (req, res) => {
       await season.save()
     }
 
-    const activeHouseguests = await col.find({ gameId: 'bigbrother', status: 'active', role: 'houseguest' }).toArray()
+    // 可参赛名单：活跃房客，排除上一轮 HOH（不能连任）
+    const activeHouseguests = await getEligibleForHoh(season)
     if (activeHouseguests.length === 0) {
-      return res.status(400).json({ success: false, error: '没有活跃房客可以参与竞争', code: 'NO_ACTIVE' })
+      return res.status(400).json({ success: false, error: '没有可参与竞争的活跃房客（上一轮 HOH 不能连任）', code: 'NO_ACTIVE' })
     }
 
     // 如果有小游戏结果，使用小游戏产生的获胜者
@@ -143,7 +185,7 @@ router.post('/competition', async (req, res) => {
     if (minigameResult && minigameResult.winnerId) {
       winner = activeHouseguests.find(h => h.id === minigameResult.winnerId)
       if (!winner) {
-        return res.status(400).json({ success: false, error: '小游戏获胜者不在活跃房客列表中', code: 'INVALID_WINNER' })
+        return res.status(400).json({ success: false, error: '小游戏获胜者不在可参赛名单中（可能是上一轮 HOH）', code: 'INVALID_WINNER' })
       }
       const { getAllGames } = require('../minigames/loadAll')
       const games = getAllGames()
@@ -211,6 +253,20 @@ router.post('/assign', async (req, res) => {
     const curRound = season.currentRound
     const twistConfigs = season.twistConfigs || []
     const roundConfigs4 = season.roundConfigs || []
+
+    // 上一轮 HOH 不能连任（手动指定同样遵守）；非活跃房客也不能指定
+    if (houseguest.status !== 'active') {
+      return res.status(400).json({ success: false, error: '该房客不是活跃状态，无法担任 HOH', code: 'NOT_ACTIVE' })
+    }
+    const eligibleForHoh = await getEligibleForHoh(season)
+    const prevHoh = eligibleForHoh.excludedHoh || null
+    if (prevHoh && prevHoh.id === playerId) {
+      return res.status(400).json({
+        success: false,
+        error: `上一轮 HOH ${prevHoh.name} 不能连任，请选择其他房客`,
+        code: 'HOH_NO_REELECTION'
+      })
+    }
 
     await BBHohRecord.deleteMany({ gameId: 'bigbrother', roundId: `round-${curRound}` })
     const record = new BBHohRecord({

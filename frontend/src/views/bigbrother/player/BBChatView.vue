@@ -171,7 +171,8 @@ const hasMoreMessages = computed(() => {
 })
 
 function getApiBase() {
-  const base = ((import.meta as any).env?.VITE_API_BASE || '').replace(/\/$/, '') || ''
+  // socket.io namespace 在后端是根路径（/bigbrother-chat），不带 /api
+  const base = ((import.meta as any).env?.VITE_API_BASE || '').replace(/\/$/, '').replace(/\/api$/, '') || ''
   return base || 'http://localhost:3000'
 }
 

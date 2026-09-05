@@ -10,15 +10,17 @@ const { getGame } = require('../games/bigbrother/minigames/loadAll')
 const activeRooms = new Map() // roomId -> GameRoom
 
 class GameRoom {
-  constructor(roomId, gameType, minigameId, participants) {
+  constructor(roomId, gameType, minigameId, participants, targetScore) {
     this.roomId = roomId
     this.gameType = gameType      // 'hoh' | 'veto'
     this.minigameId = minigameId
     this.participants = participants // [{ playerId, playerName, avatar, connected }]
+    this.targetScore = targetScore || null   // 达成即胜的目标值（可选，依游戏而定：分/时长/题数）
     this.status = 'waiting'       // waiting | countdown | playing | finished
     this.startTime = null
     this.gameState = null         // 小游戏内部状态
     this.winner = null
+    this.manualWinnerId = null    // 管理员手动指定的胜者
     this.tickTimer = null         // balance-bar 的定时器
   }
 
@@ -77,22 +79,28 @@ const initBBMinigameSocket = (io) => {
         return
       }
 
+      // 管理员可旁观任何房间；房客必须是参与者
+      const isAdmin = socket.user.role === 'admin'
       const participant = room.getParticipant(userId)
-      if (!participant) {
+      if (!isAdmin && !participant) {
         socket.emit('game_error', { message: '你不在本轮比赛参与者名单中' })
         return
       }
 
       socket.join(roomId)
-      room.setConnected(userId, true)
+      if (participant) room.setConnected(userId, true)
+      else socket.isAdminObserver = true
       socket.roomId = roomId
 
-      console.log(`[BBMinigame] ${userName} joined room ${roomId}`)
+      console.log(`[BBMinigame] ${userName} joined room ${roomId}${isAdmin ? ' (observer)' : ''}`)
 
       // 发送当前状态
       if (room.status === 'playing' && room.gameState) {
         const handler = getGame(room.minigameId)
-        if (handler && handler.getState) {
+        if (isAdmin && handler && handler.getAllStates) {
+          // 管理员：发汇总进度
+          socket.emit('game_progress', buildProgress(room))
+        } else if (handler && handler.getState) {
           socket.emit('game_state', handler.getState(room.gameState, userId))
         }
       }
@@ -148,6 +156,16 @@ const initBBMinigameSocket = (io) => {
         : null
       socket.emit('game_state', { ...playerState, actionResult: result.result })
 
+      // 广播所有玩家的实时进度（管理员观察）
+      broadcastProgress(room, minigameNs)
+
+      // 目标判定：达到管理员设定的目标即结束，该玩家胜出
+      if (handler.checkTarget && handler.checkTarget(room.gameState, userId, room.targetScore)) {
+        room.manualWinnerId = userId
+        finishGame(room, minigameNs)
+        return
+      }
+
       // 如果游戏结束
       if (result.finished) {
         finishGame(room, minigameNs)
@@ -172,14 +190,14 @@ const initBBMinigameSocket = (io) => {
   })
 
   // 管理房间相关方法挂载到 minigameNs 上供路由使用
-  minigameNs.createRoom = (gameType, minigameId, participants) => {
+  minigameNs.createRoom = (gameType, minigameId, participants, targetScore) => {
     const roomId = uuidv4()
     const room = new GameRoom(roomId, gameType, minigameId, participants.map(p => ({
       playerId: p.playerId,
       playerName: p.playerName,
       avatar: p.avatar || null,
       connected: false
-    })))
+    })), targetScore)
     activeRooms.set(roomId, room)
     return room
   }
@@ -239,9 +257,20 @@ const initBBMinigameSocket = (io) => {
               return
             }
             handler.tick(room.gameState)
-            // 广播所有玩家状态
-            if (handler.getAllStates) {
-              minigameNs.to(roomId).emit('game_state', handler.getAllStates(room.gameState))
+            // 广播实时进度给管理员观察 + 所有玩家（balance-bar 状态每个人独立，走各自的 game_state）
+            broadcastProgress(room, minigameNs)
+            minigameNs.to(roomId).emit('game_state', handler.getAllStates ? handler.getAllStates(room.gameState) : {})
+            // 目标判定：任一人达到目标时长即提前结束
+            if (handler.checkTarget && room.targetScore) {
+              for (const pid of Object.keys(room.gameState.playerStates)) {
+                if (handler.checkTarget(room.gameState, pid, room.targetScore)) {
+                  clearInterval(room.tickTimer)
+                  room.tickTimer = null
+                  room.manualWinnerId = pid
+                  finishGame(room, minigameNs)
+                  return
+                }
+              }
             }
             // 检查是否时间到
             const elapsed = Date.now() - room.startTime
@@ -285,6 +314,52 @@ const initBBMinigameSocket = (io) => {
       activeRooms.delete(roomId)
     }
   }
+
+  // 手动指定胜者（管理员），立即结束游戏
+  minigameNs.setWinner = (roomId, playerId, playerName) => {
+    const room = activeRooms.get(roomId)
+    if (!room) return { success: false, error: '房间不存在' }
+    const participant = room.getParticipant(playerId)
+    if (!participant) return { success: false, error: '该选手不在房间参与者中' }
+    room.manualWinnerId = playerId
+    if (playerName) participant.playerName = playerName
+    room.winner = { playerId, playerName: participant.playerName }
+    finishGame(room, minigameNs)
+    return { success: true, winner: room.winner }
+  }
+
+  // 获取房间实时进度（管理员轮询兜底）
+  minigameNs.getRoomProgress = (roomId) => {
+    const room = activeRooms.get(roomId)
+    if (!room) return null
+    return buildProgress(room)
+  }
+}
+
+// 构建进度汇总数据（管理员观察用）
+function buildProgress(room) {
+  const handler = getGame(room.minigameId)
+  const allStates = handler && handler.getAllStates ? handler.getAllStates(room.gameState) : {}
+  return {
+    roomId: room.roomId,
+    gameType: room.gameType,
+    minigameId: room.minigameId,
+    status: room.status,
+    targetScore: room.targetScore,
+    winner: room.winner,
+    participants: room.participants.map(p => ({
+      playerId: p.playerId,
+      playerName: p.playerName,
+      connected: p.connected
+    })),
+    states: allStates
+  }
+}
+
+// 广播实时进度到房间（管理员观察 + 供前端刷新）
+function broadcastProgress(room, minigameNs) {
+  if (!room || room.status === 'finished') return
+  minigameNs.to(room.roomId).emit('game_progress', buildProgress(room))
 }
 
 function finishGame(room, minigameNs) {
@@ -294,7 +369,11 @@ function finishGame(room, minigameNs) {
   const handler = getGame(room.minigameId)
   if (!handler) return
 
-  const winnerId = handler.computeWinner(room.gameState)
+  // 管理员手动指定胜者优先；否则按游戏规则计算
+  let winnerId = room.manualWinnerId || null
+  if (!winnerId && handler.computeWinner) {
+    winnerId = handler.computeWinner(room.gameState)
+  }
   const participant = room.participants.find(p => p.playerId === winnerId)
   room.winner = participant
     ? { playerId: participant.playerId, playerName: participant.playerName }
@@ -324,6 +403,9 @@ function finishGame(room, minigameNs) {
     winner: room.winner,
     scores
   })
+
+  // 广播最终进度（含 winner），管理员观察端据此刷新
+  minigameNs.to(room.roomId).emit('game_progress', buildProgress(room))
 
   // 清理 tick 定时器
   room.cleanup()

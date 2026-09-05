@@ -11,6 +11,7 @@ class PerformanceRoundState extends BaseModel {
     this.roundIndex = null          // 轮次数字
     this.started = false            // 公演是否已开启
     this.generationMode = 'random'  // 'random' | 'pointer'，发挥值生成方式
+    this.yesRateDenominator = 150   // 队伍得票率除数（管理员可配置，默认150）
     this.revealedTeamIds = []       // 已揭晓的队伍 ID 列表
     this.updatedAt = null
     if (data) Object.assign(this, data)

@@ -316,7 +316,7 @@ function calcTeamScore(memberScores, teamName) {
 }
 
 /** 基于真实大众评审成员，模拟 1000 人对所有舞台的 yes/no 投票 */
-async function simulateAudienceVotesForTeams(roundId, teamsData, totalAudience = 1000) {
+async function simulateAudienceVotesForTeams(roundId, teamsData, totalAudience = 1000, yesRateDenominator = 150) {
   // 1. 清空旧团队票和旧评审成员（重算时需要完全重建）
   await AudienceTeamVote.deleteMany({ roundId })
   await AudienceMember.deleteMany({ roundId })
@@ -342,7 +342,8 @@ async function simulateAudienceVotesForTeams(roundId, teamsData, totalAudience =
   const results = []
   for (const team of teamsData) {
     const appeal = team.teamScore + team.teamCharm * 0.5
-    let yesRate = appeal / 150
+    const denom = Math.max(1, yesRateDenominator)
+    let yesRate = appeal / denom
     yesRate = Math.max(0.05, Math.min(0.95, yesRate))
     // 舞台事件微调：事件票数按千分比转换
     yesRate += (team.eventVotes || 0) / totalAudience
@@ -556,6 +557,10 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
       allPlayerResults.push(...memberResults)
     }
 
+    // 读取管理员配置的得票率除数（默认150）
+    const perfState = await PerformanceRoundState.findOne({ roundId: dbRoundId })
+    const yesRateDenominator = perfState && perfState.yesRateDenominator ? perfState.yesRateDenominator : 150
+
     // 生成 1000 位大众评审成员，并逐队逐人模拟 yes/no 投票
     const teamsData = teamResults.map(tr => ({
       teamId: tr.teamId,
@@ -564,7 +569,7 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
       teamCharm: tr.teamAttributes?.charm || 0,
       eventVotes: tr.eventVotes || 0
     }))
-    const audienceVoteResults = await simulateAudienceVotesForTeams(dbRoundId, teamsData, 1000)
+    const audienceVoteResults = await simulateAudienceVotesForTeams(dbRoundId, teamsData, 1000, yesRateDenominator)
     const resultMap = {}
     for (const r of audienceVoteResults) resultMap[r.teamId] = r
     for (const tr of teamResults) {
@@ -1195,6 +1200,41 @@ router.post('/generation-mode', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// ===== POST /api/performance/config - 保存公演结算配置（如队伍得票率除数） =====
+router.post('/config', auth, requireAdmin, async (req, res) => {
+  try {
+    const round = await resolveRound(req)
+    if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
+
+    const { yesRateDenominator } = req.body
+    const denom = parseInt(yesRateDenominator)
+    if (isNaN(denom) || denom < 1 || denom > 10000) {
+      return res.status(400).json({ success: false, error: 'yesRateDenominator 必须为 1-10000 之间的整数', code: 'INVALID_PARAMS' })
+    }
+
+    let state = await PerformanceRoundState.findOne({ roundId: round.id })
+    if (!state) {
+      state = new PerformanceRoundState({
+        id: generateId(),
+        roundId: round.id,
+        roundIndex: round.index,
+        started: false,
+        generationMode: 'random',
+        revealedTeamIds: [],
+        updatedAt: new Date().toISOString()
+      })
+    }
+    state.yesRateDenominator = denom
+    state.updatedAt = new Date().toISOString()
+    await state.save()
+
+    res.json({ success: true, data: { roundId: round.id, roundIndex: round.index, yesRateDenominator: denom } })
+  } catch (e) {
+    console.error('Set performance config error:', e)
+    res.status(500).json({ success: false, error: '保存公演配置失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // ===== POST /api/performance/player-generate - 选手端生成随机发挥值 =====
 router.post('/player-generate', auth, async (req, res) => {
   try {
@@ -1481,6 +1521,7 @@ router.get('/round-status', auth, async (req, res) => {
     const state = await PerformanceRoundState.findOne({ roundId: round.id })
     const started = state ? state.started : false
     const generationMode = state ? state.generationMode : 'random'
+    const yesRateDenominator = state && state.yesRateDenominator ? state.yesRateDenominator : 150
 
     // 检查是否已结算（TeamPerformance 有记录）
     const teamPerfs = await TeamPerformance.find({ roundId: round.id })
@@ -1497,6 +1538,7 @@ router.get('/round-status', auth, async (req, res) => {
         settled,
         released,
         generationMode,
+        yesRateDenominator,
         seasonStage,
         // 判断这个轮次是否已进入公演阶段（PerformanceRoundState 存在）
         opened: !!state

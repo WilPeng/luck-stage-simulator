@@ -7,6 +7,43 @@
         <t-tab-panel value="settlement" label="公演结算">
           <!-- ==================== 阶段二：公演结算 ==================== -->
           <div class="step-section">
+            <!-- 结算参数配置：展示参考统计 + 得票率除数 -->
+            <div class="settle-config-card" v-if="!hasCalculated">
+              <div class="config-title">🎯 结算参数</div>
+              <div class="config-stats">
+                <div class="config-stat-item">
+                  <span class="stat-value">{{ avgCharm }}</span>
+                  <span class="stat-label">当前所有玩家平均魅力</span>
+                </div>
+                <div class="config-stat-item">
+                  <span class="stat-value">{{ estTeamScore }}</span>
+                  <span class="stat-label">队伍得分大致平均（估算）</span>
+                </div>
+              </div>
+              <div class="config-row">
+                <span class="config-row-label">队伍得票率除数（原为150）</span>
+                <t-input-number
+                  v-model="yesRateDenominator"
+                  :min="1"
+                  :max="10000"
+                  theme="column"
+                  style="width: 140px"
+                />
+                <t-button
+                  theme="primary"
+                  variant="outline"
+                  size="small"
+                  :loading="savingConfig"
+                  @click="handleSaveConfig"
+                >
+                  保存
+                </t-button>
+              </div>
+              <p class="config-hint">
+                队伍得票率 = (队伍得分 + 平均魅力×0.5) / 除数。除数越大，得票率越低；请根据上方参考值调整。
+              </p>
+            </div>
+
             <div class="action-section">
               <t-button
                 theme="danger"
@@ -510,6 +547,60 @@ const sortedTeamResults = computed(() =>
 )
 const hasCalculated = computed(() => teamPerformanceResults.value.length > 0)
 
+// ===== 结算参数：队伍得票率除数 + 参考统计 =====
+const yesRateDenominator = ref<number>(150)
+const savingConfig = ref(false)
+
+// 当前所有选手的平均魅力（参考）
+const avgCharm = computed(() => {
+  const users = playerStore.users.filter((u: any) => u.role !== 'admin' && u.status !== 'eliminated')
+  if (users.length === 0) return 0
+  const sum = users.reduce((s: number, u: any) => s + (u.attributes?.charm || 0), 0)
+  return Math.round(sum / users.length)
+})
+
+// 队伍得分大致的平均数（结算前预估：按 3:3:3 权重 + 难度系数0.8 估算属性分）
+const estTeamScore = computed(() => {
+  const users = playerStore.users.filter((u: any) => u.role !== 'admin' && u.status !== 'eliminated')
+  if (users.length === 0) return 0
+  const scores = users.map((u: any) => {
+    const attr = u.attributes || { vocal: 30, dance: 30, charm: 30 }
+    const attrScore = (attr.vocal || 0) * (1/3) + (attr.dance || 0) * (1/3) + (attr.charm || 0) * (1/3)
+    const difficultyFactor = 0.8
+    return Math.max(0, Math.min(120, Math.round(attrScore * difficultyFactor)))
+  })
+  return Math.round(scores.reduce((s: number, v: number) => s + v, 0) / scores.length)
+})
+
+// 加载已保存的除数配置
+async function loadConfig() {
+  try {
+    const { getPerformanceRoundStatus } = await import('../../services/api')
+    const res = await getPerformanceRoundStatus(currentRoundIdComputed.value)
+    if (res?.yesRateDenominator) {
+      yesRateDenominator.value = res.yesRateDenominator
+    }
+  } catch (_) { /* 保持默认 */ }
+}
+
+async function handleSaveConfig() {
+  const denom = parseInt(String(yesRateDenominator.value))
+  if (isNaN(denom) || denom < 1 || denom > 10000) {
+    MessagePlugin.error('除数必须为 1-10000 之间的整数')
+    return
+  }
+  savingConfig.value = true
+  try {
+    const { savePerformanceConfig } = await import('../../services/api')
+    await savePerformanceConfig(currentRoundIdComputed.value, denom)
+    MessagePlugin.success('结算参数已保存')
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '保存失败')
+  } finally {
+    savingConfig.value = false
+  }
+}
+
 // 各队的大众评审投票矩阵 { [teamId]: TeamAudienceMatrixSeat[] }
 const teamAudienceMatrices = ref<Record<string, TeamAudienceMatrixSeat[]>>({})
 const loadingTeamMatrix = ref<Record<string, boolean>>({})
@@ -656,6 +747,9 @@ onMounted(async () => {
   // 挂载时初始化选手列表（从持久化恢复或新建）
   await initPlayerStatuses()
 
+  // 加载结算参数（队伍得票率除数）
+  await loadConfig()
+
   // 从后端获取结算结果
   if (performanceStore.teamPerformanceResults.length === 0) {
     try {
@@ -776,6 +870,64 @@ onMounted(async () => {
 
 .action-section {
   margin-bottom: 16px;
+}
+
+// 结算参数配置卡片
+.settle-config-card {
+  background: var(--card-bg);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+
+  .config-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+
+  .config-stats {
+    display: flex;
+    gap: 32px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+
+    .config-stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+
+      .stat-value {
+        font-size: 26px;
+        font-weight: 800;
+        color: #667eea;
+      }
+
+      .stat-label {
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-top: 2px;
+      }
+    }
+  }
+
+  .config-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+
+    .config-row-label {
+      font-size: 14px;
+      font-weight: 500;
+    }
+  }
+
+  .config-hint {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin: 10px 0 0;
+  }
 }
 
 .player-table-card {

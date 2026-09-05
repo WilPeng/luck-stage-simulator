@@ -112,11 +112,20 @@ registerGame({
     const result = {}
     for (const [pid, ps] of Object.entries(state.playerStates)) {
       result[pid] = {
-        timeInZone: ps.timeInZone,
-        isHolding: ps.isHolding
+        score: ps.timeInZone,
+        done: false,
+        label: `${(ps.timeInZone / 1000).toFixed(1)}s`
       }
     }
     return result
+  },
+
+  // 目标判定：在目标区域累计达到 targetScore（毫秒）即达成
+  checkTarget(state, playerId, targetScore) {
+    if (!targetScore || targetScore <= 0) return false
+    const ps = state.playerStates[playerId]
+    if (!ps) return false
+    return ps.timeInZone >= targetScore
   },
 
   TICK_INTERVAL,

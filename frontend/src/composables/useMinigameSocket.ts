@@ -6,7 +6,9 @@ import { io, Socket } from 'socket.io-client'
 import type { MinigameId, MinigameParticipant } from '../types/bigbrother'
 
 function getApiRoot(): string {
-  return ((import.meta as any).env?.VITE_API_BASE || '').replace(/\/$/, '') || ''
+  // socket.io namespace 在后端是根路径（/bigbrother-minigame），不带 /api
+  const base = ((import.meta as any).env?.VITE_API_BASE || '').replace(/\/$/, '') || ''
+  return base.replace(/\/api$/, '')
 }
 
 function getToken(): string | null {

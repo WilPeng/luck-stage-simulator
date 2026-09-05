@@ -19,7 +19,7 @@
       </div>
       <div class="status-item">
         <span class="label">总轮次</span>
-        <span class="value">{{ roundConfigs.length }}</span>
+        <span class="value">{{ computedTotalRounds }}</span>
       </div>
       <div class="status-actions">
         <button class="bb-btn bb-btn-sm" @click="handleNextStage">推进到下一阶段</button>
@@ -67,6 +67,15 @@
         💡 淘汰者名次和陪审团状态会根据在线房客数（{{ totalHouseguests }}人）、Jury人数（{{ jurySize }}人）和Final人数（{{ finalSize }}人）自动计算
       </p>
 
+      <!-- 终局轮次预告 -->
+      <div v-if="final3Round > 0" class="final3-hint" :class="{ warning: isCurrentRoundFinal3 }">
+        🏁 按当前配置，普通淘汰将在<strong>第 {{ final3Round - 1 }} 周</strong>结束，存活来到 3 人；随后进入<strong>第 {{ final3Round }} 周 F3 终局</strong>（三轮小游戏 → FHOH 带走 1 人进 FTC），第 {{ championRound }} 周由陪审团进行冠军投票。
+        <span v-if="isCurrentRoundFinal3">（当前即终局！）</span>
+      </div>
+      <div v-else class="final3-hint faint">
+        🏁 配置淘汰轮后，将自动进入终局轮（F3：三轮小游戏决出 FHOH → 冠军投票）。
+      </div>
+
       <div class="config-table-wrapper">
         <table class="config-table">
           <thead>
@@ -75,7 +84,6 @@
               <th class="col-twist">Twist（反转/变数）</th>
               <th class="col-rank">淘汰者名次</th>
               <th class="col-jury">陪审团</th>
-              <th class="col-actions">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -105,28 +113,23 @@
                   {{ isJuryRound(cfg.round) ? '👨‍⚖️ 是' : '否' }}
                 </span>
               </td>
-              <td class="col-actions">
-                <button
-                  v-if="!isRoundLocked(cfg.round)"
-                  class="action-btn insert"
-                  @click="insertRoundAfter(cfg.round)"
-                  title="在此后插入轮次"
-                >+ 插入</button>
-                <button
-                  v-if="!isRoundLocked(cfg.round)"
-                  class="action-btn delete"
-                  @click="deleteRound(cfg.round)"
-                  title="删除此轮次"
-                >删除</button>
-              </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div class="add-round-row">
-        <button class="bb-btn" @click="addRound">+ 在末尾添加轮次</button>
+      <!-- 终局固定轮次 -->
+      <div class="endgame-rows">
+        <div class="endgame-row">
+          <span class="endgame-badge f3">🏁 F3 终局（第 {{ final3Round }} 周）</span>
+          <span class="endgame-desc">存活 3 人：三轮小游戏决出 FHOH → 带走 1 人进 FTC</span>
+        </div>
+        <div class="endgame-row">
+          <span class="endgame-badge champ">🏆 冠军投票（第 {{ championRound }} 周）</span>
+          <span class="endgame-desc">陪审团二选一投票产生冠军，赛季结束</span>
+        </div>
       </div>
+      <p class="auto-lock-hint">🔒 赛季总周数（普通淘汰轮 + F3 终局 + 冠军投票）由房客人数与淘汰计划自动演算，无需手动增删轮次。</p>
     </div>
 
     <!-- Twist 选择弹窗 -->
@@ -165,12 +168,12 @@
       <div class="control-form">
         <div class="form-group">
           <label>轮次</label>
-          <input v-model.number="setRound" type="number" class="bb-input" min="1" :max="roundConfigs.length" />
+          <input v-model.number="setRound" type="number" class="bb-input" min="1" :max="computedTotalRounds" />
         </div>
         <div class="form-group">
           <label>阶段</label>
           <select v-model="setStage" class="bb-select">
-            <option v-for="s in stageOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
+            <option v-for="s in manualStageOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
           </select>
         </div>
         <button class="bb-btn bb-btn-primary" @click="handleSetStage">设置</button>
@@ -220,18 +223,18 @@ import { ref, computed, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
 import {
-  BB_STAGE_NAME, type BBStageType, type BBTwistId,
+  BB_STAGE_ORDER, BB_STAGE_NAME, type BBStageType, type BBTwistId,
   type BBRoundConfig, type BBTwistDef, getAllTwistDefs
 } from '../../../types/bigbrother'
 import {
-  bbGetSeasonConfig, bbSaveSeasonConfig, bbUpdateRound, bbGetHouseguestStats
+  bbGetSeasonConfig, bbSaveSeasonConfig, bbGetHouseguestStats
 } from '../../../services/bbApi'
 
 const router = useRouter()
 const seasonStore = useBbSeasonStore()
 
 const setRound = ref(1)
-const setStage = ref<BBStageType>('hoh_competition')
+const setStage = ref<BBStageType | 'final3' | 'champion_vote'>('hoh_competition')
 const saving = ref(false)
 const isSeasonStarted = ref(false)
 const jurySize = ref(7)
@@ -248,7 +251,15 @@ const pickerRoundIdx = ref(-1)
 const pickerSelected = reactive<Set<string>>(new Set())
 
 const stageOptions = computed(() => {
-  return Object.entries(BB_STAGE_NAME).map(([value, label]) => ({ value, label }))
+  return BB_STAGE_ORDER.map(value => ({ value, label: BB_STAGE_NAME[value] }))
+})
+
+// 手动设置进度下拉：普通阶段 + 终局两阶段
+const manualStageOptions = computed(() => {
+  const normal = BB_STAGE_ORDER.map(value => ({ value, label: BB_STAGE_NAME[value] }))
+  normal.push({ value: 'final3', label: `🏁 F3终局（第 ${final3Round.value} 周）` })
+  normal.push({ value: 'champion_vote', label: `🏆 冠军投票（第 ${championRound.value} 周）` })
+  return normal
 })
 
 const matrixRounds = computed(() => {
@@ -277,6 +288,71 @@ function getEvictCount(round: number): number {
   return 1
 }
 
+// 终局轮（F3）预告：存活人数首次 <=3 的轮次
+const final3Round = computed(() => {
+  if (totalHouseguests.value <= 0) return 0
+  let alive = totalHouseguests.value
+  for (const r of matrixRounds.value) {
+    const ec = getEvictCount(r)
+    alive -= ec
+    if (alive <= 3) return r + 1 // 该轮淘汰后存活 ≤3 → 下一轮进入终局 F3
+  }
+  return matrixRounds.value.length + 1
+})
+
+// 冠军投票轮 = F3 终局轮 + 1
+const championRound = computed(() => {
+  return final3Round.value > 0 ? final3Round.value + 1 : 0
+})
+
+// 赛季总周数 = 普通淘汰轮 + F3 终局 + 冠军投票
+const computedTotalRounds = computed(() => {
+  if (championRound.value > 0) return championRound.value
+  return roundConfigs.value.length + 2
+})
+
+// 自动计算“应存在的普通轮行数”：普通淘汰一路到存活 3 人
+function computeNeededNormalRounds(): number {
+  if (totalHouseguests.value <= 0) return 0
+  let alive = totalHouseguests.value
+  let needed = 0
+  while (alive > 3) {
+    needed++
+    let ec = getEvictCount(needed)
+    if (ec > alive - 3) ec = Math.max(alive - 3, 1)
+    alive -= ec
+  }
+  return needed
+}
+
+// 根据当前配置自动收敛普通轮行数（无需手动增删轮次）
+// 赛季开始后也能自动裁剪：final3Round-1 之后的“多余普通轮”永远不会发生（该轮已是 F3 终局）
+function resizeRoundsToNeeded() {
+  if (totalHouseguests.value <= 0) return
+  const maxNormal = final3Round.value > 0 ? final3Round.value - 1 : computeNeededNormalRounds()
+  const cur = roundConfigs.value
+  if (isSeasonActive.value) {
+    // 赛季中：只裁掉永不发生的多余普通轮行；普通轮结构已定，不再增补
+    if (cur.length > maxNormal) {
+      roundConfigs.value = cur.slice(0, maxNormal)
+    }
+    return
+  }
+  const needed = computeNeededNormalRounds()
+  if (needed > cur.length) {
+    for (let r = cur.length + 1; r <= needed; r++) {
+      cur.push({ round: r, twists: [], eliminationRank: null, isJury: false })
+    }
+  } else if (needed < cur.length) {
+    roundConfigs.value = cur.slice(0, needed)
+  }
+}
+
+// 当前是否已到终局轮（当前轮 >= final3Round）
+const isCurrentRoundFinal3 = computed(() => {
+  return final3Round.value > 0 && seasonStore.currentRoundNumber >= final3Round.value
+})
+
 // 自动计算淘汰者名次范围（考虑 twist 对淘汰人数的影响）
 // 第1轮淘汰最高名次（总人数），逐轮递减，三重献祭轮次产生2个名次
 function getEliminationRankRange(round: number): string {
@@ -299,50 +375,29 @@ function getEliminationRankRange(round: number): string {
   return startRank > 0 ? `第${startRank}-${endRank}名` : '-'
 }
 
-// 自动判断是否为陪审团：
-// 规则：淘汰者中，排除 Final 选手（最后 finalSize 个名次）后，
-// 剩余淘汰者中最后 jurySize 个淘汰者为陪审团
+// 自动判断该普通轮被淘汰者是否为陪审团：
+// 赛制说明（final 人进 FTC / F3 特殊轮淘汰 1 人）：
+//  - 名次 1..finalSize 是最终决赛选手，不参与淘汰投票；
+//  - 名次 finalSize+1（即第 3 名）在 F3 特殊轮被淘汰，是"最后一位"陪审；
+//  - 因此普通淘汰轮只产生剩余 (jurySize-1) 位陪审：
+//    名次 ∈ (finalSize, finalSize+jurySize]（例 final=2、jury=7 → 名次 4..9）被淘汰者为陪审，
+//    其余更早淘汰者（名次更大）为普通 evicted。
 function isJuryRound(round: number): boolean {
   if (jurySize.value <= 0) return false
   const evictCount = getEvictCount(round)
-  if (evictCount === 0) return false // 无淘汰的轮次不产生陪审团
+  if (evictCount === 0) return false
 
-  // 计算该轮淘汰者的名次范围
+  // 该轮淘汰者名次范围：[endRank(最小名次=最靠近冠军) .. startRank(最大名次)]
   let cumulativeBefore = 0
-  for (let r = 1; r < round; r++) {
-    cumulativeBefore += getEvictCount(r)
-  }
-  const startRank = totalHouseguests.value - cumulativeBefore
-  const endRank = startRank - evictCount + 1
+  for (let r = 1; r < round; r++) cumulativeBefore += getEvictCount(r)
+  const startRank = totalHouseguests.value - cumulativeBefore        // 该轮首个淘汰的名次（最大）
+  const endRank = startRank - evictCount + 1                          // 该轮最后淘汰的名次（最小）
 
-  // Final 选手：名次在 1 ~ finalSize 范围内的不淘汰，不是陪审团
-  // 如果该轮所有淘汰者都在 Final 范围内（即 endRank <= finalSize），不是陪审团
-  if (endRank <= finalSize.value) return false
-
-  // 从总淘汰人数中排除 Final 选手，计算"有效淘汰总人数"
-  let totalEvictedAll = 0
-  for (let r = 1; r <= roundConfigs.value.length; r++) {
-    totalEvictedAll += getEvictCount(r)
-  }
-  // 有效淘汰人数 = 总淘汰人数 - finalSize（最后 finalSize 名不淘汰）
-  const effectiveEvicted = totalEvictedAll - finalSize.value
-
-  // 从最后一轮往前累计淘汰人数，排除 Final 选手轮次
-  let cumulativeFromEnd = 0
-  for (let r = roundConfigs.value.length; r >= 1; r--) {
-    const ec = getEvictCount(r)
-    if (ec === 0) continue
-    // 计算该轮淘汰者的结束名次
-    let cb = 0
-    for (let rr = 1; rr < r; rr++) { cb += getEvictCount(rr) }
-    const er = totalHouseguests.value - cb - ec + 1
-    // 如果该轮所有淘汰者都是 Final 选手，跳过
-    if (er <= finalSize.value) continue
-    cumulativeFromEnd += ec
-    if (r === round) break
-  }
-  // 如果从最后一轮（非Final）到当前轮的累计淘汰人数 <= jurySize，则是陪审团
-  return cumulativeFromEnd <= jurySize.value
+  // jury 名次窗口（普通轮部分）：finalSize+1 < rank <= finalSize+jurySize
+  const lo = finalSize.value + 1
+  const hi = finalSize.value + jurySize.value
+  // 只要该轮淘汰名次范围与窗口有交集，即本轮产生陪审
+  return endRank <= hi && startRank > lo
 }
 
 async function fetchData() {
@@ -359,7 +414,7 @@ async function fetchData() {
     finalSize.value = config.finalSize ?? 2
   } catch {
     allTwistDefs.value = getAllTwistDefs()
-    const total = seasonStore.totalRounds
+    const total = Math.max((seasonStore.totalRounds || 10) - 2, 1) // 扣除 F3 与冠军两终局周
     roundConfigs.value = Array.from({ length: total }, (_, i) => ({
       round: i + 1,
       twists: [] as BBTwistId[],
@@ -373,6 +428,7 @@ async function fetchData() {
     const stats = await bbGetHouseguestStats()
     totalHouseguests.value = stats.total
   } catch {}
+  resizeRoundsToNeeded()
 }
 
 // Twist 相关
@@ -387,6 +443,7 @@ function getTwistName(twistId: string): string {
 function removeTwist(rowIdx: number, twistId: string) {
   const cfg = roundConfigs.value[rowIdx]
   cfg.twists = cfg.twists.filter(t => t !== twistId)
+  resizeRoundsToNeeded()
 }
 
 function getRoundTwists(round: number): BBTwistId[] {
@@ -427,34 +484,50 @@ function confirmTwistPicker() {
     roundConfigs.value[pickerRoundIdx.value].twists = Array.from(pickerSelected) as BBTwistId[]
   }
   closeTwistPicker()
+  resizeRoundsToNeeded()
 }
 
-// 轮次操作
+// 轮次自动收敛（赛季开始前手动重算，通常由 twist 变更触发）
+function rebuildRounds() {
+  if (totalHouseguests.value > 0 && !isSeasonActive.value) {
+    // 用当前 twist 计划推演到达 3 人所需普通轮数
+    let alive = totalHouseguests.value
+    let needed = 0
+    const list: BBRoundConfig[] = []
+    while (alive > 3) {
+      needed++
+      let ec = getEvictCount(needed)
+      if (ec > alive - 3) ec = Math.max(alive - 3, 1)
+      alive -= ec
+      const existing = roundConfigs.value.find(c => c.round === needed)
+      list.push({
+        round: needed,
+        twists: existing?.twists || [],
+        eliminationRank: existing?.eliminationRank ?? null,
+        isJury: existing?.isJury ?? false
+      })
+    }
+    roundConfigs.value = list
+  }
+}
+
 async function addRound() {
-  const newRound = roundConfigs.value.length + 1
-  roundConfigs.value.push({ round: newRound, twists: [], eliminationRank: null, isJury: false })
+  rebuildRounds()
 }
 
-async function insertRoundAfter(round: number) {
-  try {
-    await bbUpdateRound({ insertAfter: round })
-    await fetchData()
-  } catch (e: any) { alert(e.message) }
+async function insertRoundAfter(_round: number) {
+  alert('普通轮次已自动演算，无需手动插入')
 }
 
-async function deleteRound(round: number) {
-  if (!confirm(`确定要删除第${round}周吗？后续轮次将自动重新编号。`)) return
-  try {
-    await bbUpdateRound({ deleteRound: round })
-    await fetchData()
-  } catch (e: any) { alert(e.message) }
+async function deleteRound(_round: number) {
+  alert('普通轮次已自动演算，无需手动删除')
 }
 
 // 保存
 async function handleSaveConfig() {
   saving.value = true
   try {
-    // 自动计算 eliminationRank 和 isJury 后再保存（考虑 twist 对淘汰人数的影响）
+    resizeRoundsToNeeded()
     const configsToSave = roundConfigs.value.map(cfg => {
       // 累计前 (cfg.round-1) 轮的总淘汰人数
       let cumulativeEvicted = 0
@@ -469,6 +542,7 @@ async function handleSaveConfig() {
       }
     })
     await bbSaveSeasonConfig({ roundConfigs: configsToSave, jurySize: jurySize.value, finalSize: finalSize.value })
+    await seasonStore.fetchSeason()
     alert('赛季配置已保存')
   } catch (e: any) {
     alert(e.message || '保存失败')
@@ -504,7 +578,7 @@ function navigateToStage(round: number, stage: string) {
 
 async function handleSetStage() {
   try {
-    await seasonStore.setStage(setRound.value, setStage.value)
+    await seasonStore.setStage(setRound.value, setStage.value as BBStageType)
     await fetchData()
   } catch (e: any) { alert(e.message) }
 }
@@ -586,6 +660,10 @@ onMounted(fetchData)
 .jury-size-divider { color: #444; font-size: 14px; }
 .jury-size-hint { font-size: 12px; color: #666; }
 .auto-gen-hint { font-size: 12px; color: #888; margin: 0 0 16px; padding: 8px 12px; background: #00ff8808; border-radius: 6px; border: 1px solid #00ff8811; }
+.final3-hint { font-size: 13px; color: #4488ff; margin: 0 0 14px; padding: 10px 14px; background: #4488ff10; border-radius: 8px; border: 1px solid #4488ff44; line-height: 1.6; }
+.final3-hint strong { color: #00ff88; }
+.final3-hint.warning { color: #ffaa00; border-color: #ffaa00; background: #ffaa0010; }
+.final3-hint.faint { color: #777; border-color: #ffffff11; background: #ffffff05; }
 .config-table-wrapper { overflow-x: auto; }
 .config-table { width: 100%; border-collapse: collapse; }
 .config-table th, .config-table td {
@@ -650,6 +728,22 @@ onMounted(fetchData)
 .action-btn.delete:hover { background: #ff444422; }
 
 .add-round-row { margin-top: 16px; display: flex; justify-content: center; }
+
+/* 终局固定轮次展示 */
+.endgame-rows {
+  margin-top: 14px; display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px; background: #0a0a1e; border-radius: 8px;
+  border: 1px solid #4488ff44;
+}
+.endgame-row { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.endgame-badge {
+  display: inline-block; padding: 3px 12px; border-radius: 10px; font-size: 12px; font-weight: 600;
+  min-width: 150px; text-align: center;
+}
+.endgame-badge.f3 { background: #4488ff22; color: #4488ff; border: 1px solid #4488ff66; }
+.endgame-badge.champ { background: #ffaa0022; color: #ffaa00; border: 1px solid #ffaa0066; }
+.endgame-desc { color: #888; font-size: 12px; }
+.auto-lock-hint { font-size: 12px; color: #888; margin: 12px 0 0; }
 
 /* Twist 选择弹窗 */
 .twist-picker-modal { width: 520px; }

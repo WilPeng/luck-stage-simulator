@@ -22,7 +22,7 @@
           <h2>选手训练情况</h2>
           <t-space>
             <span class="expected-count-label">期望训练次数</span>
-            <t-input-number v-model="expectedTrainingCount" :min="1" :max="20" size="small" />
+            <t-input-number v-model="expectedTrainingCount" :min="1" :max="200" size="small" />
             <t-button
               theme="primary"
               variant="outline"
@@ -446,6 +446,14 @@
                   ×{{ card.effect.multiplyAll }}
                 </span>
               </div>
+              <div v-if="card.effect.roundUp" class="effect-row">
+                <span class="effect-label">⬆️ 向上取整</span>
+                <span class="effect-value positive">至 {{ card.effect.roundUp }} 的倍数</span>
+              </div>
+              <div v-if="card.effect.roundDown" class="effect-row">
+                <span class="effect-label">⬇️ 向下取整</span>
+                <span class="effect-value negative">至 {{ card.effect.roundDown }} 的倍数</span>
+              </div>
             </div>
             <div class="card-footer">
               <span class="weight-info">权重: {{ card.weight }}</span>
@@ -530,6 +538,12 @@
           </t-form-item>
           <t-form-item label="全体倍率效果">
             <t-input-number v-model="cardForm.effect.multiplyAll" :min="0.1" :max="5" :step="0.1" :decimalPlaces="1" theme="column" placeholder="1=不变，2=翻倍" />
+          </t-form-item>
+          <t-form-item label="向上取整至倍数">
+            <t-input-number v-model="cardForm.effect.roundUp" :min="1" :max="100" theme="column" placeholder="如30：97→120" />
+          </t-form-item>
+          <t-form-item label="向下取整至倍数">
+            <t-input-number v-model="cardForm.effect.roundDown" :min="1" :max="100" theme="column" placeholder="如30：97→90" />
           </t-form-item>
         </div>
       </t-form>
@@ -796,7 +810,9 @@ const cardForm = ref({
     highest: undefined as number | undefined,
     lowest: undefined as number | undefined,
     multiply: undefined as number | undefined,
-    multiplyAll: undefined as number | undefined
+    multiplyAll: undefined as number | undefined,
+    roundUp: undefined as number | undefined,
+    roundDown: undefined as number | undefined
   }
 })
 
@@ -871,7 +887,9 @@ function getAttrLabel(key: string): string {
     highest: '最高',
     lowest: '最低',
     multiply: '随机倍率',
-    multiplyAll: '全体倍率'
+    multiplyAll: '全体倍率',
+    roundUp: '向上取整',
+    roundDown: '向下取整'
   }
   return labels[key] || key
 }
@@ -988,7 +1006,9 @@ function resetCardForm(): void {
       highest: undefined,
       lowest: undefined,
       multiply: undefined,
-      multiplyAll: undefined
+      multiplyAll: undefined,
+      roundUp: undefined,
+      roundDown: undefined
     }
   }
 }
@@ -1009,7 +1029,9 @@ function populateCardForm(card: TrainingCard): void {
       highest: card.effect.highest,
       lowest: card.effect.lowest,
       multiply: card.effect.multiply,
-      multiplyAll: card.effect.multiplyAll
+      multiplyAll: card.effect.multiplyAll,
+      roundUp: card.effect.roundUp,
+      roundDown: card.effect.roundDown
     }
   }
 }

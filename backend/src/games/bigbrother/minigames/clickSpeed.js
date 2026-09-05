@@ -61,5 +61,20 @@ registerGame({
 
   getState(state) {
     return { scores: state.scores, status: state.status, startTime: state.startTime }
+  },
+
+  // 所有玩家的实时进度（管理员观察 + 目标判定）
+  getAllStates(state) {
+    const result = {}
+    for (const [pid, score] of Object.entries(state.scores)) {
+      result[pid] = { score, done: false, label: `${score} 次点击` }
+    }
+    return result
+  },
+
+  // 判断某玩家是否达成目标（达到目标分数即胜出）
+  checkTarget(state, playerId, targetScore) {
+    if (!targetScore || targetScore <= 0) return false
+    return (state.scores[playerId] || 0) >= targetScore
   }
 })

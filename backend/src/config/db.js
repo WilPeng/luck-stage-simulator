@@ -48,6 +48,7 @@ const COLLECTIONS = [
   'BBChatMessage',
   'BBOperationLog',
   'BBSerpentMark',   // 毒蛇标记 twist
+  'BBChampionVote',  // 冠军投票（终局）
   // 恋综集合
   'LVSeason',
   'LVPlayer',

@@ -113,7 +113,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { bbGetCurrentNomination, bbSetNomination, bbGetNominationHistory, bbGetActiveHouseguests, bbVoteNominees } from '../../../services/bbApi'
+import { bbGetCurrentNomination, bbSetNomination, bbGetNominationHistory, bbGetActiveHouseguests, bbVoteNominees, bbGetCurrentHoh, bbGetCurrentVeto } from '../../../services/bbApi'
 import type { BBNomination } from '../../../types/bigbrother'
 
 const nomination = ref<BBNomination | null>(null)
@@ -121,16 +121,24 @@ const twistInfo = ref<any>(null)
 const history = ref<BBNomination[]>([])
 const activeList = ref<{ id: string; name: string }[]>([])
 const activeMap = ref<Record<string, string>>({})
+const currentHoh = ref<any>(null)
+const currentVeto = ref<any>(null)
+const savedPlayerId = ref('')
 const showSetModal = ref(false)
 const nominee1 = ref('')
 const nominee2 = ref('')
 const nominee3 = ref('')
 const democracyVotes = ref<Record<string, string>>({})
 
-// 排除 HOH
+// 排除 HOH（本人不可提名自己）、POV 赢家、被 POV 拯救者
 const baseAvailable = computed(() => {
-  const hohId = nomination.value?.hohId || ''
-  return activeList.value.filter(h => h.id !== hohId)
+  const hohId = nomination.value?.hohId || currentHoh.value?.winnerId || ''
+  const vetoWinnerId = currentVeto.value?.winnerId || ''
+  const excludeSet = new Set<string>()
+  if (hohId) excludeSet.add(hohId)
+  if (vetoWinnerId) excludeSet.add(vetoWinnerId)
+  if (savedPlayerId.value) excludeSet.add(savedPlayerId.value)
+  return activeList.value.filter(h => !excludeSet.has(h.id))
 })
 
 const listForNominee1 = computed(() => baseAvailable.value.filter(h => h.id !== nominee2.value && h.id !== nominee3.value))
@@ -154,6 +162,15 @@ async function fetchData() {
     const data = await bbGetCurrentNomination()
     nomination.value = data as any
     twistInfo.value = (data as any)?.twists || null
+  } catch {}
+  try {
+    const hoh = await bbGetCurrentHoh()
+    currentHoh.value = hoh as any
+  } catch {}
+  try {
+    const veto = await bbGetCurrentVeto()
+    currentVeto.value = veto as any
+    savedPlayerId.value = (veto as any)?.usedOnPlayerId || ''
   } catch {}
   try { history.value = await bbGetNominationHistory() } catch {}
   try {

@@ -21,6 +21,15 @@
         </ul>
       </div>
 
+      <!-- 获胜者横幅 -->
+      <div v-if="veto?.winnerId" class="veto-winner-banner">
+        <span class="banner-icon">🛡️</span>
+        <div class="banner-text">
+          <div class="banner-title">{{ veto.winnerName }} 赢得否决权！</div>
+          <div class="banner-sub">{{ veto.used ? '✅ 已使用否决权' : '⏳ 尚未使用（进入否决权会议阶段后可救人或跳过）' }}</div>
+        </div>
+      </div>
+
       <!-- 当前状态 -->
       <div v-if="veto" class="veto-card" :class="{ drawn: veto.participants?.length > 0 }">
         <div class="veto-icon">🎲</div>
@@ -118,8 +127,64 @@
         <!-- 小游戏房间状态 -->
         <div v-if="activeRoom" class="room-status" :class="activeRoom.status">
           <span class="status-badge">{{ statusText }}</span>
-          <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人</span>
+          <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人<template v-if="activeRoom.targetScore"> · 目标 {{ activeRoom.targetScore }}</template></span>
           <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-primary" @click="startMinigame">▶ 开始比赛</button>
+        </div>
+
+        <!-- 目标设置确认创建 -->
+        <div v-if="selectedMinigameId" class="target-setup">
+          <div class="target-setup-title">🎮 已选择「{{ selectedMinigameId }}」，设置胜出目标（可选）</div>
+          <div class="target-setup-row">
+            <input v-model.number="targetScore" type="number" min="1" class="target-input" :placeholder="targetInputHint" />
+            <button class="bb-btn bb-btn-primary" :disabled="creating" @click="createRoomWithTarget">✓ 创建房间</button>
+            <button class="bb-btn" :disabled="creating" @click="cancelCreateRoom">取消</button>
+          </div>
+        </div>
+
+        <!-- 实时进度（管理员观察） -->
+        <div v-if="activeRoom && progress" class="progress-panel">
+          <div class="progress-title">📊 实时进度</div>
+          <table class="progress-table">
+            <thead>
+              <tr><th>选手</th><th>当前进度</th><th>状态</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in sortedProgress" :key="row.playerId"
+                :class="{ winner: activeRoom?.winner?.playerId === row.playerId }">
+                <td class="p-name">
+                  <span class="p-avatar">{{ (row.playerName || '?').charAt(0) }}</span>
+                  {{ row.playerName }}
+                </td>
+                <td class="p-score">
+                  {{ (row as any).label || row.score }}
+                  <template v-if="row.max">
+                    <div class="p-bar"><div class="p-bar-fill" :style="{ width: Math.min(100, ((row as any).progress || 0) / row.max * 100) + '%' }"></div></div>
+                  </template>
+                </td>
+                <td class="p-status">
+                  <span v-if="activeRoom?.winner?.playerId === row.playerId" class="win-badge">🏆 胜者</span>
+                  <span v-else-if="(row as any).done" class="done-badge">✓ 完成</span>
+                  <span v-else class="playing-badge">进行中</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 手动指定胜者 -->
+        <div v-if="activeRoom && activeRoom.status !== 'finished'" class="manual-winner">
+          <div class="manual-winner-title">🏆 手动指定胜者并结束比赛</div>
+          <div class="manual-winner-row">
+            <select v-model="selectingManualWinnerId" class="pick-select">
+              <option value="">-- 选择胜者 --</option>
+              <option v-for="p in activeRoom.participants" :key="p.playerId" :value="p.playerId">
+                {{ p.playerName }}
+              </option>
+            </select>
+            <button class="bb-btn bb-btn-primary" :disabled="!selectingManualWinnerId || settingWinner" @click="confirmManualWinner">
+              {{ settingWinner ? '确认中...' : '🏆 指定胜者' }}
+            </button>
+          </div>
         </div>
         <p v-if="veto?.participants?.length && !veto?.winnerId && !allPicksDone && canPick.length > 0" class="action-hint">
           请先完成所有自选，再进行否决权竞争
@@ -145,14 +210,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
 import {
   bbGetCurrentVeto, bbRunVetoCompetition, bbDrawVetoParticipants, bbGetCurrentHoh,
-  bbGetCurrentNomination, bbPickVetoParticipant, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom
+  bbGetCurrentNomination, bbPickVetoParticipant, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom,
+  bbGetMinigameRoomProgress, bbSetMinigameWinner
 } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import MinigameSelector from '../../../components/bigbrother/minigames/MinigameSelector.vue'
-import type { BBVetoRecord, MinigameRoom } from '../../../types/bigbrother'
+import type { BBVetoRecord, MinigameRoom, MinigameProgress } from '../../../types/bigbrother'
 
 const veto = ref<BBVetoRecord | null>(null)
 const twistInfo = ref<any>(null)
@@ -160,8 +226,33 @@ const hohId = ref('')
 const nomineeIds = ref<string[]>([])
 const drawing = ref(false)
 const competing = ref(false)
+const creating = ref(false)
 const showMinigameModal = ref(false)
 const activeRoom = ref<MinigameRoom | null>(null)
+
+// ===== 目标与小游戏创建 =====
+const selectedMinigameId = ref<string | null>(null)
+const targetScore = ref<number | null>(null)
+const targetHint = ref('')
+// 目标输入框的提示：随游戏而变
+const targetInputHint = computed(() => {
+  if (!selectedMinigameId.value) return ''
+  const hints: Record<string, string> = {
+    'click-speed': '点击次数（如 50，达到即胜）',
+    'quick-math': '答对题数（如 10，达到即胜）',
+    'memory-match': '填写任意正整数（完成全部配对即胜）',
+    'balance-bar': '保持时长（毫秒，如 8000 达到即胜）',
+    'dice-duel': '总分数（如 20，达到即胜）'
+  }
+  return hints[selectedMinigameId.value] || '目标值（可选）'
+})
+
+// ===== 实时进度 =====
+const progress = ref<MinigameProgress | null>(null)
+const progressTimer = ref<ReturnType<typeof setInterval> | null>(null)
+const selectingManualWinnerId = ref('')
+const settingWinner = ref(false)
+const persistedWinner = ref('')
 
 const statusText = computed(() => {
   const s = activeRoom.value?.status
@@ -170,6 +261,18 @@ const statusText = computed(() => {
   if (s === 'playing') return '游戏中'
   if (s === 'finished') return '已结束'
   return s || ''
+})
+
+// 按分数排序的进度列表
+const sortedProgress = computed(() => {
+  if (!progress.value?.states) return []
+  return Object.entries(progress.value.states)
+    .map(([playerId, st]) => ({
+      playerId,
+      playerName: progress.value!.participants.find(p => p.playerId === playerId)?.playerName || playerId,
+      ...st
+    }))
+    .sort((a: any, b: any) => (b.score || 0) - (a.score || 0))
 })
 
 // 自选相关
@@ -228,7 +331,12 @@ async function fetchData() {
     } catch {}
   } catch {}
   // 检查活跃的小游戏房间
-  try { activeRoom.value = await bbGetActiveMinigameRoom('veto') } catch {}
+  try {
+    const room = await bbGetActiveMinigameRoom('veto')
+    activeRoom.value = room
+    if (room) startProgressPolling(room.roomId)
+    else stopProgressPolling()
+  } catch {}
 }
 
 async function drawParticipants() {
@@ -299,16 +407,114 @@ async function onSelectMinigame(minigameId: string) {
     alert('请先抽取参与者')
     return
   }
+  // 记录所选游戏，展示目标设置后再创建
+  selectedMinigameId.value = minigameId
+  targetScore.value = null
+}
+
+async function cancelCreateRoom() {
+  selectedMinigameId.value = null
+  targetScore.value = null
+}
+
+// 按当前所选游戏+目标创建房间
+async function createRoomWithTarget() {
+  if (!selectedMinigameId.value || !veto.value?.participants?.length) return
+  creating.value = true
   try {
     const participants = veto.value.participants.map(p => ({
       playerId: p.playerId,
       playerName: p.playerName
     }))
-    const room = await bbCreateMinigameRoom('veto', minigameId, participants)
+    const room = await bbCreateMinigameRoom('veto', selectedMinigameId.value, participants, targetScore.value)
     activeRoom.value = room
-    alert(`比赛房间已创建！玩家可以加入了。`)
+    selectedMinigameId.value = null
+    targetScore.value = null
+    // 开始轮询实时进度
+    startProgressPolling(room.roomId)
+    alert(`比赛房间已创建！玩家可以加入了${room.targetScore ? `（目标：达到 ${room.targetScore} 即胜）` : ''}`)
   } catch (e: any) {
     alert(e.message)
+  } finally {
+    creating.value = false
+  }
+}
+
+// 开始轮询房间实时进度
+function startProgressPolling(roomId: string) {
+  stopProgressPolling()
+  progress.value = null
+  const poll = async () => {
+    try {
+      const p = await bbGetMinigameRoomProgress(roomId)
+      progress.value = p
+      // 房间结束（有胜者）则刷新 activeRoom 状态
+      if (p && p.status === 'finished' && p.winner && activeRoom.value) {
+        activeRoom.value = { ...activeRoom.value, status: 'finished', winner: p.winner }
+        stopProgressPolling()
+        // 将胜者持久化写回 BBVetoRecord，供页面 veto 卡片显示
+        await persistRoomWinner(p.winner)
+      }
+    } catch {}
+  }
+  poll()
+  progressTimer.value = setInterval(poll, 1000)
+}
+
+// 把小游戏房间的胜者写回 BBVetoRecord
+async function persistRoomWinner(winner: { playerId: string; playerName: string }) {
+  if (!winner || !activeRoom.value || persistedWinner.value === winner.playerId) return
+  persistedWinner.value = winner.playerId
+  try {
+    const rec = await bbRunVetoCompetition({
+      winnerId: winner.playerId,
+      winnerName: winner.playerName,
+      minigameId: activeRoom.value.minigameId,
+      scores: {}
+    })
+    veto.value = rec as any
+    // 无弹窗提示，改为页面直接显示胜者；如需提示可打开下行
+    // alert(`否决权竞争完成！${winner.playerName} 获胜！`)
+  } catch (e: any) {
+    // 后端可能已记录（重复），忽略
+    try { await fetchData() } catch {}
+  }
+}
+
+function stopProgressPolling() {
+  if (progressTimer.value) {
+    clearInterval(progressTimer.value)
+    progressTimer.value = null
+  }
+}
+
+// 管理员手动指定胜者
+async function confirmManualWinner() {
+  if (!activeRoom.value || !selectingManualWinnerId.value || settingWinner.value) return
+  settingWinner.value = true
+  try {
+    const res = await bbSetMinigameWinner(activeRoom.value.roomId, selectingManualWinnerId.value)
+    const winnerName = res.winner?.playerName || ''
+    // 写回 BBVetoRecord，让页面 veto 卡片显示胜者
+    persistedWinner.value = res.winner?.playerId || ''
+    try {
+      const rec = await bbRunVetoCompetition({
+        winnerId: res.winner!.playerId,
+        winnerName,
+        minigameId: activeRoom.value.minigameId,
+        scores: {}
+      })
+      veto.value = rec as any
+      alert(`已指定胜者：${winnerName}，比赛结束！`)
+    } catch (e: any) {
+      alert(`已指定胜者：${winnerName}，比赛结束！`)
+      try { await fetchData() } catch {}
+    }
+  } catch (e: any) {
+    alert(e.message)
+  } finally {
+    settingWinner.value = false
+    selectingManualWinnerId.value = ''
   }
 }
 
@@ -323,6 +529,7 @@ async function startMinigame() {
 }
 
 onMounted(fetchData)
+onUnmounted(stopProgressPolling)
 </script>
 
 <style scoped>
@@ -334,6 +541,20 @@ onMounted(fetchData)
 .twist-info-bar { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; }
 .twist-item { font-size: 13px; color: #aaa; }
 .twist-item.no-pendant { color: #ffaa00; }
+
+/* 获胜者横幅 */
+.veto-winner-banner {
+  display: flex; align-items: center; gap: 16px;
+  background: linear-gradient(135deg, #ffaa0022, #ff880015);
+  border: 1px solid #ffaa00;
+  border-radius: 12px;
+  padding: 18px 22px;
+  margin-bottom: 16px;
+}
+.veto-winner-banner .banner-icon { font-size: 40px; }
+.veto-winner-banner .banner-text { flex: 1; }
+.veto-winner-banner .banner-title { font-size: 20px; font-weight: 700; color: #ffaa00; }
+.veto-winner-banner .banner-sub { font-size: 13px; color: #aaa; margin-top: 4px; }
 
 /* 步骤说明 */
 .step-card { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
@@ -464,4 +685,32 @@ onMounted(fetchData)
 .bb-modal-header h3 { margin: 0; color: #00ff88; font-size: 16px; }
 .close-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 18px; }
 .bb-modal-body { padding: 20px; }
+
+/* 目标设置 */
+.target-setup { margin-top: 12px; padding: 12px 16px; background: #ffffff05; border: 1px solid #aa44ff44; border-radius: 8px; }
+.target-setup-title { font-size: 13px; color: #aa44ff; margin-bottom: 8px; }
+.target-setup-row { display: flex; gap: 10px; align-items: center; }
+.target-input { flex: 1; background: #1a1a2e; border: 1px solid #aa44ff44; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; font-size: 13px; outline: none; }
+.target-input::placeholder { color: #777; }
+
+/* 实时进度 */
+.progress-panel { margin-top: 12px; padding: 12px 16px; background: #ffffff05; border: 1px solid #4488ff33; border-radius: 8px; }
+.progress-title { font-size: 13px; font-weight: 600; color: #4488ff; margin-bottom: 10px; }
+.progress-table { width: 100%; border-collapse: collapse; }
+.progress-table th, .progress-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #00ff8811; font-size: 13px; color: #ccc; }
+.progress-table th { color: #888; font-weight: 500; font-size: 11px; text-transform: uppercase; }
+.progress-table tr.winner { background: #ffaa0008; }
+.progress-table tr.winner td { color: #ffaa00; }
+.p-avatar { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: #00ff8822; color: #00ff88; align-items: center; justify-content: center; margin-right: 8px; font-size: 12px; }
+.p-score { min-width: 120px; }
+.p-bar { width: 120px; height: 5px; background: #ffffff10; border-radius: 3px; margin-top: 4px; overflow: hidden; }
+.p-bar-fill { height: 100%; background: linear-gradient(90deg, #00ff88, #4488ff); border-radius: 3px; transition: width 0.4s; }
+.win-badge { color: #ffaa00; font-weight: 600; }
+.done-badge { color: #00ff88; }
+.playing-badge { color: #888; }
+
+/* 手动指定胜者 */
+.manual-winner { margin-top: 12px; padding: 12px 16px; background: #ffffff05; border: 1px solid #ffaa0044; border-radius: 8px; }
+.manual-winner-title { font-size: 13px; font-weight: 600; color: #ffaa00; margin-bottom: 8px; }
+.manual-winner-row { display: flex; gap: 10px; align-items: center; }
 </style>

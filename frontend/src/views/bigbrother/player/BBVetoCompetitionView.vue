@@ -13,6 +13,11 @@
         :participants="activeRoom.participants" @finished="onMinigameFinished" />
     </div>
 
+    <!-- 等待进入比赛：room 已创建且我是参与者，但尚未开始 -->
+    <div v-else-if="activeRoom && isParticipant" class="veto-card empty">
+      <p>🎮 否决权比赛房间已就绪，等待管理员开始比赛...</p>
+    </div>
+
     <!-- 已有结果 -->
     <div v-else-if="veto" class="veto-card">
       <div class="veto-icon">🛡️</div>
@@ -57,10 +62,15 @@ const gameComponent = ref<Component | null>(null)
 const myId = computed(() => authStore.currentUser?.id || '')
 const myName = computed(() => authStore.currentUser?.name || '')
 
+const isParticipant = computed(() => {
+  if (!activeRoom.value?.participants) return false
+  return activeRoom.value.participants.some(p => p.playerId === myId.value)
+})
+
 const showMinigame = computed(() => {
   if (!activeRoom.value || activeRoom.value.status === 'finished') return false
   if (!activeRoom.value.participants) return false
-  return activeRoom.value.participants.some(p => p.playerId === myId.value)
+  return isParticipant.value
 })
 
 const gameComponentMap: Record<string, Component> = {
@@ -89,39 +99,39 @@ async function onMinigameFinished(winner: { playerId: string; playerName: string
 }
 
 onMounted(async () => {
-  // 加载 Veto 历史
+  // 加载 Veto 历史：只有真正产生获胜者的记录才算结果（抽选/进行中的不算，避免挡住房间）
   try {
     const history = await bbGetVetoHistory()
     const roundKey = `round-${roundNum.value}`
-    veto.value = history.find(h => h.roundId === roundKey) || null
+    const rec = history.find(h => h.roundId === roundKey)
+    if (rec && rec.winnerId) veto.value = rec
   } catch {}
 
   // 检查活跃的小游戏房间（初始 + 轮询）
   let pollTimer: ReturnType<typeof setInterval> | null = null
 
   const checkRoom = async () => {
-    // 已有结果或房间已结束，停止轮询
-    if (veto.value || activeRoom.value?.status === 'finished') {
-      if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
-      return
-    }
     try {
       const room = await bbGetActiveMinigameRoom('veto')
       if (room) {
         activeRoom.value = room
         gameComponent.value = gameComponentMap[room.minigameId] || null
-        if (room.status === 'finished' && pollTimer) {
-          clearInterval(pollTimer)
-          pollTimer = null
-        }
+      } else {
+        activeRoom.value = null
       }
     } catch {}
+
+    // 已有最终获胜者，停止轮询
+    if (veto.value) {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+      return
+    }
   }
 
   // 首次检查
   await checkRoom()
-  // 每2秒轮询，直到房间出现或已有结果
-  if (!veto.value && (!activeRoom.value || activeRoom.value.status !== 'finished')) {
+  // 每2秒轮询，直到出现最终获胜者
+  if (!veto.value) {
     pollTimer = setInterval(checkRoom, 2000)
   }
 

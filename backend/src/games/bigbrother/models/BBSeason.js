@@ -22,6 +22,20 @@ class BBSeason extends BaseModel {
     this.jurySize = data?.jurySize ?? 7
     // Final 人数（赛季开始前设置，最终不淘汰进入决赛的人数）
     this.finalSize = data?.finalSize ?? 2
+    // 终局轮号：final3Round = 第 N+1 轮（F3），championRound = 第 N+2 轮（冠军投票）；自动由淘汰计划算出
+    this.final3Round = data?.final3Round ?? null
+    this.championRound = data?.championRound ?? null
+    // F3 / 冠军数据
+    this.fhohId = data?.fhohId || null
+    this.fhohName = data?.fhohName || ''
+    this.finalTwo = data?.finalTwo || []            // FTC 决赛二人 [{ playerId, playerName }]
+    this.lastJuryId = data?.lastJuryId || null       // 被 FHOH 带剩的那位（成为最后一位 jury）
+    this.lastJuryName = data?.lastJuryName || ''
+    this.championId = data?.championId || null
+    this.championName = data?.championName || ''
+    this.runnerUpId = data?.runnerUpId || null
+    this.runnerUpName = data?.runnerUpName || ''
+    this.final3Winners = data?.final3Winners || {} // { 1:{playerId,name}, 2:{...}, 3:{...} }
     this.createdAt = data?.createdAt || new Date().toISOString()
     this.updatedAt = data?.updatedAt || new Date().toISOString()
   }

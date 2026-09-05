@@ -85,6 +85,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'profile', name: 'BBPlayerProfile', component: () => import('../views/bigbrother/player/BBProfileView.vue') },
       { path: 'chat', name: 'BBPlayerChat', component: () => import('../views/bigbrother/player/BBChatView.vue') },
       { path: 'history', name: 'BBPlayerHistory', component: () => import('../views/bigbrother/player/BBHistoryView.vue') },
+      { path: 'finale', name: 'BBPlayerFinale', component: () => import('../views/bigbrother/player/BBFinaleView.vue') },
       { path: 'round/:round/hoh', name: 'BBPlayerHoh', component: () => import('../views/bigbrother/player/BBHohView.vue') },
       { path: 'round/:round/nomination', name: 'BBPlayerNomination', component: () => import('../views/bigbrother/player/BBNominationView.vue') },
       { path: 'round/:round/veto-competition', name: 'BBPlayerVetoCompetition', component: () => import('../views/bigbrother/player/BBVetoCompetitionView.vue') },
@@ -105,6 +106,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'dashboard', name: 'BBAdminDashboard', component: () => import('../views/bigbrother/admin/BBDashboardView.vue') },
       { path: 'houseguests', name: 'BBAdminHouseguests', component: () => import('../views/bigbrother/admin/BBHouseguestView.vue') },
       { path: 'stage', name: 'BBAdminStage', component: () => import('../views/bigbrother/admin/BBStageView.vue') },
+      { path: 'endgame', name: 'BBAdminEndgame', component: () => import('../views/bigbrother/admin/BBEndgameView.vue') },
+      { path: 'season-result', name: 'BBAdminSeasonResult', component: () => import('../views/bigbrother/admin/BBSeasonResultView.vue') },
       { path: 'logs', name: 'BBAdminLogs', component: () => import('../views/bigbrother/admin/BBLogView.vue') },
       { path: 'chat', name: 'BBAdminChat', component: () => import('../views/bigbrother/admin/BBChatView.vue') },
       // 7 个独立阶段页面
