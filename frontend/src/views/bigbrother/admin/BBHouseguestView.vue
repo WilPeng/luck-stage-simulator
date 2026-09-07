@@ -2,7 +2,13 @@
   <div class="bb-houseguests">
     <div class="page-header">
       <h1>房客管理</h1>
-      <button class="bb-btn" @click="showCreateModal = true">+ 新建房客</button>
+      <div class="header-actions">
+        <button class="bb-btn" @click="exportCsv">📤 导出表格</button>
+        <label class="bb-btn upload-btn">📥 导入表格
+          <input type="file" accept=".csv,text/csv" hidden @change="onImportFile" />
+        </label>
+        <button class="bb-btn bb-btn-primary" @click="showCreateModal = true">+ 新建房客</button>
+      </div>
     </div>
 
     <div class="toolbar">
@@ -190,13 +196,138 @@ function confirmDelete(h: BBHouseguest) {
   bbDeleteHouseguest(h.id).then(fetchData).catch((e: any) => alert(e.message))
 }
 
+// ===== 导出全部房客为表格(CSV，Excel 可打开) =====
+async function fetchAllHouseguests(): Promise<BBHouseguest[]> {
+  const all: BBHouseguest[] = []
+  let pageNum = 1
+  for (;;) {
+    const r = await bbGetHouseguests({ page: pageNum, pageSize: 100 })
+    all.push(...r.list)
+    if (pageNum >= r.totalPages) break
+    pageNum++
+  }
+  return all
+}
+
+function statusLabel(s: string): string {
+  const map: Record<string, string> = { active: '活跃', evicted: '已淘汰', jury: '陪审团' }
+  return map[s] || s
+}
+
+async function exportCsv() {
+  try {
+    const rows = await fetchAllHouseguests()
+    const header = ['名称', '登录码', '角色', '状态', '已登录']
+    const lines = rows.map(h => [
+      h.name,
+      h.loginCode,
+      h.role === 'admin' ? '管理员' : '房客',
+      statusLabel(h.status),
+      h.hasLogin ? '是' : '否'
+    ])
+    const csv = [header, ...lines].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `BigBrother房客_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  } catch (e: any) {
+    alert(e.message || '导出失败')
+  }
+}
+
+// ===== 导入表格：CSV 列名 名称/姓名 + 登录码（可带 状态/角色）=====
+const importBusy = ref(false)
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let cur = ''
+  let inQuote = false
+  const src = text.replace(/^\uFEFF/, '')
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]
+    if (inQuote) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') { cur += '"'; i++ } else inQuote = false
+      } else cur += ch
+    } else if (ch === '"') {
+      inQuote = true
+    } else if (ch === ',') {
+      row.push(cur); cur = ''
+    } else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && src[i + 1] === '\n') i++
+      row.push(cur); cur = ''
+      if (row.some(c => c.trim() !== '')) rows.push(row)
+      row = []
+    } else {
+      cur += ch
+    }
+  }
+  row.push(cur)
+  if (row.some(c => c.trim() !== '')) rows.push(row)
+  return rows
+}
+
+async function onImportFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  if (importBusy.value) return
+  importBusy.value = true
+  try {
+    const text = await file.text()
+    const rows = parseCsv(text)
+    if (rows.length === 0) { alert('文件为空或格式错误'); return }
+    // 找表头/列位置
+    let nameIdx = 0, codeIdx = 1, statusIdx = -1, roleIdx = -1
+    const first = rows[0].map(c => c.trim().toLowerCase())
+    if (first.some(c => c.includes('名'))) {
+      nameIdx = first.findIndex(c => c.includes('名')) >= 0 ? first.findIndex(c => c.includes('名')) : 0
+      codeIdx = first.findIndex(c => c.includes('登录')) >= 0 ? first.findIndex(c => c.includes('登录')) : first.findIndex(c => c.includes('码'))
+      statusIdx = first.findIndex(c => c.includes('状态'))
+      roleIdx = first.findIndex(c => c.includes('角色'))
+      rows.shift()
+    }
+    const existing = await fetchAllHouseguests()
+    const existingCodes = new Set(existing.map(h => h.loginCode))
+    let ok = 0, skip = 0, fail = 0
+    const messages: string[] = []
+    for (const r of rows) {
+      const name = (r[nameIdx] || '').trim()
+      const code = (r[codeIdx] || '').trim()
+      if (!name) { skip++; continue }
+      if (!code) { fail++; messages.push(`「${name}」缺少登录码`); continue }
+      if (existingCodes.has(code)) { skip++; messages.push(`登录码 ${code} 已存在，跳过 ${name}`); continue }
+      try {
+        await bbCreateHouseguest({ name, loginCode: code })
+        existingCodes.add(code)
+        ok++
+      } catch (err: any) {
+        fail++
+        messages.push(`${name}: ${err.message || '创建失败'}`)
+      }
+    }
+    await fetchData()
+    alert(`导入完成：成功 ${ok} 条，跳过 ${skip} 条，失败 ${fail} 条${messages.length ? '\n' + messages.slice(0, 8).join('\n') : ''}`)
+  } catch (err: any) {
+    alert('导入失败：' + (err.message || err))
+  } finally {
+    importBusy.value = false
+    input.value = ''
+  }
+}
+
 onMounted(fetchData)
 </script>
 
 <style scoped>
 .bb-houseguests { max-width: 1200px; margin: 0 auto; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
 .page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
+.header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.upload-btn { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+.upload-btn input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .bb-btn {
   background: transparent; border: 1px solid #00ff8844; color: #00ff88;
   padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s;

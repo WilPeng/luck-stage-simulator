@@ -357,6 +357,21 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
     season.nextHohPlayerId = null
     season.nextHohPlayerName = ''
     season.roundConfigs = []
+    // 清除终局数据
+    season.final3Round = null
+    season.championRound = null
+    season.totalRounds = 0
+    season.status = 'running'
+    season.final3Winners = {}
+    season.fhohId = null
+    season.fhohName = ''
+    season.finalTwo = []
+    season.lastJuryId = null
+    season.lastJuryName = ''
+    season.championId = null
+    season.championName = ''
+    season.runnerUpId = null
+    season.runnerUpName = ''
     season.updatedAt = new Date().toISOString()
     await season.save()
     await logAction(req.user.userId, req.user.name || 'admin', 'admin',

@@ -31,9 +31,9 @@
 
           <div class="nav-section">
             <div class="nav-section-title">赛季设置</div>
-            <div v-for="item in stageItems" :key="item.path"
-              class="nav-item" :class="{ active: $route.path.startsWith(item.path) }"
-              @click="navigateTo(item.path)">
+            <div v-for="item in stageItems" :key="item.text"
+              class="nav-item" :class="{ active: item.path !== '#' && $route.path.startsWith(item.path) }"
+              @click="item.click ? nextStage() : navigateTo(item.path)">
               <span class="nav-icon">{{ item.icon }}</span>
               <span class="nav-text">{{ item.text }}</span>
             </div>
@@ -112,6 +112,7 @@ const stageItems = [
   { icon: '🎯', text: '赛季设置', path: '/games/bigbrother/admin/stage' },
   { icon: '🏁', text: '终局F3 / 冠军', path: '/games/bigbrother/admin/endgame' },
   { icon: '🏆', text: '季终结算', path: '/games/bigbrother/admin/season-result' },
+  { icon: '▶️', text: '推进到下一阶段', path: '#', click: 'nextStage' },
 ]
 
 const stageList = [
@@ -131,10 +132,16 @@ const otherItems = [
 
 const rounds = computed(() => {
   // 普通轮列至最后一普通轮（final3Round-1）；终局两轮通过“终局F3/冠军”菜单进入
-  const n = seasonStore.final3Round
+  const max = seasonStore.final3Round
     ? Math.min(seasonStore.final3Round - 1, seasonStore.totalRounds)
     : seasonStore.totalRounds
-  return Array.from({ length: n }, (_, i) => i + 1)
+  const cur = Math.min(seasonStore.currentRoundNumber, max)
+  // 顺序：当前轮置顶 → 已完成轮倒序（如 4 3 2 1）→ 未开始轮顺序（5 6 7 …）
+  const done = []
+  for (let i = cur - 1; i >= 1; i--) done.push(i)
+  const upcoming = []
+  for (let i = cur + 1; i <= max; i++) upcoming.push(i)
+  return [cur, ...done, ...upcoming].filter(r => r >= 1 && r <= max)
 })
 
 const stageDisplay = computed(() => {
@@ -188,6 +195,11 @@ function navigateToStage(round: number, stage: BBStageType) {
   const st = stageList.find(s => s.key === stage)
   const routeName = st?.route || 'hoh'
   router.push(`/games/bigbrother/admin/round/${round}/${routeName}`)
+}
+
+async function nextStage() {
+  mobileMenuOpen.value = false
+  await seasonStore.nextStage()
 }
 
 async function handleLogout() {

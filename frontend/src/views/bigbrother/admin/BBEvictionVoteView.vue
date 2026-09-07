@@ -20,6 +20,31 @@
       </div>
     </div>
 
+    <!-- 实时票数汇总 -->
+    <div v-if="nomineeOptions.length > 0" class="tally-section">
+      <div class="tally-header">
+        <h3>📊 实时票数</h3>
+        <span class="tally-hint">{{ voteData.total }} 票已投出</span>
+      </div>
+      <div class="tally-grid">
+        <div v-for="n in nomineeTally" :key="n.id" class="tally-card" :class="{ leading: n.isLeading && n.votes > 0 }">
+          <div class="tally-rank">{{ n.rank }}</div>
+          <div class="tally-avatar">
+            <BBAvatar :name="n.name" :avatar="null" size="md" />
+          </div>
+          <div class="tally-info">
+            <div class="tally-name">{{ n.name }}</div>
+            <div class="tally-votes-text">{{ n.votes }} 票</div>
+          </div>
+          <div class="tally-bar-wrap">
+            <div class="tally-bar" :style="{ width: n.pct + '%' }"></div>
+          </div>
+          <div class="tally-count">{{ n.votes }}</div>
+        </div>
+      </div>
+      <div v-if="voteData.votes?.length === 0" class="tally-empty">暂无投票</div>
+    </div>
+
     <!-- 投票管理 -->
     <div v-if="activeHouseguests.length > 0 && nomination" class="vote-manage-section">
       <h3>🗳️ 为房客投票</h3>
@@ -76,6 +101,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { bbGetVotes, bbCastVote, bbGetActiveHouseguests, bbGetCurrentNomination, bbGetCurrentHoh, bbGetHouseguestStats } from '../../../services/bbApi'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 
 const voteData = ref<{ votes: any[]; total: number }>({ votes: [], total: 0 })
 const twistInfo = ref<any>(null)
@@ -94,6 +120,31 @@ const nomineeOptions = computed(() => {
 })
 
 const nomineeIdSet = computed(() => new Set(nomination.value?.nomineeIds || []))
+
+const nomineeTally = computed(() => {
+  const votes = voteData.value.votes || []
+  const counts: Record<string, number> = {}
+  for (const v of votes) {
+    if (!counts[v.targetId]) counts[v.targetId] = 0
+    counts[v.targetId]++
+  }
+  const list = nomineeOptions.value.map((n: any) => ({
+    id: n.id,
+    name: n.name,
+    votes: counts[n.id] || 0,
+    pct: 0,
+    rank: 0,
+    isLeading: false,
+  }))
+  list.sort((a, b) => b.votes - a.votes)
+  const maxVotes = list.length > 0 ? list[0].votes : 0
+  for (let i = 0; i < list.length; i++) {
+    list[i].rank = i + 1
+    list[i].pct = maxVotes > 0 ? Math.round(list[i].votes / maxVotes * 100) : 0
+    list[i].isLeading = list[i].votes === maxVotes && maxVotes > 0
+  }
+  return list
+})
 
 function isNominee(hid: string): boolean {
   return nomineeIdSet.value.has(hid)
@@ -168,4 +219,25 @@ onMounted(fetchData)
 .bb-table th { color: #888; font-size: 12px; text-transform: uppercase; }
 .highlight { color: #ffaa00; font-weight: 500; }
 .time { font-size: 12px; color: #666; }
+.tally-section { background: #0f0f2e; border: 1px solid #ffaa0033; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.tally-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.tally-header h3 { margin: 0; font-size: 16px; color: #e0e0e0; }
+.tally-hint { font-size: 12px; color: #888; }
+.tally-grid { display: flex; flex-direction: column; gap: 10px; }
+.tally-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #1a1a3e; border: 1px solid #ffffff10; border-radius: 8px; transition: all 0.3s ease; }
+.tally-card.leading { border-color: #ff444488; background: linear-gradient(90deg, #2a0f0f00, #ff444410); }
+.tally-rank { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; font-weight: 700; color: #888; background: #ffffff08; flex-shrink: 0; }
+.tally-card:nth-child(1) .tally-rank { background: #ff444433; color: #ff6b6b; }
+.tally-card:nth-child(2) .tally-rank { background: #ffaa0033; color: #ffaa00; }
+.tally-card:nth-child(3) .tally-rank { background: #00ff8833; color: #00ff88; }
+.tally-avatar { flex-shrink: 0; }
+.tally-info { min-width: 80px; }
+.tally-name { font-size: 14px; font-weight: 600; color: #e0e0e0; }
+.tally-votes-text { font-size: 12px; color: #888; margin-top: 2px; }
+.tally-bar-wrap { flex: 1; height: 6px; background: #ffffff08; border-radius: 3px; overflow: hidden; }
+.tally-bar { height: 100%; background: linear-gradient(90deg, #ff4444, #ff6b6b); border-radius: 3px; transition: width 0.5s ease; }
+.tally-card.leading .tally-bar { background: linear-gradient(90deg, #ff4444, #ff2222); }
+.tally-count { font-size: 20px; font-weight: 700; color: #ff6b6b; min-width: 32px; text-align: right; flex-shrink: 0; }
+.tally-card.leading .tally-count { color: #ff4444; text-shadow: 0 0 10px #ff444444; }
+.tally-empty { text-align: center; color: #555; font-size: 13px; padding: 16px; }
 </style>

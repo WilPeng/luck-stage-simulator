@@ -37,7 +37,14 @@
       <h3>操作</h3>
       <div class="action-buttons">
         <button class="bb-btn" @click="runCompetition">🎲 模拟 HOH 竞争</button>
+        <button class="bb-btn" @click="openMinigameModal">🎮 开启小游戏</button>
         <button class="bb-btn" @click="showAssignModal = true">✏️ 手动指定 HOH</button>
+      </div>
+      <!-- 小游戏房间状态 -->
+      <div v-if="activeRoom" class="room-status" :class="activeRoom.status">
+        <span class="status-badge">{{ statusText }}</span>
+        <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人</span>
+        <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-primary" @click="startMinigame">▶ 开始比赛</button>
       </div>
     </div>
 
@@ -85,15 +92,33 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- 小游戏选择弹窗 -->
+    <Teleport to="body">
+      <div v-if="showMinigameModal" class="bb-modal-overlay" @click.self="closeMinigameModal">
+        <div class="bb-modal bb-modal-xl">
+          <div class="bb-modal-header">
+            <h3>🎮 开启 HOH 小游戏</h3>
+            <button class="close-btn" @click="closeMinigameModal">✕</button>
+          </div>
+          <div class="bb-modal-body">
+            <MinigameSelector :selectedId="null" @select="onSelectMinigame" />
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { bbGetCurrentHoh, bbGetHohHistory, bbRunHohCompetition, bbAssignHoh, bbGetHohEligible, bbGetActiveHouseguests } from '../../../services/bbApi'
-import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
-import type { BBHohRecord } from '../../../types/bigbrother'
+import {
+  bbGetCurrentHoh, bbGetHohHistory, bbRunHohCompetition, bbAssignHoh,
+  bbGetHohEligible, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom
+} from '../../../services/bbApi'
+import MinigameSelector from '../../../components/bigbrother/minigames/MinigameSelector.vue'
+import type { BBHohRecord, MinigameRoom } from '../../../types/bigbrother'
 
 const route = useRoute()
 const currentHoh = ref<BBHohRecord | null>(null)
@@ -102,7 +127,27 @@ const history = ref<BBHohRecord[]>([])
 const activeHouseguests = ref<{ id: string; name: string; avatar: string | null }[]>([])
 const excludedHoh = ref<{ id: string; name: string } | null>(null)
 const showAssignModal = ref(false)
+const showMinigameModal = ref(false)
 const selectedPlayerId = ref('')
+const activeRoom = ref<MinigameRoom | null>(null)
+
+const statusText = computed(() => {
+  const s = activeRoom.value?.status
+  if (s === 'waiting') return '等待中'
+  if (s === 'countdown') return '倒计时'
+  if (s === 'playing') return '游戏中'
+  if (s === 'finished') return '已结束'
+  return s || ''
+})
+
+function closeMinigameModal() {
+  showMinigameModal.value = false
+}
+
+function hasNormalAfterEvict(p: any): boolean {
+  if (!p.evictedRound) return false
+  return rounds.value.some(x => colKind(x) === 'normal' && x.round > p.evictedRound)
+}
 
 const hasAnyTwist = computed(() => {
   if (!twistInfo.value) return false
@@ -143,6 +188,39 @@ async function assignHoh() {
     showAssignModal.value = false
     await fetchData()
   } catch (e: any) { alert(e.message) }
+}
+
+async function openMinigameModal() {
+  showMinigameModal.value = true
+}
+
+async function onSelectMinigame(minigameId: string) {
+  showMinigameModal.value = false
+  if (!activeHouseguests.value.length) {
+    alert('没有活跃房客')
+    return
+  }
+  try {
+    const participants = activeHouseguests.value.map(h => ({
+      playerId: h.id,
+      playerName: h.name
+    }))
+    const room = await bbCreateMinigameRoom('hoh', minigameId, participants)
+    activeRoom.value = room
+    alert(`比赛房间已创建！玩家可以加入了。`)
+  } catch (e: any) {
+    alert(e.message)
+  }
+}
+
+async function startMinigame() {
+  if (!activeRoom.value) return
+  try {
+    await bbStartMinigame(activeRoom.value.roomId)
+    activeRoom.value = { ...activeRoom.value, status: 'playing' }
+  } catch (e: any) {
+    alert(e.message)
+  }
 }
 
 function getRoundIndex(roundId: string): string {
@@ -197,6 +275,7 @@ onMounted(fetchData)
 .empty-cell { text-align: center; color: #666; padding: 32px; }
 .bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; width: 400px; max-width: 90vw; }
+.bb-modal-xl { width: 680px; }
 .bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #00ff8822; }
 .bb-modal-header h3 { margin: 0; color: #00ff88; font-size: 16px; }
 .close-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 18px; }
@@ -207,4 +286,24 @@ onMounted(fetchData)
 .selected-preview { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px; background: #00ff8808; border-radius: 8px; }
 .selected-name { font-size: 15px; color: #00ff88; font-weight: 500; }
 .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
+/* 小游戏房间状态 */
+.room-status { margin-top: 14px; padding: 10px 16px; background: #ffffff05; border: 1px solid #00ff8822; border-radius: 8px; display: flex; align-items: center; gap: 12px; }
+.room-status.playing { border-color: #00ff88; }
+.room-status.finished { border-color: #ffaa00; }
+.status-badge { font-size: 12px; font-weight: 600; color: #00ff88; padding: 2px 10px; background: #00ff8810; border-radius: 4px; }
+.status-info { flex: 1; font-size: 13px; color: #aaa; }
+
+/* 小游戏选择弹窗 */
+.twist-picker-modal { width: 520px; }
+.twist-options { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; }
+.twist-option {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: #0f0f2e; border: 1px solid #00ff8811; border-radius: 8px;
+  cursor: pointer; transition: all 0.2s;
+}
+.twist-option:hover { background: #00ff8808; border-color: #00ff8833; }
+.twist-option input[type="checkbox"] { accent-color: #00ff88; width: 16px; height: 16px; }
+.twist-option-icon { font-size: 20px; }
+.twist-option-name { font-size: 14px; font-weight: 500; color: #e0e0e0; min-width: 100px; }
+.twist-option-desc { font-size: 12px; color: #888; flex: 1; }
 </style>
