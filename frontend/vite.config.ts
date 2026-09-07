@@ -7,18 +7,20 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'https://luck-stage-simulator.onrender.com',
         changeOrigin: true,
-        secure: false,
+        secure: true,
       },
       '/uploads': {
-        target: 'http://localhost:3000',
+        target: 'https://luck-stage-simulator.onrender.com',
         changeOrigin: true,
+        secure: true,
       },
       '/bigbrother-chat': {
-        target: 'http://localhost:3000',
+        target: 'https://luck-stage-simulator.onrender.com',
         changeOrigin: true,
         ws: true,
+        secure: true,
       },
     },
   },
