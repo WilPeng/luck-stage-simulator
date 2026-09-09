@@ -173,7 +173,7 @@ const hasMoreMessages = computed(() => {
 function getApiBase() {
   // socket.io namespace 在后端是根路径（/bigbrother-chat），不带 /api
   const base = ((import.meta as any).env?.VITE_API_BASE || '').replace(/\/$/, '').replace(/\/api$/, '') || ''
-  return base || 'https://luck-stage-simulator.onrender.com'
+  return base || 'http://localhost:3000'
 }
 
 function getToken(): string | null {

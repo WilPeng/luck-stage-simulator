@@ -8,5 +8,6 @@ require('./balanceBar')
 require('./diceDuel')
 
 const { getAllGames, getGame, GAME_REGISTRY } = require('./index')
+const { loadCustomGame, createCustomGameHandler, getCustomHandlerId, clearCustomGameCache } = require('./customGame')
 
-module.exports = { getAllGames, getGame, GAME_REGISTRY }
+module.exports = { getAllGames, getGame, GAME_REGISTRY, loadCustomGame, createCustomGameHandler, getCustomHandlerId, clearCustomGameCache }

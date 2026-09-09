@@ -261,6 +261,8 @@ app.use('/api/bigbrother/eviction', bbGameIdMiddleware, require('./games/bigbrot
 app.use('/api/bigbrother/logs', bbGameIdMiddleware, require('./games/bigbrother/routes/bbLogs'))
 app.use('/api/bigbrother/chat', bbGameIdMiddleware, require('./games/bigbrother/routes/bbChat'))
 app.use('/api/bigbrother/minigame', bbGameIdMiddleware, require('./games/bigbrother/routes/bbMinigame'))
+app.use('/api/bigbrother/custom-game', bbGameIdMiddleware, require('./games/bigbrother/routes/bbCustomGame'))
+app.use('/api/bigbrother/house', bbGameIdMiddleware, require('./games/bigbrother/routes/bbHouse'))
 
 // ===== 恋综路由（固定 gameId = lovevariety）=====
 const lvGameIdMiddleware = (req, res, next) => { req.gameId = 'lovevariety'; next() }
@@ -299,6 +301,9 @@ async function initBBData() {
   const existing = await BBHouseguest.countDocuments({ gameId: 'bigbrother' })
   if (existing > 0) {
     console.log('[Big Brother] Existing data found, skipping initialization')
+    // 老库可能缺少 House 空间数据，幂等补齐
+    const { ensureBBHouseData } = require('./games/bigbrother/houseMap')
+    await ensureBBHouseData()
     return
   }
 
@@ -340,6 +345,31 @@ async function initBBData() {
     gameId: 'bigbrother'
   })
   await season.save()
+
+  // 初始化 BB House 房间/通道/门数据
+  const BBHouseRoom = require('./games/bigbrother/models/BBHouseRoom')
+  const BBHousePassage = require('./games/bigbrother/models/BBHousePassage')
+  const BBHouseDoor = require('./games/bigbrother/models/BBHouseDoor')
+  const BBPlayerLocation = require('./games/bigbrother/models/BBPlayerLocation')
+  const { seedHouseData } = require('./games/bigbrother/houseMap')
+  await seedHouseData({ BBHouseRoom, BBHousePassage, BBHouseDoor })
+
+  // 为所有活跃玩家创建位置记录（默认 living_room）
+  for (const h of houseguests) {
+    const loc = new BBPlayerLocation({
+      id: h.id, playerId: h.id, playerName: h.name,
+      currentRoomId: 'living_room', enteredAt: new Date().toISOString(),
+      gameId: 'bigbrother'
+    })
+    await loc.save()
+  }
+  // 管理员也创建位置记录
+  const adminLoc = new BBPlayerLocation({
+    id: admin.id, playerId: admin.id, playerName: admin.name,
+    currentRoomId: 'living_room', enteredAt: new Date().toISOString(),
+    gameId: 'bigbrother'
+  })
+  await adminLoc.save()
 
   console.log('[Big Brother] Seed data initialized:')
   console.log(`  - 1 admin (loginCode: BB_ADMIN)`)
@@ -442,6 +472,10 @@ initStore().then(() => {
         // 初始化 Big Brother 小游戏 WebSocket
         const { initBBMinigameSocket } = require('./socket/bbMinigame')
         initBBMinigameSocket(io)
+
+        // 初始化 Big Brother House 实时通信
+        const { initBBHouseSocket } = require('./socket/bbHouse')
+        initBBHouseSocket(io)
 
         server.listen(PORT, () => {
           console.log(`Server running on port ${PORT}`)

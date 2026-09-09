@@ -295,6 +295,8 @@ export interface BBHouseguest {
   status: 'active' | 'evicted' | 'jury' | 'f2'
   hasLogin: boolean
   avatar: string | null
+  isHaveNot?: boolean
+  currentRoomId?: string
   gameId: string
   createdAt: string
   updatedAt: string
@@ -346,6 +348,7 @@ export interface BBNomination {
 export interface BBVetoParticipant {
   playerId: string
   playerName: string
+  avatar?: string | null
   source?: 'drawn' | 'picked'  // drawn=被抽中, picked=被自选
   pickedBy?: string             // 由谁自选（仅 source='picked' 时）
 }
@@ -527,4 +530,134 @@ export interface MinigameSocketEvents {
   join_room: (data: { roomId: string }) => void
   leave_room: (data: { roomId: string }) => void
   game_action: (data: { roomId: string; action: any }) => void
+}
+
+// ===== BB House 类型 =====
+
+export type HouseRoomType = 'common' | 'lodging' | 'special' | 'outdoor' | 'hidden'
+export type HouseAccessRule = 'public' | 'hoh_only' | 'hoh_or_invited' | 'have_not_only' | 'single'
+
+export interface BBHouseRoomDef {
+  id: string
+  name: string
+  nameEn: string
+  icon: string
+  type: HouseRoomType
+  capacity: number | null
+  accessRule: HouseAccessRule
+  gameId: string
+}
+
+export interface BBHouseRoomWithCount extends BBHouseRoomDef {
+  currentCount: number | null
+}
+
+export interface BBHousePassageDef {
+  id: string
+  from: string
+  to: string
+  type: 'normal' | 'door'
+  doorId: string | null
+  gameId: string
+}
+
+export interface BBHouseDoorDef {
+  id: string
+  name: string
+  from: string
+  to: string
+  isOpen: boolean
+  gameId: string
+}
+
+export interface BBHouseMap {
+  rooms: BBHouseRoomDef[]
+  passages: BBHousePassageDef[]
+  doors: BBHouseDoorDef[]
+  backyardDoorOpen: boolean
+}
+
+export interface BBPlayerLocationData {
+  playerId: string
+  playerName: string
+  currentRoomId: string
+  enteredAt: string
+}
+
+export interface BBHouseRoomDetail {
+  room: BBHouseRoomDef
+  count: number
+  players: BBPlayerLocationData[] | null
+}
+
+export interface BBReachableRoom extends BBHouseRoomDef {
+  canEnter: boolean
+  denyReason: string
+}
+
+export interface BBHohMonitorRoom {
+  roomId: string
+  roomName: string
+  icon: string
+  count: number
+}
+
+// ===== 自定义游戏类型 =====
+
+export type CustomGameType = 'quiz' | 'score'
+export type CustomGameWinCondition = 'first_correct' | 'highest_score' | 'most_correct'
+export type CustomGameScoringRule = 'correct_only' | 'timed_bonus'
+
+export interface CustomGameQuestion {
+  id: string
+  text: string
+  options: string[]
+  correctAnswer: string
+  points: number
+}
+
+export interface BBCustomGameDef {
+  id: string
+  name: string
+  description: string
+  icon: string
+  type: CustomGameType
+  questions: CustomGameQuestion[]
+  cooldownSeconds: number
+  maxAttempts: number
+  timeLimit: number
+  scoringRule: CustomGameScoringRule
+  playerCount: { min: number; max: number }
+  winCondition: CustomGameWinCondition
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CustomGamePlayerState {
+  gameType: CustomGameType
+  currentQuestion: {
+    id: string
+    text: string
+    options: string[]
+    points: number
+  } | null
+  currentIndex: number
+  totalQuestions: number
+  score: number
+  correctCount: number
+  cooldownRemaining: number
+  startTime: number | null
+  finishTime: number | null
+  lastResult: {
+    questionId: string
+    userAnswer: string
+    correctAnswer: string
+    correct: boolean
+    points: number
+    submitTime: number
+  } | null
+  timerEndTime: number | null
+  timeLimit: number
+  status: string
 }

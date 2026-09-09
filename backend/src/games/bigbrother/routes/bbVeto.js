@@ -3,6 +3,7 @@ const router = express.Router()
 const BBVetoRecord = require('../models/BBVetoRecord')
 const BBHouseguest = require('../models/BBHouseguest')
 const { generateId, logAction, getCurrentSeason, BB_ACTION_TYPES, hasTwist } = require('../helpers')
+const { auth } = require('../../../middleware/auth')
 
 // GET /current - 获取当前轮次否决权记录
 router.get('/current', async (req, res) => {
@@ -396,6 +397,77 @@ router.get('/history', async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '获取否决权历史失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// GET /pickable - 获取当前用户可自选的房客列表（仅 veto_competition 阶段）
+router.get('/pickable', auth, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    if (season.currentStage !== 'veto_competition') {
+      return res.json({ success: true, data: { canPick: false, pickablePlayers: [] } })
+    }
+    const roundId = `round-${season.currentRound}`
+
+    const { getCollection } = require('../../../config/db')
+    const col = getCollection('BBHouseguest')
+
+    // 获取当前否决权记录
+    const existingRecord = await BBVetoRecord.findOne({ gameId: 'bigbrother', roundId })
+    if (!existingRecord || !existingRecord.participants || existingRecord.participants.length === 0) {
+      return res.json({ success: true, data: { canPick: false, pickablePlayers: [] } })
+    }
+
+    // 获取 HOH 和提名者
+    const hohCol = getCollection('BBHohRecord')
+    const nomCol = getCollection('BBNomination')
+    const currentHoh = await hohCol.findOne({ gameId: 'bigbrother', roundId })
+    const nominationDoc = await nomCol.findOne({ gameId: 'bigbrother', roundId })
+    const hohId = currentHoh?.winnerId || null
+    const nomineeIds = nominationDoc?.nomineeIds || []
+
+    // 当前用户
+    const userId = req.user?.userId
+    if (!userId) {
+      return res.json({ success: true, data: { canPick: false, pickablePlayers: [] } })
+    }
+
+    // 检查当前用户是否为可自选的 HOH/被抽中的提名者
+    const myPart = existingRecord.participants.find(p => p.playerId === userId)
+    if (!myPart || myPart.source !== 'drawn') {
+      return res.json({ success: true, data: { canPick: false, pickablePlayers: [] } })
+    }
+    if (userId !== hohId && !nomineeIds.includes(userId)) {
+      return res.json({ success: true, data: { canPick: false, pickablePlayers: [] } })
+    }
+    // 已经自选过了
+    const alreadyPicked = existingRecord.participants.find(p => p.source === 'picked' && p.pickedBy === userId)
+    if (alreadyPicked) {
+      return res.json({ success: true, data: { canPick: false, pickablePlayers: [] } })
+    }
+    // 已有获胜者
+    if (existingRecord.winnerId) {
+      return res.json({ success: true, data: { canPick: false, pickablePlayers: [] } })
+    }
+
+    // 可选池：活跃房客 - 已参与者
+    const allActive = await col.find({ gameId: 'bigbrother', status: 'active', role: 'houseguest' }).toArray()
+    const participantIds = new Set(existingRecord.participants.map(p => p.playerId))
+    const pickablePlayers = allActive
+      .filter(h => !participantIds.has(h.id))
+      .map(h => ({ playerId: h.id, playerName: h.name }))
+
+    res.json({
+      success: true,
+      data: {
+        canPick: true,
+        role: userId === hohId ? 'hoh' : 'nominee',
+        pickablePlayers
+      }
+    })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取可选房客失败', code: 'SERVER_ERROR' })
   }
 })
 

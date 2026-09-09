@@ -5,6 +5,7 @@
 const jwt = require('jsonwebtoken')
 const { v4: uuidv4 } = require('uuid')
 const { getGame } = require('../games/bigbrother/minigames/loadAll')
+const { loadCustomGame, createCustomGameHandler, getCustomHandlerId } = require('../games/bigbrother/minigames/customGame')
 
 // 活跃游戏房间（内存管理）
 const activeRooms = new Map() // roomId -> GameRoom
@@ -22,6 +23,7 @@ class GameRoom {
     this.winner = null
     this.manualWinnerId = null    // 管理员手动指定的胜者
     this.tickTimer = null         // balance-bar 的定时器
+    this.handler = null           // 自定义游戏 handler 缓存
   }
 
   getParticipant(playerId) {
@@ -43,6 +45,29 @@ class GameRoom {
       this.tickTimer = null
     }
   }
+}
+
+// 解析游戏 handler：先查静态注册表，再查自定义游戏
+async function resolveGameHandler(minigameId, room) {
+  // 先检查房间缓存的 handler（自定义游戏在房间创建时加载）
+  if (room && room.handler) return room.handler
+
+  // 静态注册表
+  let handler = getGame(minigameId)
+  if (handler) return handler
+
+  // 自定义游戏
+  if (minigameId && minigameId.startsWith('custom-')) {
+    const gameId = minigameId.replace(/^custom-/, '')
+    const gameDef = await loadCustomGame(gameId)
+    if (gameDef) {
+      handler = createCustomGameHandler(gameDef)
+      if (room) room.handler = handler // 缓存到房间
+      return handler
+    }
+  }
+
+  return null
 }
 
 const initBBMinigameSocket = (io) => {
@@ -96,13 +121,13 @@ const initBBMinigameSocket = (io) => {
 
       // 发送当前状态
       if (room.status === 'playing' && room.gameState) {
-        const handler = getGame(room.minigameId)
-        if (isAdmin && handler && handler.getAllStates) {
-          // 管理员：发汇总进度
-          socket.emit('game_progress', buildProgress(room))
-        } else if (handler && handler.getState) {
-          socket.emit('game_state', handler.getState(room.gameState, userId))
-        }
+        resolveGameHandler(room.minigameId, room).then(handler => {
+          if (isAdmin && handler && handler.getAllStates) {
+            socket.emit('game_progress', buildProgress(room))
+          } else if (handler && handler.getState) {
+            socket.emit('game_state', handler.getState(room.gameState, userId))
+          }
+        }).catch(() => {})
       }
 
       // 通知管理员（所有在 room 中的人）玩家已连接
@@ -136,7 +161,7 @@ const initBBMinigameSocket = (io) => {
     })
 
     // 游戏操作
-    socket.on('game_action', (data) => {
+    socket.on('game_action', async (data) => {
       const roomId = data?.roomId || socket.roomId
       if (!roomId) return
 
@@ -144,7 +169,7 @@ const initBBMinigameSocket = (io) => {
       if (!room) return
       if (room.status !== 'playing') return
 
-      const handler = getGame(room.minigameId)
+      const handler = await resolveGameHandler(room.minigameId, room)
       if (!handler) return
 
       const result = handler.handleAction(room.gameState, userId, data.action)
@@ -202,11 +227,11 @@ const initBBMinigameSocket = (io) => {
     return room
   }
 
-  minigameNs.startGame = (roomId, callback) => {
+  minigameNs.startGame = async (roomId, callback) => {
     const room = activeRooms.get(roomId)
     if (!room) return callback({ success: false, error: '房间不存在' })
 
-    const handler = getGame(room.minigameId)
+    const handler = await resolveGameHandler(room.minigameId, room)
     if (!handler) return callback({ success: false, error: '小游戏未找到' })
 
     // 初始化游戏状态
@@ -328,6 +353,106 @@ const initBBMinigameSocket = (io) => {
     return { success: true, winner: room.winner }
   }
 
+  // 管理员暂停游戏
+  minigameNs.pauseGame = (roomId) => {
+    const room = activeRooms.get(roomId)
+    if (!room) return { success: false, error: '房间不存在' }
+    if (room.status !== 'playing') return { success: false, error: '游戏未在进行中' }
+
+    room.status = 'paused'
+    if (room.gameState) room.gameState.status = 'paused'
+
+    // 停止 balance-bar tick
+    if (room.tickTimer) {
+      clearInterval(room.tickTimer)
+      room.tickTimer = null
+    }
+
+    // 记录暂停时间
+    room.pausedAt = Date.now()
+
+    minigameNs.to(roomId).emit('game_paused', { status: 'paused' })
+    broadcastProgress(room, minigameNs)
+    return { success: true }
+  }
+
+  // 管理员恢复游戏
+  minigameNs.resumeGame = (roomId) => {
+    const room = activeRooms.get(roomId)
+    if (!room) return { success: false, error: '房间不存在' }
+    if (room.status !== 'paused') return { success: false, error: '游戏未暂停' }
+
+    // 计算暂停时长并调整开始时间
+    if (room.pausedAt && room.startTime) {
+      const pauseDuration = Date.now() - room.pausedAt
+      room.startTime += pauseDuration
+      if (room.gameState) room.gameState.startTime = room.startTime
+    }
+    room.pausedAt = null
+
+    room.status = 'playing'
+    if (room.gameState) room.gameState.status = 'playing'
+
+    // 重启 balance-bar tick
+    if (room.minigameId === 'balance-bar') {
+      const balanceBar = require('../games/bigbrother/minigames/balanceBar')
+      const handler = room.handler || getGame(room.minigameId)
+      const { TICK_INTERVAL } = balanceBar
+      room.tickTimer = setInterval(() => {
+        if (room.status !== 'playing') {
+          clearInterval(room.tickTimer)
+          room.tickTimer = null
+          return
+        }
+        handler.tick(room.gameState)
+        broadcastProgress(room, minigameNs)
+        minigameNs.to(roomId).emit('game_state', handler.getAllStates ? handler.getAllStates(room.gameState) : {})
+        if (handler.checkTarget && room.targetScore) {
+          for (const pid of Object.keys(room.gameState.playerStates)) {
+            if (handler.checkTarget(room.gameState, pid, room.targetScore)) {
+              clearInterval(room.tickTimer)
+              room.tickTimer = null
+              room.manualWinnerId = pid
+              finishGame(room, minigameNs)
+              return
+            }
+          }
+        }
+        const elapsed = Date.now() - room.startTime
+        if (elapsed >= (handler.duration || 60) * 1000) {
+          clearInterval(room.tickTimer)
+          room.tickTimer = null
+          room.gameState.status = 'finished'
+          finishGame(room, minigameNs)
+        }
+      }, TICK_INTERVAL)
+    }
+
+    minigameNs.to(roomId).emit('game_resumed', { status: 'playing' })
+    broadcastProgress(room, minigameNs)
+    return { success: true }
+  }
+
+  // 管理员停止游戏（无胜者）
+  minigameNs.stopGame = (roomId) => {
+    const room = activeRooms.get(roomId)
+    if (!room) return { success: false, error: '房间不存在' }
+    if (room.status === 'finished') return { success: false, error: '游戏已结束' }
+
+    room.status = 'finished'
+    room.winner = null
+
+    // 停止 balance-bar tick
+    if (room.tickTimer) {
+      clearInterval(room.tickTimer)
+      room.tickTimer = null
+    }
+
+    minigameNs.to(roomId).emit('game_stopped', { status: 'finished', winner: null })
+    broadcastProgress(room, minigameNs)
+    return { success: true }
+  }
+
   // 获取房间实时进度（管理员轮询兜底）
   minigameNs.getRoomProgress = (roomId) => {
     const room = activeRooms.get(roomId)
@@ -338,7 +463,8 @@ const initBBMinigameSocket = (io) => {
 
 // 构建进度汇总数据（管理员观察用）
 function buildProgress(room) {
-  const handler = getGame(room.minigameId)
+  // 优先使用房间缓存的 handler（自定义游戏），再查静态注册表
+  const handler = room.handler || getGame(room.minigameId)
   const allStates = handler && handler.getAllStates ? handler.getAllStates(room.gameState) : {}
   return {
     roomId: room.roomId,
@@ -366,7 +492,8 @@ function finishGame(room, minigameNs) {
   if (room.status === 'finished') return
   room.status = 'finished'
 
-  const handler = getGame(room.minigameId)
+  // 优先使用房间缓存的 handler（自定义游戏），再查静态注册表
+  const handler = room.handler || getGame(room.minigameId)
   if (!handler) return
 
   // 管理员手动指定胜者优先；否则按游戏规则计算

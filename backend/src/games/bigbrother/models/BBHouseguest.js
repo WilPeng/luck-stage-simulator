@@ -12,6 +12,8 @@ class BBHouseguest extends BaseModel {
     this.status = data?.status || 'active' // active | evicted | jury
     this.hasLogin = data?.hasLogin || false
     this.avatar = data?.avatar || null
+    this.currentRoomId = data?.currentRoomId || 'living_room'
+    this.isHaveNot = data?.isHaveNot || false
     this.gameId = data?.gameId || 'bigbrother'
     this.createdAt = data?.createdAt || new Date().toISOString()
     this.updatedAt = data?.updatedAt || new Date().toISOString()

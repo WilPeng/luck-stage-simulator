@@ -74,30 +74,7 @@ router.post('/vote', async (req, res) => {
     }
 
     if (admin.role !== 'admin' || !specVoterId) {
-      // 非管理员代投模式 → 检查 HOH 限制
-      const hohCol = getCollection('BBHohRecord')
-      const currentHoh = await hohCol.findOne({ gameId: 'bigbrother', roundId })
-      const isHoh = currentHoh && currentHoh.winnerId === actualVoterId
-      if (isHoh) {
-        const voteCol = getCollection('BBEvictionVote')
-        const existingVotes = await voteCol.find({ gameId: 'bigbrother', roundId }).toArray()
-        if (existingVotes.length > 0) {
-          const tally = new Map()
-          existingVotes.forEach(v => {
-            if (v.voterId !== currentHoh.winnerId) {
-              tally.set(v.targetId, (tally.get(v.targetId) || 0) + 1)
-            }
-          })
-          const counts = Array.from(tally.values())
-          const maxCount = Math.max(...counts, 0)
-          const tiedCount = counts.filter(c => c === maxCount).length
-          if (tiedCount !== 2 || counts.length < 2) {
-            return res.status(400).json({ success: false, error: '当前非平票状态，HOH 无需投票', code: 'HOH_NOT_NEEDED' })
-          }
-        } else {
-          return res.status(400).json({ success: false, error: '当前非平票状态，HOH 无需投票', code: 'HOH_NOT_NEEDED' })
-        }
-      }
+      // 非管理员代投模式 → HOH 也可以正常投票，票数在结算时仅作为平票裁决
     }
     // 删除该投票人本轮已有投票
     await BBEvictionVote.deleteMany({ gameId: 'bigbrother', roundId, voterId: actualVoterId })

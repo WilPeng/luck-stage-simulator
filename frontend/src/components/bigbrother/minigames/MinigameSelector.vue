@@ -82,6 +82,7 @@ const categoryTabs = [
   { key: 'intellect', icon: '🧮', label: '智力' },
   { key: 'skill', icon: '🎯', label: '技巧' },
   { key: 'strategy', icon: '♟', label: '策略' },
+  { key: 'custom', icon: '✨', label: '自定义' },
 ]
 
 const filteredGames = computed(() => {
@@ -91,7 +92,7 @@ const filteredGames = computed(() => {
 
 function categoryName(cat: string) {
   const map: Record<string, string> = {
-    reaction: '反应', memory: '记忆', intellect: '智力', skill: '技巧', strategy: '策略'
+    reaction: '反应', memory: '记忆', intellect: '智力', skill: '技巧', strategy: '策略', custom: '自定义'
   }
   return map[cat] || cat
 }

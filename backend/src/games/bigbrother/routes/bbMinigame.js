@@ -6,12 +6,36 @@ const express = require('express')
 const router = express.Router()
 const { getAllGames } = require('../minigames/loadAll')
 const { getCurrentSeason } = require('../helpers')
+const BBCustomGame = require('../models/BBCustomGame')
 
-// GET /list - 获取所有可用小游戏
-router.get('/list', (req, res) => {
+// GET /list - 获取所有可用小游戏（内置 + 自定义）
+router.get('/list', async (req, res) => {
   try {
-    const games = getAllGames()
-    res.json({ success: true, data: games })
+    const builtinGames = getAllGames()
+    
+    // 加载已启用的自定义游戏
+    let customGames = []
+    try {
+      const docs = await BBCustomGame.find({ enabled: true })
+      customGames = docs.map(doc => {
+        const obj = doc.toObject()
+        return {
+          id: `custom-${obj.id}`,
+          name: obj.name,
+          description: obj.description,
+          icon: obj.icon,
+          category: 'custom',
+          playerCount: obj.playerCount,
+          duration: obj.type === 'score' ? obj.timeLimit : Math.max(60, obj.questions.length * 15),
+          type: obj.type,
+          isCustom: true
+        }
+      })
+    } catch (e) {
+      console.error('加载自定义游戏失败:', e)
+    }
+
+    res.json({ success: true, data: [...builtinGames, ...customGames] })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '获取小游戏列表失败' })
@@ -195,6 +219,54 @@ router.get('/room-progress/:roomId', async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '获取房间进度失败' })
+  }
+})
+
+// POST /pause - 管理员暂停游戏
+router.post('/pause', async (req, res) => {
+  try {
+    const { roomId } = req.body
+    if (!roomId) return res.status(400).json({ success: false, error: '缺少房间ID' })
+    const minigameNs = req.app.get('io')?.of('/bigbrother-minigame')
+    if (!minigameNs) return res.status(500).json({ success: false, error: '小游戏服务未就绪' })
+    const result = minigameNs.pauseGame(roomId)
+    if (!result.success) return res.status(400).json(result)
+    res.json({ success: true, message: '游戏已暂停' })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '暂停游戏失败' })
+  }
+})
+
+// POST /resume - 管理员恢复游戏
+router.post('/resume', async (req, res) => {
+  try {
+    const { roomId } = req.body
+    if (!roomId) return res.status(400).json({ success: false, error: '缺少房间ID' })
+    const minigameNs = req.app.get('io')?.of('/bigbrother-minigame')
+    if (!minigameNs) return res.status(500).json({ success: false, error: '小游戏服务未就绪' })
+    const result = minigameNs.resumeGame(roomId)
+    if (!result.success) return res.status(400).json(result)
+    res.json({ success: true, message: '游戏已恢复' })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '恢复游戏失败' })
+  }
+})
+
+// POST /stop - 管理员停止游戏（无胜者）
+router.post('/stop', async (req, res) => {
+  try {
+    const { roomId } = req.body
+    if (!roomId) return res.status(400).json({ success: false, error: '缺少房间ID' })
+    const minigameNs = req.app.get('io')?.of('/bigbrother-minigame')
+    if (!minigameNs) return res.status(500).json({ success: false, error: '小游戏服务未就绪' })
+    const result = minigameNs.stopGame(roomId)
+    if (!result.success) return res.status(400).json(result)
+    res.json({ success: true, message: '游戏已停止' })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '停止游戏失败' })
   }
 })
 

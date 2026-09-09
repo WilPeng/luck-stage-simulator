@@ -4,7 +4,8 @@ import type {
   BBNomination, BBVetoRecord, BBEvictionVote, BBEviction,
   BBChatMessage, BBVoteResult, BBStageType,
   BBTwistRoundConfig, BBTwistDef, BBRoundConfig,
-  MinigameDef, MinigameRoom, MinigameProgress, BBSettlement, BBEndgameStatus
+  MinigameDef, MinigameRoom, MinigameProgress, BBSettlement, BBEndgameStatus,
+  BBCustomGameDef
 } from '../types/bigbrother'
 
 function getApiRoot(): string {
@@ -25,7 +26,7 @@ function buildHeaders(): Record<string, string> {
   return headers
 }
 
-async function doRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function doRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${path}`
   const res = await fetch(url, {
     ...options,
@@ -228,7 +229,7 @@ export async function bbCreateHouseguest(data: { name: string; loginCode: string
   })
 }
 
-export async function bbUpdateHouseguest(id: string, data: { name?: string; status?: string }): Promise<BBHouseguest> {
+export async function bbUpdateHouseguest(id: string, data: { name?: string; status?: string; loginCode?: string; isHaveNot?: boolean }): Promise<BBHouseguest> {
   return doRequest<BBHouseguest>(`/houseguests/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data)
@@ -392,6 +393,10 @@ export async function bbGetVetoHistory(): Promise<BBVetoRecord[]> {
   return doRequest<BBVetoRecord[]>('/veto/history')
 }
 
+export async function bbGetVetoPickable(): Promise<{ canPick: boolean; role?: string; pickablePlayers: { playerId: string; playerName: string }[] }> {
+  return doRequest('/veto/pickable')
+}
+
 // ===== 淘汰投票 =====
 export async function bbGetVotes(): Promise<BBVoteResult> {
   return doRequest<BBVoteResult>('/eviction/votes')
@@ -512,6 +517,68 @@ export async function bbSetMinigameWinner(roomId: string, playerId: string): Pro
 // 获取房间实时进度（管理员轮询）
 export async function bbGetMinigameRoomProgress(roomId: string): Promise<MinigameProgress | null> {
   return doRequest<MinigameProgress | null>(`/minigame/room-progress/${roomId}`)
+}
+
+// 管理员暂停游戏
+export async function bbPauseMinigame(roomId: string): Promise<void> {
+  return doRequest<void>('/minigame/pause', {
+    method: 'POST',
+    body: JSON.stringify({ roomId })
+  })
+}
+
+// 管理员恢复游戏
+export async function bbResumeMinigame(roomId: string): Promise<void> {
+  return doRequest<void>('/minigame/resume', {
+    method: 'POST',
+    body: JSON.stringify({ roomId })
+  })
+}
+
+// 管理员停止游戏（无胜者）
+export async function bbStopMinigame(roomId: string): Promise<void> {
+  return doRequest<void>('/minigame/stop', {
+    method: 'POST',
+    body: JSON.stringify({ roomId })
+  })
+}
+
+// ===== 自定义游戏 API =====
+
+export async function bbGetCustomGameList(): Promise<BBCustomGameDef[]> {
+  return doRequest<BBCustomGameDef[]>('/custom-game/list')
+}
+
+export async function bbGetCustomGame(id: string): Promise<BBCustomGameDef> {
+  return doRequest<BBCustomGameDef>(`/custom-game/${id}`)
+}
+
+export async function bbCreateCustomGame(data: Partial<BBCustomGameDef>): Promise<BBCustomGameDef> {
+  return doRequest<BBCustomGameDef>('/custom-game', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+}
+
+export async function bbUpdateCustomGame(id: string, data: Partial<BBCustomGameDef>): Promise<BBCustomGameDef> {
+  return doRequest<BBCustomGameDef>(`/custom-game/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+}
+
+export async function bbDeleteCustomGame(id: string): Promise<void> {
+  return doRequest<void>(`/custom-game/${id}`, {
+    method: 'DELETE'
+  })
+}
+
+export async function bbToggleCustomGame(id: string): Promise<{ id: string; enabled: boolean }> {
+  return doRequest<{ id: string; enabled: boolean }>(`/custom-game/${id}/toggle`, {
+    method: 'POST'
+  })
 }
 
 

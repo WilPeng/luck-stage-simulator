@@ -68,6 +68,19 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
       }
     })
 
+    s.on('game_paused', (data: any) => {
+      if (gameState.value) gameState.value.status = 'paused'
+    })
+
+    s.on('game_resumed', (data: any) => {
+      if (gameState.value) gameState.value.status = 'playing'
+    })
+
+    s.on('game_stopped', (data: any) => {
+      finished.value = true
+      winner.value = data.winner || null
+    })
+
     s.on('game_state', (data: any) => {
       gameState.value = data
     })

@@ -126,6 +126,8 @@ const stageList = [
 ]
 
 const otherItems = [
+  { icon: '🏡', text: 'BB House 管理', path: '/games/bigbrother/admin/house-admin' },
+  { icon: '🎮', text: '游戏库', path: '/games/bigbrother/admin/game-library' },
   { icon: '📜', text: '操作日志', path: '/games/bigbrother/admin/logs' },
   { icon: '💬', text: '聊天室', path: '/games/bigbrother/admin/chat' },
 ]

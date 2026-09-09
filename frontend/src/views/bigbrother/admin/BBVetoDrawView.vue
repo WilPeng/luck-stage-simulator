@@ -128,7 +128,12 @@
         <div v-if="activeRoom" class="room-status" :class="activeRoom.status">
           <span class="status-badge">{{ statusText }}</span>
           <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人<template v-if="activeRoom.targetScore"> · 目标 {{ activeRoom.targetScore }}</template></span>
-          <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-primary" @click="startMinigame">▶ 开始比赛</button>
+          <div class="room-actions">
+            <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-primary" @click="startMinigame">▶ 开始比赛</button>
+            <button v-if="activeRoom.status === 'playing'" class="bb-btn bb-btn-warn" @click="pauseMinigame">⏸ 暂停</button>
+            <button v-if="activeRoom.status === 'paused'" class="bb-btn bb-btn-primary" @click="resumeMinigame">▶ 恢复</button>
+            <button v-if="activeRoom.status === 'playing' || activeRoom.status === 'paused'" class="bb-btn bb-btn-danger" @click="stopMinigame">⏹ 停止</button>
+          </div>
         </div>
 
         <!-- 目标设置确认创建 -->
@@ -214,7 +219,8 @@ import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
 import {
   bbGetCurrentVeto, bbRunVetoCompetition, bbDrawVetoParticipants, bbGetCurrentHoh,
   bbGetCurrentNomination, bbPickVetoParticipant, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom,
-  bbGetMinigameRoomProgress, bbSetMinigameWinner
+  bbGetMinigameRoomProgress, bbSetMinigameWinner, bbGetHouseguests,
+  bbPauseMinigame, bbResumeMinigame, bbStopMinigame
 } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import MinigameSelector from '../../../components/bigbrother/minigames/MinigameSelector.vue'
@@ -259,6 +265,7 @@ const statusText = computed(() => {
   if (s === 'waiting') return '等待中'
   if (s === 'countdown') return '倒计时'
   if (s === 'playing') return '游戏中'
+  if (s === 'paused') return '已暂停'
   if (s === 'finished') return '已结束'
   return s || ''
 })
@@ -280,6 +287,48 @@ const canPick = ref<{ playerId: string; playerName: string; role: 'hoh' | 'nomin
 const pickablePlayers = ref<{ playerId: string; playerName: string }[]>([])
 const pickSelections = reactive<Record<string, string>>({})
 const pickingMap = reactive<Record<string, boolean>>({})
+
+// 从已有数据重新计算 canPick 和 pickablePlayers（刷新后恢复）
+async function computePickData() {
+  if (!veto.value?.participants?.length || veto.value.winnerId) {
+    canPick.value = []
+    pickablePlayers.value = []
+    return
+  }
+
+  // 获取所有活跃房客
+  let allActive: { id: string; name: string }[] = []
+  try {
+    const res = await bbGetHouseguests({ status: 'active', pageSize: 200 })
+    allActive = (res?.list || []).map((h: any) => ({ id: h.id, name: h.name }))
+  } catch {}
+
+  // 判断哪些被抽中的 HOH/提名者可以自选
+  const pickerList: { playerId: string; playerName: string; role: 'hoh' | 'nominee' }[] = []
+  for (const p of veto.value.participants) {
+    if (p.source !== 'drawn') continue
+    if (p.playerId === hohId.value) {
+      pickerList.push({ playerId: p.playerId, playerName: p.playerName, role: 'hoh' })
+    } else if (nomineeIds.value.includes(p.playerId)) {
+      pickerList.push({ playerId: p.playerId, playerName: p.playerName, role: 'nominee' })
+    }
+  }
+
+  // 已参与者 ID 集合
+  const participantIds = new Set(veto.value.participants.map(p => p.playerId))
+
+  // 可选池：活跃房客中未在参与者列表里的
+  const pickable = allActive
+    .filter(h => !participantIds.has(h.id))
+    .map(h => ({ playerId: h.id, playerName: h.name }))
+
+  // 排除已经自选过的 picker
+  const alreadyPickedIds = new Set(
+    veto.value.participants.filter(p => p.source === 'picked').map(p => p.pickedBy)
+  )
+  canPick.value = pickerList.filter(p => !alreadyPickedIds.has(p.playerId))
+  pickablePlayers.value = pickable
+}
 
 // 已自选的映射：pickedBy -> pickedPlayerId
 const pickedByMap = computed(() => {
@@ -337,6 +386,9 @@ async function fetchData() {
     if (room) startProgressPolling(room.roomId)
     else stopProgressPolling()
   } catch {}
+
+  // 重新计算自选数据（刷新后恢复）
+  await computePickData()
 }
 
 async function drawParticipants() {
@@ -528,6 +580,37 @@ async function startMinigame() {
   }
 }
 
+async function pauseMinigame() {
+  if (!activeRoom.value) return
+  try {
+    await bbPauseMinigame(activeRoom.value.roomId)
+    activeRoom.value = { ...activeRoom.value, status: 'paused' }
+  } catch (e: any) {
+    alert(e.message)
+  }
+}
+
+async function resumeMinigame() {
+  if (!activeRoom.value) return
+  try {
+    await bbResumeMinigame(activeRoom.value.roomId)
+    activeRoom.value = { ...activeRoom.value, status: 'playing' }
+  } catch (e: any) {
+    alert(e.message)
+  }
+}
+
+async function stopMinigame() {
+  if (!activeRoom.value) return
+  if (!confirm('确定停止游戏？将不产生胜者。')) return
+  try {
+    await bbStopMinigame(activeRoom.value.roomId)
+    activeRoom.value = null
+  } catch (e: any) {
+    alert(e.message)
+  }
+}
+
 onMounted(fetchData)
 onUnmounted(stopProgressPolling)
 </script>
@@ -673,9 +756,15 @@ onUnmounted(stopProgressPolling)
 .bb-btn-minigame { border-color: #ffaa0044; color: #ffaa00; }
 .bb-btn-minigame:hover:not(:disabled) { background: #ffaa0015; }
 .bb-btn-primary { background: #00ff8822; border-color: #00ff88; }
-.room-status { margin-top: 14px; padding: 10px 16px; background: #ffffff05; border: 1px solid #00ff8822; border-radius: 8px; display: flex; align-items: center; gap: 12px; }
+.bb-btn-warn { border-color: #ffaa0066; color: #ffaa00; }
+.bb-btn-warn:hover { background: #ffaa0022; }
+.bb-btn-danger { border-color: #ff444466; color: #ff4444; }
+.bb-btn-danger:hover { background: #ff444422; }
+.room-status { margin-top: 14px; padding: 10px 16px; background: #ffffff05; border: 1px solid #00ff8822; border-radius: 8px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .room-status.playing { border-color: #00ff88; }
+.room-status.paused { border-color: #ffaa00; }
 .room-status.finished { border-color: #ffaa00; }
+.room-actions { display: flex; gap: 8px; margin-left: auto; }
 .status-badge { font-size: 12px; font-weight: 600; color: #00ff88; padding: 2px 10px; background: #00ff8810; border-radius: 4px; }
 .status-info { flex: 1; font-size: 13px; color: #aaa; }
 .bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }

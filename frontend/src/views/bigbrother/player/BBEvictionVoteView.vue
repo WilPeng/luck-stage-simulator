@@ -7,7 +7,13 @@
       <span v-else-if="isFuture" class="future-tag">未开始</span>
     </div>
 
-    <template v-if="isCurrentRound">
+    <!-- 加载中 -->
+    <div v-if="loading" class="loading-state">
+      <div class="loading-spinner"></div>
+      <span>加载中...</span>
+    </div>
+
+    <template v-else-if="isCurrentRound">
       <div v-if="hasVoted" class="voted-card">
         <div class="voted-icon">🗳️</div>
         <div class="voted-info">
@@ -17,7 +23,7 @@
       </div>
 
       <div v-if="isHoh && !hasVoted" class="hoh-vote-note">
-        ⚠️ 你是本周的 HOH，只有在平票时才能投票
+        👑 你是本周的 HOH，请正常投票。你的投票仅在出现平票时作为最终裁决使用，不影响常规计票。
       </div>
 
       <div v-if="isNominee && seasonStore.currentStage === 'eviction_vote'" class="nominee-waiting-card">
@@ -92,6 +98,7 @@ const nomination = ref<BBNomination | null>(null)
 const myVote = ref<BBEvictionVote | null>(null)
 const currentHoh = ref<any>(null)
 const selectedVote = ref<string>('')
+const loading = ref(true)
 
 const hasVoted = computed(() => !!myVote.value)
 const isHoh = computed(() => currentHoh.value?.winnerId === authStore.currentUser?.id)
@@ -145,6 +152,7 @@ onMounted(async () => {
     try { currentHoh.value = await bbGetCurrentHoh() } catch {}
     try { myVote.value = await bbGetMyVote() } catch {}
   }
+  loading.value = false
 })
 </script>
 
@@ -155,7 +163,10 @@ onMounted(async () => {
 .round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
 .history-tag { background: #88888822; color: #aaa; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
 .future-tag { background: #44444422; color: #666; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
-.hoh-vote-note { background: #ffaa0022; border: 1px solid #ffaa00; border-radius: 8px; padding: 12px 16px; font-size: 14px; color: #ffaa00; margin-bottom: 16px; }
+.hoh-vote-note { background: #ffaa0022; border: 1px solid #ffaa00; border-radius: 8px; padding: 12px 16px; font-size: 14px; color: #ffaa00; margin-bottom: 16px; line-height: 1.6; }
+.loading-state { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 60px 20px; color: #888; font-size: 14px; }
+.loading-spinner { width: 32px; height: 32px; border: 3px solid #00ff8822; border-top-color: #00ff88; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .voted-card { background: #0f2e0f; border: 1px solid #00ff88; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 .voted-icon { font-size: 36px; }
 .voted-label { font-size: 12px; color: #888; text-transform: uppercase; }

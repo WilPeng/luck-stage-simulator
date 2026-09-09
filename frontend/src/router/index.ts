@@ -84,6 +84,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'home', name: 'BBPlayerHome', component: () => import('../views/bigbrother/player/BBHomeView.vue') },
       { path: 'profile', name: 'BBPlayerProfile', component: () => import('../views/bigbrother/player/BBProfileView.vue') },
       { path: 'chat', name: 'BBPlayerChat', component: () => import('../views/bigbrother/player/BBChatView.vue') },
+      { path: 'house', name: 'BBPlayerHouse', component: () => import('../views/bigbrother/player/BBHouseView.vue') },
       { path: 'history', name: 'BBPlayerHistory', component: () => import('../views/bigbrother/player/BBHistoryView.vue') },
       { path: 'finale', name: 'BBPlayerFinale', component: () => import('../views/bigbrother/player/BBFinaleView.vue') },
       { path: 'round/:round/hoh', name: 'BBPlayerHoh', component: () => import('../views/bigbrother/player/BBHohView.vue') },
@@ -105,6 +106,8 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: 'dashboard', name: 'BBAdminDashboard', component: () => import('../views/bigbrother/admin/BBDashboardView.vue') },
       { path: 'houseguests', name: 'BBAdminHouseguests', component: () => import('../views/bigbrother/admin/BBHouseguestView.vue') },
+      { path: 'house-admin', name: 'BBAdminHouse', component: () => import('../views/bigbrother/admin/BBHouseAdminView.vue') },
+      { path: 'game-library', name: 'BBAdminGameLibrary', component: () => import('../views/bigbrother/admin/BBGameLibraryView.vue') },
       { path: 'stage', name: 'BBAdminStage', component: () => import('../views/bigbrother/admin/BBStageView.vue') },
       { path: 'endgame', name: 'BBAdminEndgame', component: () => import('../views/bigbrother/admin/BBEndgameView.vue') },
       { path: 'season-result', name: 'BBAdminSeasonResult', component: () => import('../views/bigbrother/admin/BBSeasonResultView.vue') },

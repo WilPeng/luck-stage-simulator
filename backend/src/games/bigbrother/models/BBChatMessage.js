@@ -9,8 +9,10 @@ class BBChatMessage extends BaseModel {
     this.senderRole = data?.senderRole || 'houseguest'
     this.senderAvatar = data?.senderAvatar || null
     this.content = data?.content || ''
-    // 聊天类型: 'public' (群聊) | 'private' (私聊)
+    // 聊天类型: 'public' (群聊) | 'private' (私聊) | 'room' (房间)
     this.chatType = data?.chatType || 'public'
+    // 房间聊天时的房间 ID
+    this.roomId = data?.roomId || null
     // 私聊目标ID（仅私聊时有值）
     this.targetId = data?.targetId || null
     this.targetName = data?.targetName || null

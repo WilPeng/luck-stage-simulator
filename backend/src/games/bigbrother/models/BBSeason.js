@@ -36,6 +36,8 @@ class BBSeason extends BaseModel {
     this.runnerUpId = data?.runnerUpId || null
     this.runnerUpName = data?.runnerUpName || ''
     this.final3Winners = data?.final3Winners || {} // { 1:{playerId,name}, 2:{...}, 3:{...} }
+    // House 状态
+    this.backyardDoorOpen = data?.backyardDoorOpen ?? true
     this.createdAt = data?.createdAt || new Date().toISOString()
     this.updatedAt = data?.updatedAt || new Date().toISOString()
   }

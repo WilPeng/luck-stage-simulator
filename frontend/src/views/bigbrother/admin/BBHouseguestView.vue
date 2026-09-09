@@ -30,6 +30,7 @@
             <th>登录码</th>
             <th>角色</th>
             <th>状态</th>
+            <th>Have-Not</th>
             <th>已登录</th>
             <th>操作</th>
           </tr>
@@ -41,13 +42,19 @@
             <td><code class="code-tag">{{ h.loginCode }}</code></td>
             <td>{{ h.role === 'admin' ? '管理员' : '房客' }}</td>
             <td><span class="status-tag" :class="h.status">{{ statusText(h.status) }}</span></td>
+            <td>
+              <span v-if="h.isHaveNot" class="havenot-tag">🥶 是</span>
+              <button v-if="h.role !== 'admin' && h.status === 'active'" class="bb-btn bb-btn-xs" @click="toggleHaveNot(h)">
+                {{ h.isHaveNot ? '取消' : '设为贫民' }}
+              </button>
+            </td>
             <td>{{ h.hasLogin ? '是' : '否' }}</td>
             <td class="actions">
               <button class="bb-btn bb-btn-xs" @click="editHouseguest(h)">编辑</button>
               <button v-if="h.role !== 'admin'" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
             </td>
           </tr>
-          <tr v-if="list.length === 0"><td colspan="7" class="empty-cell">暂无数据</td></tr>
+          <tr v-if="list.length === 0"><td colspan="8" class="empty-cell">暂无数据</td></tr>
         </tbody>
       </table>
     </div>
@@ -82,6 +89,12 @@
                 <option value="evicted">已淘汰</option>
                 <option value="jury">陪审团</option>
               </select>
+            </div>
+            <div v-if="editingId && formStatus === 'active'" class="form-group">
+              <label class="checkbox-row">
+                <input type="checkbox" v-model="formIsHaveNot" />
+                <span>🥶 Have-Not（可进入贫民屋）</span>
+              </label>
             </div>
             <div v-if="editingId" class="form-group">
               <label>头像</label>
@@ -123,6 +136,7 @@ const editingId = ref<string | null>(null)
 const formName = ref('')
 const formCode = ref('')
 const formStatus = ref('active')
+const formIsHaveNot = ref(false)
 const editingAvatar = ref<string | null>(null)
 
 async function fetchData() {
@@ -151,8 +165,16 @@ function editHouseguest(h: BBHouseguest) {
   formName.value = h.name
   formCode.value = h.loginCode
   formStatus.value = h.status
+  formIsHaveNot.value = !!h.isHaveNot
   editingAvatar.value = h.avatar
   showCreateModal.value = true
+}
+
+async function toggleHaveNot(h: BBHouseguest) {
+  try {
+    await bbUpdateHouseguest(h.id, { isHaveNot: !h.isHaveNot })
+    await fetchData()
+  } catch (e: any) { alert(e.message) }
 }
 
 async function onAdminAvatarFile(e: Event) {
@@ -179,7 +201,9 @@ async function onAdminDeleteAvatar() {
 async function saveHouseguest() {
   try {
     if (editingId.value) {
-      await bbUpdateHouseguest(editingId.value, { name: formName.value, loginCode: formCode.value, status: formStatus.value })
+      const payload: any = { name: formName.value, loginCode: formCode.value, status: formStatus.value }
+      if (formStatus.value === 'active') payload.isHaveNot = formIsHaveNot.value
+      await bbUpdateHouseguest(editingId.value, payload)
     } else {
       await bbCreateHouseguest({ name: formName.value, loginCode: formCode.value })
     }
@@ -187,6 +211,7 @@ async function saveHouseguest() {
     editingId.value = null
     formName.value = ''
     formCode.value = ''
+    formIsHaveNot.value = false
     await fetchData()
   } catch (e: any) { alert(e.message) }
 }
@@ -361,6 +386,9 @@ onMounted(fetchData)
 .status-tag.active { background: #00ff8822; color: #00ff88; }
 .status-tag.evicted { background: #ff444422; color: #ff4444; }
 .status-tag.jury { background: #ffaa0022; color: #ffaa00; }
+.havenot-tag { padding: 2px 10px; border-radius: 10px; font-size: 12px; background: #66aaff22; color: #66aaff; margin-right: 6px; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; color: #ccc; cursor: pointer; }
+.checkbox-row input { width: 16px; height: 16px; accent-color: #00ff88; }
 .actions { display: flex; gap: 6px; }
 .empty-cell { text-align: center; color: #666; padding: 40px; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }

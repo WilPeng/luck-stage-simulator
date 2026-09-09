@@ -107,6 +107,7 @@ const fixedItems = [
   { icon: '🏠', text: '首页', path: '/games/bigbrother/player/home' },
   { icon: '👤', text: '我的资料', path: '/games/bigbrother/player/profile' },
   { icon: '💬', text: '聊天室', path: '/games/bigbrother/player/chat' },
+  { icon: '🏡', text: 'BB House', path: '/games/bigbrother/player/house' },
   { icon: '📝', text: '历史记录', path: '/games/bigbrother/player/history' },
 ]
 

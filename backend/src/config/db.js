@@ -49,6 +49,11 @@ const COLLECTIONS = [
   'BBOperationLog',
   'BBSerpentMark',   // 毒蛇标记 twist
   'BBChampionVote',  // 冠军投票（终局）
+  'BBHouseRoom',     // BB House 房间配置
+  'BBHousePassage',  // BB House 通道配置
+  'BBHouseDoor',     // BB House 门状态
+  'BBPlayerLocation',// 玩家当前位置
+  'BBCustomGame',    // 自定义游戏
   // 恋综集合
   'LVSeason',
   'LVPlayer',

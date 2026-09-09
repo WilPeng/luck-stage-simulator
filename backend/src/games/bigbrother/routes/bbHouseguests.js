@@ -130,10 +130,11 @@ router.put('/:id', async (req, res) => {
   try {
     const houseguest = await BBHouseguest.findOne({ id: req.params.id, gameId: 'bigbrother' })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
-    const { name, loginCode, status } = req.body
+    const { name, loginCode, status, isHaveNot } = req.body
     if (name) houseguest.name = name
     if (loginCode) houseguest.loginCode = loginCode
     if (status) houseguest.status = status
+    if (typeof isHaveNot === 'boolean') houseguest.isHaveNot = isHaveNot
     houseguest.updatedAt = new Date().toISOString()
     await houseguest.save()
     res.json({ success: true, data: houseguest.toObject() })

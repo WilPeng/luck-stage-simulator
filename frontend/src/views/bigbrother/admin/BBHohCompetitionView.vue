@@ -43,8 +43,23 @@
       <!-- 小游戏房间状态 -->
       <div v-if="activeRoom" class="room-status" :class="activeRoom.status">
         <span class="status-badge">{{ statusText }}</span>
-        <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人</span>
-        <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-primary" @click="startMinigame">▶ 开始比赛</button>
+        <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人<template v-if="activeRoom.targetScore"> · 目标 {{ activeRoom.targetScore }}</template></span>
+        <div class="room-actions">
+          <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-primary" @click="startMinigame">▶ 开始比赛</button>
+          <button v-if="activeRoom.status === 'playing'" class="bb-btn bb-btn-warn" @click="pauseMinigame">⏸ 暂停</button>
+          <button v-if="activeRoom.status === 'paused'" class="bb-btn bb-btn-primary" @click="resumeMinigame">▶ 恢复</button>
+          <button v-if="activeRoom.status === 'playing' || activeRoom.status === 'paused'" class="bb-btn bb-btn-danger" @click="stopMinigame">⏹ 停止</button>
+        </div>
+      </div>
+
+      <!-- 目标设置确认创建 -->
+      <div v-if="selectedMinigameId" class="target-setup">
+        <div class="target-setup-title">🎮 已选择「{{ selectedMinigameId }}」，设置胜出目标（可选）</div>
+        <div class="target-setup-row">
+          <input v-model.number="targetScore" type="number" min="1" class="target-input" :placeholder="targetInputHint" />
+          <button class="bb-btn bb-btn-primary" :disabled="creating" @click="createRoomWithTarget">✓ 创建房间</button>
+          <button class="bb-btn" :disabled="creating" @click="cancelCreateRoom">取消</button>
+        </div>
       </div>
     </div>
 
@@ -115,7 +130,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   bbGetCurrentHoh, bbGetHohHistory, bbRunHohCompetition, bbAssignHoh,
-  bbGetHohEligible, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom
+  bbGetHohEligible, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom,
+  bbPauseMinigame, bbResumeMinigame, bbStopMinigame
 } from '../../../services/bbApi'
 import MinigameSelector from '../../../components/bigbrother/minigames/MinigameSelector.vue'
 import type { BBHohRecord, MinigameRoom } from '../../../types/bigbrother'
@@ -130,12 +146,28 @@ const showAssignModal = ref(false)
 const showMinigameModal = ref(false)
 const selectedPlayerId = ref('')
 const activeRoom = ref<MinigameRoom | null>(null)
+const selectedMinigameId = ref<string | null>(null)
+const targetScore = ref<number | null>(null)
+const creating = ref(false)
+
+const targetInputHint = computed(() => {
+  if (!selectedMinigameId.value) return ''
+  const hints: Record<string, string> = {
+    'click-speed': '点击次数（如 50，达到即胜）',
+    'quick-math': '答对题数（如 10，达到即胜）',
+    'memory-match': '填写任意正整数（完成全部配对即胜）',
+    'balance-bar': '保持时长（毫秒，如 8000 达到即胜）',
+    'dice-duel': '总分数（如 20，达到即胜）'
+  }
+  return hints[selectedMinigameId.value] || '目标值（可选）'
+})
 
 const statusText = computed(() => {
   const s = activeRoom.value?.status
   if (s === 'waiting') return '等待中'
   if (s === 'countdown') return '倒计时'
   if (s === 'playing') return '游戏中'
+  if (s === 'paused') return '已暂停'
   if (s === 'finished') return '已结束'
   return s || ''
 })
@@ -200,17 +232,33 @@ async function onSelectMinigame(minigameId: string) {
     alert('没有活跃房客')
     return
   }
+  selectedMinigameId.value = minigameId
+  targetScore.value = null
+}
+
+async function createRoomWithTarget() {
+  if (!selectedMinigameId.value || !activeHouseguests.value.length) return
+  creating.value = true
   try {
     const participants = activeHouseguests.value.map(h => ({
       playerId: h.id,
       playerName: h.name
     }))
-    const room = await bbCreateMinigameRoom('hoh', minigameId, participants)
+    const room = await bbCreateMinigameRoom('hoh', selectedMinigameId.value, participants, targetScore.value)
     activeRoom.value = room
-    alert(`比赛房间已创建！玩家可以加入了。`)
+    selectedMinigameId.value = null
+    targetScore.value = null
+    alert(`比赛房间已创建！玩家可以加入了${room.targetScore ? `（目标：达到 ${room.targetScore} 即胜）` : ''}`)
   } catch (e: any) {
     alert(e.message)
+  } finally {
+    creating.value = false
   }
+}
+
+function cancelCreateRoom() {
+  selectedMinigameId.value = null
+  targetScore.value = null
 }
 
 async function startMinigame() {
@@ -218,6 +266,37 @@ async function startMinigame() {
   try {
     await bbStartMinigame(activeRoom.value.roomId)
     activeRoom.value = { ...activeRoom.value, status: 'playing' }
+  } catch (e: any) {
+    alert(e.message)
+  }
+}
+
+async function pauseMinigame() {
+  if (!activeRoom.value) return
+  try {
+    await bbPauseMinigame(activeRoom.value.roomId)
+    activeRoom.value = { ...activeRoom.value, status: 'paused' }
+  } catch (e: any) {
+    alert(e.message)
+  }
+}
+
+async function resumeMinigame() {
+  if (!activeRoom.value) return
+  try {
+    await bbResumeMinigame(activeRoom.value.roomId)
+    activeRoom.value = { ...activeRoom.value, status: 'playing' }
+  } catch (e: any) {
+    alert(e.message)
+  }
+}
+
+async function stopMinigame() {
+  if (!activeRoom.value) return
+  if (!confirm('确定停止游戏？将不产生胜者。')) return
+  try {
+    await bbStopMinigame(activeRoom.value.roomId)
+    activeRoom.value = null
   } catch (e: any) {
     alert(e.message)
   }
@@ -266,6 +345,10 @@ onMounted(fetchData)
 .bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
 .bb-btn:hover { background: #00ff8822; }
 .bb-btn-primary { background: #00ff8822; border-color: #00ff88; }
+.bb-btn-warn { border-color: #ffaa0066; color: #ffaa00; }
+.bb-btn-warn:hover { background: #ffaa0022; }
+.bb-btn-danger { border-color: #ff444466; color: #ff4444; }
+.bb-btn-danger:hover { background: #ff444422; }
 .history-section h3 { font-size: 16px; color: #e0e0e0; margin: 0 0 12px; }
 .bb-table { width: 100%; border-collapse: collapse; }
 .bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #00ff8811; font-size: 14px; color: #ccc; }
@@ -287,11 +370,21 @@ onMounted(fetchData)
 .selected-name { font-size: 15px; color: #00ff88; font-weight: 500; }
 .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
 /* 小游戏房间状态 */
-.room-status { margin-top: 14px; padding: 10px 16px; background: #ffffff05; border: 1px solid #00ff8822; border-radius: 8px; display: flex; align-items: center; gap: 12px; }
+.room-status { margin-top: 14px; padding: 10px 16px; background: #ffffff05; border: 1px solid #00ff8822; border-radius: 8px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .room-status.playing { border-color: #00ff88; }
+.room-status.paused { border-color: #ffaa00; }
 .room-status.finished { border-color: #ffaa00; }
+.room-actions { display: flex; gap: 8px; margin-left: auto; }
 .status-badge { font-size: 12px; font-weight: 600; color: #00ff88; padding: 2px 10px; background: #00ff8810; border-radius: 4px; }
 .status-info { flex: 1; font-size: 13px; color: #aaa; }
+
+/* 目标设置 */
+.target-setup { margin-top: 14px; padding: 14px 16px; background: #ffffff05; border: 1px solid #ffaa0033; border-radius: 8px; }
+.target-setup-title { font-size: 13px; color: #ffaa00; margin-bottom: 10px; }
+.target-setup-row { display: flex; gap: 10px; align-items: center; }
+.target-input { flex: 1; max-width: 240px; padding: 8px 12px; background: #0a0a2e; border: 1px solid #ffaa0044; border-radius: 6px; color: #fff; font-size: 14px; }
+.target-input::placeholder { color: #666; }
+.target-input:focus { outline: none; border-color: #ffaa00; }
 
 /* 小游戏选择弹窗 */
 .twist-picker-modal { width: 520px; }
