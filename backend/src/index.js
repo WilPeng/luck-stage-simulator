@@ -262,6 +262,7 @@ app.use('/api/bigbrother/logs', bbGameIdMiddleware, require('./games/bigbrother/
 app.use('/api/bigbrother/chat', bbGameIdMiddleware, require('./games/bigbrother/routes/bbChat'))
 app.use('/api/bigbrother/minigame', bbGameIdMiddleware, require('./games/bigbrother/routes/bbMinigame'))
 app.use('/api/bigbrother/custom-game', bbGameIdMiddleware, require('./games/bigbrother/routes/bbCustomGame'))
+app.use('/api/bigbrother/power-challenge', bbGameIdMiddleware, require('./games/bigbrother/routes/bbPowerChallenge'))
 app.use('/api/bigbrother/house', bbGameIdMiddleware, require('./games/bigbrother/routes/bbHouse'))
 
 // ===== 恋综路由（固定 gameId = lovevariety）=====
@@ -273,6 +274,13 @@ app.use('/api/lovevariety/votes', lvGameIdMiddleware, require('./games/lovevarie
 app.use('/api/lovevariety/pairing', lvGameIdMiddleware, require('./games/lovevariety/routes/lvPairing'))
 app.use('/api/lovevariety/elimination', lvGameIdMiddleware, require('./games/lovevariety/routes/lvElimination'))
 app.use('/api/lovevariety/letters', lvGameIdMiddleware, require('./games/lovevariety/routes/lvLetter'))
+
+// ===== 实力大挑战路由（固定 gameId = powerchallenge）=====
+const pcGameIdMiddleware = (req, res, next) => { req.gameId = 'powerchallenge'; next() }
+app.use('/api/powerchallenge/auth', pcGameIdMiddleware, require('./games/powerchallenge/routes/pcAuth'))
+app.use('/api/powerchallenge/season', pcGameIdMiddleware, require('./games/powerchallenge/routes/pcSeason'))
+app.use('/api/powerchallenge/players', pcGameIdMiddleware, require('./games/powerchallenge/routes/pcPlayers'))
+app.use('/api/powerchallenge/power-challenge', pcGameIdMiddleware, require('./games/powerchallenge/routes/pcPowerChallenge'))
 
 app.use('/api/:gameId/auth', require('./routes/auth'))
 app.use('/api/:gameId/season', require('./routes/season'))
@@ -378,6 +386,96 @@ async function initBBData() {
   console.log(`  - 1 season (Round 1, Stage: HOH Competition)`)
 }
 
+// ===== 实力大挑战 Seed 数据初始化 =====
+async function initPCData() {
+  const PCPlayer = require('./games/powerchallenge/models/PCPlayer')
+  const PCSeason = require('./games/powerchallenge/models/PCSeason')
+  const PCPowerChallenge = require('./games/powerchallenge/models/PCPowerChallenge')
+  const { generateId } = require('./games/powerchallenge/helpers')
+
+  const existing = await PCPlayer.countDocuments({ gameId: 'powerchallenge' })
+  if (existing > 0) {
+    const engine = require('./games/powerchallenge/engine')
+    await engine.ensureSeason()
+    console.log('[实力大挑战] Existing data found, skipping initialization')
+    return
+  }
+
+  console.log('[实力大挑战] Initializing seed data...')
+
+  const admin = new PCPlayer({
+    id: generateId(),
+    name: '实力大挑战管理员',
+    loginCode: 'PC_ADMIN',
+    role: 'admin',
+    status: 'active',
+    gameId: 'powerchallenge'
+  })
+  await admin.save()
+
+  const playerNames = [
+    { name: '阿豪' }, { name: '小雪' }, { name: '大熊' },
+    { name: '思远' }, { name: '明轩' }, { name: '可欣' },
+    { name: '子航' }, { name: '语桐' }
+  ]
+  const players = playerNames.map((h, i) => new PCPlayer({
+    id: generateId(),
+    name: h.name,
+    loginCode: `PC${String(i + 1).padStart(3, '0')}`,
+    role: 'player',
+    status: 'active',
+    gameId: 'powerchallenge'
+  }))
+  await PCPlayer.insertMany(players)
+
+  const seedQuestions = [
+    { id: generateId(), text: '世界上最高的山峰是？', options: ['珠穆朗玛峰', '乔戈里峰', '干城章嘉峰', '洛子峰'], correctAnswer: '珠穆朗玛峰' },
+    { id: generateId(), text: '《三国演义》的作者是？', options: ['曹雪芹', '罗贯中', '施耐庵', '吴承恩'], correctAnswer: '罗贯中' },
+    { id: generateId(), text: '太阳系中最大的行星是？', options: ['地球', '土星', '木星', '海王星'], correctAnswer: '木星' },
+    { id: generateId(), text: '水的化学式是？', options: ['CO2', 'H2O', 'O2', 'NaCl'], correctAnswer: 'H2O' },
+    { id: generateId(), text: '被称为“诗仙”的唐代诗人是？', options: ['杜甫', '王维', '李白', '白居易'], correctAnswer: '李白' },
+    { id: generateId(), text: '一年有多少个星期？', options: ['50', '52', '54', '48'], correctAnswer: '52' },
+    { id: generateId(), text: '光速约为每秒多少公里？', options: ['30万公里', '3万公里', '300万公里', '3000公里'], correctAnswer: '30万公里' },
+    { id: generateId(), text: '奥运会每几年举办一次？', options: ['2年', '3年', '4年', '5年'], correctAnswer: '4年' },
+    { id: generateId(), text: '中国最长的河流是？', options: ['黄河', '长江', '珠江', '黑龙江'], correctAnswer: '长江' },
+    { id: generateId(), text: '海平面以上的高度用什么单位？', options: ['千克', '米', '帕斯卡', '秒'], correctAnswer: '米' }
+  ]
+
+  const season = new PCSeason({
+    id: generateId(),
+    gameId: 'powerchallenge',
+    name: '实力大挑战',
+    totalRounds: 5,
+    answerCooldown: 3,
+    status: 'idle',
+    currentRound: 1,
+    roundPhase: 'waiting',
+    theme: '常识大作战',
+    questions: seedQuestions,
+    alivePlayers: players.map(p => p.id),
+    points: {},
+    eliminated: [],
+    started: false
+  })
+  await season.save()
+
+  const pool = new PCPowerChallenge({
+    id: generateId(),
+    gameId: 'powerchallenge',
+    name: '默认题库·常识',
+    theme: '常识大作战',
+    questions: seedQuestions,
+    enabled: true
+  })
+  await pool.save()
+
+  console.log('[实力大挑战] Seed data initialized:')
+  console.log(`  - 1 admin (loginCode: PC_ADMIN)`)
+  console.log(`  - ${players.length} players`)
+  players.forEach(h => console.log(`    ${h.name} (loginCode: ${h.loginCode})`))
+  console.log('  - 1 season (Round 1) + 1 question pool')
+}
+
 // ===== 恋综 Seed 数据初始化 =====
 async function initLoveVarietyData() {
   const LVPlayer = require('./games/lovevariety/models/LVPlayer')
@@ -450,6 +548,7 @@ initStore().then(() => {
   initData().then(() => {
     initBBData().then(() => {
       initLoveVarietyData().then(() => {
+        initPCData().then(() => {
         // 创建 HTTP 服务器并绑定 socket.io
         const server = http.createServer(app)
         const io = new Server(server, {
@@ -477,12 +576,17 @@ initStore().then(() => {
         const { initBBHouseSocket } = require('./socket/bbHouse')
         initBBHouseSocket(io)
 
+        // 初始化 实力大挑战 实时比赛
+        const { initPCGameSocket } = require('./socket/pcGame')
+        initPCGameSocket(io)
+
         server.listen(PORT, () => {
           console.log(`Server running on port ${PORT}`)
           console.log(`WebSocket (Socket.IO) enabled`)
           console.log(`Database persistence enabled: ${process.env.MONGODB_URI}`)
         })
-      })
+        })
+    })
     })
   })
 }).catch((error) => {

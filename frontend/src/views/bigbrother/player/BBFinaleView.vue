@@ -65,6 +65,12 @@ import MemoryMatchGame from '../../../components/bigbrother/minigames/MemoryMatc
 import QuickMathGame from '../../../components/bigbrother/minigames/QuickMathGame.vue'
 import BalanceBarGame from '../../../components/bigbrother/minigames/BalanceBarGame.vue'
 import DiceDuelGame from '../../../components/bigbrother/minigames/DiceDuelGame.vue'
+import KlotskiGame from '../../../components/bigbrother/minigames/KlotskiGame.vue'
+import SwingPointerGame from '../../../components/bigbrother/minigames/SwingPointerGame.vue'
+import MinorityGame from '../../../components/bigbrother/minigames/MinorityGame.vue'
+import SpotDifferenceGame from '../../../components/bigbrother/minigames/SpotDifferenceGame.vue'
+import ReactionGame from '../../../components/bigbrother/minigames/ReactionGame.vue'
+import SequenceMemoryGame from '../../../components/bigbrother/minigames/SequenceMemoryGame.vue'
 import type { MinigameRoom, BBEndgameStatus } from '../../../types/bigbrother'
 
 const authStore = useBbAuthStore()
@@ -89,7 +95,13 @@ const gameComponentMap: Record<string, Component> = {
   'memory-match': markRaw(MemoryMatchGame),
   'quick-math': markRaw(QuickMathGame),
   'balance-bar': markRaw(BalanceBarGame),
-  'dice-duel': markRaw(DiceDuelGame)
+  'dice-duel': markRaw(DiceDuelGame),
+  'klotski': markRaw(KlotskiGame),
+  'swing-pointer': markRaw(SwingPointerGame),
+  'minority': markRaw(MinorityGame),
+  'spot-difference': markRaw(SpotDifferenceGame),
+  'reaction': markRaw(ReactionGame),
+  'sequence-memory': markRaw(SequenceMemoryGame)
 }
 
 function inMe(room: MinigameRoom): boolean {

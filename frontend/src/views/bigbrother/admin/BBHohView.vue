@@ -45,6 +45,7 @@
         <span class="status-badge">{{ statusText }}</span>
         <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人</span>
         <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-primary" @click="startMinigame">▶ 开始比赛</button>
+        <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-danger" @click="stopMinigame">✕ 取消房间</button>
       </div>
     </div>
 
@@ -67,19 +68,7 @@
     </div>
 
     <!-- 小游戏选择弹窗 -->
-    <Teleport to="body">
-      <div v-if="showMinigameModal" class="bb-modal-overlay" @click.self="showMinigameModal = false">
-        <div class="bb-modal bb-modal-lg">
-          <div class="bb-modal-header">
-            <h3>选择 HOH 小游戏</h3>
-            <button class="close-btn" @click="showMinigameModal = false">✕</button>
-          </div>
-          <div class="bb-modal-body">
-            <MinigameSelector :selectedId="null" @select="onSelectMinigame" />
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <MinigameSelectModal v-model:open="showMinigameModal" title="选择 HOH 小游戏" @select="onSelectMinigame" />
 
     <!-- 手动指定弹窗 -->
     <Teleport to="body">
@@ -112,9 +101,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   bbGetCurrentHoh, bbGetHohHistory, bbRunHohCompetition, bbAssignHoh,
-  bbGetHohEligible, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom
+  bbGetHohEligible, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom, bbStopMinigame
 } from '../../../services/bbApi'
-import MinigameSelector from '../../../components/bigbrother/minigames/MinigameSelector.vue'
+import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
 import type { BBHohRecord, MinigameRoom } from '../../../types/bigbrother'
 
 const route = useRoute()
@@ -194,6 +183,17 @@ async function startMinigame() {
   try {
     await bbStartMinigame(activeRoom.value.roomId)
     activeRoom.value = { ...activeRoom.value, status: 'playing' }
+  } catch (e: any) {
+    alert(e.message)
+  }
+}
+
+async function stopMinigame() {
+  if (!activeRoom.value) return
+  if (!confirm('确定取消该比赛房间？')) return
+  try {
+    await bbStopMinigame(activeRoom.value.roomId)
+    activeRoom.value = null
   } catch (e: any) {
     alert(e.message)
   }

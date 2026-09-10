@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { useBbAuthStore } from '../stores/bbAuthStore'
 import { useLvAuthStore } from '../stores/lovevarietyAuthStore'
+import { usePcAuthStore } from '../stores/pcAuthStore'
 import { DEFAULT_GAME_ID, getGameById } from '../config/games'
 
 const routes: RouteRecordRaw[] = [
@@ -108,6 +109,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'houseguests', name: 'BBAdminHouseguests', component: () => import('../views/bigbrother/admin/BBHouseguestView.vue') },
       { path: 'house-admin', name: 'BBAdminHouse', component: () => import('../views/bigbrother/admin/BBHouseAdminView.vue') },
       { path: 'game-library', name: 'BBAdminGameLibrary', component: () => import('../views/bigbrother/admin/BBGameLibraryView.vue') },
+      { path: 'power-challenge', name: 'BBAdminPowerChallenge', component: () => import('../views/bigbrother/admin/BBPowerChallengeView.vue') },
       { path: 'stage', name: 'BBAdminStage', component: () => import('../views/bigbrother/admin/BBStageView.vue') },
       { path: 'endgame', name: 'BBAdminEndgame', component: () => import('../views/bigbrother/admin/BBEndgameView.vue') },
       { path: 'season-result', name: 'BBAdminSeasonResult', component: () => import('../views/bigbrother/admin/BBSeasonResultView.vue') },
@@ -155,6 +157,32 @@ const routes: RouteRecordRaw[] = [
       { path: 'letters', name: 'LVAdminLetters', component: () => import('../views/lovevariety/admin/LVLetterView.vue') }
     ]
   },
+  // ===== 实力大挑战 选手端 =====
+  {
+    path: '/games/powerchallenge/player',
+    name: 'PCPlayer',
+    redirect: () => '/games/powerchallenge/player/home',
+    meta: { requiresPlayer: true, gameId: 'powerchallenge' },
+    component: () => import('../layouts/PowerChallengePlayerLayout.vue'),
+    children: [
+      { path: 'home', name: 'PCPlayerHome', component: () => import('../views/powerchallenge/player/PCHomeView.vue') },
+      { path: 'game', name: 'PCPlayerGame', component: () => import('../views/powerchallenge/player/PCGameView.vue') }
+    ]
+  },
+  // ===== 实力大挑战 管理端 =====
+  {
+    path: '/games/powerchallenge/admin',
+    name: 'PCAdmin',
+    redirect: () => '/games/powerchallenge/admin/dashboard',
+    meta: { requiresAdmin: true, gameId: 'powerchallenge' },
+    component: () => import('../layouts/PowerChallengeAdminLayout.vue'),
+    children: [
+      { path: 'dashboard', name: 'PCAdminDashboard', component: () => import('../views/powerchallenge/admin/PCDashboardView.vue') },
+      { path: 'live', name: 'PCAdminLive', component: () => import('../views/powerchallenge/admin/PCLiveControlView.vue') },
+      { path: 'players', name: 'PCAdminPlayers', component: () => import('../views/powerchallenge/admin/PCPlayerView.vue') },
+      { path: 'question-pools', name: 'PCAdminQuestionPools', component: () => import('../views/powerchallenge/admin/PCPowerChallengeView.vue') }
+    ]
+  },
   // ===== 默认重定向 =====
   {
     path: '/',
@@ -175,66 +203,63 @@ router.beforeEach((to) => {
   const authStore = useAuthStore()
   const bbAuthStore = useBbAuthStore()
   const lvAuthStore = useLvAuthStore()
+  const pcAuthStore = usePcAuthStore()
 
   const fullPath = to.path
   const isBB = fullPath.startsWith('/games/bigbrother/')
   const isLV = fullPath.startsWith('/games/lovevariety/')
-  const routeGameId = isBB ? 'bigbrother' : isLV ? 'lovevariety' : (to.params.gameId as string | undefined)
+  const isPC = fullPath.startsWith('/games/powerchallenge/')
+  const routeGameId = isBB ? 'bigbrother' : isLV ? 'lovevariety' : isPC ? 'powerchallenge' : (to.params.gameId as string | undefined)
 
   // 根据游戏选择对应的 authStore
   let store = authStore
   if (isBB) store = bbAuthStore
   else if (isLV) store = lvAuthStore
+  else if (isPC) store = pcAuthStore
 
   // 同步 gameId
-  if (routeGameId && routeGameId !== authStore.currentGameId && !isBB && !isLV) {
+  if (routeGameId && routeGameId !== authStore.currentGameId && !isBB && !isLV && !isPC) {
     authStore.setCurrentGameId(routeGameId)
   }
 
   const currentGameId = routeGameId || authStore.currentGameId || DEFAULT_GAME_ID
 
   // 登录页直接放行
-  if (to.name === 'Login') {
-    return true
-  }
+  if (to.name === 'Login') { return true }
 
   // 未登录时尝试从 sessionStorage 恢复
   if (!store.isLoggedIn) {
-    const tokenKey = isBB ? 'bigbrother_token' : isLV ? 'lovevariety_token' : store.gameKey('token')
-    const userKey = isBB ? 'bigbrother_user' : isLV ? 'lovevariety_user' : store.gameKey('user')
+    let tokenKey: string, userKey: string
+    if (isBB) { tokenKey = 'bigbrother_token'; userKey = 'bigbrother_user' }
+    else if (isLV) { tokenKey = 'lovevariety_token'; userKey = 'lovevariety_user' }
+    else if (isPC) { tokenKey = 'powerchallenge_token'; userKey = 'powerchallenge_user' }
+    else { tokenKey = store.gameKey('token'); userKey = store.gameKey('user') }
     const token = sessionStorage.getItem(tokenKey)
     const userJson = sessionStorage.getItem(userKey)
     if (token && userJson) {
       try {
         const user = JSON.parse(userJson)
-        if (isBB) {
-          (bbAuthStore as any).currentUser = user
-        } else if (isLV) {
-          (lvAuthStore as any).currentUser = user
-        } else {
-          (authStore as any).setUser(user)
-        }
+        if (isBB) { (bbAuthStore as any).currentUser = user }
+        else if (isLV) { (lvAuthStore as any).currentUser = user }
+        else if (isPC) { (pcAuthStore as any).currentUser = user }
+        else { (authStore as any).setUser(user) }
       } catch {
-        sessionStorage.removeItem(tokenKey)
-        sessionStorage.removeItem(userKey)
+        if (isBB || isLV || isPC) sessionStorage.removeItem(tokenKey)
+        else sessionStorage.removeItem(tokenKey)
       }
     }
   }
 
-  // 仍未登录 → 跳游戏对应的登录页
+  // 未登录 → 跳游戏对应的登录页
   if (!store.isLoggedIn) {
     return `/games/${currentGameId}/login`
   }
 
   if (to.meta.requiresAdmin) {
-    if (store.isAdmin) {
-      return true
-    }
+    if (store.isAdmin) { return true }
     return `/games/${currentGameId}/admin/dashboard`
   } else if (to.meta.requiresPlayer) {
-    if (store.isPlayer || store.isHouseguest) {
-      return true
-    }
+    if (store.isPlayer || store.isHouseguest) { return true }
     return `/games/${currentGameId}/player/home`
   }
 

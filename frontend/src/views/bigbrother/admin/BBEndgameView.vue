@@ -179,19 +179,7 @@
     </div>
 
     <!-- 选择小游戏弹窗 -->
-    <Teleport to="body">
-      <div v-if="roomPickerOpen" class="bb-modal-overlay" @click.self="closeRoomPicker">
-        <div class="bb-modal">
-          <div class="bb-modal-header">
-            <h3>为第 {{ roomPickerRound }} 场选小游戏</h3>
-            <button class="close-btn" @click="closeRoomPicker">✕</button>
-          </div>
-          <div class="bb-modal-body">
-            <MinigameSelector :selectedId="null" @select="onRoomMinigameSelect" />
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <MinigameSelectModal v-model:open="roomPickerOpen" :title="`为第 ${roomPickerRound} 场选小游戏`" @select="onRoomMinigameSelect" />
   </div>
 </template>
 
@@ -203,7 +191,7 @@ import {
   bbCreateMinigameRoom, bbStartMinigame, bbGetMinigameRoom
 } from '../../../services/bbApi'
 import type { BBEndgameStatus } from '../../../types/bigbrother'
-import MinigameSelector from '../../../components/bigbrother/minigames/MinigameSelector.vue'
+import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
 
 const seasonStore = useBbSeasonStore()
 const status = ref<BBEndgameStatus | null>(null)

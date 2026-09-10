@@ -3,7 +3,7 @@
     <div v-if="!gameStarted" class="game-waiting">
       <div class="game-icon">🎲</div>
       <h2>骰子对决</h2>
-      <p>3轮策略性投骰子，每轮选择1-3个骰子，总分最高者获胜！</p>
+      <p>3轮策略性投骰子，每轮选择1-4个骰子，总分最接近且不超过目标值者获胜！</p>
       <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
@@ -11,12 +11,13 @@
     <div v-else-if="!finished" class="game-playing">
       <div class="game-header">
         <span>第 {{ currentRound }}/{{ totalRounds }} 轮</span>
+        <span v-if="targetScore > 0">目标: {{ targetScore }}</span>
         <span>总分: {{ totalScore }}</span>
       </div>
 
-      <div v-if="currentRound < totalRounds" class="roll-area">
+      <div v-if="roundsDone < totalRounds" class="roll-area">
         <div class="dice-select">
-          <button v-for="n in 3" :key="n" class="dice-count-btn"
+          <button v-for="n in 4" :key="n" class="dice-count-btn"
             :class="{ selected: selectedCount === n }"
             @click="selectedCount = n">
             {{ n }}个骰子
@@ -31,7 +32,7 @@
         <span class="roll-total">= {{ lastTotal }}</span>
       </div>
 
-      <div v-if="currentRound >= totalRounds" class="completed">
+      <div v-if="roundsDone >= totalRounds" class="completed">
         <span class="done-msg">✅ 全部完成！等待其他玩家...</span>
       </div>
 
@@ -70,9 +71,11 @@ const roomIdRef = ref(props.roomId)
 const { gameState, countdown, winner, finished, connect, sendAction } = useMinigameSocket(roomIdRef)
 
 const gameStarted = computed(() => gameState.value && (countdown.value === -1 || countdown.value === 0))
-const currentRound = computed(() => (gameState.value?.currentRound || 0) + 1)
+const roundsDone = computed(() => gameState.value?.currentRound || 0)
+const currentRound = computed(() => roundsDone.value + 1)
 const totalRounds = computed(() => gameState.value?.totalRounds || 3)
 const totalScore = computed(() => gameState.value?.totalScore || 0)
+const targetScore = computed(() => (gameState.value as any)?.targetScore || 0)
 const roundHistory = computed(() => gameState.value?.rounds || [])
 
 const selectedCount = ref(1)

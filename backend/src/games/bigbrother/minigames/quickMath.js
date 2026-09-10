@@ -34,10 +34,12 @@ registerGame({
   duration: 120,
 
   init(participants) {
+    // 所有选手使用完全相同的题目
+    const sharedQuestions = generateQuestions()
     const playerStates = {}
     participants.forEach(p => {
       playerStates[p.playerId] = {
-        questions: generateQuestions(),
+        questions: sharedQuestions.map(q => ({ ...q })),
         currentIndex: 0,
         answers: [],         // 用户答案记录
         startTime: null,
@@ -70,11 +72,12 @@ registerGame({
             s => s.currentIndex >= TOTAL_QUESTIONS
           )
           if (allFinished) {
-            return { updated: true, finished: true, winner: this.computeWinner(state) }
+            return { updated: true, finished: true, winner: this.computeWinner(state), result: { correct } }
           }
         }
       }
-      return { updated: true, finished: false, result: { correct, correctAnswer: q.answer } }
+      // 答错时不返回正确答案
+      return { updated: true, finished: false, result: correct ? { correct, correctAnswer: q.answer } : { correct } }
     }
 
     return { updated: false }
@@ -104,7 +107,9 @@ registerGame({
       totalQuestions: TOTAL_QUESTIONS,
       startTime: ps.startTime,
       finishTime: ps.finishTime,
-      lastResult: ps.answers.length > 0 ? ps.answers[ps.answers.length - 1] : null,
+      lastResult: ps.answers.length > 0
+        ? (() => { const a = ps.answers[ps.answers.length - 1]; return a.correct ? a : { ...a, correctAnswer: undefined } })()
+        : null,
       status: state.status
     }
   },

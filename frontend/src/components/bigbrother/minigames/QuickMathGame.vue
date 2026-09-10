@@ -21,7 +21,7 @@
           <button class="submit-btn" @click="submitAnswer">确认</button>
         </div>
         <div v-if="lastResult" class="result-feedback" :class="{ correct: lastResult.correct, wrong: !lastResult.correct }">
-          {{ lastResult.correct ? '✅ 正确！' : `❌ 错误，正确答案是 ${lastResult.correctAnswer}` }}
+          {{ lastResult.correct ? '✅ 正确！' : '❌ 错误，请重试' }}
         </div>
       </div>
       <div v-else class="completed">

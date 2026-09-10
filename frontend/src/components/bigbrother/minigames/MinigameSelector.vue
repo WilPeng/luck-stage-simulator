@@ -3,7 +3,7 @@
     <div class="selector-header">
       <div class="selector-title">
         <span class="selector-icon">🎮</span>
-        <span>选择一个 HOH 竞争小游戏</span>
+        <span v-if="showTitle">选择一个 HOH 竞争小游戏</span>
       </div>
       <div class="category-tabs">
         <button
@@ -68,7 +68,9 @@ import { ref, computed, onMounted } from 'vue'
 import { bbGetMinigameList } from '../../../services/bbApi'
 import type { MinigameDef } from '../../../types/bigbrother'
 
-defineProps<{ selectedId: string | null }>()
+withDefaults(defineProps<{ selectedId: string | null; showTitle?: boolean }>(), {
+  showTitle: true
+})
 defineEmits<{ (e: 'select', id: string): void }>()
 
 const games = ref<MinigameDef[]>([])
@@ -212,8 +214,8 @@ onMounted(async () => {
 
 .game-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 16px;
 }
 
 .game-card {
@@ -255,8 +257,8 @@ onMounted(async () => {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 18px 16px 14px;
+  gap: 10px;
+  padding: 22px 20px 18px;
   background: linear-gradient(165deg, #141430 0%, #0d0d24 100%);
   border-radius: 11px;
   height: 100%;
@@ -270,7 +272,7 @@ onMounted(async () => {
 }
 
 .card-icon {
-  font-size: 32px;
+  font-size: 38px;
   line-height: 1;
   filter: drop-shadow(0 2px 8px rgba(0, 255, 136, 0.15));
 }
@@ -286,16 +288,16 @@ onMounted(async () => {
 }
 
 .card-name {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: #e8e8e8;
   margin-top: 2px;
 }
 
 .card-desc {
-  font-size: 12px;
+  font-size: 12.5px;
   color: #777;
-  line-height: 1.5;
+  line-height: 1.55;
   flex: 1;
 }
 

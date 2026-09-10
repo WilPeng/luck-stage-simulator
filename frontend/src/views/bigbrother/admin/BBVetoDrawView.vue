@@ -130,6 +130,7 @@
           <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人<template v-if="activeRoom.targetScore"> · 目标 {{ activeRoom.targetScore }}</template></span>
           <div class="room-actions">
             <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-primary" @click="startMinigame">▶ 开始比赛</button>
+            <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-danger" @click="stopMinigame">✕ 取消房间</button>
             <button v-if="activeRoom.status === 'playing'" class="bb-btn bb-btn-warn" @click="pauseMinigame">⏸ 暂停</button>
             <button v-if="activeRoom.status === 'paused'" class="bb-btn bb-btn-primary" @click="resumeMinigame">▶ 恢复</button>
             <button v-if="activeRoom.status === 'playing' || activeRoom.status === 'paused'" class="bb-btn bb-btn-danger" @click="stopMinigame">⏹ 停止</button>
@@ -165,6 +166,11 @@
                   <template v-if="row.max">
                     <div class="p-bar"><div class="p-bar-fill" :style="{ width: Math.min(100, ((row as any).progress || 0) / row.max * 100) + '%' }"></div></div>
                   </template>
+                  <div v-if="(row as any).submissions && (row as any).submissions.length" class="sub-list">
+                    <div v-for="(s, si) in (row as any).submissions" :key="si" class="sub-item">
+                      #{{ si + 1 }} {{ formatSubmission(s) }}
+                    </div>
+                  </div>
                 </td>
                 <td class="p-status">
                   <span v-if="activeRoom?.winner?.playerId === row.playerId" class="win-badge">🏆 胜者</span>
@@ -198,19 +204,7 @@
     </div>
 
     <!-- 小游戏选择弹窗 -->
-    <Teleport to="body">
-      <div v-if="showMinigameModal" class="bb-modal-overlay" @click.self="showMinigameModal = false">
-        <div class="bb-modal bb-modal-lg">
-          <div class="bb-modal-header">
-            <h3>选择否决权小游戏</h3>
-            <button class="close-btn" @click="showMinigameModal = false">✕</button>
-          </div>
-          <div class="bb-modal-body">
-            <MinigameSelector :selectedId="null" @select="onSelectMinigame" />
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <MinigameSelectModal v-model:open="showMinigameModal" title="选择否决权小游戏" @select="onSelectMinigame" />
   </div>
 </template>
 
@@ -223,7 +217,7 @@ import {
   bbPauseMinigame, bbResumeMinigame, bbStopMinigame
 } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
-import MinigameSelector from '../../../components/bigbrother/minigames/MinigameSelector.vue'
+import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
 import type { BBVetoRecord, MinigameRoom, MinigameProgress } from '../../../types/bigbrother'
 
 const veto = ref<BBVetoRecord | null>(null)
@@ -248,7 +242,13 @@ const targetInputHint = computed(() => {
     'quick-math': '答对题数（如 10，达到即胜）',
     'memory-match': '填写任意正整数（完成全部配对即胜）',
     'balance-bar': '保持时长（毫秒，如 8000 达到即胜）',
-    'dice-duel': '总分数（如 20，达到即胜）'
+    'dice-duel': '目标分数（总分最接近且不超过者胜）',
+    'klotski': '填写任意正整数（首位复原即胜）',
+    'swing-pointer': '填写任意正整数（完成5次点击即胜）',
+    'minority': '填写任意正整数（存活到最后即胜）',
+    'spot-difference': '填写任意正整数（找齐即胜）',
+    'reaction': '填写任意正整数（完成9块即胜）',
+    'sequence-memory': '填写任意正整数（存活到最后即胜）'
   }
   return hints[selectedMinigameId.value] || '目标值（可选）'
 })
@@ -281,6 +281,11 @@ const sortedProgress = computed(() => {
     }))
     .sort((a: any, b: any) => (b.score || 0) - (a.score || 0))
 })
+
+function formatSubmission(s: any) {
+  const vals = Object.values(s?.answers || {})
+  return vals.length ? vals.map(v => String(v == null || v === '' ? '（空）' : v)).join(' / ') : '（空提交）'
+}
 
 // 自选相关
 const canPick = ref<{ playerId: string; playerName: string; role: 'hoh' | 'nominee' }[]>([])
@@ -790,6 +795,8 @@ onUnmounted(stopProgressPolling)
 .progress-table th { color: #888; font-weight: 500; font-size: 11px; text-transform: uppercase; }
 .progress-table tr.winner { background: #ffaa0008; }
 .progress-table tr.winner td { color: #ffaa00; }
+.sub-list { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+.sub-item { font-size: 12px; color: #8fd8a8; background: #00ff8810; border-radius: 4px; padding: 2px 8px; }
 .p-avatar { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: #00ff8822; color: #00ff88; align-items: center; justify-content: center; margin-right: 8px; font-size: 12px; }
 .p-score { min-width: 120px; }
 .p-bar { width: 120px; height: 5px; background: #ffffff10; border-radius: 3px; margin-top: 4px; overflow: hidden; }

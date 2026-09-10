@@ -461,7 +461,7 @@ export function getEndgameStatus(currentRound: number, currentStage: BBAllStageT
 
 // ===== 小游戏相关类型 =====
 
-export type MinigameId = 'click-speed' | 'memory-match' | 'quick-math' | 'balance-bar' | 'dice-duel'
+export type MinigameId = 'click-speed' | 'memory-match' | 'quick-math' | 'balance-bar' | 'dice-duel' | 'power-challenge' | 'klotski' | 'swing-pointer' | 'minority' | 'spot-difference' | 'reaction' | 'sequence-memory'
 export type MinigameCategory = 'reaction' | 'memory' | 'intellect' | 'skill' | 'strategy'
 
 export interface MinigameDef {
@@ -605,8 +605,10 @@ export interface BBHohMonitorRoom {
 // ===== 自定义游戏类型 =====
 
 export type CustomGameType = 'quiz' | 'score'
-export type CustomGameWinCondition = 'first_correct' | 'highest_score' | 'most_correct'
+export type CustomGameWinCondition = 'first_correct' | 'highest_score' | 'most_correct' | 'all_correct' | 'target_correct' | 'admin_judge'
 export type CustomGameScoringRule = 'correct_only' | 'timed_bonus'
+export type CustomGameSubmitMode = 'single' | 'batch'
+export type CustomGameWrongFeedback = 'none' | 'count' | 'reveal' | 'all_correct_only'
 
 export interface CustomGameQuestion {
   id: string
@@ -623,6 +625,10 @@ export interface BBCustomGameDef {
   icon: string
   type: CustomGameType
   questions: CustomGameQuestion[]
+  submitMode: CustomGameSubmitMode
+  wrongFeedback: CustomGameWrongFeedback
+  lockOnWrong: boolean
+  targetCorrect: number
   cooldownSeconds: number
   maxAttempts: number
   timeLimit: number
@@ -634,30 +640,67 @@ export interface BBCustomGameDef {
   updatedAt: string
 }
 
+export interface CustomGameBatchQuestion {
+  id: string
+  text: string
+  options: string[]
+  points: number
+  userAnswer: string
+  correct: boolean
+  locked: boolean
+}
+
 export interface CustomGamePlayerState {
   gameType: CustomGameType
+  winCondition: CustomGameWinCondition
+  submitMode: CustomGameSubmitMode
+  wrongFeedback: CustomGameWrongFeedback
   currentQuestion: {
     id: string
     text: string
     options: string[]
     points: number
   } | null
+  questions?: CustomGameBatchQuestion[]
   currentIndex: number
   totalQuestions: number
   score: number
   correctCount: number
+  attemptsUsed: number
+  maxAttempts: number
   cooldownRemaining: number
   startTime: number | null
   finishTime: number | null
+  done: boolean
   lastResult: {
-    questionId: string
-    userAnswer: string
-    correctAnswer: string
+    questionId?: string
+    userAnswer?: string
+    correctAnswer?: string
     correct: boolean
-    points: number
-    submitTime: number
+    points?: number
+    submitTime?: number
   } | null
   timerEndTime: number | null
   timeLimit: number
   status: string
+}
+
+// ===== 实力大挑战题目池类型 =====
+
+export interface PowerChallengeQuestion {
+  id: string
+  text: string
+  options: string[]
+  correctAnswer: string
+}
+
+export interface PowerChallengePool {
+  id: string
+  gameId: string
+  name: string
+  theme: string
+  questions: PowerChallengeQuestion[]
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
 }

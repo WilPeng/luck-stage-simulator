@@ -6,6 +6,7 @@ const express = require('express')
 const router = express.Router()
 const BBCustomGame = require('../models/BBCustomGame')
 const { getCurrentSeason } = require('../helpers')
+const { clearCustomGameCache } = require('../minigames/customGame')
 
 // GET /list - 获取所有自定义游戏
 router.get('/list', async (req, res) => {
@@ -42,7 +43,11 @@ router.get('/:id', async (req, res) => {
 // POST / - 创建自定义游戏
 router.post('/', async (req, res) => {
   try {
-    const { name, description, icon, type, questions, cooldownSeconds, maxAttempts, timeLimit, scoringRule, playerCount, winCondition } = req.body
+    const {
+      name, description, icon, type, questions, cooldownSeconds, maxAttempts,
+      timeLimit, scoringRule, playerCount, winCondition,
+      submitMode, wrongFeedback, lockOnWrong, targetCorrect
+    } = req.body
 
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, error: '游戏名称不能为空' })
@@ -54,13 +59,16 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, error: '至少需要一道题目' })
     }
 
+    const finalWin = winCondition || (type === 'quiz' ? 'all_correct' : 'highest_score')
+    const allowEmptyAnswer = finalWin === 'admin_judge'
+
     // 验证题目
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i]
       if (!q.text || !q.text.trim()) {
         return res.status(400).json({ success: false, error: `第${i + 1}题题目文本不能为空` })
       }
-      if (!q.correctAnswer || !q.correctAnswer.trim()) {
+      if (!allowEmptyAnswer && (!q.correctAnswer || !q.correctAnswer.trim())) {
         return res.status(400).json({ success: false, error: `第${i + 1}题正确答案不能为空` })
       }
     }
@@ -78,7 +86,7 @@ router.post('/', async (req, res) => {
         id: q.id || `q-${idx + 1}`,
         text: q.text.trim(),
         options: (q.options || []).map(o => o.trim()).filter(Boolean),
-        correctAnswer: q.correctAnswer.trim(),
+        correctAnswer: (q.correctAnswer || '').trim(),
         points: q.points || 1
       })),
       cooldownSeconds: cooldownSeconds ?? 5,
@@ -86,11 +94,16 @@ router.post('/', async (req, res) => {
       timeLimit: timeLimit ?? 120,
       scoringRule: scoringRule || 'correct_only',
       playerCount: playerCount || { min: 2, max: 20 },
-      winCondition: winCondition || (type === 'quiz' ? 'first_correct' : 'highest_score'),
+      winCondition: finalWin,
+      submitMode: submitMode || 'single',
+      wrongFeedback: wrongFeedback || 'none',
+      lockOnWrong: !!lockOnWrong,
+      targetCorrect: targetCorrect ?? 1,
       enabled: true
     })
 
     await game.save()
+    clearCustomGameCache(game.id)
 
     res.json({ success: true, data: game.toObject() })
   } catch (e) {
@@ -107,7 +120,14 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ success: false, error: '游戏不存在' })
     }
 
-    const { name, description, icon, type, questions, cooldownSeconds, maxAttempts, timeLimit, scoringRule, playerCount, winCondition, enabled } = req.body
+    const {
+      name, description, icon, type, questions, cooldownSeconds, maxAttempts,
+      timeLimit, scoringRule, playerCount, winCondition, enabled,
+      submitMode, wrongFeedback, lockOnWrong, targetCorrect
+    } = req.body
+
+    const finalWin = winCondition !== undefined ? winCondition : existing.winCondition
+    const allowEmptyAnswer = finalWin === 'admin_judge'
 
     if (questions && Array.isArray(questions)) {
       for (let i = 0; i < questions.length; i++) {
@@ -115,7 +135,7 @@ router.put('/:id', async (req, res) => {
         if (!q.text || !q.text.trim()) {
           return res.status(400).json({ success: false, error: `第${i + 1}题题目文本不能为空` })
         }
-        if (!q.correctAnswer || !q.correctAnswer.trim()) {
+        if (!allowEmptyAnswer && (!q.correctAnswer || !q.correctAnswer.trim())) {
           return res.status(400).json({ success: false, error: `第${i + 1}题正确答案不能为空` })
         }
       }
@@ -130,7 +150,7 @@ router.put('/:id', async (req, res) => {
         id: q.id || `q-${idx + 1}`,
         text: q.text.trim(),
         options: (q.options || []).map(o => o.trim()).filter(Boolean),
-        correctAnswer: q.correctAnswer.trim(),
+        correctAnswer: (q.correctAnswer || '').trim(),
         points: q.points || 1
       }))
     }
@@ -140,10 +160,15 @@ router.put('/:id', async (req, res) => {
     if (scoringRule !== undefined) existing.scoringRule = scoringRule
     if (playerCount !== undefined) existing.playerCount = playerCount
     if (winCondition !== undefined) existing.winCondition = winCondition
+    if (submitMode !== undefined) existing.submitMode = submitMode
+    if (wrongFeedback !== undefined) existing.wrongFeedback = wrongFeedback
+    if (lockOnWrong !== undefined) existing.lockOnWrong = !!lockOnWrong
+    if (targetCorrect !== undefined) existing.targetCorrect = targetCorrect
     if (enabled !== undefined) existing.enabled = enabled
     existing.updatedAt = new Date().toISOString()
 
     await existing.save()
+    clearCustomGameCache(existing.id)
 
     res.json({ success: true, data: existing.toObject() })
   } catch (e) {
@@ -161,6 +186,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     await BBCustomGame.deleteOne({ id: req.params.id })
+    clearCustomGameCache(req.params.id)
 
     res.json({ success: true, message: '已删除' })
   } catch (e) {
@@ -180,6 +206,7 @@ router.post('/:id/toggle', async (req, res) => {
     existing.enabled = !existing.enabled
     existing.updatedAt = new Date().toISOString()
     await existing.save()
+    clearCustomGameCache(existing.id)
 
     res.json({ success: true, data: { id: existing.id, enabled: existing.enabled } })
   } catch (e) {

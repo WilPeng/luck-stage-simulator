@@ -1,6 +1,8 @@
 /**
  * 骰子对决 (Dice Duel)
- * 规则：每人3轮，每轮可选投1-3个骰子，点数总和计入总分，3轮后总分最高者获胜
+ * 规则：每人3轮，每轮可选投1-4个骰子，点数累计。
+ * 最终总分最接近但不超过管理员设定的目标值者获胜；
+ * 若所有人都超过目标值，则总分最小者获胜；同分比较完成时间（更早者胜）。
  */
 const { registerGame } = require('./index')
 
@@ -14,18 +16,19 @@ registerGame({
   id: 'dice-duel',
   name: '骰子对决',
   icon: '🎲',
-  description: '3轮策略性投骰子，每轮选择1-3个骰子，总分最高者获胜',
+  description: '3轮投骰子(每轮1-4个)，总分最接近且不超过目标值者获胜',
   category: 'strategy',
   playerCount: { min: 2, max: 20 },
-  duration: 90,
+  duration: 120,
 
   init(participants) {
     const playerStates = {}
     participants.forEach(p => {
       playerStates[p.playerId] = {
-        rounds: [],          // [{ diceCount, results, total }]
+        rounds: [],
         currentRound: 0,
-        totalScore: 0
+        totalScore: 0,
+        finishTime: null
       }
     })
     return { playerStates, status: 'ready' }
@@ -34,14 +37,16 @@ registerGame({
   handleAction(state, playerId, action) {
     const ps = state.playerStates[playerId]
     if (!ps) return { updated: false }
+    if (!action) return { updated: false }
+
+    if (action.type === 'start') return { updated: true, finished: false }
 
     if (action.type === 'roll') {
       if (ps.currentRound >= TOTAL_ROUNDS) return { updated: false }
 
       const diceCount = action.count || 1
-      if (diceCount < 1 || diceCount > 3) return { updated: false }
+      if (diceCount < 1 || diceCount > 4) return { updated: false }
 
-      // 投骰子
       const results = []
       let total = 0
       for (let i = 0; i < diceCount; i++) {
@@ -54,32 +59,49 @@ registerGame({
       ps.totalScore += total
       ps.currentRound++
 
-      // 检查是否所有人都完成了
       if (ps.currentRound >= TOTAL_ROUNDS) {
+        ps.finishTime = Date.now()
         const allFinished = Object.values(state.playerStates).every(
           s => s.currentRound >= TOTAL_ROUNDS
         )
         if (allFinished) {
-          return { updated: true, finished: true, winner: this.computeWinner(state), result: { results, total } }
+          return { updated: true, finished: true, winner: this.computeWinner(state), result: { results, total, totalScore: ps.totalScore } }
         }
       }
 
-      return { updated: true, finished: false, result: { results, total } }
+      return { updated: true, finished: false, result: { results, total, totalScore: ps.totalScore } }
     }
 
     return { updated: false }
   },
 
   computeWinner(state) {
-    let maxScore = -1
-    let winner = null
-    for (const [pid, ps] of Object.entries(state.playerStates)) {
-      if (ps.totalScore > maxScore) {
-        maxScore = ps.totalScore
-        winner = pid
+    const w = this.getWinners(state)
+    return w.length ? w[0] : null
+  },
+
+  getWinners(state) {
+    const target = Number(state.targetScore)
+    const entries = Object.entries(state.playerStates)
+    let pool = entries
+    if (target && target > 0) {
+      const under = entries.filter(([, ps]) => ps.totalScore <= target)
+      if (under.length) {
+        // 不超过目标：总分最大者（最接近）
+        const best = Math.max(...under.map(([, ps]) => ps.totalScore))
+        pool = under.filter(([, ps]) => ps.totalScore === best)
+      } else {
+        // 全部超过：总分最小者
+        const min = Math.min(...entries.map(([, ps]) => ps.totalScore))
+        pool = entries.filter(([, ps]) => ps.totalScore === min)
       }
+    } else {
+      const best = Math.max(...entries.map(([, ps]) => ps.totalScore))
+      pool = entries.filter(([, ps]) => ps.totalScore === best)
     }
-    return winner
+    if (!pool.length) return []
+    const earliest = Math.min(...pool.map(([, ps]) => ps.finishTime || Infinity))
+    return pool.filter(([, ps]) => (ps.finishTime || Infinity) === earliest).map(([pid]) => pid)
   },
 
   getState(state, playerId) {
@@ -90,11 +112,11 @@ registerGame({
       currentRound: ps.currentRound,
       totalRounds: TOTAL_ROUNDS,
       totalScore: ps.totalScore,
+      targetScore: Number(state.targetScore) || 0,
       status: state.status
     }
   },
 
-  // 所有玩家的实时进度
   getAllStates(state) {
     const result = {}
     for (const [pid, ps] of Object.entries(state.playerStates)) {
@@ -110,11 +132,6 @@ registerGame({
     return result
   },
 
-  // 目标判定：总分达到 targetScore 即达成
-  checkTarget(state, playerId, targetScore) {
-    const ps = state.playerStates[playerId]
-    if (!ps) return false
-    if (!targetScore || targetScore <= 0) return ps.currentRound >= TOTAL_ROUNDS
-    return ps.totalScore >= targetScore
-  }
+  // 不在达到目标时提前结束（目标只是评分基准）
+  checkTarget() { return false }
 })

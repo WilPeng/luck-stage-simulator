@@ -581,4 +581,38 @@ export async function bbToggleCustomGame(id: string): Promise<{ id: string; enab
   })
 }
 
+// ===== 实力大挑战 API =====
+
+export async function bbGetPowerChallengePools(): Promise<PowerChallengePool[]> {
+  return doRequest<PowerChallengePool[]>('/power-challenge/list')
+}
+
+export async function bbGetPowerChallengePool(id: string): Promise<PowerChallengePool> {
+  return doRequest<PowerChallengePool>(`/power-challenge/${id}`)
+}
+
+export async function bbCreatePowerChallengePool(data: { name: string; theme: string; questions: PowerChallengeQuestion[] }): Promise<PowerChallengePool> {
+  return doRequest<PowerChallengePool>('/power-challenge', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+}
+
+export async function bbUpdatePowerChallengePool(id: string, data: Partial<{ name: string; theme: string; questions: PowerChallengeQuestion[] }>): Promise<PowerChallengePool> {
+  return doRequest<PowerChallengePool>(`/power-challenge/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+}
+
+export async function bbDeletePowerChallengePool(id: string): Promise<void> {
+  return doRequest<void>(`/power-challenge/${id}`, { method: 'DELETE' })
+}
+
+export async function bbTogglePowerChallengePool(id: string): Promise<PowerChallengePool> {
+  return doRequest<PowerChallengePool>(`/power-challenge/${id}/toggle`, { method: 'POST' })
+}
+
 

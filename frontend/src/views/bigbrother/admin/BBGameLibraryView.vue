@@ -9,7 +9,7 @@
     <section class="game-section">
       <h2>内置游戏</h2>
       <div class="game-grid">
-        <div v-for="g in builtinGames" :key="g.id" class="game-card builtin">
+        <div v-for="g in builtinGames" :key="g.id" class="game-card builtin" :class="{ 'is-power-challenge': g.id === 'power-challenge' }">
           <div class="game-icon">{{ g.icon }}</div>
           <div class="game-info">
             <div class="game-name">{{ g.name }}</div>
@@ -21,6 +21,7 @@
             </div>
           </div>
           <div class="game-badge builtin-badge">内置</div>
+          <button v-if="g.id === 'power-challenge'" class="bb-btn-xs btn-edit" style="position:absolute;top:8px;right:36px" @click="goManage">管理题目</button>
         </div>
       </div>
     </section>
@@ -67,12 +68,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   bbGetMinigameList, bbGetCustomGameList, bbDeleteCustomGame, bbToggleCustomGame
 } from '../../../services/bbApi'
 import type { MinigameDef, BBCustomGameDef } from '../../../types/bigbrother'
 import CustomGameEditor from '../../../components/bigbrother/admin/CustomGameEditor.vue'
 
+const router = useRouter()
 const builtinGames = ref<MinigameDef[]>([])
 const customGames = ref<BBCustomGameDef[]>([])
 const showEditor = ref(false)
@@ -116,6 +119,10 @@ async function toggleGame(game: BBCustomGameDef) {
 async function onSave() {
   showEditor.value = false
   await fetchData()
+}
+
+function goManage() {
+  router.push('/games/bigbrother/admin/power-challenge')
 }
 
 onMounted(fetchData)

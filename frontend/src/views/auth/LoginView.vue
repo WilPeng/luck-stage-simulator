@@ -85,12 +85,14 @@ import { ref, computed } from 'vue'
 import { useAuthStore } from '../../stores/authStore'
 import { useBbAuthStore } from '../../stores/bbAuthStore'
 import { useLvAuthStore } from '../../stores/lovevarietyAuthStore'
+import { usePcAuthStore } from '../../stores/pcAuthStore'
 import { useRouter, useRoute } from 'vue-router'
 import { GAMES, getGameById, DEFAULT_GAME_ID } from '../../config/games'
 
 const authStore = useAuthStore()
 const bbAuthStore = useBbAuthStore()
 const lvAuthStore = useLvAuthStore()
+const pcAuthStore = usePcAuthStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -118,6 +120,7 @@ const currentGame = computed(() => {
 
 const isBB = computed(() => selectedGameId.value === 'bigbrother')
 const isLV = computed(() => selectedGameId.value === 'lovevariety')
+const isPC = computed(() => selectedGameId.value === 'powerchallenge')
 
 function loadRecentCodes() {
   try {
@@ -141,8 +144,8 @@ function fillCode(code: string) {
 }
 
 async function onGameChange(gameId: string) {
-  if (gameId === 'bigbrother') {
-    // Big Brother 不设置 authStore 的 currentGameId
+  if (gameId === 'bigbrother' || gameId === 'powerchallenge') {
+    // Big Brother & PowerChallenge don't use generic authStore currentGameId
   } else {
     authStore.setCurrentGameId(gameId)
   }
@@ -151,24 +154,17 @@ async function onGameChange(gameId: string) {
 
 async function handleLogin() {
   const trimmed = loginCode.value.trim()
-  if (!trimmed) {
-    error.value = '请输入登录码'
-    success.value = ''
-    return
-  }
+  if (!trimmed) { error.value = '请输入登录码'; success.value = ''; return }
 
   isLoading.value = true
   error.value = ''
   success.value = ''
 
   try {
-    const store = isBB.value ? bbAuthStore : isLV.value ? lvAuthStore : authStore
+    const store = isBB.value ? bbAuthStore : isLV.value ? lvAuthStore : isPC.value ? pcAuthStore : authStore
     const result = await store.loginUser(trimmed)
 
-    if (!result) {
-      error.value = '登录码不存在，请检查后重新输入'
-      return
-    }
+    if (!result) { error.value = '登录码不存在，请检查后重新输入'; return }
 
     saveRecentCode(trimmed)
     success.value = '登录成功，正在进入...'
