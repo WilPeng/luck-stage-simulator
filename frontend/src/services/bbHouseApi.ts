@@ -89,3 +89,33 @@ export async function bbAdminBroadcast(data: { type: 'notice' | 'invite'; roomId
     body: JSON.stringify(data)
   })
 }
+
+// ===== 睡眠 / 洗澡 / 状态 =====
+export async function bbGetMyState() {
+  return doRequest<any>('/house/my-state')
+}
+
+export async function bbSleep() {
+  return doRequest<any>('/house/sleep', { method: 'POST', body: JSON.stringify({}) })
+}
+
+export async function bbSleepWake() {
+  return doRequest<any>('/house/sleep/wake', { method: 'POST', body: JSON.stringify({}) })
+}
+
+export async function bbSleepApprove(playerId: string) {
+  return doRequest<any>('/house/sleep/approve', { method: 'POST', body: JSON.stringify({ playerId }) })
+}
+
+export async function bbShower() {
+  return doRequest<any>('/house/shower', { method: 'POST', body: JSON.stringify({}) })
+}
+
+// 管理员：房间人数/床位、赛季时间
+export async function bbAdminSetRoom(data: { roomId: string; capacity?: number | null; bedLimit?: number | null; canSleep?: boolean }) {
+  return doRequest<any>('/house/admin/room', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export async function bbAdminSetSeason(data: { autoSleepHour?: number; hohSleepAllowed?: boolean }) {
+  return doRequest<any>('/house/admin/season', { method: 'POST', body: JSON.stringify(data) })
+}

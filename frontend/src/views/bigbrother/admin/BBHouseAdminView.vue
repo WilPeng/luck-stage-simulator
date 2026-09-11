@@ -52,6 +52,34 @@
       </div>
     </div>
 
+    <!-- 房间人数/床位/睡觉 & 自动睡眠时间 -->
+    <div class="control-card">
+      <div class="control-header">
+        <h3>🛏️ 房间人数 / 床位 / 睡觉</h3>
+        <div class="sleep-setting">
+          <label>自动睡眠时间</label>
+          <input type="number" min="0" max="23" v-model.number="autoSleepHour" class="bb-input" style="max-width: 80px;" />
+          <span>点</span>
+          <button class="bb-btn" @click="saveSeason">保存</button>
+        </div>
+      </div>
+      <div class="room-editor">
+        <div v-for="r in allRooms" :key="r.id" class="room-edit-row">
+          <span class="re-name">{{ r.icon }} {{ r.name }}</span>
+          <label class="re-field">人数
+            <input type="number" min="0" v-model.number="roomEdits[r.id].capacity" class="bb-input re-input" />
+          </label>
+          <label class="re-field">床位
+            <input type="number" min="0" v-model.number="roomEdits[r.id].bedLimit" class="bb-input re-input" />
+          </label>
+          <label class="re-field re-check">
+            <input type="checkbox" v-model="roomEdits[r.id].canSleep" /> 可睡觉
+          </label>
+          <button class="bb-btn bb-btn-xs" @click="saveRoom(r.id)">保存</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 玩家位置总览 -->
     <div class="locations-section">
       <h3>📍 玩家位置总览</h3>
@@ -83,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import {
   bbGetHouseRooms,
   bbGetHouseMap,
@@ -91,8 +119,11 @@ import {
   bbAdminSetDoor,
   bbAdminEvictBackyard,
   bbAdminMovePlayer,
-  bbAdminBroadcast
+  bbAdminBroadcast,
+  bbAdminSetRoom,
+  bbAdminSetSeason
 } from '../../../services/bbHouseApi'
+import { bbGetSeason } from '../../../services/bbApi'
 import type { BBHouseRoomWithCount } from '../../../types/bigbrother'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 
@@ -105,6 +136,34 @@ const allRooms = ref<BBHouseRoomWithCount[]>([])
 const broadcastType = ref<'notice' | 'invite'>('notice')
 const broadcastRoom = ref('')
 const broadcastMessage = ref('')
+
+const autoSleepHour = ref(18)
+const roomEdits = reactive<Record<string, { capacity: number | null; bedLimit: number | null; canSleep: boolean }>>({})
+
+async function saveSeason() {
+  try {
+    await bbAdminSetSeason({ autoSleepHour: autoSleepHour.value })
+    alert('已保存')
+  } catch (e: any) {
+    alert(e?.message || '保存失败')
+  }
+}
+
+async function saveRoom(roomId: string) {
+  const e = roomEdits[roomId]
+  if (!e) return
+  try {
+    await bbAdminSetRoom({
+      roomId,
+      capacity: e.capacity === null || e.capacity === ('' as any) ? null : Number(e.capacity),
+      bedLimit: e.bedLimit === null || e.bedLimit === ('' as any) ? null : Number(e.bedLimit),
+      canSleep: e.canSleep
+    })
+    alert('已保存')
+  } catch (err: any) {
+    alert(err?.message || '保存失败')
+  }
+}
 
 async function sendBroadcast() {
   if (broadcastType.value === 'invite' && !broadcastRoom.value) return
@@ -146,6 +205,22 @@ async function loadData() {
     locations.value = locRes || {}
     // 获取后院门状态
     backyardDoorOpen.value = mapRes?.backyardDoorOpen ?? true
+
+    // 初始化房间编辑表单
+    for (const r of allRooms.value) {
+      if (!roomEdits[r.id]) {
+        roomEdits[r.id] = {
+          capacity: (r as any).capacity ?? null,
+          bedLimit: (r as any).bedLimit ?? null,
+          canSleep: !!(r as any).canSleep
+        }
+      }
+    }
+    // 自动睡眠时间
+    try {
+      const s = await bbGetSeason()
+      if (s) autoSleepHour.value = (s as any).autoSleepHour ?? 18
+    } catch {}
   } catch (e) {
     console.error(e)
   }
@@ -230,6 +305,18 @@ async function handleForceMove(playerId: string, targetRoomId: string) {
 .bb-input { flex: 1; min-width: 180px; }
 .bb-select:focus, .bb-input:focus { border-color: #00ff88; }
 .bb-btn-primary { background: #00ff8822; border-color: #00ff88; }
+
+.sleep-setting { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #aaa; }
+.sleep-setting label { color: #888; }
+.room-editor { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.room-edit-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  font-size: 13px; color: #ccc; padding: 6px 0; border-bottom: 1px solid #ffffff08;
+}
+.re-name { min-width: 110px; }
+.re-field { display: flex; align-items: center; gap: 4px; color: #888; font-size: 12px; }
+.re-input { width: 70px; }
+.re-check { gap: 4px; }
 
 .bb-btn {
   background: transparent;

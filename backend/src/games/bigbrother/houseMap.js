@@ -4,19 +4,20 @@
  */
 
 const HOUSE_ROOMS = [
-  { id: 'living_room',   name: '客厅',       nameEn: 'Living Room',   icon: '🛋️', type: 'common',   capacity: null, accessRule: 'public' },
-  { id: 'kitchen',       name: '厨房',       nameEn: 'Kitchen',       icon: '🍳', type: 'common',   capacity: null, accessRule: 'public' },
-  { id: 'dining_room',   name: '餐厅',       nameEn: 'Dining Room',   icon: '🍽️', type: 'common',   capacity: null, accessRule: 'public' },
-  { id: 'gym',           name: '健身房',      nameEn: 'Gym',           icon: '🏋️', type: 'common',   capacity: null, accessRule: 'public' },
-  { id: 'bathroom',      name: '浴室',       nameEn: 'Bathroom',      icon: '🚿', type: 'common',   capacity: null, accessRule: 'public' },
-  { id: 'storage_room',  name: '储物间',      nameEn: 'Storage Room',  icon: '📦', type: 'common',   capacity: null, accessRule: 'public' },
-  { id: 'bedroom_a',     name: '卧室 A',     nameEn: 'Bedroom A',     icon: '🛏️', type: 'lodging',  capacity: null, accessRule: 'public' },
-  { id: 'bedroom_b',     name: '卧室 B',     nameEn: 'Bedroom B',     icon: '🛏️', type: 'lodging',  capacity: null, accessRule: 'public' },
-  { id: 'have_not_room', name: '贫民屋',      nameEn: 'Have-Not Room', icon: '🥶', type: 'lodging',  capacity: null, accessRule: 'public' },
-  { id: 'backyard',      name: '后院',       nameEn: 'Backyard',      icon: '🌴', type: 'outdoor',  capacity: null, accessRule: 'public' },
-  { id: 'hoh_door',      name: 'HOH 房门口',  nameEn: 'HOH Door',      icon: '🚪', type: 'common',   capacity: null, accessRule: 'public' },
-  { id: 'hoh_room',      name: 'HOH 房',     nameEn: 'HOH Room',      icon: '👑', type: 'special',  capacity: 6,    accessRule: 'hoh_or_invited' },
-  { id: 'diary_room',    name: 'Diary Room', nameEn: 'Diary Room',    icon: '🎤', type: 'hidden',   capacity: 1,    accessRule: 'single' },
+  { id: 'living_room',   name: '客厅',       nameEn: 'Living Room',   icon: '🛋️', type: 'common',   capacity: 16,   bedLimit: null, canSleep: true,  accessRule: 'public' },
+  { id: 'kitchen',       name: '厨房',       nameEn: 'Kitchen',       icon: '🍳', type: 'common',   capacity: 8,    bedLimit: null, canSleep: false, accessRule: 'public' },
+  { id: 'dining_room',   name: '餐厅',       nameEn: 'Dining Room',   icon: '🍽️', type: 'common',   capacity: 12,   bedLimit: null, canSleep: false, accessRule: 'public' },
+  { id: 'gym',           name: '健身房',      nameEn: 'Gym',           icon: '🏋️', type: 'common',   capacity: 6,    bedLimit: null, canSleep: false, accessRule: 'public' },
+  { id: 'washroom',      name: '洗漱间',      nameEn: 'Washroom',      icon: '🧼', type: 'common',   capacity: 4,    bedLimit: null, canSleep: false, accessRule: 'public' },
+  { id: 'bathroom',      name: '浴室',       nameEn: 'Bathroom',      icon: '🚿', type: 'common',   capacity: 2,    bedLimit: null, canSleep: false, accessRule: 'public' },
+  { id: 'storage_room',  name: '储物间',      nameEn: 'Storage Room',  icon: '📦', type: 'common',   capacity: 4,    bedLimit: null, canSleep: false, accessRule: 'public' },
+  { id: 'bedroom_a',     name: '卧室 A',     nameEn: 'Bedroom A',     icon: '🛏️', type: 'lodging',  capacity: 6,    bedLimit: 6,    canSleep: true,  accessRule: 'public' },
+  { id: 'bedroom_b',     name: '卧室 B',     nameEn: 'Bedroom B',     icon: '🛏️', type: 'lodging',  capacity: 6,    bedLimit: 6,    canSleep: true,  accessRule: 'public' },
+  { id: 'have_not_room', name: '贫民屋',      nameEn: 'Have-Not Room', icon: '🥶', type: 'lodging',  capacity: 4,    bedLimit: 4,    canSleep: true,  accessRule: 'public' },
+  { id: 'backyard',      name: '后院',       nameEn: 'Backyard',      icon: '🌴', type: 'outdoor',  capacity: 20,   bedLimit: null, canSleep: false, accessRule: 'public' },
+  { id: 'hoh_door',      name: 'HOH 房门口',  nameEn: 'HOH Door',      icon: '🚪', type: 'common',   capacity: 8,    bedLimit: null, canSleep: false, accessRule: 'public' },
+  { id: 'hoh_room',      name: 'HOH 房',     nameEn: 'HOH Room',      icon: '👑', type: 'special',  capacity: 6,    bedLimit: 6,    canSleep: true,  accessRule: 'public' },
+  { id: 'diary_room',    name: 'Diary Room', nameEn: 'Diary Room',    icon: '🎤', type: 'hidden',   capacity: 1,    bedLimit: null, canSleep: false, accessRule: 'single' },
 ]
 
 // 通道：双向只需存一条
@@ -25,7 +26,8 @@ const HOUSE_PASSAGES = [
   { id: 'pass_living_bedroom_b',   from: 'living_room', to: 'bedroom_b',     type: 'normal' },
   { id: 'pass_living_kitchen',     from: 'living_room', to: 'kitchen',       type: 'normal' },
   { id: 'pass_living_gym',         from: 'living_room', to: 'gym',           type: 'normal' },
-  { id: 'pass_living_bathroom',    from: 'living_room', to: 'bathroom',      type: 'normal' },
+  { id: 'pass_living_washroom',    from: 'living_room', to: 'washroom',      type: 'normal' },
+  { id: 'pass_washroom_bathroom',  from: 'washroom',    to: 'bathroom',      type: 'normal' },
   { id: 'pass_living_storage',     from: 'living_room', to: 'storage_room',  type: 'normal' },
   { id: 'pass_living_havenot',     from: 'living_room', to: 'have_not_room', type: 'normal' },
   { id: 'pass_living_hohdoor',     from: 'living_room', to: 'hoh_door',      type: 'normal' },
@@ -94,8 +96,11 @@ async function seedHouseData({ BBHouseRoom, BBHousePassage, BBHouseDoor }) {
       existing.nameEn = r.nameEn
       existing.icon = r.icon
       existing.type = r.type
-      existing.capacity = r.capacity
       existing.accessRule = r.accessRule
+      existing.bedLimit = r.bedLimit
+      existing.canSleep = r.canSleep
+      // 容量：若旧值缺失则补默认；不覆盖管理员已调整的值
+      if (existing.capacity == null) existing.capacity = r.capacity
       await existing.save()
     } else {
       await new BBHouseRoom({ ...r, gameId }).save()

@@ -31,6 +31,11 @@
       <button v-if="canControlHohDoor" class="bb-btn bb-btn-sm" @click="toggleHohDoor(true)">开门</button>
     </div>
 
+    <!-- 洗澡提示 -->
+    <div v-if="isShowering && !isSleeping" class="shower-banner">
+      🚿 洗澡中（{{ showerSecondsLeft }}s 后自动结束，只能看到浴室消息）
+    </div>
+
     <!-- 移动中提示 -->
     <div v-if="moving" class="moving-banner">
       <span class="moving-spinner"></span>
@@ -67,8 +72,27 @@
           <div v-if="doorbellSentNotice" class="doorbell-sent">{{ doorbellSentNotice }}</div>
         </div>
 
-        <!-- HOH 房间特殊功能 -->
-        <div v-if="currentRoomId === 'hoh_room' && isHoh" class="hoh-panel">
+        <!-- 睡觉 / 洗澡 -->
+        <div v-if="canSleepHere || canShower" class="action-panel">
+          <button v-if="canSleepHere" class="bb-btn bb-btn-sm" @click="doSleep">😴 睡觉</button>
+          <button v-if="canShower" class="bb-btn bb-btn-sm" @click="doShower">🚿 洗澡</button>
+          <span v-if="canShower && myState.lastShowerDate === myState.today" class="action-hint">今天已洗过澡</span>
+        </div>
+
+        <!-- 洗漱间：查看浴室内有谁 -->
+        <div v-if="currentRoomId === 'washroom'" class="washroom-panel">
+          <div class="washroom-title">🧼 洗漱间 · 浴室内</div>
+          <div v-if="washroomBathroomPlayers.length" class="washroom-list">
+            <div v-for="p in washroomBathroomPlayers" :key="p.playerId" class="washroom-player">
+              <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
+              <span>{{ p.playerName }}</span>
+            </div>
+          </div>
+          <div v-else class="washroom-empty">浴室目前无人</div>
+        </div>
+
+        <!-- HOH 房间：监控（房内所有人可见）+ 邀请/睡眠同意（仅 HOH） -->
+        <div v-if="showMonitor" class="hoh-panel">
           <div class="hoh-panel-title">👑 House Monitor</div>
           <div v-if="hohMonitor.length" class="monitor-grid">
             <div v-for="r in hohMonitor" :key="r.roomId" class="monitor-item">
@@ -78,23 +102,35 @@
             </div>
           </div>
 
-          <div class="hoh-divider"></div>
-          <div class="hoh-panel-title">📨 邀请进入 HOH Room</div>
-          <div v-if="declineNotice" class="invite-notice">{{ declineNotice }}</div>
-          <div class="invite-row">
-            <select v-model="inviteTargetId" class="invite-select">
-              <option value="">选择玩家…</option>
-              <option v-for="p in inviteCandidates" :key="p.id" :value="p.id">{{ p.name }}</option>
-            </select>
-            <button class="bb-btn bb-btn-sm" :disabled="!inviteTargetId" @click="handleInvite">邀请</button>
-          </div>
-          <div v-if="pendingInvites.length" class="pending-list">
-            <div v-for="pid in pendingInvites" :key="pid" class="pending-item">
-              <span>⏳ {{ playerName(pid) }} 等待回应</span>
-              <button class="bb-btn bb-btn-xs" @click="handleCancelInvite(pid)">撤销</button>
+          <template v-if="isHoh">
+            <div class="hoh-divider"></div>
+            <div class="hoh-panel-title">📨 邀请进入 HOH Room</div>
+            <div v-if="declineNotice" class="invite-notice">{{ declineNotice }}</div>
+            <div class="invite-row">
+              <select v-model="inviteTargetId" class="invite-select">
+                <option value="">选择玩家…</option>
+                <option v-for="p in inviteCandidates" :key="p.id" :value="p.id">{{ p.name }}</option>
+              </select>
+              <button class="bb-btn bb-btn-sm" :disabled="!inviteTargetId" @click="handleInvite">邀请</button>
             </div>
-          </div>
-          <div v-if="cancelNotice" class="invite-notice">{{ cancelNotice }}</div>
+            <div v-if="pendingInvites.length" class="pending-list">
+              <div v-for="pid in pendingInvites" :key="pid" class="pending-item">
+                <span>⏳ {{ playerName(pid) }} 等待回应</span>
+                <button class="bb-btn bb-btn-xs" @click="handleCancelInvite(pid)">撤销</button>
+              </div>
+            </div>
+            <div v-if="cancelNotice" class="invite-notice">{{ cancelNotice }}</div>
+
+            <div class="hoh-divider"></div>
+            <div class="hoh-panel-title">😴 允许在 HOH 房睡觉</div>
+            <div class="approve-list">
+              <div v-for="p in approveCandidates" :key="p.id" class="approve-row">
+                <span>{{ p.name }}</span>
+                <button class="bb-btn bb-btn-xs" @click="approveSleep(p.id)">同意</button>
+              </div>
+              <div v-if="!approveCandidates.length" class="approve-empty">暂无可同意的玩家</div>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -112,6 +148,19 @@
           @send="handleSend"
           @load-more="handleLoadMore"
         />
+      </div>
+    </div>
+
+    <!-- 睡眠覆盖 -->
+    <div v-if="isSleeping" class="state-overlay">
+      <div class="state-card">
+        <div class="state-icon">😴</div>
+        <div class="state-title">睡眠中</div>
+        <div class="state-desc">你在睡觉，无法接收任何消息</div>
+        <div v-if="!wakeReady" class="state-timer">可醒来倒计时：{{ sleepCountdown }}</div>
+        <button class="bb-btn" :disabled="!wakeReady" @click="doWake">
+          {{ wakeReady ? '醒来' : '还未到时间' }}
+        </button>
       </div>
     </div>
 
@@ -134,14 +183,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
 import { useHouseSocket, type HouseMessage, type HousePlayer } from '../../../composables/useHouseSocket'
-import { bbGetMyLocation, bbGetReachableRooms, bbMoveToRoom, bbGetHouseRooms } from '../../../services/bbHouseApi'
+import { bbGetMyLocation, bbGetReachableRooms, bbMoveToRoom, bbGetHouseRooms, bbGetRoomPlayers, bbGetMyState, bbSleep, bbSleepWake, bbSleepApprove, bbShower } from '../../../services/bbHouseApi'
 import { bbGetActiveHouseguests, bbGetCurrentHoh } from '../../../services/bbApi'
 import HouseMap from '../../../components/bigbrother/house/HouseMap.vue'
 import RoomChat from '../../../components/bigbrother/house/RoomChat.vue'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBHouseRoomWithCount, BBHohMonitorRoom } from '../../../types/bigbrother'
 
 const authStore = useBbAuthStore()
@@ -166,6 +216,15 @@ const inviteData = ref<{ hohName: string; hohId: string; roomId: string } | null
 const cancelNotice = ref('')
 const broadcastData = ref<{ type: string; roomId: string | null; roomName?: string; roomIcon?: string; message: string; from: string } | null>(null)
 
+// 睡眠 / 洗澡
+const myState = ref<any>({
+  isSleeping: false, wakeAt: null, sleepStartedAt: null,
+  isShowering: false, showerStartedAt: null, lastShowerDate: null,
+  autoSleepHour: 18, today: '', hohSleepAllowed: true
+})
+const nowTs = ref(Date.now())
+const washroomBathroomPlayers = ref<any[]>([])
+
 // HOH 相关：周 HOH（BBHohRecord）> 终局 FHOH 回退
 const currentHohId = ref<string | null>(null)
 const myId = computed(() => authStore.currentUser?.id || '')
@@ -188,6 +247,29 @@ const canControlHohDoor = computed(() =>
 // 门状态可见范围
 const canSeeBackyardDoor = computed(() => currentRoomId.value === 'living_room' || currentRoomId.value === 'backyard')
 const canSeeHohDoor = computed(() => currentRoomId.value === 'hoh_room' || currentRoomId.value === 'hoh_door')
+
+// 睡眠 / 洗澡
+const isSleeping = computed(() => !!myState.value.isSleeping)
+const isShowering = computed(() => !!myState.value.isShowering)
+const canSleepHere = computed(() => !!currentRoomDef.value?.canSleep)
+const wakeReady = computed(() => myState.value.wakeAt ? nowTs.value >= new Date(myState.value.wakeAt).getTime() : false)
+const sleepCountdown = computed(() => {
+  if (!myState.value.wakeAt) return ''
+  const ms = Math.max(0, new Date(myState.value.wakeAt).getTime() - nowTs.value)
+  const h = Math.floor(ms / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  return `${h}小时${m}分`
+})
+const canShower = computed(() =>
+  currentRoomId.value === 'bathroom' && !isShowering.value && !isSleeping.value &&
+  myState.value.lastShowerDate !== myState.value.today
+)
+const showerSecondsLeft = computed(() => {
+  if (!myState.value.showerStartedAt) return 0
+  return Math.max(0, Math.ceil((new Date(myState.value.showerStartedAt).getTime() + 10 * 60 * 1000 - nowTs.value) / 1000))
+})
+const showMonitor = computed(() => currentRoomId.value === 'hoh_room')
+const approveCandidates = computed(() => activePlayers.value.filter(p => p.id !== myId.value))
 
 const inviteCandidates = computed(() => {
   const inRoom = new Set(presencePlayers.value.map(p => p.playerId))
@@ -267,6 +349,8 @@ house.onDoorUpdate.value = (data) => {
   } else if (data.doorId === 'hoh_door') {
     hohDoorOpen.value = data.isOpen
   }
+  // 门开关影响可前往房间，刷新可达列表
+  loadData()
 }
 
 house.onHohDoorbell.value = (data) => {
@@ -314,6 +398,10 @@ house.onBroadcast.value = (data) => {
   broadcastData.value = data
 }
 
+house.onSleepForced.value = (data) => {
+  myState.value = { ...myState.value, isSleeping: true, wakeAt: data.wakeAt }
+}
+
 house.onForceMoved.value = (data) => {
   currentRoomId.value = data.targetRoomId
   house.currentRoomId.value = data.targetRoomId
@@ -343,6 +431,19 @@ async function loadData() {
     hohDoorOpen.value = reachableRes?.hohDoorOpen ?? false
     house.currentRoomId.value = currentRoomId.value
 
+    // 睡眠/洗澡状态
+    try { myState.value = await bbGetMyState() } catch {}
+
+    // 洗漱间：查看浴室内有谁
+    if (currentRoomId.value === 'washroom') {
+      try {
+        const r = await bbGetRoomPlayers('washroom')
+        washroomBathroomPlayers.value = r?.bathroomPlayers || []
+      } catch { washroomBathroomPlayers.value = [] }
+    } else {
+      washroomBathroomPlayers.value = []
+    }
+
     // 解析当前 HOH（周 HOH > 终局 FHOH 回退）
     const hohRes = await bbGetCurrentHoh()
     if (hohRes && (hohRes as any).winnerId) {
@@ -353,8 +454,8 @@ async function loadData() {
       currentHohId.value = null
     }
 
-    // 仅 HOH 且身处 HOH 房时加载监控
-    if (isHoh.value && currentRoomId.value === 'hoh_room') {
+    // 身处 HOH 房即可查看监控（含普通房客）
+    if (currentRoomId.value === 'hoh_room') {
       try {
         const monitorRes = await (await import('../../../services/bbHouseApi')).bbGetHohMonitor()
         hohMonitor.value = monitorRes || []
@@ -447,15 +548,35 @@ function handleCancelInvite(pid: string) {
   house.cancelInvite(pid)
 }
 
+async function doSleep() {
+  try { await bbSleep(); await loadData() } catch (e: any) { alert(e?.message || '无法睡觉') }
+}
+async function doWake() {
+  try { await bbSleepWake(); await loadData() } catch (e: any) { alert(e?.message || '无法醒来') }
+}
+async function doShower() {
+  try { await bbShower(); await loadData() } catch (e: any) { alert(e?.message || '无法洗澡') }
+}
+async function approveSleep(pid: string) {
+  try { await bbSleepApprove(pid) } catch (e: any) { alert(e?.message || '操作失败') }
+}
+
 async function loadActivePlayers() {
   try {
     activePlayers.value = (await bbGetActiveHouseguests()) || []
   } catch {}
 }
 
+let stateTicker: ReturnType<typeof setInterval> | null = null
+
 onMounted(() => {
   loadData()
   loadActivePlayers()
+  stateTicker = setInterval(() => { nowTs.value = Date.now() }, 1000)
+})
+
+onUnmounted(() => {
+  if (stateTicker) { clearInterval(stateTicker); stateTicker = null }
 })
 
 // 监听 season 变化以更新 backyardDoorOpen
@@ -583,6 +704,39 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 .broadcast-room { color: #00ff88; font-size: 13px; margin-bottom: 8px; }
 .broadcast-from { color: #777; font-size: 12px; margin-bottom: 16px; }
 .broadcast-actions { display: flex; gap: 10px; justify-content: center; }
+
+.action-panel {
+  display: flex; gap: 10px; align-items: center;
+  background: #0f0f2e; border: 1px solid #00ff8833; border-radius: 10px; padding: 12px 14px;
+}
+.action-hint { font-size: 11px; color: #888; }
+
+.washroom-panel { background: #0f0f2e; border: 1px solid #4488ff33; border-radius: 10px; padding: 14px; }
+.washroom-title { font-size: 14px; color: #7fb0ff; font-weight: 600; margin-bottom: 10px; }
+.washroom-list { display: flex; flex-direction: column; gap: 8px; }
+.washroom-player { display: flex; align-items: center; gap: 8px; color: #ccc; font-size: 13px; }
+.washroom-empty { color: #666; font-size: 12px; }
+
+.approve-list { display: flex; flex-direction: column; gap: 6px; }
+.approve-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #ccc; }
+.approve-empty { color: #666; font-size: 12px; }
+
+.shower-banner {
+  padding: 10px 16px; margin-bottom: 16px;
+  background: #4488ff18; border: 1px solid #4488ff55; border-radius: 8px;
+  color: #7fb0ff; font-size: 13px;
+}
+
+.state-overlay {
+  position: fixed; inset: 0; z-index: 1800;
+  background: rgba(4, 6, 20, 0.92);
+  display: flex; align-items: center; justify-content: center;
+}
+.state-card { text-align: center; color: #e0e0e0; }
+.state-icon { font-size: 72px; }
+.state-title { font-size: 24px; font-weight: 700; margin: 12px 0 6px; color: #00ff88; }
+.state-desc { color: #888; margin-bottom: 12px; }
+.state-timer { color: #ffaa00; margin-bottom: 16px; }
 .moving-spinner {
   width: 16px;
   height: 16px;

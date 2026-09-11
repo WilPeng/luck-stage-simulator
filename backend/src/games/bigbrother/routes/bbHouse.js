@@ -45,11 +45,10 @@ router.get('/rooms', auth, async (req, res) => {
   try {
     const rooms = await BBHouseRoom.find({ gameId: 'bigbrother' })
     const isAdmin = req.user.role === 'admin'
-    const hoh = await getCurrentHoh()
-    // HOH 仅在自己身处 HOH 房时才能看到人数（监控）
+    // 身处 HOH 房的房客（含 HOH）可见人数
     const loc = await BBPlayerLocation.findOne({ playerId: req.user.userId, gameId: 'bigbrother' })
-    const hohInRoom = !!(hoh && hoh.id === req.user.userId && loc && loc.currentRoomId === 'hoh_room')
-    const showCounts = isAdmin || hohInRoom
+    const inHohRoom = !!(loc && loc.currentRoomId === 'hoh_room')
+    const showCounts = isAdmin || inHohRoom
 
     const result = []
     for (const room of rooms) {
@@ -107,7 +106,15 @@ router.get('/rooms/:roomId', auth, async (req, res) => {
       data: {
         room: room.toObject(),
         count,
-        players
+        players,
+        bathroomPlayers: await (async () => {
+          if (roomId !== 'washroom') return null
+          const locs = await BBPlayerLocation.find({ currentRoomId: 'bathroom', gameId: 'bigbrother' })
+          const guests = await BBHouseguest.find({ gameId: 'bigbrother' })
+          const av = {}
+          guests.forEach(g => { av[g.id] = g.avatar || null })
+          return locs.map(l => ({ playerId: l.playerId, playerName: l.playerName, avatar: av[l.playerId] || null }))
+        })()
       }
     })
   } catch (e) {
@@ -172,6 +179,15 @@ router.get('/reachable', auth, async (req, res) => {
             if (count >= 1) {
               canEnter = false
               denyReason = '已有人在内'
+            }
+          }
+
+          // 人数上限
+          if (canEnter && room.capacity) {
+            const cnt = await BBPlayerLocation.countDocuments({ currentRoomId: id, gameId: 'bigbrother' })
+            if (cnt >= room.capacity) {
+              canEnter = false
+              denyReason = '房间已满'
             }
           }
 
@@ -379,18 +395,13 @@ router.post('/accept-invite', auth, async (req, res) => {
 
 // ===== HOH API =====
 
-// GET /hoh-monitor - HOH 监控（仅人数）
+// GET /hoh-monitor - 监控（仅人数）：身处 HOH 房的房客或管理员可看
 router.get('/hoh-monitor', auth, async (req, res) => {
   try {
-    const hoh = await getCurrentHoh()
     const isAdmin = req.user.role === 'admin'
-    // HOH 必须身处 HOH 房才能查看监控
-    let inHohRoom = false
-    if (hoh && hoh.id === req.user.userId) {
-      const myLoc = await BBPlayerLocation.findOne({ playerId: req.user.userId, gameId: 'bigbrother' })
-      inHohRoom = !!(myLoc && myLoc.currentRoomId === 'hoh_room')
-    }
-    if (!isAdmin && !(hoh && hoh.id === req.user.userId && inHohRoom)) {
+    const myLoc = await BBPlayerLocation.findOne({ playerId: req.user.userId, gameId: 'bigbrother' })
+    const inHohRoom = !!(myLoc && myLoc.currentRoomId === 'hoh_room')
+    if (!isAdmin && !inHohRoom) {
       return res.status(403).json({ success: false, error: '仅身处 HOH 房时才能查看监控' })
     }
 
@@ -667,6 +678,191 @@ router.post('/admin/init-locations', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '初始化位置失败' })
+  }
+})
+
+// ===== 睡眠 / 洗澡 / 状态 =====
+
+function todayStr(d = new Date()) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+// GET /my-state - 当前玩家的睡眠/洗澡状态
+router.get('/my-state', auth, async (req, res) => {
+  try {
+    const g = await BBHouseguest.findOne({ id: req.user.userId, gameId: 'bigbrother' })
+    const season = await getCurrentSeason()
+    res.json({
+      success: true,
+      data: {
+        isSleeping: g?.isSleeping || false,
+        sleepStartedAt: g?.sleepStartedAt || null,
+        wakeAt: g?.wakeAt || null,
+        lastSleepDate: g?.lastSleepDate || null,
+        hohSleepApproved: g?.hohSleepApproved || false,
+        isShowering: g?.isShowering || false,
+        showerStartedAt: g?.showerStartedAt || null,
+        lastShowerDate: g?.lastShowerDate || null,
+        today: todayStr(),
+        autoSleepHour: season?.autoSleepHour ?? 18,
+        hohSleepAllowed: season?.hohSleepAllowed ?? true,
+        now: Date.now()
+      }
+    })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取状态失败' })
+  }
+})
+
+// POST /sleep - 开始睡觉
+router.post('/sleep', auth, async (req, res) => {
+  try {
+    const gameId = 'bigbrother'
+    const g = await BBHouseguest.findOne({ id: req.user.userId, gameId })
+    if (!g || g.status !== 'active') return res.status(403).json({ success: false, error: '非活跃玩家' })
+    if (g.isSleeping) return res.status(400).json({ success: false, error: '你已在睡眠中' })
+    if (g.isShowering) return res.status(400).json({ success: false, error: '洗澡中无法睡觉' })
+
+    const loc = await BBPlayerLocation.findOne({ playerId: g.id, gameId })
+    const room = await BBHouseRoom.findOne({ id: loc?.currentRoomId, gameId })
+    if (!room || !room.canSleep) return res.status(400).json({ success: false, error: '该房间不能睡觉' })
+
+    const hoh = await getCurrentHoh()
+    const isHoh = !!(hoh && hoh.id === g.id)
+    const season = await getCurrentSeason()
+
+    if (g.isHaveNot && room.id !== 'have_not_room') {
+      return res.status(403).json({ success: false, error: '贫民只能在贫民屋睡觉' })
+    }
+    if (room.id === 'hoh_room' && !isHoh && !g.isHaveNot) {
+      if (season && season.hohSleepAllowed === false) {
+        return res.status(403).json({ success: false, error: '本周 HOH 房睡觉已关闭' })
+      }
+      if (!g.hohSleepApproved) {
+        return res.status(403).json({ success: false, error: '需要 HOH 同意才能在 HOH 房睡觉' })
+      }
+    }
+    if (room.bedLimit) {
+      const sleepingCount = await BBHouseguest.countDocuments({ gameId, isSleeping: true, currentRoomId: room.id })
+      if (sleepingCount >= room.bedLimit) {
+        return res.status(400).json({ success: false, error: '床位已满' })
+      }
+    }
+
+    g.isSleeping = true
+    g.sleepStartedAt = new Date().toISOString()
+    g.wakeAt = new Date(Date.now() + 6 * 3600 * 1000).toISOString()
+    g.lastSleepDate = todayStr()
+    await g.save()
+    res.json({ success: true, data: { wakeAt: g.wakeAt } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '睡觉失败' })
+  }
+})
+
+// POST /sleep/wake - 醒来（必须满 6 小时）
+router.post('/sleep/wake', auth, async (req, res) => {
+  try {
+    const g = await BBHouseguest.findOne({ id: req.user.userId, gameId: 'bigbrother' })
+    if (!g || !g.isSleeping) return res.status(400).json({ success: false, error: '你不在睡眠中' })
+    if (g.wakeAt && Date.now() < new Date(g.wakeAt).getTime()) {
+      return res.status(400).json({ success: false, error: '还没到可以醒来的时间' })
+    }
+    g.isSleeping = false
+    await g.save()
+    res.json({ success: true })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '醒来失败' })
+  }
+})
+
+// POST /sleep/approve - HOH 同意某玩家在 HOH 房睡觉
+router.post('/sleep/approve', auth, async (req, res) => {
+  try {
+    const { playerId } = req.body || {}
+    if (!playerId) return res.status(400).json({ success: false, error: '缺少玩家' })
+    const hoh = await getCurrentHoh()
+    const isHoh = !!(hoh && hoh.id === req.user.userId)
+    if (!isHoh && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: '仅 HOH 可同意' })
+    }
+    const target = await BBHouseguest.findOne({ id: playerId, gameId: 'bigbrother' })
+    if (!target) return res.status(404).json({ success: false, error: '玩家不存在' })
+    target.hohSleepApproved = true
+    await target.save()
+    res.json({ success: true, data: { playerId, playerName: target.name } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '操作失败' })
+  }
+})
+
+// POST /shower - 开始洗澡（仅浴室，每天一次）
+router.post('/shower', auth, async (req, res) => {
+  try {
+    const gameId = 'bigbrother'
+    const g = await BBHouseguest.findOne({ id: req.user.userId, gameId })
+    if (!g || g.status !== 'active') return res.status(403).json({ success: false, error: '非活跃玩家' })
+    if (g.isSleeping) return res.status(400).json({ success: false, error: '睡眠中无法洗澡' })
+    if (g.isShowering) return res.status(400).json({ success: false, error: '你已在洗澡' })
+    const loc = await BBPlayerLocation.findOne({ playerId: g.id, gameId })
+    if (!loc || loc.currentRoomId !== 'bathroom') {
+      return res.status(400).json({ success: false, error: '只能在浴室洗澡' })
+    }
+    if (g.lastShowerDate === todayStr()) {
+      return res.status(400).json({ success: false, error: '今天已经洗过澡了' })
+    }
+    g.isShowering = true
+    g.showerStartedAt = new Date().toISOString()
+    g.lastShowerDate = todayStr()
+    await g.save()
+    res.json({ success: true, data: { showerStartedAt: g.showerStartedAt } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '洗澡失败' })
+  }
+})
+
+// ===== 管理员：房间人数/床位、赛季时间 =====
+
+// POST /admin/room - 调整房间人数上限 / 床位 / 是否可睡觉
+router.post('/admin/room', auth, requireAdmin, async (req, res) => {
+  try {
+    const { roomId, capacity, bedLimit, canSleep } = req.body || {}
+    const room = await BBHouseRoom.findOne({ id: roomId, gameId: 'bigbrother' })
+    if (!room) return res.status(404).json({ success: false, error: '房间不存在' })
+    if (capacity !== undefined) room.capacity = (capacity === '' || capacity === null) ? null : Number(capacity)
+    if (bedLimit !== undefined) room.bedLimit = (bedLimit === '' || bedLimit === null) ? null : Number(bedLimit)
+    if (canSleep !== undefined) room.canSleep = !!canSleep
+    room.updatedAt = new Date().toISOString()
+    await room.save()
+    res.json({ success: true, data: room.toObject() })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '调整失败' })
+  }
+})
+
+// POST /admin/season - 调整自动睡眠时间 / HOH 房睡觉开关
+router.post('/admin/season', auth, requireAdmin, async (req, res) => {
+  try {
+    const { autoSleepHour, hohSleepAllowed } = req.body || {}
+    const season = await getCurrentSeason()
+    if (!season) return res.status(404).json({ success: false, error: '赛季不存在' })
+    if (autoSleepHour !== undefined) season.autoSleepHour = Number(autoSleepHour)
+    if (hohSleepAllowed !== undefined) season.hohSleepAllowed = !!hohSleepAllowed
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    res.json({ success: true, data: { autoSleepHour: season.autoSleepHour, hohSleepAllowed: season.hohSleepAllowed } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '调整失败' })
   }
 })
 

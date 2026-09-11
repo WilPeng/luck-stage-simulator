@@ -38,6 +38,8 @@ class BBSeason extends BaseModel {
     this.final3Winners = data?.final3Winners || {} // { 1:{playerId,name}, 2:{...}, 3:{...} }
     // House 状态
     this.backyardDoorOpen = data?.backyardDoorOpen ?? true
+    this.autoSleepHour = data?.autoSleepHour ?? 18   // 每天 N 点未完成睡觉则自动进入睡眠
+    this.hohSleepAllowed = data?.hohSleepAllowed ?? true // 是否允许在 HOH 房睡觉（淘汰公布后重置）
     this.createdAt = data?.createdAt || new Date().toISOString()
     this.updatedAt = data?.updatedAt || new Date().toISOString()
   }

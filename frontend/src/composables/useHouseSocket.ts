@@ -61,6 +61,7 @@ export function useHouseSocket() {
   const onInviteDeclined = ref<((data: { playerId: string; playerName: string }) => void) | null>(null)
   const onInviteCancelled = ref<((data: { playerId?: string; hohId?: string }) => void) | null>(null)
   const onBroadcast = ref<((data: { type: string; roomId: string | null; message: string; from: string; at: string }) => void) | null>(null)
+  const onSleepForced = ref<((data: { wakeAt: string }) => void) | null>(null)
   const onForceMoved = ref<((data: { targetRoomId: string; reason: string }) => void) | null>(null)
   const onMonitorUpdate = ref<((data: HohMonitorRoom[]) => void) | null>(null)
   const onHohDoorbell = ref<((data: { playerId: string; playerName: string }) => void) | null>(null)
@@ -101,6 +102,7 @@ export function useHouseSocket() {
     s.on('house:invite-declined', (data) => onInviteDeclined.value?.(data))
     s.on('house:invite-cancelled', (data) => onInviteCancelled.value?.(data))
     s.on('house:broadcast', (data) => onBroadcast.value?.(data))
+    s.on('house:sleep-forced', (data) => onSleepForced.value?.(data))
     s.on('house:force-moved', (data) => onForceMoved.value?.(data))
     s.on('house:monitor-update', (data) => onMonitorUpdate.value?.(data))
     s.on('house:hoh-doorbell', (data) => onHohDoorbell.value?.(data))
@@ -183,6 +185,7 @@ export function useHouseSocket() {
     onInviteDeclined,
     onInviteCancelled,
     onBroadcast,
+    onSleepForced,
     onForceMoved,
     onMonitorUpdate,
     onHohDoorbell,

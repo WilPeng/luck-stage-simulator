@@ -248,6 +248,20 @@ router.post('/result', async (req, res) => {
       await result.save()
     }
 
+    // 淘汰结果公布后：去除当前 HOH 状态，并关闭 HOH 房睡觉（重置所有同意）
+    try {
+      await hohCol.deleteMany({ gameId: 'bigbrother', roundId })
+      season.hohSleepAllowed = false
+      season.updatedAt = new Date().toISOString()
+      await season.save()
+      const allGuests = await BBHouseguest.find({ gameId: 'bigbrother' })
+      for (const g of allGuests) {
+        if (g.hohSleepApproved) { g.hohSleepApproved = false; await g.save() }
+      }
+    } catch (e) {
+      console.error('[Eviction] reset HOH error:', e)
+    }
+
     res.json({
       success: true,
       data: {

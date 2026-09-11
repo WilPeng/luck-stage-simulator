@@ -81,14 +81,9 @@ function initBBHouseSocket(io) {
       const recent = visible.slice(-50)
       socket.emit('house:history', { roomId: currentRoomId, messages: recent.map(m => m.toObject()) })
 
-      // 发送房间内玩家列表
+      // 发送房间内玩家列表（按位置，包含离线房客）
       await broadcastRoomPresence(currentRoomId)
-
-      // 通知房间有人进入
-      bbHouseNamespace.to(`room:${currentRoomId}`).emit('house:player-joined', {
-        roomId: currentRoomId,
-        playerName: socket.userName
-      })
+      // 注意：上线/下线不产生“进入/离开房间”消息（视为一直在该房间）
     } catch (e) {
       console.error('[BBHouse] Connection init error:', e)
     }
@@ -102,6 +97,15 @@ function initBBHouseSocket(io) {
         const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
         if (!loc || loc.currentRoomId !== roomId) {
           return socket.emit('house:error', { error: '你不在这个房间' })
+        }
+
+        // 睡眠/洗澡状态限制
+        const senderGuest = await BBHouseguest.findOne({ id: socket.userId, gameId })
+        if (senderGuest?.isSleeping) {
+          return socket.emit('house:error', { error: '睡眠中无法发送消息' })
+        }
+        if (senderGuest?.isShowering && roomId !== 'bathroom') {
+          return socket.emit('house:error', { error: '洗澡中只能在浴室发言' })
         }
 
         // 保存消息
@@ -119,11 +123,14 @@ function initBBHouseSocket(io) {
         })
         await msg.save()
 
-        // 广播给同房间所有人
-        bbHouseNamespace.to(`room:${roomId}`).emit('house:new-message', {
-          roomId,
-          message: msg.toObject()
-        })
+        // 广播给同房间所有人（睡眠中的房客不接收；洗澡中的房客只接收浴室消息）
+        const roomSockets = await bbHouseNamespace.in(`room:${roomId}`).fetchSockets()
+        for (const s of roomSockets) {
+          const g = await BBHouseguest.findOne({ id: s.userId, gameId })
+          if (g?.isSleeping) continue
+          if (g?.isShowering && roomId !== 'bathroom') continue
+          s.emit('house:new-message', { roomId, message: msg.toObject() })
+        }
       } catch (e) {
         console.error('[BBHouse] Send message error:', e)
         socket.emit('house:error', { error: '发送失败' })
@@ -380,14 +387,9 @@ function initBBHouseSocket(io) {
     // === 断开连接 ===
     socket.on('disconnect', async () => {
       try {
+        // 下线不视为离开房间，仅更新在线列表
         const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
-        if (loc) {
-          bbHouseNamespace.to(`room:${loc.currentRoomId}`).emit('house:player-left', {
-            roomId: loc.currentRoomId,
-            playerName: socket.userName
-          })
-          await broadcastRoomPresence(loc.currentRoomId)
-        }
+        if (loc) await broadcastRoomPresence(loc.currentRoomId)
       } catch (e) {
         console.error('[BBHouse] Disconnect error:', e)
       }
@@ -396,6 +398,72 @@ function initBBHouseSocket(io) {
   })
 
   console.log('[BBHouse] Socket.IO namespace /bigbrother-house initialized')
+  startHouseTimers()
+}
+
+// ===== 定时任务：自动睡眠 / 洗澡自动结束 =====
+let houseTimer = null
+
+function localDate(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function startHouseTimers() {
+  if (houseTimer) return
+  houseTimer = setInterval(runHouseTimers, 60 * 1000)
+  // 启动后先跑一次
+  runHouseTimers()
+}
+
+async function runHouseTimers() {
+  try {
+    const season = await BBSeason.findOne({ gameId })
+    const hour = season?.autoSleepHour ?? 18
+    const now = new Date()
+    const today = localDate(now)
+
+    // 自动睡眠：当天未完成睡觉且已过设定时间
+    const guests = await BBHouseguest.find({ gameId, status: 'active' })
+    for (const g of guests) {
+      if (g.isSleeping) continue
+      if (g.lastSleepDate === today) continue
+      if (now.getHours() >= hour) {
+        g.isSleeping = true
+        g.sleepStartedAt = now.toISOString()
+        g.wakeAt = new Date(now.getTime() + 6 * 3600 * 1000).toISOString()
+        g.lastSleepDate = today
+        await g.save()
+        for (const [, s] of bbHouseNamespace.sockets) {
+          if (s.userId === g.id) s.emit('house:sleep-forced', { wakeAt: g.wakeAt })
+        }
+      }
+    }
+
+    // 洗澡 10 分钟后自动结束并移动到洗漱间
+    const showering = await BBHouseguest.find({ gameId, isShowering: true })
+    for (const g of showering) {
+      if (!g.showerStartedAt) continue
+      if (now.getTime() - new Date(g.showerStartedAt).getTime() >= 10 * 60 * 1000) {
+        g.isShowering = false
+        await g.save()
+        const loc = await BBPlayerLocation.findOne({ playerId: g.id, gameId })
+        const oldRoomId = loc?.currentRoomId || 'bathroom'
+        if (loc && oldRoomId !== 'washroom') {
+          loc.currentRoomId = 'washroom'
+          loc.enteredAt = now.toISOString()
+          await loc.save()
+          g.currentRoomId = 'washroom'
+          await g.save()
+          await movePlayerSockets(g.id, oldRoomId, 'washroom', '洗澡结束')
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[BBHouse] House timer error:', e)
+  }
 }
 
 // 广播房间内玩家列表
@@ -433,12 +501,10 @@ async function broadcastMonitorUpdate() {
         s.emit('house:monitor-update', result)
         continue
       }
-      if (hoh && s.userId === hoh.id) {
-        // HOH 仅身处 HOH 房时才能收到监控
-        const loc = await BBPlayerLocation.findOne({ playerId: s.userId, gameId })
-        if (loc && loc.currentRoomId === 'hoh_room') {
-          s.emit('house:monitor-update', result)
-        }
+      // 身处 HOH 房的任意房客都能看到监控
+      const loc = await BBPlayerLocation.findOne({ playerId: s.userId, gameId })
+      if (loc && loc.currentRoomId === 'hoh_room') {
+        s.emit('house:monitor-update', result)
       }
     }
   } catch (e) {
