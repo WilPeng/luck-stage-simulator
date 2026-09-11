@@ -53,6 +53,7 @@ const COLLECTIONS = [
   'BBHousePassage',  // BB House 通道配置
   'BBHouseDoor',     // BB House 门状态
   'BBPlayerLocation',// 玩家当前位置
+  'BBLocationHistory',// 玩家位置历史（消息可见性核心）
   'BBCustomGame',    // 自定义游戏
   'BBPowerChallenge', // Big Brother 实力大挑战题目池
   'PCPlayer',

@@ -12,6 +12,7 @@ const BBHouseDoor = require('../games/bigbrother/models/BBHouseDoor')
 const BBHousePassage = require('../games/bigbrother/models/BBHousePassage')
 const BBSeason = require('../games/bigbrother/models/BBSeason')
 const { getCurrentHoh } = require('../games/bigbrother/houseMap')
+const locationHistory = require('../games/bigbrother/locationHistory')
 
 const JWT_SECRET = process.env.JWT_SECRET || 'bigbrother_secret_key'
 const gameId = 'bigbrother'
@@ -22,6 +23,18 @@ let bbHouseNamespace = null
 const pendingInvites = new Map()
 
 function getNamespace() { return bbHouseNamespace }
+
+// 头像查询
+async function getAvatarMap() {
+  const guests = await BBHouseguest.find({ gameId })
+  const map = {}
+  for (const g of guests) map[g.id] = g.avatar || null
+  return map
+}
+async function getAvatar(playerId) {
+  const g = await BBHouseguest.findOne({ id: playerId, gameId })
+  return g?.avatar || null
+}
 
 function initBBHouseSocket(io) {
   bbHouseNamespace = io.of('/bigbrother-house')
@@ -42,6 +55,11 @@ function initBBHouseSocket(io) {
   })
 
   bbHouseNamespace.on('connection', async (socket) => {
+    // 用数据库中的房客姓名/头像覆盖 token 中可能缺失的信息
+    try {
+      const guest = await BBHouseguest.findOne({ id: socket.userId, gameId })
+      if (guest?.name) socket.userName = guest.name
+    } catch (e) { /* ignore */ }
     console.log(`[BBHouse] Player connected: ${socket.userName} (${socket.userId})`)
 
     try {
@@ -49,14 +67,18 @@ function initBBHouseSocket(io) {
       const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
       const currentRoomId = loc?.currentRoomId || 'living_room'
 
+      // 确保位置历史有当前区间
+      await locationHistory.ensureOpenInterval(socket.userId, socket.userName, currentRoomId, loc?.enteredAt)
+
       // 加入当前房间的 Socket.IO room
       socket.join(`room:${currentRoomId}`)
       socket.currentRoomId = currentRoomId
 
-      // 发送当前房间的历史消息（最近 50 条）
-      const messages = await BBChatMessage.find({ gameId, chatType: 'room', roomId: currentRoomId })
-      messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-      const recent = messages.slice(-50)
+      // 发送当前房间的历史消息（仅“发送时我在该房间”的消息，最近 50 条）
+      const allMessages = await BBChatMessage.find({ gameId, chatType: 'room', roomId: currentRoomId })
+      allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+      const visible = await locationHistory.filterVisibleMessages(socket.userId, currentRoomId, allMessages)
+      const recent = visible.slice(-50)
       socket.emit('house:history', { roomId: currentRoomId, messages: recent.map(m => m.toObject()) })
 
       // 发送房间内玩家列表
@@ -83,12 +105,13 @@ function initBBHouseSocket(io) {
         }
 
         // 保存消息
+        const avatar = await getAvatar(socket.userId)
         const msg = new BBChatMessage({
           id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           senderId: socket.userId,
           senderName: socket.userName,
           senderRole: socket.userRole,
-          senderAvatar: null,
+          senderAvatar: avatar,
           content: content.trim(),
           chatType: 'room',
           roomId,
@@ -113,13 +136,18 @@ function initBBHouseSocket(io) {
         const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
         if (!loc || loc.currentRoomId !== roomId) return
 
-        const filter = { gameId, chatType: 'room', roomId }
-        if (before) filter.createdAt = { $lt: before }
-
-        const messages = await BBChatMessage.find(filter)
-        messages.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        const older = messages.slice(0, 30)
-        older.reverse()
+        const all = await BBChatMessage.find({ gameId, chatType: 'room', roomId })
+        all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        // 仅可见消息（发送时我在该房间）
+        const visible = await locationHistory.filterVisibleMessages(socket.userId, roomId, all)
+        let older
+        if (before) {
+          const idx = visible.findIndex(m => new Date(m.createdAt).getTime() < new Date(before).getTime())
+          older = idx >= 0 ? visible.slice(idx, idx + 30) : []
+        } else {
+          older = visible.slice(0, 30)
+        }
+        older = older.slice().reverse()
 
         socket.emit('house:older-messages', { roomId, messages: older.map(m => m.toObject()) })
       } catch (e) {
@@ -144,17 +172,19 @@ function initBBHouseSocket(io) {
         if (newRoomId) {
           socket.join(`room:${newRoomId}`)
           socket.currentRoomId = newRoomId
+          // 记录位置历史（消息可见性核心）
+          await locationHistory.recordMove(socket.userId, socket.userName, oldRoomId, newRoomId)
           bbHouseNamespace.to(`room:${newRoomId}`).emit('house:player-joined', {
             roomId: newRoomId,
             playerName: socket.userName
           })
           await broadcastRoomPresence(newRoomId)
 
-          // 发送新房间历史消息
-          const messages = await BBChatMessage.find({ gameId, chatType: 'room', roomId: newRoomId })
-          messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-          const recent = messages.slice(-50)
-          socket.emit('house:history', { roomId: newRoomId, messages: recent.map(m => m.toObject()) })
+          // 发送新房间可见历史消息
+          const allMessages = await BBChatMessage.find({ gameId, chatType: 'room', roomId: newRoomId })
+          allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+          const visible = await locationHistory.filterVisibleMessages(socket.userId, newRoomId, allMessages)
+          socket.emit('house:history', { roomId: newRoomId, messages: visible.slice(-50).map(m => m.toObject()) })
         }
       } catch (e) {
         console.error('[BBHouse] Moved event error:', e)
@@ -210,6 +240,29 @@ function initBBHouseSocket(io) {
       }
     })
 
+    // === 撤销 HOH 邀请（HOH 取消已发出的邀请） ===
+    socket.on('house:cancel-invite', async ({ targetPlayerId }) => {
+      try {
+        const hoh = await getCurrentHoh()
+        if (!hoh || hoh.id !== socket.userId) {
+          return socket.emit('house:error', { error: '仅 HOH 可撤销邀请' })
+        }
+        if (!targetPlayerId) return
+        pendingInvites.delete(targetPlayerId)
+        // 通知被邀请者：邀请已撤销
+        for (const [, s] of bbHouseNamespace.sockets) {
+          if (s.userId === targetPlayerId) {
+            s.emit('house:invite-cancelled', { hohId: socket.userId })
+            break
+          }
+        }
+        // 回执给 HOH
+        socket.emit('house:invite-cancelled', { playerId: targetPlayerId })
+      } catch (e) {
+        console.error('[BBHouse] Cancel invite error:', e)
+      }
+    })
+
     // === 接受 HOH 邀请 ===
     socket.on('house:accept-invite', async () => {
       try {
@@ -250,6 +303,7 @@ function initBBHouseSocket(io) {
         // 进入新房间
         socket.join(`room:hoh_room`)
         socket.currentRoomId = 'hoh_room'
+        await locationHistory.recordMove(socket.userId, socket.userName, oldRoomId, 'hoh_room')
         bbHouseNamespace.to(`room:hoh_room`).emit('house:player-joined', {
           roomId: 'hoh_room', playerName: socket.userName
         })
@@ -269,9 +323,10 @@ function initBBHouseSocket(io) {
           }
         }
 
-        const messages = await BBChatMessage.find({ gameId, chatType: 'room', roomId: 'hoh_room' })
-        messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-        socket.emit('house:history', { roomId: 'hoh_room', messages: messages.slice(-50).map(m => m.toObject()) })
+        const allMessages = await BBChatMessage.find({ gameId, chatType: 'room', roomId: 'hoh_room' })
+        allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        const visible = await locationHistory.filterVisibleMessages(socket.userId, 'hoh_room', allMessages)
+        socket.emit('house:history', { roomId: 'hoh_room', messages: visible.slice(-50).map(m => m.toObject()) })
       } catch (e) {
         console.error('[BBHouse] Accept invite error:', e)
       }
@@ -279,6 +334,48 @@ function initBBHouseSocket(io) {
 
     // === 后院门状态监听（REST 触发后通过 socket 广播） ===
     // 这个由 REST API 的 admin/door 端点调用 broadcastDoorUpdate 触发
+
+    // === HOH 房门控制（房内房客 或 门外的 HOH） ===
+    socket.on('house:hoh-door-set', async ({ isOpen }) => {
+      try {
+        const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
+        const hoh = await getCurrentHoh()
+        const isHoh = !!(hoh && hoh.id === socket.userId)
+        const canControl = loc && (loc.currentRoomId === 'hoh_room' || (isHoh && loc.currentRoomId === 'hoh_door'))
+        if (!canControl) {
+          return socket.emit('house:error', { error: '无权控制 HOH 房门' })
+        }
+        const door = await BBHouseDoor.findOne({ id: 'hoh_door', gameId })
+        if (!door) return
+        door.isOpen = !!isOpen
+        door.updatedAt = new Date().toISOString()
+        await door.save()
+        broadcastDoorUpdate('hoh_door', door.isOpen)
+      } catch (e) {
+        console.error('[BBHouse] hoh-door-set error:', e)
+      }
+    })
+
+    // === 按门铃（门外房客通知房内的人） ===
+    socket.on('house:hoh-doorbell', async () => {
+      try {
+        const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
+        if (!loc || loc.currentRoomId !== 'hoh_door') {
+          return socket.emit('house:error', { error: '你不在 HOH 房门口' })
+        }
+        const door = await BBHouseDoor.findOne({ id: 'hoh_door', gameId })
+        if (door && door.isOpen) {
+          return socket.emit('house:error', { error: '门是开着的，直接进入即可' })
+        }
+        bbHouseNamespace.to('room:hoh_room').emit('house:hoh-doorbell', {
+          playerId: socket.userId,
+          playerName: socket.userName
+        })
+        socket.emit('house:hoh-doorbell-sent', {})
+      } catch (e) {
+        console.error('[BBHouse] hoh-doorbell error:', e)
+      }
+    })
 
     // === 断开连接 ===
     socket.on('disconnect', async () => {
@@ -305,7 +402,12 @@ function initBBHouseSocket(io) {
 async function broadcastRoomPresence(roomId) {
   if (!bbHouseNamespace) return
   const locations = await BBPlayerLocation.find({ currentRoomId: roomId, gameId })
-  const players = locations.map(l => ({ playerId: l.playerId, playerName: l.playerName }))
+  const avatars = await getAvatarMap()
+  const players = locations.map(l => ({
+    playerId: l.playerId,
+    playerName: l.playerName,
+    avatar: avatars[l.playerId] || null
+  }))
   bbHouseNamespace.to(`room:${roomId}`).emit('house:room-presence', {
     roomId,
     players
@@ -327,8 +429,16 @@ async function broadcastMonitorUpdate() {
       result.push({ roomId: room.id, roomName: room.name, icon: room.icon, count })
     }
     for (const [, s] of bbHouseNamespace.sockets) {
-      if (s.userRole === 'admin' || (hoh && s.userId === hoh.id)) {
+      if (s.userRole === 'admin') {
         s.emit('house:monitor-update', result)
+        continue
+      }
+      if (hoh && s.userId === hoh.id) {
+        // HOH 仅身处 HOH 房时才能收到监控
+        const loc = await BBPlayerLocation.findOne({ playerId: s.userId, gameId })
+        if (loc && loc.currentRoomId === 'hoh_room') {
+          s.emit('house:monitor-update', result)
+        }
       }
     }
   } catch (e) {
@@ -336,10 +446,19 @@ async function broadcastMonitorUpdate() {
   }
 }
 
-// 广播后院门状态（供 REST API 调用）
+// 广播门状态（仅特定房间可见）
 async function broadcastDoorUpdate(doorId, isOpen) {
   if (!bbHouseNamespace) return
-  bbHouseNamespace.emit('house:door-update', { doorId, isOpen })
+  const payload = { doorId, isOpen }
+  if (doorId === 'backyard_door') {
+    bbHouseNamespace.to('room:living_room').emit('house:door-update', payload)
+    bbHouseNamespace.to('room:backyard').emit('house:door-update', payload)
+  } else if (doorId === 'hoh_door') {
+    bbHouseNamespace.to('room:hoh_room').emit('house:door-update', payload)
+    bbHouseNamespace.to('room:hoh_door').emit('house:door-update', payload)
+  } else {
+    bbHouseNamespace.emit('house:door-update', payload)
+  }
 }
 
 // 取出并清除指定玩家的待处理邀请（供 REST accept-invite 使用）
@@ -363,10 +482,18 @@ function notifyForceMove(playerId, targetRoomId, reason) {
 // 管理员强制移动/清空后院：服务端权威地切换玩家 socket 房间并实时广播
 async function movePlayerSockets(playerId, oldRoomId, newRoomId, reason = '管理员移动') {
   if (!bbHouseNamespace) return
+  const hg = await BBHouseguest.findOne({ id: playerId, gameId })
+  // 记录位置历史（消息可见性核心）
+  await locationHistory.recordMove(playerId, hg?.name || '', oldRoomId, newRoomId)
   const targets = []
   for (const [, s] of bbHouseNamespace.sockets) {
     if (s.userId === playerId) targets.push(s)
   }
+
+  // 预先取该玩家在新房间可见的历史
+  const allMessages = await BBChatMessage.find({ gameId, chatType: 'room', roomId: newRoomId })
+  allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+  const visible = await locationHistory.filterVisibleMessages(playerId, newRoomId, allMessages)
 
   for (const s of targets) {
     s.leave(`room:${oldRoomId}`)
@@ -382,20 +509,24 @@ async function movePlayerSockets(playerId, oldRoomId, newRoomId, reason = '管�
     })
     // 先通知客户端切换，再补发新房间历史（保证顺序）
     s.emit('house:force-moved', { targetRoomId: newRoomId, reason })
-
-    const messages = await BBChatMessage.find({ gameId, chatType: 'room', roomId: newRoomId })
-    messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-    s.emit('house:history', { roomId: newRoomId, messages: messages.slice(-50).map(m => m.toObject()) })
+    s.emit('house:history', { roomId: newRoomId, messages: visible.slice(-50).map(m => m.toObject()) })
   }
 
   await broadcastRoomPresence(oldRoomId)
   if (oldRoomId !== newRoomId) await broadcastRoomPresence(newRoomId)
 }
 
+// 广播给所有 House 连接（供管理员广播使用）
+function broadcastHouse(event, payload) {
+  if (!bbHouseNamespace) return
+  bbHouseNamespace.emit(event, payload)
+}
+
 module.exports = {
   initBBHouseSocket,
   getNamespace,
   broadcastDoorUpdate,
+  broadcastHouse,
   notifyForceMove,
   broadcastRoomPresence,
   broadcastMonitorUpdate,

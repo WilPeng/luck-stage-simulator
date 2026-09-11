@@ -12,8 +12,9 @@ const BBPlayerLocation = require('../models/BBPlayerLocation')
 const BBHouseguest = require('../models/BBHouseguest')
 const { getCurrentSeason, logAction, BB_ACTION_TYPES } = require('../helpers')
 const { getReachableRooms, getCurrentHoh } = require('../houseMap')
+const locationHistory = require('../locationHistory')
 const { getCollection } = require('../../../config/db')
-const { broadcastDoorUpdate, movePlayerSockets, takePendingInvite } = require('../../../socket/bbHouse')
+const { broadcastDoorUpdate, movePlayerSockets, takePendingInvite, broadcastHouse } = require('../../../socket/bbHouse')
 
 // ===== 公共 API =====
 
@@ -45,7 +46,10 @@ router.get('/rooms', auth, async (req, res) => {
     const rooms = await BBHouseRoom.find({ gameId: 'bigbrother' })
     const isAdmin = req.user.role === 'admin'
     const hoh = await getCurrentHoh()
-    const showCounts = isAdmin || (hoh && hoh.id === req.user.userId)
+    // HOH 仅在自己身处 HOH 房时才能看到人数（监控）
+    const loc = await BBPlayerLocation.findOne({ playerId: req.user.userId, gameId: 'bigbrother' })
+    const hohInRoom = !!(hoh && hoh.id === req.user.userId && loc && loc.currentRoomId === 'hoh_room')
+    const showCounts = isAdmin || hohInRoom
 
     const result = []
     for (const room of rooms) {
@@ -82,8 +86,11 @@ router.get('/rooms/:roomId', auth, async (req, res) => {
     let players
     let count = null
     if (isAdmin || isInRoom) {
-      // 可以看到具体玩家
-      players = locations.map(l => ({ playerId: l.playerId, playerName: l.playerName, enteredAt: l.enteredAt }))
+      // 可以看到具体玩家（含头像）
+      const avatars = {}
+      const guests = await BBHouseguest.find({ gameId: 'bigbrother' })
+      guests.forEach(g => { avatars[g.id] = g.avatar || null })
+      players = locations.map(l => ({ playerId: l.playerId, playerName: l.playerName, avatar: avatars[l.playerId] || null, enteredAt: l.enteredAt }))
       count = locations.length
     } else if (isHoh) {
       // HOH：仅能看到人数，不能看到身份
@@ -172,10 +179,23 @@ router.get('/reachable', auth, async (req, res) => {
         })
     )
 
-    // 附带后院门状态，方便前端初始渲染
-    const door = await BBHouseDoor.findOne({ id: 'backyard_door', gameId: 'bigbrother' })
+    // 附带门状态，但仅在特定房间可见
+    const doors = await BBHouseDoor.find({ gameId: 'bigbrother' })
+    const doorMap = {}
+    doors.forEach(d => { doorMap[d.id] = d.isOpen })
 
-    res.json({ success: true, data: { currentRoomId, rooms: reachable, backyardDoorOpen: door ? door.isOpen : true } })
+    const canSeeBackyardDoor = currentRoomId === 'living_room' || currentRoomId === 'backyard'
+    const canSeeHohDoor = currentRoomId === 'hoh_room' || currentRoomId === 'hoh_door'
+
+    res.json({
+      success: true,
+      data: {
+        currentRoomId,
+        rooms: reachable,
+        backyardDoorOpen: canSeeBackyardDoor ? (doorMap['backyard_door'] ?? true) : null,
+        hohDoorOpen: canSeeHohDoor ? (doorMap['hoh_door'] ?? false) : null
+      }
+    })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '获取可达房间失败' })
@@ -274,6 +294,9 @@ router.post('/move', auth, async (req, res) => {
     player.currentRoomId = targetRoomId
     await player.save()
 
+    // 记录位置历史（消息可见性核心）
+    await locationHistory.recordMove(req.user.userId, player.name, oldRoomId, targetRoomId)
+
     res.json({
       success: true,
       data: { oldRoomId, newRoomId: targetRoomId, playerName: player.name }
@@ -360,8 +383,15 @@ router.post('/accept-invite', auth, async (req, res) => {
 router.get('/hoh-monitor', auth, async (req, res) => {
   try {
     const hoh = await getCurrentHoh()
-    if ((!hoh || hoh.id !== req.user.userId) && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, error: '仅 HOH 或管理员可使用监控' })
+    const isAdmin = req.user.role === 'admin'
+    // HOH 必须身处 HOH 房才能查看监控
+    let inHohRoom = false
+    if (hoh && hoh.id === req.user.userId) {
+      const myLoc = await BBPlayerLocation.findOne({ playerId: req.user.userId, gameId: 'bigbrother' })
+      inHohRoom = !!(myLoc && myLoc.currentRoomId === 'hoh_room')
+    }
+    if (!isAdmin && !(hoh && hoh.id === req.user.userId && inHohRoom)) {
+      return res.status(403).json({ success: false, error: '仅身处 HOH 房时才能查看监控' })
     }
 
     const rooms = await BBHouseRoom.find({ gameId: 'bigbrother' })
@@ -471,6 +501,75 @@ router.post('/admin/evict-backyard', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// POST /admin/broadcast - 管理员广播（通知 / 邀请所有人到某房间）
+router.post('/admin/broadcast', auth, requireAdmin, async (req, res) => {
+  try {
+    const { type = 'notice', roomId = null, message = '' } = req.body || {}
+    const gameId = 'bigbrother'
+
+    if (type === 'invite') {
+      if (!roomId) {
+        return res.status(400).json({ success: false, error: '邀请广播需要指定房间' })
+      }
+      const targetRoom = await BBHouseRoom.findOne({ id: roomId, gameId })
+      if (!targetRoom) return res.status(404).json({ success: false, error: '目标房间不存在' })
+
+      // 邀请 = 强制移动所有房客到目标房间（忽略拓扑/门/权限）
+      const houseguests = await BBHouseguest.find({ gameId, role: 'houseguest' })
+      const moved = []
+      for (const p of houseguests) {
+        if (p.status !== 'active') continue
+        let loc = await BBPlayerLocation.findOne({ playerId: p.id, gameId })
+        const oldRoomId = loc?.currentRoomId || 'living_room'
+        if (!loc) {
+          loc = new BBPlayerLocation({
+            id: p.id, playerId: p.id, playerName: p.name,
+            currentRoomId: roomId, enteredAt: new Date().toISOString(), gameId
+          })
+          await loc.save()
+        } else if (oldRoomId !== roomId) {
+          loc.currentRoomId = roomId
+          loc.enteredAt = new Date().toISOString()
+          await loc.save()
+        } else {
+          continue // 已在该房间
+        }
+        p.currentRoomId = roomId
+        await p.save()
+        // 服务端权威切换 socket 房间 + 记录位置历史 + 实时通知
+        await movePlayerSockets(p.id, oldRoomId, roomId, `管理员邀请前往 ${targetRoom.name}`)
+        moved.push(p.name)
+      }
+
+      const payload = {
+        type,
+        roomId,
+        roomName: targetRoom.name,
+        roomIcon: targetRoom.icon,
+        message: (message || '').trim() || `管理员邀请所有人前往「${targetRoom.name}」`,
+        from: req.user.name || '管理员',
+        at: new Date().toISOString()
+      }
+      broadcastHouse('house:broadcast', payload)
+      return res.json({ success: true, data: { ...payload, movedCount: moved.length } })
+    }
+
+    // 普通通知
+    const payload = {
+      type: 'notice',
+      roomId: null,
+      message: (message || '').trim(),
+      from: req.user.name || '管理员',
+      at: new Date().toISOString()
+    }
+    broadcastHouse('house:broadcast', payload)
+    res.json({ success: true, data: payload })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '广播失败' })
+  }
+})
+
 // GET /admin/locations - 管理员查看所有玩家位置
 router.get('/admin/locations', auth, requireAdmin, async (req, res) => {
   try {
@@ -478,6 +577,9 @@ router.get('/admin/locations', auth, requireAdmin, async (req, res) => {
     const rooms = await BBHouseRoom.find({ gameId: 'bigbrother' })
 
     // 按房间分组
+    const avatars = {}
+    const guests = await BBHouseguest.find({ gameId: 'bigbrother' })
+    guests.forEach(g => { avatars[g.id] = g.avatar || null })
     const grouped = {}
     for (const room of rooms) {
       grouped[room.id] = { room: room.toObject(), players: [] }
@@ -487,6 +589,7 @@ router.get('/admin/locations', auth, requireAdmin, async (req, res) => {
         grouped[loc.currentRoomId].players.push({
           playerId: loc.playerId,
           playerName: loc.playerName,
+          avatar: avatars[loc.playerId] || null,
           enteredAt: loc.enteredAt
         })
       }
