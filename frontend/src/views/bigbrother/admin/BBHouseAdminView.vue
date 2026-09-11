@@ -25,6 +25,33 @@
       </div>
     </div>
 
+    <!-- 管理员广播 -->
+    <div class="control-card">
+      <div class="control-header">
+        <h3>📣 广播</h3>
+      </div>
+      <div class="broadcast-form">
+        <select v-model="broadcastType" class="bb-select">
+          <option value="notice">通知</option>
+          <option value="invite">邀请所有人到房间</option>
+        </select>
+        <select v-if="broadcastType === 'invite'" v-model="broadcastRoom" class="bb-select">
+          <option value="">选择房间…</option>
+          <option v-for="r in allRooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
+        </select>
+        <input
+          v-model="broadcastMessage"
+          class="bb-input"
+          :placeholder="broadcastType === 'invite' ? '附言（可选）' : '通知内容'"
+        />
+        <button
+          class="bb-btn bb-btn-primary"
+          :disabled="broadcastType === 'invite' && !broadcastRoom"
+          @click="sendBroadcast"
+        >发送</button>
+      </div>
+    </div>
+
     <!-- 玩家位置总览 -->
     <div class="locations-section">
       <h3>📍 玩家位置总览</h3>
@@ -37,6 +64,7 @@
           </div>
           <div class="location-players">
             <div v-for="p in (data.players || [])" :key="p.playerId" class="location-player">
+              <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
               <span class="player-name">{{ p.playerName }}</span>
               <span class="player-time">{{ formatTime(p.enteredAt) }}</span>
               <select class="move-select" @change="handleForceMove(p.playerId, ($event.target as any).value); ($event.target as any).value = ''">
@@ -55,22 +83,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import {
   bbGetHouseRooms,
   bbGetHouseMap,
   bbAdminGetLocations,
   bbAdminSetDoor,
   bbAdminEvictBackyard,
-  bbAdminMovePlayer
+  bbAdminMovePlayer,
+  bbAdminBroadcast
 } from '../../../services/bbHouseApi'
 import type { BBHouseRoomWithCount } from '../../../types/bigbrother'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 
 const rooms = ref<BBHouseRoomWithCount[]>([])
 const locations = ref<Record<string, { room: any; players: any[] }>>({})
 const backyardDoorOpen = ref(true)
 
 const allRooms = ref<BBHouseRoomWithCount[]>([])
+
+const broadcastType = ref<'notice' | 'invite'>('notice')
+const broadcastRoom = ref('')
+const broadcastMessage = ref('')
+
+async function sendBroadcast() {
+  if (broadcastType.value === 'invite' && !broadcastRoom.value) return
+  try {
+    await bbAdminBroadcast({
+      type: broadcastType.value,
+      roomId: broadcastType.value === 'invite' ? broadcastRoom.value : null,
+      message: broadcastMessage.value
+    })
+    broadcastMessage.value = ''
+    alert('广播已发送')
+  } catch (e: any) {
+    alert(e?.message || '发送失败')
+  }
+}
 
 function getRoomIcon(roomId: string) {
   return allRooms.value.find(r => r.id === roomId)?.icon || '🏠'
@@ -92,16 +141,26 @@ async function loadData() {
       bbAdminGetLocations(),
       bbGetHouseMap()
     ])
-    allRooms.value = roomsRes?.data || []
+    allRooms.value = roomsRes || []
     rooms.value = allRooms.value
-    locations.value = locRes?.data || {}
-
+    locations.value = locRes || {}
     // 获取后院门状态
-    backyardDoorOpen.value = mapRes?.data?.backyardDoorOpen ?? true
+    backyardDoorOpen.value = mapRes?.backyardDoorOpen ?? true
   } catch (e) {
     console.error(e)
   }
 }
+
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  loadData()
+  // 每 5 秒自动刷新玩家位置总览
+  refreshTimer = setInterval(loadData, 5000)
+})
+onUnmounted(() => {
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null }
+})
 
 async function toggleDoor(isOpen: boolean) {
   try {
@@ -118,7 +177,7 @@ async function evictBackyard() {
   try {
     const res = await bbAdminEvictBackyard()
     backyardDoorOpen.value = false
-    alert(`已清空后院，${res?.data?.movedPlayers?.length || 0} 名玩家被移至客厅`)
+    alert(`已清空后院，${res?.movedPlayers?.length || 0} 名玩家被移至客厅`)
     await loadData()
   } catch (e: any) {
     alert(e?.message || '操作失败')
@@ -134,10 +193,7 @@ async function handleForceMove(playerId: string, targetRoomId: string) {
     alert(e?.message || '移动失败')
   }
 }
-
-onMounted(loadData)
 </script>
-
 <style scoped>
 .bb-house-admin { max-width: 1200px; margin: 0 auto; }
 .page-header { margin-bottom: 20px; }
@@ -160,6 +216,20 @@ onMounted(loadData)
 .door-status { font-size: 13px; font-weight: 600; color: #ff6b6b; }
 .door-status.open { color: #00ff88; }
 .control-actions { display: flex; gap: 10px; }
+
+.broadcast-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.bb-select, .bb-input {
+  padding: 8px 12px;
+  background: #0a0a1a;
+  border: 1px solid #00ff8833;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 13px;
+  outline: none;
+}
+.bb-input { flex: 1; min-width: 180px; }
+.bb-select:focus, .bb-input:focus { border-color: #00ff88; }
+.bb-btn-primary { background: #00ff8822; border-color: #00ff88; }
 
 .bb-btn {
   background: transparent;

@@ -81,3 +81,11 @@ export async function bbAdminInitLocations() {
     method: 'POST'
   })
 }
+
+// 管理员广播（通知 / 邀请所有人到某房间）
+export async function bbAdminBroadcast(data: { type: 'notice' | 'invite'; roomId?: string | null; message?: string }) {
+  return doRequest<any>('/house/admin/broadcast', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  })
+}

@@ -32,6 +32,7 @@ export interface HouseMessage {
 export interface HousePlayer {
   playerId: string
   playerName: string
+  avatar?: string | null
   enteredAt?: string
 }
 
@@ -58,8 +59,12 @@ export function useHouseSocket() {
   const onInviteReceived = ref<((data: { hohName: string; hohId: string; roomId: string }) => void) | null>(null)
   const onInviteAccepted = ref<((data: { playerId: string; playerName: string }) => void) | null>(null)
   const onInviteDeclined = ref<((data: { playerId: string; playerName: string }) => void) | null>(null)
+  const onInviteCancelled = ref<((data: { playerId?: string; hohId?: string }) => void) | null>(null)
+  const onBroadcast = ref<((data: { type: string; roomId: string | null; message: string; from: string; at: string }) => void) | null>(null)
   const onForceMoved = ref<((data: { targetRoomId: string; reason: string }) => void) | null>(null)
   const onMonitorUpdate = ref<((data: HohMonitorRoom[]) => void) | null>(null)
+  const onHohDoorbell = ref<((data: { playerId: string; playerName: string }) => void) | null>(null)
+  const onHohDoorbellSent = ref<((data: any) => void) | null>(null)
   const onError = ref<((data: { error: string }) => void) | null>(null)
 
   function connect() {
@@ -94,8 +99,12 @@ export function useHouseSocket() {
     s.on('house:invite-received', (data) => onInviteReceived.value?.(data))
     s.on('house:invite-accepted', (data) => onInviteAccepted.value?.(data))
     s.on('house:invite-declined', (data) => onInviteDeclined.value?.(data))
+    s.on('house:invite-cancelled', (data) => onInviteCancelled.value?.(data))
+    s.on('house:broadcast', (data) => onBroadcast.value?.(data))
     s.on('house:force-moved', (data) => onForceMoved.value?.(data))
     s.on('house:monitor-update', (data) => onMonitorUpdate.value?.(data))
+    s.on('house:hoh-doorbell', (data) => onHohDoorbell.value?.(data))
+    s.on('house:hoh-doorbell-sent', (data) => onHohDoorbellSent.value?.(data))
     s.on('house:error', (data) => onError.value?.(data))
 
     socket.value = s
@@ -132,6 +141,18 @@ export function useHouseSocket() {
     socket.value?.emit('house:decline-invite', { hohId })
   }
 
+  function cancelInvite(targetPlayerId: string) {
+    socket.value?.emit('house:cancel-invite', { targetPlayerId })
+  }
+
+  function setHohDoor(isOpen: boolean) {
+    socket.value?.emit('house:hoh-door-set', { isOpen })
+  }
+
+  function ringHohDoorbell() {
+    socket.value?.emit('house:hoh-doorbell')
+  }
+
   onMounted(connect)
   onUnmounted(disconnect)
 
@@ -147,6 +168,9 @@ export function useHouseSocket() {
     invitePlayer,
     acceptInvite,
     declineInvite,
+    cancelInvite,
+    setHohDoor,
+    ringHohDoorbell,
     onHistory,
     onNewMessage,
     onOlderMessages,
@@ -157,8 +181,12 @@ export function useHouseSocket() {
     onInviteReceived,
     onInviteAccepted,
     onInviteDeclined,
+    onInviteCancelled,
+    onBroadcast,
     onForceMoved,
     onMonitorUpdate,
+    onHohDoorbell,
+    onHohDoorbellSent,
     onError
   }
 }

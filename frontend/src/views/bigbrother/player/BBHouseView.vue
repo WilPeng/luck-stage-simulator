@@ -24,6 +24,13 @@
       </div>
     </div>
 
+    <!-- HOH 门铃提示（房内的人收到） -->
+    <div v-if="doorbellNotice" class="doorbell-banner">
+      <span class="doorbell-icon">🔔</span>
+      <span class="doorbell-text">{{ doorbellNotice }}</span>
+      <button v-if="canControlHohDoor" class="bb-btn bb-btn-sm" @click="toggleHohDoor(true)">开门</button>
+    </div>
+
     <!-- 移动中提示 -->
     <div v-if="moving" class="moving-banner">
       <span class="moving-spinner"></span>
@@ -36,10 +43,29 @@
         <HouseMap
           :rooms="rooms"
           :currentRoomId="currentRoomId"
-          :reachableIds="reachableIds"
+          :reachableRooms="reachableRooms"
           :backyardDoorOpen="backyardDoorOpen"
+          :hohDoorOpen="hohDoorOpen"
+          :showBackyardDoor="canSeeBackyardDoor"
+          :showHohDoor="canSeeHohDoor"
           @select-room="handleMove"
         />
+
+        <!-- HOH 房门控制 / 门铃 -->
+        <div v-if="canControlHohDoor || atHohDoor" class="hoh-door-panel">
+          <div class="hoh-door-title">
+            🚪 HOH 房门：<span :class="hohDoorOpen ? 'open' : 'closed'">{{ hohDoorOpen ? '已打开' : '已关闭' }}</span>
+          </div>
+          <div v-if="canControlHohDoor" class="hoh-door-actions">
+            <button class="bb-btn bb-btn-sm" :class="{ 'btn-active': hohDoorOpen }" @click="toggleHohDoor(true)">打开门</button>
+            <button class="bb-btn bb-btn-sm" :class="{ 'btn-active': !hohDoorOpen }" @click="toggleHohDoor(false)">关闭门</button>
+          </div>
+          <div v-if="atHohDoor && !hohDoorOpen" class="doorbell-row">
+            <button class="bb-btn bb-btn-sm" @click="ringDoorbell">🔔 按门铃</button>
+            <span class="doorbell-hint">门已关闭，按门铃通知房内的人</span>
+          </div>
+          <div v-if="doorbellSentNotice" class="doorbell-sent">{{ doorbellSentNotice }}</div>
+        </div>
 
         <!-- HOH 房间特殊功能 -->
         <div v-if="currentRoomId === 'hoh_room' && isHoh" class="hoh-panel">
@@ -65,8 +91,10 @@
           <div v-if="pendingInvites.length" class="pending-list">
             <div v-for="pid in pendingInvites" :key="pid" class="pending-item">
               <span>⏳ {{ playerName(pid) }} 等待回应</span>
+              <button class="bb-btn bb-btn-xs" @click="handleCancelInvite(pid)">撤销</button>
             </div>
           </div>
+          <div v-if="cancelNotice" class="invite-notice">{{ cancelNotice }}</div>
         </div>
       </div>
 
@@ -84,6 +112,22 @@
           @send="handleSend"
           @load-more="handleLoadMore"
         />
+      </div>
+    </div>
+
+    <!-- 管理员广播提示框 -->
+    <div v-if="broadcastData" class="broadcast-overlay" @click.self="broadcastData = null">
+      <div class="broadcast-modal">
+        <div class="broadcast-icon">{{ broadcastData.type === 'invite' ? '📣' : '🔔' }}</div>
+        <div class="broadcast-title">{{ broadcastData.type === 'invite' ? '管理员邀请' : '管理员通知' }}</div>
+        <div class="broadcast-msg">{{ broadcastData.message }}</div>
+        <div v-if="broadcastData.type === 'invite' && broadcastData.roomName" class="broadcast-room">
+          📍 已带你前往「{{ broadcastData.roomName }}」
+        </div>
+        <div class="broadcast-from">—— {{ broadcastData.from }}</div>
+        <div class="broadcast-actions">
+          <button class="bb-btn bb-btn-sm" @click="broadcastData = null">知道了</button>
+        </div>
       </div>
     </div>
   </div>
@@ -106,16 +150,21 @@ const house = useHouseSocket()
 
 const currentRoomId = ref('living_room')
 const rooms = ref<BBHouseRoomWithCount[]>([])
-const reachableIds = ref<string[]>([])
+const reachableRooms = ref<any[]>([])
 const messages = ref<HouseMessage[]>([])
 const presencePlayers = ref<HousePlayer[]>([])
 const hohMonitor = ref<BBHohMonitorRoom[]>([])
 const backyardDoorOpen = ref(true)
+const hohDoorOpen = ref(false)
+const doorbellNotice = ref('')
+const doorbellSentNotice = ref('')
 const moving = ref(false)
 const movingTargetName = ref('')
 const hasMore = ref(true)
 const loadingMore = ref(false)
 const inviteData = ref<{ hohName: string; hohId: string; roomId: string } | null>(null)
+const cancelNotice = ref('')
+const broadcastData = ref<{ type: string; roomId: string | null; roomName?: string; roomIcon?: string; message: string; from: string } | null>(null)
 
 // HOH 相关：周 HOH（BBHohRecord）> 终局 FHOH 回退
 const currentHohId = ref<string | null>(null)
@@ -131,6 +180,14 @@ const declineNotice = ref('')
 const currentRoomDef = computed(() => rooms.value.find(r => r.id === currentRoomId.value))
 const currentRoomName = computed(() => currentRoomDef.value?.name || currentRoomId.value)
 const currentRoomIcon = computed(() => currentRoomDef.value?.icon || '🏠')
+
+const atHohDoor = computed(() => currentRoomId.value === 'hoh_door')
+const canControlHohDoor = computed(() =>
+  currentRoomId.value === 'hoh_room' || (isHoh.value && currentRoomId.value === 'hoh_door')
+)
+// 门状态可见范围
+const canSeeBackyardDoor = computed(() => currentRoomId.value === 'living_room' || currentRoomId.value === 'backyard')
+const canSeeHohDoor = computed(() => currentRoomId.value === 'hoh_room' || currentRoomId.value === 'hoh_door')
 
 const inviteCandidates = computed(() => {
   const inRoom = new Set(presencePlayers.value.map(p => p.playerId))
@@ -207,7 +264,19 @@ house.onDoorUpdate.value = (data) => {
     if (seasonStore.season) {
       (seasonStore.season as any).backyardDoorOpen = data.isOpen
     }
+  } else if (data.doorId === 'hoh_door') {
+    hohDoorOpen.value = data.isOpen
   }
+}
+
+house.onHohDoorbell.value = (data) => {
+  doorbellNotice.value = `${data.playerName} 在 HOH 房门口按了门铃`
+  window.setTimeout(() => { doorbellNotice.value = '' }, 6000)
+}
+
+house.onHohDoorbellSent.value = () => {
+  doorbellSentNotice.value = '已按门铃，等待房内回应…'
+  window.setTimeout(() => { doorbellSentNotice.value = '' }, 5000)
 }
 
 house.onMonitorUpdate.value = (data) => {
@@ -226,6 +295,23 @@ house.onInviteDeclined.value = (data) => {
   pendingInvites.value = pendingInvites.value.filter(id => id !== data.playerId)
   declineNotice.value = `${data.playerName} 拒绝了你的邀请`
   window.setTimeout(() => { declineNotice.value = '' }, 4000)
+}
+
+house.onInviteCancelled.value = (data) => {
+  if (data.playerId) {
+    // HOH 侧：移除待回应
+    pendingInvites.value = pendingInvites.value.filter(id => id !== data.playerId)
+  }
+  if (data.hohId) {
+    // 被邀请者侧：邀请被撤销
+    inviteData.value = null
+    cancelNotice.value = 'HOH 撤销了邀请'
+    window.setTimeout(() => { cancelNotice.value = '' }, 4000)
+  }
+}
+
+house.onBroadcast.value = (data) => {
+  broadcastData.value = data
 }
 
 house.onForceMoved.value = (data) => {
@@ -250,10 +336,11 @@ async function loadData() {
       bbGetHouseRooms(),
       bbGetReachableRooms()
     ])
-    currentRoomId.value = locRes?.data?.currentRoomId || 'living_room'
-    rooms.value = roomsRes?.data || []
-    reachableIds.value = (reachableRes?.data?.rooms || []).map((r: any) => r.id)
-    backyardDoorOpen.value = reachableRes?.data?.backyardDoorOpen ?? true
+    currentRoomId.value = locRes?.currentRoomId || 'living_room'
+    rooms.value = roomsRes || []
+    reachableRooms.value = reachableRes?.rooms || []
+    backyardDoorOpen.value = reachableRes?.backyardDoorOpen ?? true
+    hohDoorOpen.value = reachableRes?.hohDoorOpen ?? false
     house.currentRoomId.value = currentRoomId.value
 
     // 解析当前 HOH（周 HOH > 终局 FHOH 回退）
@@ -266,12 +353,14 @@ async function loadData() {
       currentHohId.value = null
     }
 
-    // 如果是 HOH，加载监控数据
-    if (isHoh.value) {
+    // 仅 HOH 且身处 HOH 房时加载监控
+    if (isHoh.value && currentRoomId.value === 'hoh_room') {
       try {
         const monitorRes = await (await import('../../../services/bbHouseApi')).bbGetHohMonitor()
-        hohMonitor.value = monitorRes?.data || []
-      } catch {}
+        hohMonitor.value = monitorRes || []
+      } catch { hohMonitor.value = [] }
+    } else {
+      hohMonitor.value = []
     }
   } catch (e) {
     console.error('[BBHouse] Load data error:', e)
@@ -344,6 +433,18 @@ function handleInvite() {
 
 function playerName(pid: string): string {
   return activePlayers.value.find(p => p.id === pid)?.name || pid
+}
+
+function toggleHohDoor(isOpen: boolean) {
+  house.setHohDoor(isOpen)
+}
+
+function ringDoorbell() {
+  house.ringHohDoorbell()
+}
+
+function handleCancelInvite(pid: string) {
+  house.cancelInvite(pid)
 }
 
 async function loadActivePlayers() {
@@ -426,6 +527,62 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   font-size: 13px;
   color: #00ff88;
 }
+
+.doorbell-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, #3a2e0f, #241a08);
+  border: 1px solid #ffaa0066;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.doorbell-icon { font-size: 22px; }
+.doorbell-text { flex: 1; color: #ffaa00; font-size: 14px; }
+
+.hoh-door-panel {
+  background: #0f0f2e;
+  border: 1px solid #ffaa0033;
+  border-radius: 10px;
+  padding: 14px;
+}
+.hoh-door-title { font-size: 14px; color: #e0e0e0; margin-bottom: 10px; font-weight: 600; }
+.hoh-door-title .open { color: #00ff88; }
+.hoh-door-title .closed { color: #ff6b6b; }
+.hoh-door-actions { display: flex; gap: 8px; }
+.bb-btn.btn-active { background: #00ff8822; border-color: #00ff88; }
+.doorbell-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.doorbell-hint { font-size: 11px; color: #888; }
+.doorbell-sent { margin-top: 10px; font-size: 12px; color: #ffaa00; }
+
+.pending-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bb-btn-xs { padding: 2px 8px; font-size: 11px; }
+
+.broadcast-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.broadcast-modal {
+  background: linear-gradient(135deg, #1a1a3e, #0f0f2e);
+  border: 1px solid #00ff8866;
+  border-radius: 14px;
+  padding: 28px 32px;
+  width: min(420px, 90vw);
+  text-align: center;
+  box-shadow: 0 12px 48px #000000aa;
+}
+.broadcast-icon { font-size: 44px; }
+.broadcast-title { color: #00ff88; font-weight: 700; margin: 10px 0 8px; font-size: 16px; }
+.broadcast-msg { color: #e0e0e0; font-size: 15px; line-height: 1.6; margin-bottom: 8px; }
+.broadcast-room { color: #00ff88; font-size: 13px; margin-bottom: 8px; }
+.broadcast-from { color: #777; font-size: 12px; margin-bottom: 16px; }
+.broadcast-actions { display: flex; gap: 10px; justify-content: center; }
 .moving-spinner {
   width: 16px;
   height: 16px;

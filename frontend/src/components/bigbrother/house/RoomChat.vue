@@ -14,7 +14,7 @@
     <!-- 玩家列表 -->
     <div class="presence-bar">
       <div v-for="p in presencePlayers" :key="p.playerId" class="presence-player">
-        <span class="presence-player-dot"></span>
+        <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
         <span class="presence-player-name">{{ p.playerName }}</span>
       </div>
       <div v-if="presencePlayers.length === 0" class="presence-empty">暂无其他人</div>
@@ -33,11 +33,16 @@
           <div class="system-text">{{ msg.content }}</div>
         </template>
         <template v-else>
-          <div class="msg-header">
-            <span class="msg-sender" :class="{ admin: msg.senderRole === 'admin' }">{{ msg.senderName }}</span>
-            <span class="msg-time">{{ formatTime(msg.createdAt) }}</span>
+          <div class="msg-row">
+            <BBAvatar :name="msg.senderName" :avatar="msg.senderAvatar" size="sm" />
+            <div class="msg-body">
+              <div class="msg-header">
+                <span class="msg-sender" :class="{ admin: msg.senderRole === 'admin' }">{{ msg.senderName }}</span>
+                <span class="msg-time">{{ formatTime(msg.createdAt) }}</span>
+              </div>
+              <div class="msg-content">{{ msg.content }}</div>
+            </div>
           </div>
-          <div class="msg-content">{{ msg.content }}</div>
         </template>
       </div>
 
@@ -66,6 +71,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted } from 'vue'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
+import BBAvatar from '../BBAvatar.vue'
 import type { HouseMessage, HousePlayer } from '../../../composables/useHouseSocket'
 
 const props = defineProps<{
@@ -219,6 +225,8 @@ import { computed } from 'vue'
   flex-direction: column;
   gap: 2px;
 }
+.msg-row { display: flex; gap: 8px; align-items: flex-start; }
+.msg-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .system-msg {
   align-items: center;
 }
