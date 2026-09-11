@@ -234,6 +234,19 @@ router.post('/move', auth, async (req, res) => {
       return res.status(403).json({ success: false, error: '非活跃玩家' })
     }
 
+    // 睡眠/洗澡期间不可移动
+    if (player.isSleeping) {
+      return res.status(403).json({ success: false, error: '睡眠中无法移动' })
+    }
+    if (player.isShowering) {
+      return res.status(403).json({ success: false, error: '洗澡中无法离开浴室' })
+    }
+
+    // 进入浴室：需先确认今天未洗过澡
+    if (targetRoomId === 'bathroom' && player.lastShowerDate === todayStr()) {
+      return res.status(403).json({ success: false, error: '今天已经洗过澡了' })
+    }
+
     // 2. 目标房间存在
     const targetRoom = await BBHouseRoom.findOne({ id: targetRoomId, gameId })
     if (!targetRoom) return res.status(400).json({ success: false, error: '房间不存在' })
@@ -312,6 +325,14 @@ router.post('/move', auth, async (req, res) => {
 
     // 记录位置历史（消息可见性核心）
     await locationHistory.recordMove(req.user.userId, player.name, oldRoomId, targetRoomId)
+
+    // 进入浴室即自动开始洗澡（不可中途退出，10 分钟后自动结束并移动到洗漱间）
+    if (targetRoomId === 'bathroom') {
+      player.isShowering = true
+      player.showerStartedAt = new Date().toISOString()
+      player.lastShowerDate = todayStr()
+      await player.save()
+    }
 
     res.json({
       success: true,

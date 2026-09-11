@@ -3,6 +3,7 @@
     <div class="page-header">
       <h1>🏠 BB House</h1>
       <div class="header-meta">
+        <button v-if="canSleepHere && !isSleeping && !isShowering" class="bb-btn bb-btn-sm" @click="doSleep">😴 睡觉</button>
         <span class="location-tag">
           📍 {{ currentRoomName }}
         </span>
@@ -45,16 +46,18 @@
     <div class="house-layout">
       <!-- 左侧：房屋地图 -->
       <div class="house-left">
-        <HouseMap
-          :rooms="rooms"
-          :currentRoomId="currentRoomId"
-          :reachableRooms="reachableRooms"
-          :backyardDoorOpen="backyardDoorOpen"
-          :hohDoorOpen="hohDoorOpen"
-          :showBackyardDoor="canSeeBackyardDoor"
-          :showHohDoor="canSeeHohDoor"
-          @select-room="handleMove"
-        />
+        <div class="map-wrap" :class="{ locked: isShowering || isSleeping }">
+          <HouseMap
+            :rooms="rooms"
+            :currentRoomId="currentRoomId"
+            :reachableRooms="reachableRooms"
+            :backyardDoorOpen="backyardDoorOpen"
+            :hohDoorOpen="hohDoorOpen"
+            :showBackyardDoor="canSeeBackyardDoor"
+            :showHohDoor="canSeeHohDoor"
+            @select-room="handleMove"
+          />
+        </div>
 
         <!-- HOH 房门控制 / 门铃 -->
         <div v-if="canControlHohDoor || atHohDoor" class="hoh-door-panel">
@@ -72,11 +75,10 @@
           <div v-if="doorbellSentNotice" class="doorbell-sent">{{ doorbellSentNotice }}</div>
         </div>
 
-        <!-- 睡觉 / 洗澡 -->
-        <div v-if="canSleepHere || canShower" class="action-panel">
-          <button v-if="canSleepHere" class="bb-btn bb-btn-sm" @click="doSleep">😴 睡觉</button>
-          <button v-if="canShower" class="bb-btn bb-btn-sm" @click="doShower">🚿 洗澡</button>
-          <span v-if="canShower && myState.lastShowerDate === myState.today" class="action-hint">今天已洗过澡</span>
+        <!-- 睡觉 -->
+        <div v-if="canSleepHere" class="action-panel">
+          <button class="bb-btn bb-btn-sm" @click="doSleep">😴 睡觉</button>
+          <span v-if="myState.lastSleepDate === myState.today" class="action-hint">今天已完成睡觉任务</span>
         </div>
 
         <!-- 洗漱间：查看浴室内有谁 -->
@@ -187,7 +189,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
 import { useHouseSocket, type HouseMessage, type HousePlayer } from '../../../composables/useHouseSocket'
-import { bbGetMyLocation, bbGetReachableRooms, bbMoveToRoom, bbGetHouseRooms, bbGetRoomPlayers, bbGetMyState, bbSleep, bbSleepWake, bbSleepApprove, bbShower } from '../../../services/bbHouseApi'
+import { bbGetMyLocation, bbGetReachableRooms, bbMoveToRoom, bbGetHouseRooms, bbGetRoomPlayers, bbGetMyState, bbSleep, bbSleepWake, bbSleepApprove } from '../../../services/bbHouseApi'
 import { bbGetActiveHouseguests, bbGetCurrentHoh } from '../../../services/bbApi'
 import HouseMap from '../../../components/bigbrother/house/HouseMap.vue'
 import RoomChat from '../../../components/bigbrother/house/RoomChat.vue'
@@ -260,10 +262,6 @@ const sleepCountdown = computed(() => {
   const m = Math.floor((ms % 3600000) / 60000)
   return `${h}小时${m}分`
 })
-const canShower = computed(() =>
-  currentRoomId.value === 'bathroom' && !isShowering.value && !isSleeping.value &&
-  myState.value.lastShowerDate !== myState.value.today
-)
 const showerSecondsLeft = computed(() => {
   if (!myState.value.showerStartedAt) return 0
   return Math.max(0, Math.ceil((new Date(myState.value.showerStartedAt).getTime() + 10 * 60 * 1000 - nowTs.value) / 1000))
@@ -554,9 +552,6 @@ async function doSleep() {
 async function doWake() {
   try { await bbSleepWake(); await loadData() } catch (e: any) { alert(e?.message || '无法醒来') }
 }
-async function doShower() {
-  try { await bbShower(); await loadData() } catch (e: any) { alert(e?.message || '无法洗澡') }
-}
 async function approveSleep(pid: string) {
   try { await bbSleepApprove(pid) } catch (e: any) { alert(e?.message || '操作失败') }
 }
@@ -759,6 +754,7 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   flex-direction: column;
   gap: 12px;
 }
+.map-wrap.locked { pointer-events: none; opacity: 0.5; }
 .house-right {
   flex: 1;
   min-width: 0;
