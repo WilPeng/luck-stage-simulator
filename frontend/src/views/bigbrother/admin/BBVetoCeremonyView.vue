@@ -162,6 +162,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import { bbGetCurrentVeto, bbUseVeto, bbSkipVeto, bbGetCurrentNomination, bbGetCurrentHoh, bbGetNominationHistory } from '../../../services/bbApi'
 import type { BBVetoRecord, BBNomination, BBHohRecord } from '../../../types/bigbrother'
@@ -239,6 +240,7 @@ function closeSkipModal() {
   skipConfirmed.value = false
 }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 

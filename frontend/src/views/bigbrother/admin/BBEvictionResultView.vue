@@ -20,15 +20,35 @@
     </div>
 
     <div class="action-section">
-      <h3>操作 - 宣布结果</h3>
-      <div v-if="twistInfo?.isTripleEviction" class="twist-action-hint">
-        🔱 三重献祭生效中：宣布结果后将淘汰得票最高的 2 名被提名人
-      </div>
+      <h3>操作 - 淘汰夜</h3>
       <div class="action-buttons">
-        <button class="bb-btn bb-btn-danger" @click="announceResult" :disabled="voteData.total === 0">
-          🚪 宣布淘汰结果{{ twistInfo?.isTripleEviction ? '（双淘汰）' : '' }}
+        <button v-if="!night" class="bb-btn bb-btn-danger" @click="startNight" :disabled="(voteData.votes?.length || 0) === 0 || starting">
+          🌙 {{ starting ? '处理中...' : '开始淘汰夜（锁票）' }}
         </button>
+        <button v-else-if="night.phase === 'announce'" class="bb-btn bb-btn-primary" @click="confirmNight" :disabled="confirming">
+          ✅ {{ confirming ? '处理中...' : '确定（开门）' }}
+        </button>
+        <button v-else class="bb-btn" disabled>🚪 已开门</button>
+        <button v-if="night" class="bb-btn" @click="resetNight">清除淘汰夜</button>
       </div>
+
+      <div v-if="night" class="night-preview">
+        <div class="night-phase">{{ night.phase === 'announce' ? '📢 淘汰结果宣布' : '🚪 开门结果' }}</div>
+        <template v-if="night.phase === 'announce'">
+          <div class="night-line">by a vote of {{ night.big }}-{{ night.small }},</div>
+          <div v-for="e in night.evicted" :key="e.id" class="night-line evicted">{{ e.name }}</div>
+        </template>
+        <template v-else>
+          <div v-for="e in night.evicted" :key="e.id" class="night-line door">🚪 {{ e.name }} · {{ night.big }}-{{ night.small }}</div>
+        </template>
+      </div>
+      <div v-if="night && night.phase === 'announce' && nominees.length" class="nominee-preview">
+        <div class="np-title">本轮被提名者</div>
+        <div class="np-list">
+          <span v-for="n in nominees" :key="n.id" class="np-chip">{{ n.name }}</span>
+        </div>
+      </div>
+      <p v-if="!night" class="hint">开始淘汰夜后将锁定投票，并向选手端展示「📢 淘汰结果宣布」框架；再点「确定」显示开门结果。</p>
     </div>
 
     <div v-if="voteData.votes?.length > 0" class="votes-section">
@@ -68,43 +88,63 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { bbGetVotes, bbAnnounceEviction, bbGetEvictionHistory } from '../../../services/bbApi'
+import { ref, onMounted, watch } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
+import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
+import {
+  bbGetVotes, bbGetEvictionHistory, bbGetEvictionNight, bbGetCurrentNomination,
+  bbStartEvictionNight, bbConfirmEvictionNight, bbResetEvictionNight
+} from '../../../services/bbApi'
 import type { BBEviction } from '../../../types/bigbrother'
 
-const voteData = ref<{ votes: any[]; total: number }>({ votes: [], total: 0 })
+const realtime = useBbRealtimeStore()
+
+const voteData = ref<{ votes: any[]; totalVotes?: number }>({ votes: [], totalVotes: 0 })
 const lastEviction = ref<BBEviction | null>(null)
 const evictionHistory = ref<BBEviction[]>([])
 const twistInfo = ref<any>(null)
+
+const night = ref<any>(null)
+const starting = ref(false)
+const confirming = ref(false)
+const nominees = ref<{ id: string; name: string }[]>([])
 
 async function fetchData() {
   try { voteData.value = await bbGetVotes() } catch {}
   try { evictionHistory.value = await bbGetEvictionHistory() } catch {}
   lastEviction.value = evictionHistory.value[0] || null
+  try { const r = await bbGetEvictionNight(); night.value = r.night } catch {}
+  try {
+    const nom: any = await bbGetCurrentNomination()
+    nominees.value = (nom?.nomineeIds || []).map((id: string, i: number) => ({ id, name: nom.nomineeNames?.[i] || id }))
+  } catch {}
 }
 
-async function announceResult() {
-  const msg = twistInfo.value?.isTripleEviction
-    ? '确定宣布淘汰结果？此操作将淘汰得票最高的 2 名房客（三重献祭）。'
-    : '确定宣布淘汰结果？此操作将淘汰得票最多的房客。'
-  if (!confirm(msg)) return
+async function startNight() {
+  if (starting.value) return
+  if (!confirm('确定开始淘汰夜？将锁定投票并显示淘汰结果宣布框架。')) return
+  starting.value = true
   try {
-    const result = await bbAnnounceEviction()
-    twistInfo.value = result
-    if (result.isTripleEviction && result.evicted?.length > 1) {
-      alert(`${result.evicted.map((e: any) => e.name).join('、')} 被淘汰！(${result.totalVotes}总票)`)
-    } else if (result.evicted?.length > 0) {
-      alert(`${result.evicted[0].name} 被淘汰！(${result.evicted[0].votes}票)`)
-    }
-    if (result.karmicHoh) {
-      alert(`⚖️ 因果报应生效：${result.karmicHoh} 将成为下轮 HOH`)
-    }
+    night.value = await bbStartEvictionNight()
     await fetchData()
-  } catch (e: any) { alert(e.message) }
+  } catch (e: any) { alert(e?.message || '开始失败') } finally { starting.value = false }
 }
+
+async function confirmNight() {
+  if (confirming.value) return
+  confirming.value = true
+  try { night.value = await bbConfirmEvictionNight() } catch (e: any) { alert(e?.message || '确认失败') } finally { confirming.value = false }
+}
+
+async function resetNight() {
+  try { await bbResetEvictionNight(); night.value = null } catch (e: any) { alert(e?.message || '清除失败') }
+}
+
+watch(() => realtime.lastEvictionNight, (v) => { night.value = v })
 
 function formatTime(t: string) { return t ? new Date(t).toLocaleString('zh-CN') : '' }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 
@@ -139,4 +179,23 @@ onMounted(fetchData)
 .highlight { color: #ffaa00; font-weight: 500; }
 .time { font-size: 12px; color: #666; }
 .empty-cell { text-align: center; color: #666; padding: 32px; }
+.announce-segments { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.seg { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #ffffff06; border: 1px solid #ffffff10; border-radius: 8px; opacity: 0.5; }
+.seg.shown { opacity: 1; border-color: #00ff8866; background: #00ff8810; }
+.seg-no { width: 22px; height: 22px; border-radius: 50%; background: #1c1c46; color: #aaa; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+.seg.shown .seg-no { background: #00ff88; color: #003018; }
+.seg-text { color: #e0e0e0; font-size: 15px; }
+.announce-form { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.announce-form label { color: #888; font-size: 13px; }
+.bb-select { padding: 8px 12px; background: #0a0a1a; border: 1px solid #00ff8833; border-radius: 6px; color: #e0e0e0; font-size: 13px; }
+.hint { color: #666; font-size: 12px; margin-top: 8px; }
+.night-preview { margin-top: 16px; background: #0a0a1a; border: 1px solid #ffaa0044; border-radius: 10px; padding: 18px; text-align: center; }
+.night-phase { color: #ffaa00; font-size: 13px; margin-bottom: 12px; }
+.night-line { font-size: 20px; font-weight: 700; color: #e0e0e0; padding: 4px 0; }
+.night-line.evicted { color: #ff4444; }
+.night-line.door { color: #ffaa00; }
+.nominee-preview { margin-top: 14px; background: #0a0a1a; border: 1px solid #ffaa0033; border-radius: 10px; padding: 14px; }
+.np-title { font-size: 13px; color: #ffaa00; margin-bottom: 10px; }
+.np-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.np-chip { background: #ffaa0015; border: 1px solid #ffaa0033; border-radius: 6px; padding: 6px 14px; font-size: 14px; color: #ffaa00; }
 </style>

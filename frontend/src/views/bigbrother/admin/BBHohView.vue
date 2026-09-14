@@ -98,6 +98,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useRoute } from 'vue-router'
 import {
   bbGetCurrentHoh, bbGetHohHistory, bbRunHohCompetition, bbAssignHoh,
@@ -218,6 +219,7 @@ function formatTime(t: string) {
   return t ? new Date(t).toLocaleString('zh-CN') : ''
 }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 

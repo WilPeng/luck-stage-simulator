@@ -11,6 +11,8 @@ class BBNomination extends BaseModel {
     this.hohName = data?.hohName || ''
     this.replacementNomineeId = data?.replacementNomineeId || null // 替换提名（否决权使用后）
     this.replacementNomineeName = data?.replacementNomineeName || ''
+    this.bbbbWinnerId = data?.bbbbWinnerId || null   // BBBB 胜者（安全，不进入淘汰投票）
+    this.bbbbWinnerName = data?.bbbbWinnerName || ''
     this.vetoUsed = data?.vetoUsed || false
     this.gameId = data?.gameId || 'bigbrother'
     this.createdAt = data?.createdAt || new Date().toISOString()

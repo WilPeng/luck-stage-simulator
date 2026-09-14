@@ -88,6 +88,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { bbGetCurrentNomination, bbReplaceNomination, bbGetActiveHouseguests, bbGetCurrentVeto } from '../../../services/bbApi'
 import type { BBNomination, BBVetoRecord } from '../../../types/bigbrother'
 
@@ -144,6 +145,7 @@ async function replaceNomination() {
   } catch (e: any) { alert(e.message) }
 }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 

@@ -32,7 +32,7 @@
 
     <!-- 非直接民主模式：当前轮次且用户是 HOH 且处于提名阶段：显示提名操作 -->
     <div v-else-if="isCurrentRound && isCurrentHoh && isNominationStage" class="nomination-action">
-      <div class="hoh-banner">🏆 你是本周的 HOH！{{ isTripleOffering ? '请选择三名被提名人' : '请选择两名被提名人' }}</div>
+      <div class="hoh-banner">🏆 你是本周的 HOH！{{ needThree ? '请选择三名被提名人' : '请选择两名被提名人' }}</div>
       <div class="nomination-form">
         <div class="form-group">
           <label>被提名人 1</label>
@@ -48,14 +48,14 @@
             <option v-for="h in listForNominee2" :key="h.id" :value="h.id">{{ h.name }}</option>
           </select>
         </div>
-        <div v-if="isTripleOffering" class="form-group">
-          <label>被提名人 3（三重献祭）</label>
+        <div v-if="needThree" class="form-group">
+          <label>被提名人 3</label>
           <select v-model="nominee3" class="bb-select">
             <option value="" disabled>请选择</option>
             <option v-for="h in listForNominee3" :key="h.id" :value="h.id">{{ h.name }}</option>
           </select>
         </div>
-        <button class="bb-btn" @click="submitNomination" :disabled="!nominee1 || !nominee2 || (isTripleOffering && !nominee3) || submitting">
+        <button class="bb-btn" @click="submitNomination" :disabled="!nominee1 || !nominee2 || (needThree && !nominee3) || submitting">
           {{ submitting ? '提交中...' : '提交提名' }}
         </button>
       </div>
@@ -136,6 +136,13 @@ const isTripleOffering = computed(() => {
   return cfg?.twists?.includes('triple_offering') || false
 })
 
+// BBBB：本轮提名 3 人
+const isBbbb = computed(() => {
+  const cfg = roundConfigs.value.find(c => c.round === roundNum.value)
+  return cfg?.twists?.includes('bbbb') || false
+})
+const needThree = computed(() => isTripleOffering.value || isBbbb.value)
+
 // 直接民主投票候选人（所有活跃玩家）
 const democracyCandidates = computed(() => activeList.value)
 
@@ -163,11 +170,11 @@ function isMe(name: string): boolean {
 
 async function submitNomination() {
   if (!nominee1.value || !nominee2.value) return
-  if (isTripleOffering.value && !nominee3.value) return
+  if (needThree.value && !nominee3.value) return
   submitting.value = true
   try {
     const ids = [nominee1.value, nominee2.value]
-    if (isTripleOffering.value && nominee3.value) ids.push(nominee3.value)
+    if (needThree.value && nominee3.value) ids.push(nominee3.value)
     const names = ids.map(id => activeMap.value[id] || '')
     await bbSetNomination(ids, names)
     submitSuccess.value = true

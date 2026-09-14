@@ -9,6 +9,7 @@
  *       答错反馈（不告知/告知数量/告知答案/仅全对告知）、答错是否锁定该题
  */
 const BBCustomGame = require('../models/BBCustomGame')
+const { createModeHandler, MODE_TYPES } = require('./customGameModes')
 
 const customGameCache = new Map()
 
@@ -48,6 +49,8 @@ function normalize(v) {
 }
 
 function createCustomGameHandler(gameDef) {
+  if (MODE_TYPES.includes(gameDef.type)) return createModeHandler(gameDef)
+
   const handlerId = getCustomHandlerId(gameDef.id)
   const isAdminJudge = gameDef.winCondition === 'admin_judge'
   const submitMode = gameDef.submitMode || 'single'
@@ -57,6 +60,11 @@ function createCustomGameHandler(gameDef) {
 
   // 单题：与正确答案比较；无答案（管理员评判）返回 null
   function grade(q, userAnswer) {
+    if (q.qtype === 'number') {
+      const a = Number(userAnswer)
+      const c = Number(q.correctAnswer)
+      return !Number.isNaN(a) && !Number.isNaN(c) && a === c
+    }
     if (!q.correctAnswer) return null
     return normalize(userAnswer) === normalize(q.correctAnswer)
   }
@@ -362,7 +370,9 @@ function createCustomGameHandler(gameDef) {
           return {
             id: q.id,
             text: q.text,
-            options: q.shuffledOptions || q.options,
+            qtype: q.qtype || 'text',
+            options: q.qtype === 'choice' ? (q.shuffledOptions || q.options)
+              : (q.qtype === 'judge' ? (q.options && q.options.length ? q.options : ['对', '错']) : []),
             points: q.points,
             userAnswer: rec ? rec.userAnswer : '',
             correct: rec ? !!rec.correct : false,
@@ -375,7 +385,9 @@ function createCustomGameHandler(gameDef) {
         base.currentQuestion = q ? {
           id: q.id,
           text: q.text,
-          options: q.shuffledOptions || q.options,
+          qtype: q.qtype || 'text',
+          options: q.qtype === 'choice' ? (q.shuffledOptions || q.options)
+            : (q.qtype === 'judge' ? (q.options && q.options.length ? q.options : ['对', '错']) : []),
           points: q.points
         } : null
       }

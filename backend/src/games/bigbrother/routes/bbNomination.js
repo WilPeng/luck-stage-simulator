@@ -39,6 +39,8 @@ router.get('/current', async (req, res) => {
           vetoWinnerName: vetoRecord?.winnerName || '',
           replacementNomineeId: doc.replacementNomineeId || null,
           replacementNomineeName: doc.replacementNomineeName || '',
+          bbbbWinnerId: doc.bbbbWinnerId || null,
+          bbbbWinnerName: doc.bbbbWinnerName || '',
           vetoUsed: doc.vetoUsed || false,
           gameId: 'bigbrother',
           createdAt: doc.createdAt || new Date().toISOString(),
@@ -46,6 +48,7 @@ router.get('/current', async (req, res) => {
           // twist 信息
           isDirectDemocracy: hasTwist(season.currentRound, 'direct_democracy', season.twistConfigs, roundConfigs),
           isTripleOffering: hasTwist(season.currentRound, 'triple_offering', season.twistConfigs, roundConfigs),
+          isBbbb: hasTwist(season.currentRound, 'bbbb', season.twistConfigs, roundConfigs),
           isSecretKeeper
         }
       })
@@ -56,6 +59,7 @@ router.get('/current', async (req, res) => {
         twists: {
           isDirectDemocracy: hasTwist(season.currentRound, 'direct_democracy', season.twistConfigs, roundConfigs),
           isTripleOffering: hasTwist(season.currentRound, 'triple_offering', season.twistConfigs, roundConfigs),
+          isBbbb: hasTwist(season.currentRound, 'bbbb', season.twistConfigs, roundConfigs),
           isSecretKeeper
         }
       })
@@ -80,10 +84,11 @@ router.post('/set', async (req, res) => {
       return res.status(400).json({ success: false, error: '本轮为"直接民主"模式，提名由全员投票决定，不能手动设置', code: 'DIRECT_DEMOCRACY' })
     }
 
-    // Twist #38 三重献祭：允许 2-3 人
+    // Twist #38 三重献祭 / BBBB：允许 2-3 人
     const isTriple = hasTwist(curRound, 'triple_offering', twistConfigs, roundConfigs)
+    const isBbbb = hasTwist(curRound, 'bbbb', twistConfigs, roundConfigs)
     const minNominees = 2
-    const maxNominees = isTriple ? 3 : 2
+    const maxNominees = (isTriple || isBbbb) ? 3 : 2
 
     if (!nomineeIds || !nomineeNames || nomineeIds.length < minNominees || nomineeIds.length > maxNominees) {
       return res.status(400).json({ success: false, error: `请选择 ${minNominees}~${maxNominees} 位被提名人`, code: 'INVALID_NOMINEES' })
@@ -317,6 +322,40 @@ router.get('/history', async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '获取提名历史失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /bbbb-winner - BBBB 比赛胜者（安全，不进入淘汰投票）
+router.post('/bbbb-winner', async (req, res) => {
+  try {
+    const { playerId, playerName } = req.body
+    if (!playerId) return res.status(400).json({ success: false, error: '缺少玩家' })
+    const season = await getCurrentSeason()
+    if (season.currentStage !== 'bbbb') {
+      return res.status(400).json({ success: false, error: '当前不是 BBBB 阶段', code: 'WRONG_STAGE' })
+    }
+    const roundId = `round-${season.currentRound}`
+    const doc = await BBNomination.findOne({ gameId: 'bigbrother', roundId })
+    if (!doc) return res.status(404).json({ success: false, error: '本轮提名不存在' })
+    if (!doc.nomineeIds.includes(playerId)) {
+      return res.status(400).json({ success: false, error: '该玩家不是本轮被提名人' })
+    }
+    doc.bbbbWinnerId = playerId
+    doc.bbbbWinnerName = playerName || ''
+    // BBBB 胜者不再是本轮终极提名：从提名名单中移除，安全、不可被投票、可参与投票
+    const pairs = (doc.nomineeIds || []).map((id, i) => ({ id, name: (doc.nomineeNames || [])[i] }))
+    const remaining = pairs.filter(p => p.id !== playerId)
+    doc.nomineeIds = remaining.map(p => p.id)
+    doc.nomineeNames = remaining.map(p => p.name)
+    doc.updatedAt = new Date().toISOString()
+    await doc.save()
+    await logAction(req.user.userId, req.user.name || 'admin', req.user.role || 'admin',
+      BB_ACTION_TYPES.NOMINATION_SET, 'season', season.id,
+      `BBBB 胜者（安全）：${playerName || playerId}`)
+    res.json({ success: true, data: { playerId, playerName: playerName || '' } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '设置 BBBB 胜者失败', code: 'SERVER_ERROR' })
   }
 })
 

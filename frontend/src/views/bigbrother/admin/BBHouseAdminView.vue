@@ -121,7 +121,8 @@ import {
   bbAdminMovePlayer,
   bbAdminBroadcast,
   bbAdminSetRoom,
-  bbAdminSetSeason
+  bbAdminSetSeason,
+  bbAdminChatLogs
 } from '../../../services/bbHouseApi'
 import { bbGetSeason } from '../../../services/bbApi'
 import type { BBHouseRoomWithCount } from '../../../types/bigbrother'
@@ -139,6 +140,31 @@ const broadcastMessage = ref('')
 
 const autoSleepHour = ref(18)
 const roomEdits = reactive<Record<string, { capacity: number | null; bedLimit: number | null; canSleep: boolean }>>({})
+
+// 聊天记录
+const chatRoomFilter = ref('')
+const chatLogs = ref<any[]>([])
+const expandedMsgId = ref<string | null>(null)
+
+function toggleDetail(id: string) {
+  expandedMsgId.value = expandedMsgId.value === id ? null : id
+}
+
+function formatDateTime(t: string) {
+  if (!t) return ''
+  const d = new Date(t)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+async function loadChatLogs() {
+  try {
+    const res = await bbAdminChatLogs(chatRoomFilter.value || undefined)
+    chatLogs.value = res?.messages || []
+  } catch {
+    chatLogs.value = []
+  }
+}
 
 async function saveSeason() {
   try {
@@ -383,4 +409,15 @@ async function handleForceMove(playerId: string, targetRoomId: string) {
 }
 .move-select option { background: #0f0f2e; color: #fff; }
 .no-players { color: #555; font-size: 12px; padding: 4px 0; }
+
+.chat-logs-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.chat-logs-header h3 { margin: 0; }
+.chat-logs { display: flex; flex-direction: column; gap: 8px; }
+.chat-log-item { background: #0f0f2e; border: 1px solid #ffffff10; border-radius: 8px; padding: 10px 12px; }
+.cl-head { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.cl-room { color: #7fb0ff; }
+.cl-sender { color: #00ff88; font-weight: 600; }
+.cl-time { color: #666; margin-left: auto; }
+.cl-content { color: #ddd; font-size: 13px; margin-top: 6px; }
+.cl-detail { margin-top: 8px; font-size: 12px; color: #ffaa00; background: #ffaa0010; border-radius: 6px; padding: 6px 10px; }
 </style>

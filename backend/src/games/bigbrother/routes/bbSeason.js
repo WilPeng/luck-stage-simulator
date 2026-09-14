@@ -91,6 +91,7 @@ router.get('/progress', auth, async (req, res) => {
     const lastNormalRound = season.final3Round ? (season.final3Round - 1) : season.totalRounds
     for (let r = 1; r <= lastNormalRound; r++) {
       for (const st of BB_STAGE_ORDER) {
+        if (st === 'bbbb' && !hasTwist(r, 'bbbb', season.twistConfigs, season.roundConfigs)) continue
         matrix.push({
           round: r,
           stage: st,
@@ -138,6 +139,8 @@ router.get('/menu', auth, async (req, res) => {
     const lastNormalRound = season.final3Round ? (season.final3Round - 1) : season.totalRounds
     for (let r = 1; r <= lastNormalRound; r++) {
       for (const st of BB_STAGE_ORDER) {
+        // BBBB 仅在本轮启用该 twist 时出现
+        if (st === 'bbbb' && !hasTwist(r, 'bbbb', season.twistConfigs, season.roundConfigs)) continue
         const status = getStageStatus(r, st, season.currentRound, season.currentStage)
         menu.push({
           round: r,
@@ -244,8 +247,9 @@ router.post('/next', auth, requireAdmin, async (req, res) => {
     }
 
     // Twist #22 无护符挑战：从提名推进时跳过否决权相关阶段
+    const hasBbbb = hasTwist(curRound, 'bbbb', twistConfigs, roundConfigs)
     if (season.currentStage === 'nomination' && hasTwist(curRound, 'no_pendant_challenge', twistConfigs, roundConfigs)) {
-      targetStage = 'eviction_vote'
+      targetStage = hasBbbb ? 'bbbb' : 'eviction_vote'
     }
 
     // 从否决权会议推进时，检查否决权是否被使用
@@ -254,9 +258,14 @@ router.post('/next', auth, requireAdmin, async (req, res) => {
       const vetoRecord = await vetoCol.findOne({ gameId: 'bigbrother', roundId: `round-${curRound}` })
       const vetoUsed = vetoRecord?.used === true
       if (!vetoUsed) {
-        // 否决权未被使用 → 跳过替换提名，直接进入淘汰投票
-        targetStage = 'eviction_vote'
+        // 否决权未被使用 → 跳过替换提名；若启用 BBBB 则先进入 BBBB
+        targetStage = hasBbbb ? 'bbbb' : 'eviction_vote'
       }
+    }
+
+    // BBBB：未启用该 twist 的轮次跳过 bbbb 阶段
+    if (season.currentStage === 'replacement_nom' && !hasBbbb) {
+      targetStage = 'eviction_vote'
     }
 
     const prevRound = season.currentRound

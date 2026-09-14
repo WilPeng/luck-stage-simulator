@@ -13,6 +13,11 @@
       </div>
     </div>
 
+    <!-- 特殊区域锁定提示（初入屋 / 陪审屋） -->
+    <div v-if="houseLocked" class="locked-banner">
+      🔒 {{ houseLockReason || '你当前处于特殊区域，只能由管理员安排移动' }}
+    </div>
+
     <!-- HOH 邀请提示 -->
     <div v-if="inviteData" class="invite-banner">
       <div class="invite-icon">👑</div>
@@ -153,19 +158,6 @@
       </div>
     </div>
 
-    <!-- 睡眠覆盖 -->
-    <div v-if="isSleeping" class="state-overlay">
-      <div class="state-card">
-        <div class="state-icon">😴</div>
-        <div class="state-title">睡眠中</div>
-        <div class="state-desc">你在睡觉，无法接收任何消息</div>
-        <div v-if="!wakeReady" class="state-timer">可醒来倒计时：{{ sleepCountdown }}</div>
-        <button class="bb-btn" :disabled="!wakeReady" @click="doWake">
-          {{ wakeReady ? '醒来' : '还未到时间' }}
-        </button>
-      </div>
-    </div>
-
     <!-- 管理员广播提示框 -->
     <div v-if="broadcastData" class="broadcast-overlay" @click.self="broadcastData = null">
       <div class="broadcast-modal">
@@ -203,6 +195,8 @@ const house = useHouseSocket()
 const currentRoomId = ref('living_room')
 const rooms = ref<BBHouseRoomWithCount[]>([])
 const reachableRooms = ref<any[]>([])
+const houseLocked = ref(false)
+const houseLockReason = ref('')
 const messages = ref<HouseMessage[]>([])
 const presencePlayers = ref<HousePlayer[]>([])
 const hohMonitor = ref<BBHohMonitorRoom[]>([])
@@ -425,6 +419,8 @@ async function loadData() {
     currentRoomId.value = locRes?.currentRoomId || 'living_room'
     rooms.value = roomsRes || []
     reachableRooms.value = reachableRes?.rooms || []
+    houseLocked.value = !!reachableRes?.locked
+    houseLockReason.value = reachableRes?.lockReason || ''
     backyardDoorOpen.value = reachableRes?.backyardDoorOpen ?? true
     hohDoorOpen.value = reachableRes?.hohDoorOpen ?? false
     house.currentRoomId.value = currentRoomId.value
@@ -547,6 +543,7 @@ function handleCancelInvite(pid: string) {
 }
 
 async function doSleep() {
+  if (!confirm('确认开始睡觉？睡觉后 6 小时内无法进行任何操作。')) return
   try { await bbSleep(); await loadData() } catch (e: any) { alert(e?.message || '无法睡觉') }
 }
 async function doWake() {
@@ -853,4 +850,5 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   .house-layout { flex-direction: column; }
   .house-left { width: 100%; }
 }
+.locked-banner { background: #ffaa0015; border: 1px solid #ffaa0044; color: #ffaa00; border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; text-align: center; }
 </style>

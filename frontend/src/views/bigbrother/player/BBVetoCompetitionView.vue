@@ -7,6 +7,12 @@
       <span v-else-if="isFuture" class="future-tag">未开始</span>
     </div>
 
+    <!-- POV 抽卡（存活 > 6） -->
+    <div v-if="cardState && !cardDrawDone" class="card-draw-wrap">
+      <h3>🃏 POV 抽卡</h3>
+      <VetoCardDraw :state="cardState" :myId="myId" :isAdmin="false" :canDeal="false" @draw="drawCard" />
+    </div>
+
     <!-- 加载中 -->
     <div v-if="loading" class="loading-state">
       <div class="loading-spinner"></div>
@@ -16,7 +22,7 @@
     <!-- 小游戏模式 -->
     <div v-else-if="showMinigame" class="minigame-section">
       <component :is="gameComponent" :roomId="activeRoom.roomId"
-        :participants="activeRoom.participants" @finished="onMinigameFinished" />
+        :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
     </div>
 
     <!-- 等待进入比赛：room 已创建且我是参与者，但尚未开始 -->
@@ -107,11 +113,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, markRaw, type Component } from 'vue'
+import { ref, computed, onMounted, onUnmounted, markRaw, watch, type Component } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetVetoHistory, bbGetActiveMinigameRoom, bbRunVetoCompetition, bbGetCurrentHoh, bbGetCurrentNomination, bbPickVetoParticipant, bbGetVetoPickable } from '../../../services/bbApi'
+import { bbGetVetoHistory, bbGetActiveMinigameRoom, bbRunVetoCompetition, bbGetCurrentHoh, bbGetCurrentNomination, bbPickVetoParticipant, bbGetVetoPickable, bbGetCurrentVeto } from '../../../services/bbApi'
+import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
+import VetoCardDraw from '../../../components/bigbrother/VetoCardDraw.vue'
 import ClickSpeedGame from '../../../components/bigbrother/minigames/ClickSpeedGame.vue'
 import MemoryMatchGame from '../../../components/bigbrother/minigames/MemoryMatchGame.vue'
 import QuickMathGame from '../../../components/bigbrother/minigames/QuickMathGame.vue'
@@ -143,6 +151,30 @@ const loading = ref(true)
 
 const myId = computed(() => authStore.currentUser?.id || '')
 const myName = computed(() => authStore.currentUser?.name || '')
+
+// POV 抽卡
+const realtime = useBbRealtimeStore()
+const vetoRecord = ref<any>(null)
+const myRoundId = computed(() => `round-${roundNum.value}`)
+const cardState = computed(() => {
+  const rt = realtime.lastVetoCard
+  if (rt && rt.roundId === myRoundId.value && rt.cardDraw) return rt.cardDraw
+  return vetoRecord.value?.cardDraw || null
+})
+const cardDrawDone = computed(() => {
+  const cs = cardState.value
+  if (!cs) return false
+  if (cs.finished != null) return cs.finished
+  return (cs.drawerIndex || 0) >= (cs.drawerOrder || []).length
+})
+async function drawCard() {
+  const res = await realtime.vetoDraw()
+  if (!res.success) alert(res.error || '抽卡失败')
+  await loadVeto()
+}
+async function loadVeto() {
+  try { vetoRecord.value = await bbGetCurrentVeto() } catch {}
+}
 
 const isParticipant = computed(() => {
   if (!activeRoom.value?.participants) return false
@@ -267,6 +299,12 @@ async function loadHohAndNom() {
   } catch {}
 }
 
+watch(() => realtime.lastVetoCard, async (v) => {
+  if (!v || v.roundId !== myRoundId.value) return
+  await loadVeto()
+  await loadPickable()
+})
+
 onMounted(async () => {
   // 加载 Veto 历史
   try {
@@ -280,6 +318,7 @@ onMounted(async () => {
 
   await loadHohAndNom()
   await loadPickable()
+  await loadVeto()
 
   // 检查活跃的小游戏房间
   let pollTimer: ReturnType<typeof setInterval> | null = null

@@ -4,6 +4,30 @@ const BBVetoRecord = require('../models/BBVetoRecord')
 const BBHouseguest = require('../models/BBHouseguest')
 const { generateId, logAction, getCurrentSeason, BB_ACTION_TYPES, hasTwist } = require('../helpers')
 const { auth } = require('../../../middleware/auth')
+const { broadcastBBGame } = require('../../../socket/bbGame')
+const { dealVetoCards, drawVetoCard } = require('../vetoCardService')
+
+function shuffleArr(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+function publicCardState(cd) {
+  if (!cd) return null
+  return {
+    cards: (cd.cards || []).map(c => ({ id: c.id, flipped: c.flipped, playerId: c.flipped ? c.playerId : null, playerName: c.flipped ? c.playerName : null, avatar: c.flipped ? c.avatar : null, drawnBy: c.drawnBy || null })),
+    drawerOrder: cd.drawerOrder || [],
+    drawerIndex: cd.drawerIndex || 0,
+    needDraw: cd.needDraw || 0,
+    participants: cd.participants || [],
+    canPick: cd.canPick || [],
+    pickablePlayers: cd.pickablePlayers || []
+  }
+}
 
 // GET /current - 获取当前轮次否决权记录
 router.get('/current', async (req, res) => {
@@ -194,7 +218,7 @@ router.post('/pick', async (req, res) => {
 
     // 校验：pickedByPlayerId 必须是抽中的HOH或提名者
     const drawnParticipant = existingRecord.participants.find(
-      p => p.playerId === pickedByPlayerId && p.source === 'drawn'
+      p => p.playerId === pickedByPlayerId && (p.source === 'drawn' || p.selfPickEligible)
     )
     if (!drawnParticipant) {
       return res.status(400).json({ success: false, error: '该玩家不在抽中名单中', code: 'NOT_DRAWN' })
@@ -434,7 +458,7 @@ router.get('/pickable', auth, async (req, res) => {
 
     // 检查当前用户是否为可自选的 HOH/被抽中的提名者
     const myPart = existingRecord.participants.find(p => p.playerId === userId)
-    if (!myPart || myPart.source !== 'drawn') {
+    if (!myPart || (myPart.source !== 'drawn' && !myPart.selfPickEligible)) {
       return res.json({ success: true, data: { canPick: false, pickablePlayers: [] } })
     }
     if (userId !== hohId && !nomineeIds.includes(userId)) {
@@ -469,6 +493,24 @@ router.get('/pickable', auth, async (req, res) => {
     console.error(e)
     res.status(500).json({ success: false, error: '获取可选房客失败', code: 'SERVER_ERROR' })
   }
+})
+
+// ===== POV 抽卡环节（存活人数 > 6 时） =====
+// 实际逻辑在 vetoCardService，同时供 WebSocket 事件调用，保证实时同步无需刷新
+
+// POST /card-deal - 发牌
+router.post('/card-deal', auth, async (req, res) => {
+  const result = await dealVetoCards()
+  if (!result.success) return res.status(400).json(result)
+  res.json(result)
+})
+
+// POST /card-draw - 当前抽卡者翻一张牌
+router.post('/card-draw', auth, async (req, res) => {
+  const isAdmin = req.user?.role === 'admin'
+  const result = await drawVetoCard(req.user?.userId, isAdmin)
+  if (!result.success) return res.status(400).json(result)
+  res.json(result)
 })
 
 module.exports = router

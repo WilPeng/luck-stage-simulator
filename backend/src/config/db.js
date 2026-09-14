@@ -54,8 +54,9 @@ const COLLECTIONS = [
   'BBHouseDoor',     // BB House 门状态
   'BBPlayerLocation',// 玩家当前位置
   'BBLocationHistory',// 玩家位置历史（消息可见性核心）
-  'BBCustomGame',    // 自定义游戏
-  'BBPowerChallenge', // Big Brother 实力大挑战题目池
+    'BBCustomGame',    // 自定义游戏
+    'BBPowerChallenge', // Big Brother 实力大挑战题目池
+    'BBMinigameReplay', // 小游戏对局回放/复盘
   'PCPlayer',
   'PCSeason',
   'PCPowerChallenge', // 实力大挑战（独立游戏）题目池

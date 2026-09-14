@@ -18,6 +18,9 @@ const HOUSE_ROOMS = [
   { id: 'hoh_door',      name: 'HOH 房门口',  nameEn: 'HOH Door',      icon: '🚪', type: 'common',   capacity: 8,    bedLimit: null, canSleep: false, accessRule: 'public' },
   { id: 'hoh_room',      name: 'HOH 房',     nameEn: 'HOH Room',      icon: '👑', type: 'special',  capacity: 6,    bedLimit: 6,    canSleep: true,  accessRule: 'public' },
   { id: 'diary_room',    name: 'Diary Room', nameEn: 'Diary Room',    icon: '🎤', type: 'hidden',   capacity: 1,    bedLimit: null, canSleep: false, accessRule: 'single' },
+  // 特殊隔离区域：无通道，选手无法自行进出，仅管理员可移动
+  { id: 'prehouse',      name: '初入屋',      nameEn: 'Pre-House',     icon: '🏠', type: 'special',  capacity: 20,   bedLimit: 20,   canSleep: true,  accessRule: 'admin_only' },
+  { id: 'juryhouse',     name: '陪审屋',      nameEn: 'Jury House',    icon: '⚖️', type: 'special',  capacity: 20,   bedLimit: 20,   canSleep: true,  accessRule: 'admin_only' },
 ]
 
 // 通道：双向只需存一条

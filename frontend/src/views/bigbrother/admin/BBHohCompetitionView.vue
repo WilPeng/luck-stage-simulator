@@ -53,6 +53,11 @@
         </div>
       </div>
 
+      <!-- 实时观战 -->
+      <div v-if="activeRoom" class="observer-wrap">
+        <MinigameObserver :roomId="activeRoom.roomId" :room="activeRoom" />
+      </div>
+
       <!-- 目标设置确认创建 -->
       <div v-if="selectedMinigameId" class="target-setup">
         <div class="target-setup-title">🎮 已选择「{{ selectedMinigameId }}」，设置胜出目标（可选）</div>
@@ -116,6 +121,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useRoute } from 'vue-router'
 import {
   bbGetCurrentHoh, bbGetHohHistory, bbRunHohCompetition, bbAssignHoh,
@@ -123,6 +129,7 @@ import {
   bbPauseMinigame, bbResumeMinigame, bbStopMinigame
 } from '../../../services/bbApi'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
+import MinigameObserver from '../../../components/bigbrother/MinigameObserver.vue'
 import type { BBHohRecord, MinigameRoom } from '../../../types/bigbrother'
 
 const route = useRoute()
@@ -317,6 +324,7 @@ function formatTime(t: string) {
   return t ? new Date(t).toLocaleString('zh-CN') : ''
 }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 

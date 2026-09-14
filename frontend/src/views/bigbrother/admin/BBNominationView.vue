@@ -11,8 +11,6 @@
         <div class="header-badges">
           <span v-if="nomination.isSecretKeeper" class="twist-badge secret">🎭 匿名房主</span>
           <span v-if="nomination.isDirectDemocracy" class="twist-badge democracy">🗳️ 直接民主</span>
-          <span v-if="isTripleOffering" class="twist-badge triple">🔱 三重献祭</span>
-          <span v-if="nomination.vetoUsed" class="veto-badge">否决权已使用</span>
         </div>
       </div>
       <div class="nominees">
@@ -31,7 +29,6 @@
       <p>暂无提名记录</p>
       <div v-if="twistInfo" class="twist-info-bar">
         <span v-if="twistInfo.isDirectDemocracy" class="twist-info-item">🗳️ 本轮为"直接民主"模式，提名由全员投票决定</span>
-        <span v-if="twistInfo.isTripleOffering" class="twist-info-item">🔱 本轮为"三重献祭"模式，允许提名3人</span>
         <span v-if="twistInfo.isSecretKeeper" class="twist-info-item">🎭 本轮为"匿名房主"模式</span>
       </div>
     </div>
@@ -104,7 +101,7 @@
               </select>
             </div>
             <div v-if="isTripleOffering" class="form-group">
-              <label>被提名人 3（三重献祭）</label>
+              <label>被提名人 3</label>
               <select v-model="nominee3" class="bb-select">
                 <option value="" disabled>请选择</option>
                 <option v-for="h in listForNominee3" :key="h.id" :value="h.id">{{ h.name }}</option>
@@ -142,6 +139,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { bbGetCurrentNomination, bbSetNomination, bbReplaceNomination, bbGetNominationHistory, bbGetActiveHouseguests, bbVoteNominees, bbGetCurrentVeto } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBNomination } from '../../../types/bigbrother'
@@ -263,6 +261,7 @@ async function replaceNomination() {
 
 function getRoundLabel(t: string) { return t ? new Date(t).toLocaleDateString('zh-CN') : '?' }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 

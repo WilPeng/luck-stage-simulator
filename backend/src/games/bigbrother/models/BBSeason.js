@@ -40,6 +40,12 @@ class BBSeason extends BaseModel {
     this.backyardDoorOpen = data?.backyardDoorOpen ?? true
     this.autoSleepHour = data?.autoSleepHour ?? 18   // 每天 N 点未完成睡觉则自动进入睡眠
     this.hohSleepAllowed = data?.hohSleepAllowed ?? true // 是否允许在 HOH 房睡觉（淘汰公布后重置）
+    // 淘汰结果分段宣布：{ round, segments:[{type,text}], released }
+    this.evictionAnnouncement = data?.evictionAnnouncement || null
+    // 淘汰夜：{ phase:'announce'|'door', round, evicted:[...], counts:[...], big, small, totalVotes, isTripleEviction }
+    this.evictionNight = data?.evictionNight || null
+    // 是否已锁定淘汰投票（开始淘汰夜后锁定）
+    this.votesLocked = data?.votesLocked ?? false
     this.createdAt = data?.createdAt || new Date().toISOString()
     this.updatedAt = data?.updatedAt || new Date().toISOString()
   }

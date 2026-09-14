@@ -205,20 +205,33 @@
 
     <!-- 小游戏选择弹窗 -->
     <MinigameSelectModal v-model:open="showMinigameModal" title="选择否决权小游戏" @select="onSelectMinigame" />
+
+    <!-- POV 抽卡（存活 > 6） -->
+    <div class="card-draw-section">
+      <h3>🃏 POV 抽卡（存活 &gt; 6 时使用）</h3>
+      <VetoCardDraw :state="cardState" :isAdmin="true" :canDeal="true" @deal="dealCards" @draw="drawCard" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
+import { useRoute } from 'vue-router'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import {
   bbGetCurrentVeto, bbRunVetoCompetition, bbDrawVetoParticipants, bbGetCurrentHoh,
   bbGetCurrentNomination, bbPickVetoParticipant, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom,
   bbGetMinigameRoomProgress, bbSetMinigameWinner, bbGetHouseguests,
   bbPauseMinigame, bbResumeMinigame, bbStopMinigame
 } from '../../../services/bbApi'
+import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
+import VetoCardDraw from '../../../components/bigbrother/VetoCardDraw.vue'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
 import type { BBVetoRecord, MinigameRoom, MinigameProgress } from '../../../types/bigbrother'
+
+const realtime = useBbRealtimeStore()
+const route = useRoute()
 
 const veto = ref<BBVetoRecord | null>(null)
 const twistInfo = ref<any>(null)
@@ -229,6 +242,25 @@ const competing = ref(false)
 const creating = ref(false)
 const showMinigameModal = ref(false)
 const activeRoom = ref<MinigameRoom | null>(null)
+
+// POV 抽卡
+const roundNum = computed(() => Number(route.params.round) || 1)
+const cardState = computed(() => {
+  const rt = realtime.lastVetoCard
+  const myRound = `round-${roundNum.value}`
+  if (rt && rt.roundId === myRound && rt.cardDraw) return rt.cardDraw
+  return (veto.value as any)?.cardDraw || null
+})
+async function dealCards() {
+  const res = await realtime.vetoDeal()
+  if (!res.success) alert(res.error || '发牌失败')
+  await fetchData()
+}
+async function drawCard() {
+  const res = await realtime.vetoDraw()
+  if (!res.success) alert(res.error || '抽卡失败')
+  await fetchData()
+}
 
 // ===== 目标与小游戏创建 =====
 const selectedMinigameId = ref<string | null>(null)
@@ -311,7 +343,7 @@ async function computePickData() {
   // 判断哪些被抽中的 HOH/提名者可以自选
   const pickerList: { playerId: string; playerName: string; role: 'hoh' | 'nominee' }[] = []
   for (const p of veto.value.participants) {
-    if (p.source !== 'drawn') continue
+    if (p.source !== 'drawn' && !(p as any).selfPickEligible) continue
     if (p.playerId === hohId.value) {
       pickerList.push({ playerId: p.playerId, playerName: p.playerName, role: 'hoh' })
     } else if (nomineeIds.value.includes(p.playerId)) {
@@ -616,6 +648,7 @@ async function stopMinigame() {
   }
 }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 onUnmounted(stopProgressPolling)
 </script>

@@ -1,7 +1,32 @@
 <template>
   <div class="bb-player-layout">
-    <header class="bb-player-header">
-      <div class="header-content">
+    <!-- 睡眠全局覆盖：进入 BB 游戏即判断，睡眠期间禁止一切操作 -->
+    <div v-if="isSleeping" class="sleep-overlay">
+      <div class="sleep-card">
+        <div class="sleep-icon">😴</div>
+        <div class="sleep-title">睡眠中</div>
+        <div class="sleep-desc">你在睡觉，无法进行任何操作或接收消息</div>
+        <div v-if="!wakeReady" class="sleep-timer">可醒来倒计时：{{ sleepCountdown }}</div>
+        <button class="bb-btn" :disabled="!wakeReady" @click="doWake">
+          {{ wakeReady ? '醒来' : '还未到时间' }}
+        </button>
+      </div>
+    </div>
+    <!-- 管理员广播（全页面可见） -->
+    <div v-if="realtime.lastBroadcast" class="bb-broadcast-overlay" @click.self="realtime.clearBroadcast()">
+      <div class="bb-broadcast-modal">
+        <div class="bb-broadcast-icon">{{ realtime.lastBroadcast.type === 'invite' ? '📣' : '🔔' }}</div>
+        <div class="bb-broadcast-title">{{ realtime.lastBroadcast.type === 'invite' ? '管理员邀请' : '管理员通知' }}</div>
+        <div class="bb-broadcast-msg">{{ realtime.lastBroadcast.message }}</div>
+        <div v-if="realtime.lastBroadcast.type === 'invite' && realtime.lastBroadcast.roomName" class="bb-broadcast-room">
+          📍 已带你前往「{{ realtime.lastBroadcast.roomName }}」
+        </div>
+        <div class="bb-broadcast-from">—— {{ realtime.lastBroadcast.from }}</div>
+        <button class="bb-btn" @click="realtime.clearBroadcast()">知道了</button>
+      </div>
+    </div>
+
+    <header class="bb-player-header">      <div class="header-content">
         <div class="logo-section">
           <span class="logo-icon">📹</span>
           <span class="logo-text">Big Brother</span>
@@ -32,22 +57,22 @@
             </router-link>
           </div>
 
-          <div v-for="round in totalRounds" :key="round" class="nav-section">
-            <div class="nav-section-header" :class="{ current: round === seasonStore.currentRoundNumber }"
-              @click="toggleRound(round)">
-              <span class="collapse-icon" :class="{ collapsed: isRoundCollapsed(round) }">▾</span>
-              <span class="section-title">第{{ round }}周</span>
-              <span class="section-status" :class="getRoundStatus(round)">{{ getRoundStatusText(round) }}</span>
+          <div v-for="grp in roundGroups" :key="grp.round" class="nav-section">
+            <div class="nav-section-header" :class="{ current: grp.status === 'current' }"
+              @click="toggleRound(grp.round)">
+              <span class="collapse-icon" :class="{ collapsed: isRoundCollapsed(grp.round) }">▾</span>
+              <span class="section-title">{{ grp.title }}</span>
+              <span class="section-status" :class="grp.status">{{ grp.statusText }}</span>
             </div>
-            <div v-show="!isRoundCollapsed(round)" class="round-stages">
-              <router-link v-for="st in roundStages" :key="st.key"
-                :to="`/games/bigbrother/player/round/${round}/${st.route}`"
+            <div v-show="!isRoundCollapsed(grp.round)" class="round-stages">
+              <router-link v-for="it in grp.items" :key="it.stage"
+                :to="it.path"
                 class="nav-item sub-item"
-                :class="{ disabled: !isStageAccessible(round, st.key as any) }"
+                :class="{ disabled: !it.clickable }"
                 @click="mobileMenuOpen = false">
-                <span class="nav-icon">{{ st.icon }}</span>
-                <span class="nav-text">{{ st.text }}</span>
-                <span class="stage-status-dot" :class="getStageStatusClass(round, st.key as any)"></span>
+                <span class="nav-icon">{{ it.icon }}</span>
+                <span class="nav-text">{{ it.stageName }}</span>
+                <span class="stage-status-dot" :class="it.status"></span>
               </router-link>
             </div>
           </div>
@@ -55,7 +80,7 @@
       </aside>
 
       <main class="bb-main">
-        <router-view />
+        <router-view :key="'bb-stage-' + realtime.stageTick" />
       </main>
     </div>
 
@@ -85,20 +110,50 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useBbAuthStore } from '../stores/bbAuthStore'
 import { useBbSeasonStore } from '../stores/bbSeasonStore'
+import { useBbRealtimeStore } from '../stores/bbRealtimeStore'
 import { BB_STAGE_NAME } from '../types/bigbrother'
+import { bbGetMyState, bbSleepWake } from '../services/bbHouseApi'
+import { applyGamePageMeta } from '../router'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useBbAuthStore()
 const seasonStore = useBbSeasonStore()
 
+// 浏览器标题随当前比赛/阶段动态变化
+watch(() => seasonStore.stageName, (s) => {
+  applyGamePageMeta('bigbrother', seasonStore.currentRoundNumber ? `第${seasonStore.currentRoundNumber}周 · ${s}` : s)
+}, { immediate: true })
+const realtime = useBbRealtimeStore()
+
 const mobileMenuOpen = ref(false)
 const showSwitchModal = ref(false)
 const collapsedRounds = ref<Set<number>>(new Set())
+
+// 睡眠全局状态
+const myState = ref<any>({ isSleeping: false, wakeAt: null })
+const nowTs = ref(Date.now())
+const isSleeping = computed(() => !!myState.value.isSleeping)
+const wakeReady = computed(() => myState.value.wakeAt ? nowTs.value >= new Date(myState.value.wakeAt).getTime() : false)
+const sleepCountdown = computed(() => {
+  if (!myState.value.wakeAt) return ''
+  const ms = Math.max(0, new Date(myState.value.wakeAt).getTime() - nowTs.value)
+  const h = Math.floor(ms / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  return `${h}小时${m}分`
+})
+let stateTimer: ReturnType<typeof setInterval> | null = null
+let tickTimer: ReturnType<typeof setInterval> | null = null
+async function refreshState() {
+  try { myState.value = await bbGetMyState() } catch {}
+}
+async function doWake() {
+  try { await bbSleepWake(); await refreshState() } catch (e: any) { alert(e?.message || '无法醒来') }
+}
 
 const currentUser = computed(() => authStore.currentUser)
 const totalRounds = computed(() => seasonStore.totalRounds)
@@ -106,20 +161,67 @@ const totalRounds = computed(() => seasonStore.totalRounds)
 const fixedItems = [
   { icon: '🏠', text: '首页', path: '/games/bigbrother/player/home' },
   { icon: '👤', text: '我的资料', path: '/games/bigbrother/player/profile' },
-  { icon: '💬', text: '聊天室', path: '/games/bigbrother/player/chat' },
   { icon: '🏡', text: 'BB House', path: '/games/bigbrother/player/house' },
   { icon: '📝', text: '历史记录', path: '/games/bigbrother/player/history' },
 ]
 
-const roundStages = [
-  { key: 'hoh_competition', icon: '👑', text: 'HOH竞争', route: 'hoh' },
-  { key: 'nomination', icon: '📋', text: '提名仪式', route: 'nomination' },
-  { key: 'veto_competition', icon: '🛡️', text: '否决权竞争', route: 'veto-competition' },
-  { key: 'veto_ceremony', icon: '⚖️', text: '否决权会议', route: 'veto-ceremony' },
-  { key: 'replacement_nom', icon: '🔄', text: '替换提名', route: 'replacement-nom' },
-  { key: 'eviction_vote', icon: '🗳️', text: '淘汰投票', route: 'eviction-vote' },
-  { key: 'eviction', icon: '🚪', text: '淘汰结果', route: 'eviction' },
-]
+const stageMeta: Record<string, { icon: string; route: string }> = {
+  hoh_competition: { icon: '👑', route: 'hoh' },
+  nomination: { icon: '📋', route: 'nomination' },
+  veto_competition: { icon: '🛡️', route: 'veto-competition' },
+  veto_ceremony: { icon: '⚖️', route: 'veto-ceremony' },
+  replacement_nom: { icon: '🔄', route: 'replacement-nom' },
+  bbbb: { icon: '🎯', route: 'bbbb' },
+  eviction_vote: { icon: '🗳️', route: 'eviction-vote' },
+  eviction: { icon: '🚪', route: 'eviction' },
+  final3: { icon: '🏁', route: 'finale' },
+  champion_vote: { icon: '🏆', route: 'finale' },
+}
+
+const ENDGAME_STAGES = ['final3', 'champion_vote']
+
+// 依据赛季配置（菜单）生成左侧树：每周包含哪些环节、终局两轮
+const roundGroups = computed(() => {
+  const items = seasonStore.menuItems || []
+  const byRound = new Map<number, any[]>()
+  for (const it of items) {
+    if (!byRound.has(it.round)) byRound.set(it.round, [])
+    byRound.get(it.round)!.push(it)
+  }
+  const c = seasonStore.currentRoundNumber
+  const rounds = Array.from(byRound.keys()).sort((a, b) => {
+    const ka = a <= c ? (c - a) : (1000 + (a - c))
+    const kb = b <= c ? (c - b) : (1000 + (b - c))
+    return ka - kb
+  })
+  return rounds.map(r => {
+    const list = byRound.get(r)!
+    const isEndgame = list.some(i => ENDGAME_STAGES.includes(i.stage))
+    const hasCurrent = list.some(i => i.status === 'current')
+    const allDone = list.every(i => i.status === 'completed')
+    const status = hasCurrent ? 'current' : (allDone ? 'completed' : 'future')
+    return {
+      round: r,
+      title: isEndgame ? (list[0]?.stageName || `第${r}轮`) : `第${r}周`,
+      status,
+      statusText: status === 'current' ? '进行中' : status === 'completed' ? '已完成' : '未开始',
+      items: list.map(i => {
+        const meta = stageMeta[i.stage] || { icon: '•', route: i.stage }
+        const isEnd = ENDGAME_STAGES.includes(i.stage)
+        return {
+          stage: i.stage,
+          stageName: i.stageName,
+          status: i.status,
+          clickable: i.clickable,
+          icon: meta.icon,
+          path: isEnd
+            ? '/games/bigbrother/player/finale'
+            : `/games/bigbrother/player/round/${r}/${meta.route}`
+        }
+      })
+    }
+  })
+})
 
 const loggedPlayers = computed(() => authStore.getLoggedPlayers())
 
@@ -177,6 +279,16 @@ async function handleLogout() {
 onMounted(async () => {
   await seasonStore.fetchProgress()
   await seasonStore.fetchMenu()
+  await refreshState()
+  realtime.connect()
+  stateTimer = setInterval(refreshState, 8000)
+  tickTimer = setInterval(() => { nowTs.value = Date.now() }, 1000)
+})
+
+onUnmounted(() => {
+  if (stateTimer) { clearInterval(stateTimer); stateTimer = null }
+  if (tickTimer) { clearInterval(tickTimer); tickTimer = null }
+  realtime.disconnect()
 })
 </script>
 
@@ -187,6 +299,32 @@ onMounted(async () => {
   color: #e0e0e0;
   font-family: system-ui, sans-serif;
 }
+.sleep-overlay {
+  position: fixed; inset: 0; z-index: 3000;
+  background: rgba(4, 6, 20, 0.96);
+  display: flex; align-items: center; justify-content: center;
+}
+.sleep-card { text-align: center; color: #e0e0e0; }
+.sleep-icon { font-size: 80px; }
+.sleep-title { font-size: 26px; font-weight: 700; color: #00ff88; margin: 12px 0 6px; }
+.sleep-desc { color: #888; margin-bottom: 12px; }
+.sleep-timer { color: #ffaa00; margin-bottom: 16px; }
+.bb-broadcast-overlay {
+  position: fixed; inset: 0; z-index: 2500;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex; align-items: center; justify-content: center;
+}
+.bb-broadcast-modal {
+  background: linear-gradient(135deg, #1a1a3e, #0f0f2e);
+  border: 1px solid #00ff8866; border-radius: 14px;
+  padding: 28px 32px; width: min(420px, 90vw); text-align: center;
+  box-shadow: 0 12px 48px #000000aa;
+}
+.bb-broadcast-icon { font-size: 44px; }
+.bb-broadcast-title { color: #00ff88; font-weight: 700; margin: 10px 0 8px; font-size: 16px; }
+.bb-broadcast-msg { color: #e0e0e0; font-size: 15px; line-height: 1.6; margin-bottom: 8px; }
+.bb-broadcast-room { color: #00ff88; font-size: 13px; margin-bottom: 8px; }
+.bb-broadcast-from { color: #777; font-size: 12px; margin-bottom: 16px; }
 .bb-player-header {
   position: fixed;
   top: 0; left: 0; right: 0;

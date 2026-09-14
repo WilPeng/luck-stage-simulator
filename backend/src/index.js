@@ -249,6 +249,22 @@ app.use('/api/:gameId', (req, res, next) => {
   next()
 })
 
+// ===== Big Brother 全局实时广播：任意 /api/bigbrother 写操作成功后推送 bb:update =====
+app.use('/api/bigbrother', (req, res, next) => {
+  if (req.method === 'GET' || req.method === 'OPTIONS') return next()
+  // 注意：必须在进入子路由前记录完整路径，否则子路由会改写 req.url 导致路径前缀丢失
+  const fullPath = req.originalUrl || req.path
+  res.on('finish', () => {
+    if (res.statusCode < 400) {
+      try {
+        const { broadcastBBGame } = require('./socket/bbGame')
+        broadcastBBGame('bb:update', { path: fullPath, method: req.method })
+      } catch (e) { /* ignore */ }
+    }
+  })
+  next()
+})
+
 // ===== Big Brother 路由（固定 gameId = bigbrother，必须在 :gameId 路由之前注册）=====
 const bbGameIdMiddleware = (req, res, next) => { req.gameId = 'bigbrother'; next() }
 app.use('/api/bigbrother/auth', bbGameIdMiddleware, require('./games/bigbrother/routes/bbAuth'))
@@ -259,7 +275,6 @@ app.use('/api/bigbrother/nomination', bbGameIdMiddleware, require('./games/bigbr
 app.use('/api/bigbrother/veto', bbGameIdMiddleware, require('./games/bigbrother/routes/bbVeto'))
 app.use('/api/bigbrother/eviction', bbGameIdMiddleware, require('./games/bigbrother/routes/bbEviction'))
 app.use('/api/bigbrother/logs', bbGameIdMiddleware, require('./games/bigbrother/routes/bbLogs'))
-app.use('/api/bigbrother/chat', bbGameIdMiddleware, require('./games/bigbrother/routes/bbChat'))
 app.use('/api/bigbrother/minigame', bbGameIdMiddleware, require('./games/bigbrother/routes/bbMinigame'))
 app.use('/api/bigbrother/custom-game', bbGameIdMiddleware, require('./games/bigbrother/routes/bbCustomGame'))
 app.use('/api/bigbrother/power-challenge', bbGameIdMiddleware, require('./games/bigbrother/routes/bbPowerChallenge'))
@@ -312,6 +327,9 @@ async function initBBData() {
     // 老库可能缺少 House 空间数据，幂等补齐
     const { ensureBBHouseData } = require('./games/bigbrother/houseMap')
     await ensureBBHouseData()
+    // 幂等补齐新增模式的示例题目
+    const { ensureCustomGameExamples } = require('./games/bigbrother/seedCustomGames')
+    await ensureCustomGameExamples()
     return
   }
 
@@ -384,6 +402,8 @@ async function initBBData() {
   console.log(`  - ${houseguests.length} houseguests`)
   houseguests.forEach(h => console.log(`    ${h.name} (loginCode: ${h.loginCode})`))
   console.log(`  - 1 season (Round 1, Stage: HOH Competition)`)
+  const { ensureCustomGameExamples } = require('./games/bigbrother/seedCustomGames')
+  await ensureCustomGameExamples()
 }
 
 // ===== 实力大挑战 Seed 数据初始化 =====
@@ -564,10 +584,6 @@ initStore().then(() => {
         const { initChatSocket } = require('./socket/chat')
         initChatSocket(io)
 
-        // 初始化 Big Brother 聊天 WebSocket
-        const { initBBChatSocket } = require('./socket/bbChat')
-        initBBChatSocket(io)
-
         // 初始化 Big Brother 小游戏 WebSocket
         const { initBBMinigameSocket } = require('./socket/bbMinigame')
         initBBMinigameSocket(io)
@@ -579,6 +595,10 @@ initStore().then(() => {
         // 初始化 实力大挑战 实时比赛
         const { initPCGameSocket } = require('./socket/pcGame')
         initPCGameSocket(io)
+
+        // 初始化 Big Brother 全局实时通信
+        const { initBBGameSocket } = require('./socket/bbGame')
+        initBBGameSocket(io)
 
         server.listen(PORT, () => {
           console.log(`Server running on port ${PORT}`)

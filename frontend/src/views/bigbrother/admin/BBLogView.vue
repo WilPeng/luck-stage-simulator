@@ -28,6 +28,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { bbGetLogs } from '../../../services/bbApi'
 
 const logs = ref<any[]>([])
@@ -45,6 +46,7 @@ async function fetchData() {
 function changePage(p: number) { page.value = p; fetchData() }
 function formatTime(t: string) { return t ? new Date(t).toLocaleString('zh-CN') : '' }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 

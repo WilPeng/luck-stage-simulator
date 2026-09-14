@@ -489,6 +489,7 @@ export interface MinigameRoom {
   roomId: string
   gameType: 'hoh' | 'veto'
   minigameId: MinigameId
+  minigameName?: string
   participants: MinigameParticipant[]
   status: MinigameRoomStatus
   startTime: number | null
@@ -604,8 +605,9 @@ export interface BBHohMonitorRoom {
 
 // ===== 自定义游戏类型 =====
 
-export type CustomGameType = 'quiz' | 'score'
+export type CustomGameType = 'quiz' | 'score' | 'elim-last' | 'first-pick' | 'duel' | 'survive-tb' | 'score-tb'
 export type CustomGameWinCondition = 'first_correct' | 'highest_score' | 'most_correct' | 'all_correct' | 'target_correct' | 'admin_judge'
+export type CustomGameQType = 'text' | 'choice' | 'number' | 'judge'
 export type CustomGameScoringRule = 'correct_only' | 'timed_bonus'
 export type CustomGameSubmitMode = 'single' | 'batch'
 export type CustomGameWrongFeedback = 'none' | 'count' | 'reveal' | 'all_correct_only'
@@ -613,9 +615,11 @@ export type CustomGameWrongFeedback = 'none' | 'count' | 'reveal' | 'all_correct
 export interface CustomGameQuestion {
   id: string
   text: string
+  qtype?: CustomGameQType
   options: string[]
-  correctAnswer: string
+  correctAnswer: string | number
   points: number
+  tb?: boolean
 }
 
 export interface BBCustomGameDef {
@@ -635,6 +639,10 @@ export interface BBCustomGameDef {
   scoringRule: CustomGameScoringRule
   playerCount: { min: number; max: number }
   winCondition: CustomGameWinCondition
+  eliminateRule?: 'last' | 'first_wrong'
+  showSubmissions?: boolean
+  basicTimeLimit?: number
+  tiebreakTimeLimit?: number
   enabled: boolean
   createdAt: string
   updatedAt: string

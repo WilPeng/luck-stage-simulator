@@ -220,6 +220,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useRouter } from 'vue-router'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
 import {
@@ -599,6 +600,7 @@ async function handleResetSeason() {
   } catch (e: any) { alert(e.message) }
 }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 

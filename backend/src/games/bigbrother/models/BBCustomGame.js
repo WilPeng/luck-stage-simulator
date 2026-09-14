@@ -9,16 +9,35 @@ class BBCustomGame extends BaseModel {
     this.name = data.name || ''
     this.description = data.description || ''
     this.icon = data.icon || '🎮'
-    this.type = data.type || 'quiz' // quiz(答对赛制) | score(积分赛制)
+    // quiz(答对赛制) | score(积分赛制)
+    // elim-last(模式1 最后作答/首个答错出局) | first-pick(模式2 首个作答定胜负)
+    // duel(模式3 1v1对决) | survive-tb(模式4 限时淘汰+数字TB) | score-tb(模式5 限时积分+数字TB)
+    this.type = data.type || 'quiz'
 
     // 题目列表（admin_judge 模式下 correctAnswer 可为空）
+    // qtype: text(填空) | choice(选择) | number(数字) | judge(判断)
+    // tb: 是否为数字加时题（模式4/5使用）
     this.questions = (data.questions || []).map(q => ({
       id: q.id || crypto.randomUUID(),
       text: q.text || '',
+      qtype: q.qtype || ((q.options && q.options.length) ? 'choice' : 'text'),
       options: q.options || [],
-      correctAnswer: q.correctAnswer || '',
-      points: q.points || 1
+      correctAnswer: q.correctAnswer === 0 ? 0 : (q.correctAnswer || ''),
+      points: q.points || 1,
+      tb: !!q.tb
     }))
+
+    // ===== 模式1/2/3 =====
+    // 模式1 出局规则：last=最后一个作答出局，first_wrong=第一个答错出局
+    this.eliminateRule = data.eliminateRule || 'last'
+    // 选手是否能看到其他人的提交情况
+    this.showSubmissions = data.showSubmissions ?? true
+
+    // ===== 模式4/5 =====
+    // 基本题限时（秒）
+    this.basicTimeLimit = data.basicTimeLimit ?? 30
+    // 数字加时题限时（秒）
+    this.tiebreakTimeLimit = data.tiebreakTimeLimit ?? 30
 
     // ===== 通用规则 =====
     // 提交方式：single=单题提交，batch=全部一起提交

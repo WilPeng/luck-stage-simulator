@@ -342,6 +342,14 @@ export async function bbSetNomination(nomineeIds: string[], nomineeNames: string
   })
 }
 
+// BBBB 比赛胜者（安全）
+export async function bbSetBbbbWinner(playerId: string, playerName: string): Promise<any> {
+  return doRequest<any>('/nomination/bbbb-winner', {
+    method: 'POST',
+    body: JSON.stringify({ playerId, playerName })
+  })
+}
+
 export async function bbReplaceNomination(playerId: string, playerName: string): Promise<BBNomination> {
   return doRequest<BBNomination>('/nomination/replace', {
     method: 'POST',
@@ -367,6 +375,14 @@ export async function bbPickVetoParticipant(pickedByPlayerId: string, pickedPlay
     method: 'POST',
     body: JSON.stringify({ pickedByPlayerId, pickedPlayerId })
   })
+}
+
+// POV 抽卡（存活>6）
+export async function bbVetoCardDeal(): Promise<any> {
+  return doRequest<any>('/veto/card-deal', { method: 'POST', body: JSON.stringify({}) })
+}
+export async function bbVetoCardDraw(): Promise<any> {
+  return doRequest<any>('/veto/card-draw', { method: 'POST', body: JSON.stringify({}) })
 }
 
 export async function bbRunVetoCompetition(minigameResult?: {
@@ -418,6 +434,35 @@ export async function bbGetMyVote(): Promise<BBEvictionVote | null> {
 
 export async function bbAnnounceEviction(): Promise<BBEviction> {
   return doRequest<BBEviction>('/eviction/result', { method: 'POST' })
+}
+
+// ===== 淘汰结果分段宣布 =====
+export async function bbGetEvictionAnnounce(): Promise<any> {
+  return doRequest<any>('/eviction/announce')
+}
+export async function bbPrepareEvictionAnnounce(segments: { type: string; text: string }[]): Promise<any> {
+  return doRequest<any>('/eviction/announce/prepare', { method: 'POST', body: JSON.stringify({ segments }) })
+}
+export async function bbNextEvictionAnnounce(): Promise<any> {
+  return doRequest<any>('/eviction/announce/next', { method: 'POST', body: JSON.stringify({}) })
+}
+export async function bbResetEvictionAnnounce(): Promise<any> {
+  return doRequest<any>('/eviction/announce/reset', { method: 'POST', body: JSON.stringify({}) })
+}
+
+// ===== 淘汰夜（锁票 + 宣布框架 + 开门） =====
+export async function bbGetEvictionNight(): Promise<{ night: any; votesLocked: boolean }> {
+  const res = await doRequest<any>('/eviction/night')
+  return { night: (res as any)?.data ?? res ?? null, votesLocked: !!(res as any)?.votesLocked }
+}
+export async function bbStartEvictionNight(): Promise<any> {
+  return doRequest<any>('/eviction/night/start', { method: 'POST', body: JSON.stringify({}) })
+}
+export async function bbConfirmEvictionNight(): Promise<any> {
+  return doRequest<any>('/eviction/night/confirm', { method: 'POST', body: JSON.stringify({}) })
+}
+export async function bbResetEvictionNight(): Promise<any> {
+  return doRequest<any>('/eviction/night/reset', { method: 'POST', body: JSON.stringify({}) })
 }
 
 export async function bbGetEvictionHistory(): Promise<BBEviction[]> {
@@ -541,6 +586,28 @@ export async function bbStopMinigame(roomId: string): Promise<void> {
     method: 'POST',
     body: JSON.stringify({ roomId })
   })
+}
+
+// ===== 小游戏实时观战 & 复盘 =====
+export async function bbGetActiveMinigameRooms(): Promise<any[]> {
+  return doRequest<any[]>('/minigame/active-rooms')
+}
+
+export async function bbGetMinigameReplays(params?: { gameType?: string; minigameId?: string; limit?: number }): Promise<any[]> {
+  const qs = new URLSearchParams()
+  if (params?.gameType) qs.set('gameType', params.gameType)
+  if (params?.minigameId) qs.set('minigameId', params.minigameId)
+  if (params?.limit) qs.set('limit', String(params.limit))
+  const q = qs.toString()
+  return doRequest<any[]>(`/minigame/replays${q ? '?' + q : ''}`)
+}
+
+export async function bbGetMinigameReplay(id: string): Promise<any> {
+  return doRequest<any>(`/minigame/replay/${id}`)
+}
+
+export async function bbDeleteMinigameReplay(id: string): Promise<void> {
+  return doRequest<void>(`/minigame/replay/${id}`, { method: 'DELETE' })
 }
 
 // ===== 自定义游戏 API =====

@@ -30,6 +30,11 @@
               <select v-model="form.type" class="bb-input" @change="onTypeChange">
                 <option value="quiz">答对赛制</option>
                 <option value="score">积分赛制</option>
+                <option value="elim-last">模式1 · 最后作答出局</option>
+                <option value="first-pick">模式2 · 首个作答定胜负</option>
+                <option value="duel">模式3 · 1v1 对决</option>
+                <option value="survive-tb">模式4 · 限时淘汰 + 数字TB</option>
+                <option value="score-tb">模式5 · 限时积分 + 数字TB</option>
               </select>
             </div>
             <div class="form-row">
@@ -47,6 +52,7 @@
         <div class="form-section">
           <h3>规则设置</h3>
 
+          <template v-if="isQuizOrScore">
           <div class="form-row-inline">
             <div class="form-row">
               <label>提交方式</label>
@@ -126,6 +132,41 @@
               </div>
             </div>
           </template>
+          </template>
+
+          <template v-else>
+            <div class="form-row-inline" v-if="form.type === 'elim-last'">
+              <div class="form-row">
+                <label>出局规则</label>
+                <select v-model="form.eliminateRule" class="bb-input">
+                  <option value="last">最后一个作答者出局</option>
+                  <option value="first_wrong">第一个答错者出局</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label>选手可见他人提交情况</label>
+                <select v-model="form.showSubmissions" class="bb-input">
+                  <option :value="true">可见</option>
+                  <option :value="false">不可见</option>
+                </select>
+              </div>
+            </div>
+
+            <template v-if="form.type === 'survive-tb' || form.type === 'score-tb'">
+              <div class="form-row-inline">
+                <div class="form-row">
+                  <label>基本题限时（秒）</label>
+                  <input v-model.number="form.basicTimeLimit" type="number" class="bb-input" min="5" max="600" />
+                </div>
+                <div class="form-row">
+                  <label>数字加时题限时（秒）</label>
+                  <input v-model.number="form.tiebreakTimeLimit" type="number" class="bb-input" min="5" max="600" />
+                </div>
+              </div>
+            </template>
+
+            <p class="hint-line">{{ modeHint }}</p>
+          </template>
         </div>
 
         <!-- 题目管理 -->
@@ -149,17 +190,38 @@
               <input v-model="q.text" class="bb-input" placeholder="输入题目" />
             </div>
             <div class="form-row">
-              <label>选项（每行一个，留空则为开放回答）</label>
+              <label>题目类型</label>
+              <select v-model="q.qtype" class="bb-input" @change="onQtypeChange(q)">
+                <option value="text">填空</option>
+                <option value="choice">选择</option>
+                <option value="number">数字</option>
+                <option value="judge">判断</option>
+              </select>
+            </div>
+            <div class="form-row" v-if="q.qtype === 'choice'">
+              <label>选项（每行一个）</label>
               <textarea v-model="q.optionsText" class="bb-input" rows="2" placeholder="选项A&#10;选项B&#10;选项C&#10;选项D" @blur="parseOptions(q)"></textarea>
+            </div>
+            <div class="form-row" v-else-if="q.qtype === 'judge'">
+              <label>选项（每行一个，默认 对/错）</label>
+              <input v-model="q.optionsText" class="bb-input" placeholder="对&#10;错" @blur="parseOptions(q)" />
             </div>
             <div class="form-row-inline">
               <div class="form-row">
                 <label>正确答案 {{ isAdminJudge ? '（可留空）' : '*' }}</label>
-                <input v-model="q.correctAnswer" class="bb-input" :placeholder="isAdminJudge ? '可留空' : '正确答案'" />
+                <input v-if="q.qtype === 'number'" v-model.number="q.correctAnswer" type="number" class="bb-input" placeholder="目标数字" />
+                <input v-else v-model="q.correctAnswer" class="bb-input" :placeholder="isAdminJudge ? '可留空' : '正确答案'" />
               </div>
               <div class="form-row" style="max-width: 100px;">
                 <label>分值</label>
                 <input v-model.number="q.points" type="number" class="bb-input" min="1" max="100" />
+              </div>
+              <div class="form-row" style="max-width: 150px;" v-if="isMode4or5">
+                <label>题目用途</label>
+                <select v-model="q.tb" class="bb-input">
+                  <option :value="false">普通题</option>
+                  <option :value="true">数字加时TB题</option>
+                </select>
               </div>
             </div>
           </div>
@@ -197,10 +259,12 @@ function createBlankQuestion(idx: number): QuestionForm {
   return {
     id: `q-${Date.now()}-${idx}`,
     text: '',
+    qtype: 'text',
     options: [],
     optionsText: '',
     correctAnswer: '',
-    points: 1
+    points: 1,
+    tb: false
   }
 }
 
@@ -208,7 +272,7 @@ const form = reactive({
   name: '',
   description: '',
   icon: '🎮',
-  type: 'quiz' as 'quiz' | 'score',
+  type: 'quiz' as string,
   questions: [] as QuestionForm[],
   submitMode: 'single' as 'single' | 'batch',
   wrongFeedback: 'none' as 'none' | 'count' | 'reveal' | 'all_correct_only',
@@ -219,13 +283,40 @@ const form = reactive({
   timeLimit: 120,
   scoringRule: 'correct_only' as 'correct_only' | 'timed_bonus',
   winCondition: 'all_correct' as string,
+  eliminateRule: 'last' as 'last' | 'first_wrong',
+  showSubmissions: true,
+  basicTimeLimit: 30,
+  tiebreakTimeLimit: 30,
   playerCount: { min: 2, max: 20 }
+})
+
+const MODE_TYPES = ['elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb']
+const isQuizOrScore = computed(() => form.type === 'quiz' || form.type === 'score')
+const isMode4or5 = computed(() => form.type === 'survive-tb' || form.type === 'score-tb')
+const modeHint = computed(() => {
+  switch (form.type) {
+    case 'elim-last': return '模式1：所有选手同时收到同一道题并作答。每轮根据设置淘汰「最后作答者」或「第一个答错者」，直到只剩 1 人。'
+    case 'first-pick': return '模式2：只检查第一个作答的选手。答对可任选 1 人出局，答错自己出局，直到只剩 1 人。'
+    case 'duel': return '模式3：所有选手进入候选池，每轮由管理员随机/指定 2 人进行 1v1。只检查第一个作答者，答对则对方出局，答错自己出局，未出局者回到候选池，直到剩 2 人进行决赛。'
+    case 'survive-tb': return '模式4：每题有限时，限时内可切换答案，结束后锁定。错误和未作答本轮出局（全员错误则无事发生）。基本题用完后进入数字加时题，更接近且不超过目标数字者获胜。'
+    case 'score-tb': return '模式5：每题有限时，限时内可切换答案，结束后锁定。正确积 1 分。基本题用完后若唯一最高分则获胜，否则并列最高分者进入数字加时题。'
+    default: return ''
+  }
 })
 
 const isAdminJudge = computed(() => form.type === 'quiz' && form.winCondition === 'admin_judge')
 
 function onTypeChange() {
-  form.winCondition = form.type === 'quiz' ? 'all_correct' : 'highest_score'
+  if (form.type === 'quiz') form.winCondition = 'all_correct'
+  else if (form.type === 'score') form.winCondition = 'highest_score'
+}
+
+function onQtypeChange(q: QuestionForm) {
+  if (q.qtype === 'judge' && !q.optionsText.trim()) {
+    q.optionsText = '对\n错'
+    q.options = ['对', '错']
+  }
+  if (q.qtype === 'number') q.options = []
 }
 
 onMounted(() => {
@@ -243,9 +334,15 @@ onMounted(() => {
     form.timeLimit = props.game.timeLimit
     form.scoringRule = props.game.scoringRule
     form.winCondition = props.game.winCondition
+    form.eliminateRule = (props.game as any).eliminateRule || 'last'
+    form.showSubmissions = (props.game as any).showSubmissions ?? true
+    form.basicTimeLimit = (props.game as any).basicTimeLimit ?? 30
+    form.tiebreakTimeLimit = (props.game as any).tiebreakTimeLimit ?? 30
     form.playerCount = { ...props.game.playerCount }
     form.questions = props.game.questions.map(q => ({
       ...q,
+      qtype: (q as any).qtype || ((q.options && q.options.length) ? 'choice' : 'text'),
+      tb: !!(q as any).tb,
       optionsText: q.options.join('\n')
     }))
   }
@@ -279,7 +376,11 @@ const isValid = computed(() => {
   }
   return form.questions.every(q => {
     if (!q.text.trim()) return false
-    if (!isAdminJudge.value && !q.correctAnswer.trim()) return false
+    if (!isAdminJudge.value) {
+      if (q.qtype === 'number') {
+        if (q.correctAnswer === '' || q.correctAnswer === null || Number.isNaN(Number(q.correctAnswer))) return false
+      } else if (!String(q.correctAnswer).trim()) return false
+    }
     return true
   })
 })
@@ -296,9 +397,11 @@ async function save() {
       questions: form.questions.map(q => ({
         id: q.id,
         text: q.text,
+        qtype: q.qtype,
         options: q.options,
         correctAnswer: q.correctAnswer,
-        points: q.points
+        points: q.points,
+        tb: !!q.tb
       })),
       submitMode: form.submitMode,
       wrongFeedback: form.wrongFeedback,
@@ -309,6 +412,10 @@ async function save() {
       timeLimit: form.timeLimit,
       scoringRule: form.scoringRule,
       winCondition: form.winCondition,
+      eliminateRule: form.eliminateRule,
+      showSubmissions: form.showSubmissions,
+      basicTimeLimit: form.basicTimeLimit,
+      tiebreakTimeLimit: form.tiebreakTimeLimit,
       playerCount: form.playerCount
     }
     if (isEdit.value) {

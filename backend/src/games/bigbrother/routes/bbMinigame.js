@@ -4,9 +4,76 @@
  */
 const express = require('express')
 const router = express.Router()
-const { getAllGames } = require('../minigames/loadAll')
+const { getAllGames, getGame } = require('../minigames/loadAll')
 const { getCurrentSeason } = require('../helpers')
 const BBCustomGame = require('../models/BBCustomGame')
+const BBMinigameReplay = require('../models/BBMinigameReplay')
+
+// GET /active-rooms - 所有活跃比赛房间（管理员实时观战）
+router.get('/active-rooms', async (req, res) => {
+  try {
+    const io = req.app.get('io')
+    const ns = io.of('/bigbrother-minigame')
+    const rooms = ns.listActiveRooms ? ns.listActiveRooms() : []
+    res.json({ success: true, data: rooms })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取活跃房间失败' })
+  }
+})
+
+// GET /replays - 历史对局复盘列表
+router.get('/replays', async (req, res) => {
+  try {
+    const { gameType, minigameId, limit } = req.query
+    const query = { gameId: 'bigbrother' }
+    if (gameType) query.gameType = gameType
+    if (minigameId) query.minigameId = minigameId
+    const pageSize = Math.min(200, Number(limit) || 100)
+    const docs = await BBMinigameReplay.find(query)
+    const list = docs
+      .sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))
+      .slice(0, pageSize)
+      .map(d => {
+        const o = d.toObject()
+        // 列表不返回完整事件，仅返回摘要
+        return {
+          id: o.id, roomId: o.roomId, gameType: o.gameType, minigameId: o.minigameId,
+          minigameName: o.minigameName, category: o.category, roundIndex: o.roundIndex,
+          targetScore: o.targetScore, participants: o.participants, status: o.status,
+          startedAt: o.startedAt, endedAt: o.endedAt, winner: o.winner, winners: o.winners,
+          scores: o.scores, eventCount: (o.events || []).length
+        }
+      })
+    res.json({ success: true, data: list })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取复盘列表失败' })
+  }
+})
+
+// GET /replay/:id - 复盘详情（含完整事件日志）
+router.get('/replay/:id', async (req, res) => {
+  try {
+    const doc = await BBMinigameReplay.findOne({ id: req.params.id })
+    if (!doc) return res.status(404).json({ success: false, error: '复盘记录不存在' })
+    res.json({ success: true, data: doc.toObject() })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取复盘详情失败' })
+  }
+})
+
+// DELETE /replay/:id
+router.delete('/replay/:id', async (req, res) => {
+  try {
+    await BBMinigameReplay.deleteOne({ id: req.params.id })
+    res.json({ success: true })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '删除复盘失败' })
+  }
+})
 
 // GET /list - 获取所有可用小游戏（内置 + 自定义）
 router.get('/list', async (req, res) => {
@@ -47,7 +114,7 @@ router.post('/create-room', async (req, res) => {
   try {
     const { gameType, minigameId, participants, targetScore } = req.body
 
-    if (!gameType || !['hoh', 'veto'].includes(gameType)) {
+    if (!gameType || !['hoh', 'veto', 'bbbb'].includes(gameType)) {
       return res.status(400).json({ success: false, error: '无效的比赛类型' })
     }
     if (!minigameId) {
@@ -80,7 +147,23 @@ router.post('/create-room', async (req, res) => {
       }
     }
 
-    const room = minigameNs.createRoom(gameType, minigameId, participants, target)
+    const season = await getCurrentSeason()
+    // 解析小游戏名称（自定义游戏需查库），供选手端开始前显示
+    let minigameName = ''
+    try {
+      if (minigameId.startsWith('custom-')) {
+        const cg = await BBCustomGame.findOne({ id: minigameId.replace(/^custom-/, '') })
+        minigameName = cg?.name || ''
+      } else {
+        const h = getGame(minigameId)
+        minigameName = h?.name || ''
+      }
+    } catch { /* ignore */ }
+    const room = minigameNs.createRoom(gameType, minigameId, participants, target, {
+      roundIndex: season?.currentRound ?? null,
+      roundId: season ? `round-${season.currentRound}` : '',
+      name: minigameName
+    })
 
     res.json({
       success: true,
@@ -88,6 +171,7 @@ router.post('/create-room', async (req, res) => {
         roomId: room.roomId,
         gameType: room.gameType,
         minigameId: room.minigameId,
+        minigameName: room.minigameName || '',
         participants: room.participants,
         targetScore: room.targetScore,
         status: room.status
@@ -143,6 +227,7 @@ router.get('/room/:roomId', (req, res) => {
         roomId: room.roomId,
         gameType: room.gameType,
         minigameId: room.minigameId,
+        minigameName: room.minigameName || '',
         participants: room.participants,
         status: room.status,
         winner: room.winner
@@ -174,6 +259,7 @@ router.get('/active-room/:gameType', (req, res) => {
         roomId: room.roomId,
         gameType: room.gameType,
         minigameId: room.minigameId,
+        minigameName: room.minigameName || '',
         participants: room.participants,
         status: room.status,
         winner: room.winner

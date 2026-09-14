@@ -26,6 +26,9 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
   const scores = ref<Record<string, number>>({})
   const error = ref('')
   const finished = ref(false)
+  const progress = ref<any>(null)
+  const events = ref<any[]>([])
+  const paused = ref(false)
 
   function connect() {
     if (socket.value) return
@@ -69,10 +72,12 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
     })
 
     s.on('game_paused', (data: any) => {
+      paused.value = true
       if (gameState.value) gameState.value.status = 'paused'
     })
 
     s.on('game_resumed', (data: any) => {
+      paused.value = false
       if (gameState.value) gameState.value.status = 'playing'
     })
 
@@ -83,6 +88,17 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
 
     s.on('game_state', (data: any) => {
       gameState.value = data
+    })
+
+    // 管理员观战：实时进度 + 事件流
+    s.on('game_progress', (data: any) => {
+      progress.value = data
+      if (data && Array.isArray(data.participants)) participants.value = data.participants
+    })
+
+    s.on('game_event', (data: any) => {
+      if (!data) return
+      events.value = [...events.value, data]
     })
 
     s.on('game_finished', (data: { winner: { playerId: string; playerName: string } | null; scores: Record<string, number> }) => {
@@ -129,6 +145,9 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
     gameState.value = null
     winner.value = null
     finished.value = false
+    progress.value = null
+    events.value = []
+    paused.value = false
   }
 
   onUnmounted(() => {
@@ -137,7 +156,7 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
 
   return {
     socket, connected, gameState, countdown, participants,
-    winner, scores, error, finished,
+    winner, scores, error, finished, progress, events, paused,
     connect, joinRoom, sendAction, disconnect
   }
 }

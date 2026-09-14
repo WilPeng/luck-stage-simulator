@@ -11,7 +11,6 @@
         <div class="header-badges">
           <span v-if="nomination.isSecretKeeper" class="twist-badge secret">🎭 匿名房主</span>
           <span v-if="nomination.isDirectDemocracy" class="twist-badge democracy">🗳️ 直接民主</span>
-          <span v-if="nomination.isTripleOffering" class="twist-badge triple">🔱 三重献祭</span>
         </div>
       </div>
       <div class="nominees">
@@ -26,7 +25,6 @@
       <p>暂无提名记录</p>
       <div v-if="twistInfo" class="twist-info-bar">
         <span v-if="twistInfo.isDirectDemocracy" class="twist-info-item">🗳️ 本轮为"直接民主"模式，提名由全员投票决定</span>
-        <span v-if="twistInfo.isTripleOffering" class="twist-info-item">🔱 本轮为"三重献祭"模式，允许提名3人</span>
         <span v-if="twistInfo.isSecretKeeper" class="twist-info-item">🎭 本轮为"匿名房主"模式</span>
       </div>
     </div>
@@ -93,8 +91,8 @@
                 <option v-for="h in listForNominee2" :key="h.id" :value="h.id">{{ h.name }}</option>
               </select>
             </div>
-            <div v-if="isTripleOffering" class="form-group">
-              <label>被提名人 3（三重献祭）</label>
+            <div v-if="needThree" class="form-group">
+              <label>被提名人 3</label>
               <select v-model="nominee3" class="bb-select">
                 <option value="" disabled>请选择</option>
                 <option v-for="h in listForNominee3" :key="h.id" :value="h.id">{{ h.name }}</option>
@@ -113,6 +111,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { bbGetCurrentNomination, bbSetNomination, bbGetNominationHistory, bbGetActiveHouseguests, bbVoteNominees, bbGetCurrentHoh, bbGetCurrentVeto } from '../../../services/bbApi'
 import type { BBNomination } from '../../../types/bigbrother'
 
@@ -157,6 +156,12 @@ const isTripleOffering = computed(() =>
   (nomination.value as any)?.isTripleOffering || twistInfo.value?.isTripleOffering
 )
 
+// BBBB：本轮提名 3 人
+const isBbbb = computed(() =>
+  (nomination.value as any)?.isBbbb || twistInfo.value?.isBbbb
+)
+const needThree = computed(() => isTripleOffering.value || isBbbb.value)
+
 async function fetchData() {
   try {
     const data = await bbGetCurrentNomination()
@@ -183,7 +188,7 @@ async function fetchData() {
 }
 
 async function setNomination() {
-  const isTriple = isTripleOffering.value
+  const isTriple = needThree.value
   const ids = [nominee1.value, nominee2.value]
   if (isTriple && nominee3.value) ids.push(nominee3.value)
   const names = ids.map(id => activeMap.value[id] || '')
@@ -216,6 +221,7 @@ async function submitDemocracyVotes() {
 
 function getRoundLabel(t: string) { return t ? new Date(t).toLocaleDateString('zh-CN') : '?' }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 

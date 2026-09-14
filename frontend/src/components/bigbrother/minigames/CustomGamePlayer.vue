@@ -22,6 +22,8 @@
     </div>
 
     <div v-else class="game-playing">
+      <CustomModeArena v-if="isModeGame" :state="modeState" :myId="myId" @action="sendAction" />
+      <template v-else>
       <!-- 顶部信息栏 -->
       <div class="game-header">
         <div class="header-left">
@@ -71,6 +73,12 @@
                   @click="batchAnswers[q.id] = opt"
                 >{{ opt }}</button>
               </div>
+              <NumberPad
+                v-else-if="q.qtype === 'number'"
+                :modelValue="Number(batchAnswers[q.id] || 0)"
+                :disabled="q.locked || cooldownRemaining > 0"
+                @update:modelValue="batchAnswers[q.id] = String($event)"
+              />
               <input
                 v-else
                 v-model="batchAnswers[q.id]"
@@ -105,6 +113,12 @@
               @click="selectOption(opt)"
             >{{ opt }}</button>
           </div>
+          <NumberPad
+            v-else-if="currentQuestion.qtype === 'number'"
+            v-model="numberAnswer"
+            :disabled="cooldownRemaining > 0"
+            @submit="submitNumberAnswer"
+          />
           <div v-else class="answer-input">
             <input ref="inputRef" v-model="userAnswer" class="bb-input" placeholder="输入答案"
               :disabled="cooldownRemaining > 0" @keyup.enter="submitAnswer" />
@@ -120,6 +134,7 @@
         <div>{{ feedback.text }}</div>
         <div v-if="feedback.detail" class="fb-detail">{{ feedback.detail }}</div>
       </div>
+      </template>
     </div>
   </div>
 </template>
@@ -128,8 +143,10 @@
 import { ref, computed, watch, onMounted, nextTick, onUnmounted } from 'vue'
 import { useMinigameSocket } from '../../../composables/useMinigameSocket'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
+import CustomModeArena from './CustomModeArena.vue'
+import NumberPad from './NumberPad.vue'
 
-const props = defineProps<{ roomId: string; participants: { playerId: string; playerName: string }[] }>()
+const props = defineProps<{ roomId: string; participants: { playerId: string; playerName: string }[]; gameTitle?: string }>()
 const emit = defineEmits<{ (e: 'finished', winner: { playerId: string; playerName: string }): void }>()
 
 const bbAuth = useBbAuthStore()
@@ -139,13 +156,16 @@ const roomIdRef = ref(props.roomId)
 const { gameState, countdown, winner, finished, connect, sendAction, disconnect } = useMinigameSocket(roomIdRef)
 
 const userAnswer = ref('')
+const numberAnswer = ref(0)
+const modeState = ref<any>(null)
 const inputRef = ref<HTMLInputElement>()
 const batchAnswers = ref<Record<string, string>>({})
 const startTime = ref(0)
 const elapsed = ref(0)
 let elapsedTimer: ReturnType<typeof setInterval> | null = null
 
-const gameTitle = ref('自定义游戏')
+const gameTitle = ref(props.gameTitle || '自定义游戏')
+watch(() => props.gameTitle, (v) => { if (v) gameTitle.value = v })
 const gameType = ref<'quiz' | 'score'>('quiz')
 const winCondition = ref('')
 const submitMode = ref<'single' | 'batch'>('single')
@@ -167,6 +187,7 @@ let cooldownTimer: ReturnType<typeof setInterval> | null = null
 let startSent = false
 
 const isAdminJudge = computed(() => winCondition.value === 'admin_judge')
+const isModeGame = computed(() => !!modeState.value)
 const isBatch = computed(() => submitMode.value === 'batch' || isAdminJudge.value)
 const showReveal = computed(() => wrongFeedback.value === 'reveal')
 
@@ -204,6 +225,12 @@ function submitAnswer() {
   sendAction({ type: 'answer', answer: userAnswer.value })
   userAnswer.value = ''
   nextTick(() => inputRef.value?.focus())
+}
+
+function submitNumberAnswer(v: number) {
+  if (cooldownRemaining.value > 0) return
+  sendAction({ type: 'answer', answer: v })
+  numberAnswer.value = 0
 }
 
 function submitBatch() {
@@ -256,6 +283,7 @@ function buildFeedback(result: any) {
 
 watch(gameState, (state: any) => {
   if (!state) return
+  if (state.gameType === 'custom-mode') { modeState.value = state; return }
   if (state.gameType) gameType.value = state.gameType
   if (state.winCondition) winCondition.value = state.winCondition
   if (state.submitMode) submitMode.value = state.submitMode

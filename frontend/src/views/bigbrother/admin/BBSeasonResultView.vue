@@ -140,6 +140,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, nextTick, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import html2canvas from 'html2canvas'
 import { bbGetSeasonSettlement } from '../../../services/bbApi'
 import type { BBSettlement, BBSettlementRound } from '../../../types/bigbrother'
@@ -445,6 +446,7 @@ async function fetchData() {
   loading.value = false
 }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 

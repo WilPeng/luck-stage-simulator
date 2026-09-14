@@ -10,11 +10,14 @@ const BBHousePassage = require('../models/BBHousePassage')
 const BBHouseDoor = require('../models/BBHouseDoor')
 const BBPlayerLocation = require('../models/BBPlayerLocation')
 const BBHouseguest = require('../models/BBHouseguest')
+const BBChatMessage = require('../models/BBChatMessage')
+const BBLocationHistory = require('../models/BBLocationHistory')
 const { getCurrentSeason, logAction, BB_ACTION_TYPES } = require('../helpers')
 const { getReachableRooms, getCurrentHoh } = require('../houseMap')
 const locationHistory = require('../locationHistory')
 const { getCollection } = require('../../../config/db')
 const { broadcastDoorUpdate, movePlayerSockets, takePendingInvite, broadcastHouse } = require('../../../socket/bbHouse')
+const { broadcastBBGame } = require('../../../socket/bbGame')
 
 // ===== 公共 API =====
 
@@ -147,13 +150,21 @@ router.get('/reachable', auth, async (req, res) => {
     const roomMap = {}
     rooms.forEach(r => { roomMap[r.id] = r })
 
+    // 特殊隔离区域（初入屋/陪审屋）：无法自行移动，仅管理员可安排
+    if (roomMap[currentRoomId]?.accessRule === 'admin_only') {
+      return res.json({
+        success: true,
+        data: { currentRoomId, rooms: [], backyardDoorOpen: null, hohDoorOpen: null, locked: true, lockReason: '你当前处于特殊区域，只能由管理员安排移动' }
+      })
+    }
+
     const player = await BBHouseguest.findOne({ id: req.user.userId, gameId: 'bigbrother' })
     const hoh = await getCurrentHoh()
     const hohId = hoh ? hoh.id : null
 
     const reachable = await Promise.all(
       reachableIds
-        .filter(id => roomMap[id])
+        .filter(id => roomMap[id] && roomMap[id].accessRule !== 'admin_only')
         .map(async id => {
           const room = roomMap[id]
           let canEnter = true
@@ -264,6 +275,15 @@ router.post('/move', auth, async (req, res) => {
     // 不能原地不动
     if (loc.currentRoomId === targetRoomId) {
       return res.status(400).json({ success: false, error: '你已经在这个房间了' })
+    }
+
+    // 特殊隔离区域（初入屋/陪审屋）：选手无法自行进出，仅管理员可安排
+    const currentRoomDoc = await BBHouseRoom.findOne({ id: loc.currentRoomId, gameId })
+    if (currentRoomDoc?.accessRule === 'admin_only') {
+      return res.status(403).json({ success: false, error: '你当前处于特殊区域，只能由管理员安排移动' })
+    }
+    if (targetRoom.accessRule === 'admin_only') {
+      return res.status(403).json({ success: false, error: '该区域只能由管理员安排进入' })
     }
 
     // 4. 通道存在
@@ -583,6 +603,7 @@ router.post('/admin/broadcast', auth, requireAdmin, async (req, res) => {
         at: new Date().toISOString()
       }
       broadcastHouse('house:broadcast', payload)
+      broadcastBBGame('bb:broadcast', payload)
       return res.json({ success: true, data: { ...payload, movedCount: moved.length } })
     }
 
@@ -595,6 +616,7 @@ router.post('/admin/broadcast', auth, requireAdmin, async (req, res) => {
       at: new Date().toISOString()
     }
     broadcastHouse('house:broadcast', payload)
+    broadcastBBGame('bb:broadcast', payload)
     res.json({ success: true, data: payload })
   } catch (e) {
     console.error(e)
@@ -884,6 +906,118 @@ router.post('/admin/season', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '调整失败' })
+  }
+})
+
+// GET /admin/chat-logs - 管理员查看所有房间聊天记录，并计算每条消息被哪些房客看到
+router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
+  try {
+    const gameId = 'bigbrother'
+    const { roomId } = req.query
+    const filter = { gameId, chatType: 'room' }
+    if (roomId) filter.roomId = roomId
+
+    const messages = await BBChatMessage.find(filter)
+    messages.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    const limited = messages.slice(0, 200)
+
+    const rooms = await BBHouseRoom.find({ gameId })
+    const guests = await BBHouseguest.find({ gameId })
+    const nameById = {}
+    guests.forEach(g => { nameById[g.id] = g.name })
+
+    // 位置历史按房间分组
+    const history = await BBLocationHistory.find({ gameId })
+    const byRoom = {}
+    history.forEach(h => {
+      if (!byRoom[h.roomId]) byRoom[h.roomId] = []
+      byRoom[h.roomId].push({ playerId: h.playerId, from: h.from, to: h.to })
+    })
+
+    const result = limited.map(m => {
+      const ivs = byRoom[m.roomId] || []
+      const t = new Date(m.createdAt).getTime()
+      const seen = new Set()
+      for (const iv of ivs) {
+        const from = new Date(iv.from).getTime()
+        const to = iv.to ? new Date(iv.to).getTime() : Infinity
+        if (t >= from && t <= to) seen.add(nameById[iv.playerId] || iv.playerId)
+      }
+      return { ...m.toObject(), seenBy: Array.from(seen) }
+    })
+
+    res.json({ success: true, data: { rooms: rooms.map(r => r.toObject()), messages: result } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取聊天记录失败' })
+  }
+})
+
+// ===== 管理员：房客睡眠/洗澡记录 =====
+
+// GET /admin/guest-states - 所有房客的睡眠/洗澡状态
+router.get('/admin/guest-states', auth, requireAdmin, async (req, res) => {
+  try {
+    const guests = await BBHouseguest.find({ gameId: 'bigbrother' })
+    res.json({
+      success: true,
+      data: guests.map(g => ({
+        id: g.id, name: g.name, avatar: g.avatar, role: g.role, status: g.status,
+        currentRoomId: g.currentRoomId,
+        isSleeping: g.isSleeping, wakeAt: g.wakeAt, lastSleepDate: g.lastSleepDate,
+        isShowering: g.isShowering, showerStartedAt: g.showerStartedAt, lastShowerDate: g.lastShowerDate,
+        hohSleepApproved: g.hohSleepApproved
+      })),
+      today: todayStr()
+    })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取房客状态失败' })
+  }
+})
+
+// POST /admin/set-sleep - 直接设置房客睡眠状态
+router.post('/admin/set-sleep', auth, requireAdmin, async (req, res) => {
+  try {
+    const { playerId, sleeping } = req.body || {}
+    const g = await BBHouseguest.findOne({ id: playerId, gameId: 'bigbrother' })
+    if (!g) return res.status(404).json({ success: false, error: '房客不存在' })
+    if (sleeping) {
+      g.isSleeping = true
+      g.sleepStartedAt = new Date().toISOString()
+      g.wakeAt = new Date(Date.now() + 6 * 3600 * 1000).toISOString()
+      g.lastSleepDate = todayStr()
+    } else {
+      g.isSleeping = false
+      g.sleepStartedAt = null
+      g.wakeAt = null
+    }
+    await g.save()
+    res.json({ success: true })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '设置失败' })
+  }
+})
+
+// POST /admin/set-shower - 直接设置房客洗澡状态（已洗澡 = 记录今天日期）
+router.post('/admin/set-shower', auth, requireAdmin, async (req, res) => {
+  try {
+    const { playerId, showered } = req.body || {}
+    const g = await BBHouseguest.findOne({ id: playerId, gameId: 'bigbrother' })
+    if (!g) return res.status(404).json({ success: false, error: '房客不存在' })
+    if (showered) {
+      g.lastShowerDate = todayStr()
+      g.isShowering = false
+      g.showerStartedAt = null
+    } else {
+      g.lastShowerDate = null
+    }
+    await g.save()
+    res.json({ success: true })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '设置失败' })
   }
 })
 

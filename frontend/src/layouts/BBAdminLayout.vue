@@ -39,25 +39,6 @@
             </div>
           </div>
 
-          <div v-for="round in rounds" :key="round" class="nav-section">
-            <div class="nav-section-header" :class="{ current: round === seasonStore.currentRoundNumber }"
-              @click="toggleRound(round)">
-              <span class="collapse-icon" :class="{ collapsed: isRoundCollapsed(round) }">▾</span>
-              <span class="section-title">第{{ round }}周</span>
-              <span class="section-status" :class="getRoundStatus(round)">{{ getRoundStatusText(round) }}</span>
-            </div>
-            <div v-show="!isRoundCollapsed(round)" class="round-stages">
-              <div v-for="st in stageList" :key="st.key"
-                class="nav-item sub-item"
-                :class="{ active: isStageActive(round, st.key), disabled: !isStageClickable(round, st.key) }"
-                @click="navigateToStage(round, st.key)">
-                <span class="nav-icon">{{ st.icon }}</span>
-                <span class="nav-text">{{ st.text }}</span>
-                <span class="stage-status-dot" :class="getStageStatusClass(round, st.key)"></span>
-              </div>
-            </div>
-          </div>
-
           <div class="nav-section">
             <div class="nav-section-title">其他</div>
             <div v-for="item in otherItems" :key="item.path"
@@ -65,6 +46,25 @@
               @click="navigateTo(item.path)">
               <span class="nav-icon">{{ item.icon }}</span>
               <span class="nav-text">{{ item.text }}</span>
+            </div>
+          </div>
+
+          <div v-for="grp in roundGroups" :key="grp.round" class="nav-section">
+            <div class="nav-section-header" :class="{ current: grp.status === 'current' }"
+              @click="toggleRound(grp.round)">
+              <span class="collapse-icon" :class="{ collapsed: isRoundCollapsed(grp.round) }">▾</span>
+              <span class="section-title">{{ grp.title }}</span>
+              <span class="section-status" :class="grp.status">{{ grp.statusText }}</span>
+            </div>
+            <div v-show="!isRoundCollapsed(grp.round)" class="round-stages">
+              <div v-for="it in grp.items" :key="it.stage"
+                class="nav-item sub-item"
+                :class="{ active: isStageActive(grp.round, it.stage), disabled: !it.clickable }"
+                @click="navigateTo(it.path)">
+                <span class="nav-icon">{{ it.icon }}</span>
+                <span class="nav-text">{{ it.stageName }}</span>
+                <span class="stage-status-dot" :class="it.status"></span>
+              </div>
             </div>
           </div>
         </nav>
@@ -78,16 +78,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useBbAuthStore } from '../stores/bbAuthStore'
 import { useBbSeasonStore } from '../stores/bbSeasonStore'
+import { useBbRealtimeStore } from '../stores/bbRealtimeStore'
 import { BB_STAGE_NAME, type BBStageType } from '../types/bigbrother'
+import { applyGamePageMeta } from '../router'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useBbAuthStore()
 const seasonStore = useBbSeasonStore()
+const realtime = useBbRealtimeStore()
 
 const mobileMenuOpen = ref(false)
 const collapsedRounds = ref<Set<number>>(new Set())
@@ -127,28 +130,77 @@ const stageList = [
 
 const otherItems = [
   { icon: '🏡', text: 'BB House 管理', path: '/games/bigbrother/admin/house-admin' },
+  { icon: '💬', text: '房间聊天记录', path: '/games/bigbrother/admin/house-chat' },
+  { icon: '😴', text: '睡眠/洗澡记录', path: '/games/bigbrother/admin/guest-states' },
   { icon: '🎮', text: '游戏库', path: '/games/bigbrother/admin/game-library' },
+  { icon: '👁', text: '小游戏实时观战', path: '/games/bigbrother/admin/minigame-live' },
+  { icon: '🎬', text: '小游戏复盘', path: '/games/bigbrother/admin/minigame-replay' },
   { icon: '📜', text: '操作日志', path: '/games/bigbrother/admin/logs' },
-  { icon: '💬', text: '聊天室', path: '/games/bigbrother/admin/chat' },
 ]
 
-const rounds = computed(() => {
-  // 普通轮列至最后一普通轮（final3Round-1）；终局两轮通过“终局F3/冠军”菜单进入
-  const max = seasonStore.final3Round
-    ? Math.min(seasonStore.final3Round - 1, seasonStore.totalRounds)
-    : seasonStore.totalRounds
-  const cur = Math.min(seasonStore.currentRoundNumber, max)
-  // 顺序：当前轮置顶 → 已完成轮倒序（如 4 3 2 1）→ 未开始轮顺序（5 6 7 …）
-  const done = []
-  for (let i = cur - 1; i >= 1; i--) done.push(i)
-  const upcoming = []
-  for (let i = cur + 1; i <= max; i++) upcoming.push(i)
-  return [cur, ...done, ...upcoming].filter(r => r >= 1 && r <= max)
+const adminStageMeta: Record<string, { icon: string; route: string }> = {
+  hoh_competition: { icon: '👑', route: 'hoh' },
+  nomination: { icon: '📋', route: 'nomination' },
+  veto_competition: { icon: '🛡️', route: 'veto-competition' },
+  veto_ceremony: { icon: '⚖️', route: 'veto-ceremony' },
+  replacement_nom: { icon: '🔄', route: 'replacement-nom' },
+  bbbb: { icon: '🎯', route: 'bbbb' },
+  eviction_vote: { icon: '🗳️', route: 'eviction-vote' },
+  eviction: { icon: '🚪', route: 'eviction' },
+  final3: { icon: '🏁', route: 'endgame' },
+  champion_vote: { icon: '🏆', route: 'endgame' },
+}
+const ENDGAME_STAGES = ['final3', 'champion_vote']
+
+// 依据赛季配置（菜单）生成左侧树
+const roundGroups = computed(() => {
+  const items = seasonStore.menuItems || []
+  const byRound = new Map<number, any[]>()
+  for (const it of items) {
+    if (!byRound.has(it.round)) byRound.set(it.round, [])
+    byRound.get(it.round)!.push(it)
+  }
+  const c = seasonStore.currentRoundNumber
+  const rounds = Array.from(byRound.keys()).sort((a, b) => {
+    const ka = a <= c ? (c - a) : (1000 + (a - c))
+    const kb = b <= c ? (c - b) : (1000 + (b - c))
+    return ka - kb
+  })
+  return rounds.map(r => {
+    const list = byRound.get(r)!
+    const isEndgame = list.some(i => ENDGAME_STAGES.includes(i.stage))
+    const hasCurrent = list.some(i => i.status === 'current')
+    const allDone = list.every(i => i.status === 'completed')
+    const status = hasCurrent ? 'current' : (allDone ? 'completed' : 'future')
+    return {
+      round: r,
+      title: isEndgame ? (list[0]?.stageName || `第${r}轮`) : `第${r}周`,
+      status,
+      statusText: status === 'current' ? '进行中' : status === 'completed' ? '已完成' : '未开始',
+      items: list.map(i => {
+        const meta = adminStageMeta[i.stage] || { icon: '•', route: i.stage }
+        const isEnd = ENDGAME_STAGES.includes(i.stage)
+        return {
+          stage: i.stage,
+          stageName: i.stageName,
+          status: i.status,
+          clickable: i.clickable,
+          icon: meta.icon,
+          path: isEnd
+            ? `/games/bigbrother/admin/${meta.route}`
+            : `/games/bigbrother/admin/round/${r}/${meta.route}`
+        }
+      })
+    }
+  })
 })
 
 const stageDisplay = computed(() => {
   return `第${seasonStore.currentRoundNumber}周 · ${seasonStore.stageName}`
 })
+
+// 浏览器标题随当前比赛/阶段动态变化
+watch(stageDisplay, (v) => { applyGamePageMeta('bigbrother', v) }, { immediate: true })
 
 function toggleRound(round: number) {
   if (collapsedRounds.value.has(round)) {
@@ -213,6 +265,11 @@ onMounted(async () => {
   await seasonStore.fetchProgress()
   await seasonStore.fetchMenu()
   initCollapsed()
+  realtime.connect()
+})
+
+onUnmounted(() => {
+  realtime.disconnect()
 })
 </script>
 

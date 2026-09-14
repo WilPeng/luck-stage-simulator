@@ -9,8 +9,9 @@ const BB_STAGE_ORDER = [
   'veto_competition',   // 2  否决权竞争
   'veto_ceremony',      // 3  否决权会议
   'replacement_nom',    // 4  替换提名（可选）
-  'eviction_vote',      // 5  淘汰投票
-  'eviction'            // 6  淘汰结果
+  'bbbb',               // 5  BBBB（仅启用该 twist 的轮次；3名提名者比赛，胜者安全）
+  'eviction_vote',      // 6  淘汰投票
+  'eviction'            // 7  淘汰结果
 ]
 
 const BB_STAGE_NAME = {
@@ -19,6 +20,7 @@ const BB_STAGE_NAME = {
   veto_competition: '否决权竞争',
   veto_ceremony: '否决权会议',
   replacement_nom: '替换提名',
+  bbbb: 'BBBB',
   eviction_vote: '淘汰投票',
   eviction: '淘汰结果',
   final3: 'F3终局',
@@ -95,6 +97,14 @@ const TWIST_DEFINITIONS = {
     icon: '🪃',
     description: '否决权使用时所有被提名者全救，HOH必须重新提名全部人',
     affectsStages: ['veto_ceremony', 'replacement_nom'],
+    group: 1
+  },
+  bbbb: {
+    id: 'bbbb',
+    name: 'BBBB',
+    icon: '🎯',
+    description: '本轮 HOH 提名 3 人；淘汰投票前 3 名提名者进行 BBBB 比赛，胜者安全，其余 2 人进入淘汰投票',
+    affectsStages: ['nomination', 'bbbb', 'eviction_vote'],
     group: 1
   }
 }

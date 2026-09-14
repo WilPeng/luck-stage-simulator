@@ -100,8 +100,8 @@ const currentActions = computed(() => {
   const actions: Record<string, { icon: string; title: string; desc: string; path: string }> = {
     hoh_competition: { icon: '👑', title: 'HOH 竞争', desc: '参与 HOH 竞争，争夺一家之主', path: `/games/bigbrother/player/round/${round}/hoh` },
     nomination: { icon: '📋', title: '查看提名', desc: '查看本周被提名人', path: `/games/bigbrother/player/round/${round}/nomination` },
-    veto_competition: { icon: '🛡️', title: '否决权竞争', desc: '参与否决权竞争', path: `/games/bigbrother/player/round/${round}/veto` },
-    veto_ceremony: { icon: '⚖️', title: '否决权会议', desc: '查看否决权使用情况', path: `/games/bigbrother/player/round/${round}/veto` },
+    veto_competition: { icon: '🛡️', title: '否决权竞争', desc: '参与否决权竞争', path: `/games/bigbrother/player/round/${round}/veto-competition` },
+    veto_ceremony: { icon: '⚖️', title: '否决权会议', desc: '查看否决权使用情况', path: `/games/bigbrother/player/round/${round}/veto-ceremony` },
     eviction_vote: { icon: '🗳️', title: '淘汰投票', desc: '参与本周淘汰投票', path: `/games/bigbrother/player/round/${round}/eviction` },
     eviction: { icon: '🚪', title: '淘汰结果', desc: '查看本周淘汰结果', path: `/games/bigbrother/player/round/${round}/eviction` },
     final3: { icon: '🏁', title: 'F3 终局挑战', desc: '参与 F3 终局小游戏', path: `/games/bigbrother/player/finale` },
@@ -113,9 +113,9 @@ const currentActions = computed(() => {
 const stageInfo: Record<string, { icon: string; label: string; path: string }> = {
   hoh_competition: { icon: '👑', label: 'HOH', path: 'hoh' },
   nomination: { icon: '📋', label: '提名', path: 'nomination' },
-  veto_competition: { icon: '🛡️', label: '否决权', path: 'veto' },
-  veto_ceremony: { icon: '⚖️', label: '否决权', path: 'veto' },
-  replacement_nom: { icon: '🔄', label: '替换提名', path: 'nomination' },
+  veto_competition: { icon: '🛡️', label: '否决权', path: 'veto-competition' },
+  veto_ceremony: { icon: '⚖️', label: '否决权', path: 'veto-ceremony' },
+  replacement_nom: { icon: '🔄', label: '替换提名', path: 'replacement-nom' },
   eviction_vote: { icon: '🗳️', label: '淘汰', path: 'eviction' },
   eviction: { icon: '🚪', label: '结果', path: 'eviction' },
 }

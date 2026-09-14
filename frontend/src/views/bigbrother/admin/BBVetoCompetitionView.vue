@@ -62,6 +62,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { bbGetCurrentVeto, bbGetVetoHistory, bbRunVetoCompetition } from '../../../services/bbApi'
 import type { BBVetoRecord } from '../../../types/bigbrother'
 
@@ -88,6 +89,7 @@ async function runCompetition() {
 
 function formatTime(t: string) { return t ? new Date(t).toLocaleDateString('zh-CN') : '?' }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 

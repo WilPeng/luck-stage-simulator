@@ -119,3 +119,22 @@ export async function bbAdminSetRoom(data: { roomId: string; capacity?: number |
 export async function bbAdminSetSeason(data: { autoSleepHour?: number; hohSleepAllowed?: boolean }) {
   return doRequest<any>('/house/admin/season', { method: 'POST', body: JSON.stringify(data) })
 }
+
+// 管理员：查看所有房间聊天记录（含每条消息被谁看到）
+export async function bbAdminChatLogs(roomId?: string) {
+  const qs = roomId ? `?roomId=${encodeURIComponent(roomId)}` : ''
+  return doRequest<any>(`/house/admin/chat-logs${qs}`)
+}
+
+// 管理员：房客睡眠/洗澡记录
+export async function bbAdminGuestStates() {
+  return doRequest<any>('/house/admin/guest-states')
+}
+
+export async function bbAdminSetSleep(playerId: string, sleeping: boolean) {
+  return doRequest<any>('/house/admin/set-sleep', { method: 'POST', body: JSON.stringify({ playerId, sleeping }) })
+}
+
+export async function bbAdminSetShower(playerId: string, showered: boolean) {
+  return doRequest<any>('/house/admin/set-shower', { method: 'POST', body: JSON.stringify({ playerId, showered }) })
+}

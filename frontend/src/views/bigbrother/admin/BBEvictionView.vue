@@ -117,6 +117,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { bbGetVotes, bbCastVote, bbAnnounceEviction, bbGetEvictionHistory, bbGetHouseguestStats, bbGetActiveHouseguests, bbGetCurrentNomination, bbGetCurrentHoh } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBEviction } from '../../../types/bigbrother'
@@ -200,6 +201,7 @@ async function announceResult() {
 
 function formatTime(t: string) { return t ? new Date(t).toLocaleString('zh-CN') : '' }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 

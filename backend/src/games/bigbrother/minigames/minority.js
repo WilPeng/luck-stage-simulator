@@ -9,6 +9,11 @@ const { registerGame } = require('./index')
  */
 const ROUND_MS = 15000
 
+function pushReplay(state, type, text, data) {
+  if (!state._replayEvents) state._replayEvents = []
+  state._replayEvents.push({ type, text, data: data || null })
+}
+
 const DEFAULT_QUESTIONS = [
   { text: '你更喜欢吃甜的还是咸的？', options: ['甜', '咸'] },
   { text: '你更喜欢猫还是狗？', options: ['猫', '狗'] },
@@ -30,7 +35,7 @@ registerGame({
   init(participants) {
     const playerStates = {}
     participants.forEach(p => {
-      playerStates[p.playerId] = { alive: true, eliminatedRound: null, lastTime: null }
+      playerStates[p.playerId] = { alive: true, eliminatedRound: null, lastTime: null, name: p.playerName || p.playerId }
     })
     const questions = DEFAULT_QUESTIONS
     return {
@@ -46,6 +51,7 @@ registerGame({
       lastEliminated: [],
       winner: null,
       finished: false,
+      _replayEvents: [],
       questions
     }
   },
@@ -137,16 +143,31 @@ registerGame({
     }
     state.lastEliminated = eliminated
 
+    const nameOf = pid => (state.playerStates[pid] && state.playerStates[pid].name) || pid
+    const choiceText = alive.map(([pid]) => {
+      const a = state.roundAnswers[pid]
+      return `${nameOf(pid)}:${a ? (a.choice === 0 ? 'A' : 'B') : '未作答'}`
+    }).join('、')
+    const elimText = eliminated.length ? eliminated.map(nameOf).join('、') + ' 出局' : '本轮无人出局'
+    pushReplay(state, 'round', `第${state.round + 1}轮「${state.question ? state.question.text : ''}」：${choiceText}；${elimText}`, {
+      round: state.round,
+      question: state.question,
+      answers: state.roundAnswers,
+      eliminated
+    })
+
     const survivors = Object.entries(state.playerStates).filter(([, p]) => p.alive)
 
     if (survivors.length === 0) {
       state.finished = true
       state.winner = null
+      pushReplay(state, 'finish', '全部出局，无胜者', {})
       return
     }
     if (survivors.length === 1) {
       state.finished = true
       state.winner = survivors[0][0]
+      pushReplay(state, 'finish', `${nameOf(state.winner)} 获胜`, { winnerId: state.winner })
       return
     }
     if (survivors.length === 2) {
@@ -156,6 +177,7 @@ registerGame({
         times.sort((a, b) => a.t - b.t)
         state.finished = true
         state.winner = times[0].pid
+        pushReplay(state, 'finish', `${nameOf(state.winner)} 作答更快，获胜`, { winnerId: state.winner })
         return
       }
       // 无法比较则继续
@@ -213,5 +235,20 @@ registerGame({
 
   checkTarget() {
     return false
+  },
+
+  describeEvent(state, playerId, action, result) {
+    const ps = state.playerStates[playerId]
+    const name = ps ? ps.name : playerId
+    if (action && action.type === 'choose') {
+      return { text: `${name} 选择：${action.choice === 0 ? 'A' : 'B'}`, data: { choice: action.choice } }
+    }
+    return null
+  },
+
+  takeReplayEvents(state) {
+    const evs = state._replayEvents || []
+    state._replayEvents = []
+    return evs
   }
 })

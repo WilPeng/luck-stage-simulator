@@ -13,6 +13,7 @@ class BBVetoRecord extends BaseModel {
     this.used = data?.used || false // 是否使用了否决权（向后兼容，status==='used'时为true）
     this.usedOnPlayerId = data?.usedOnPlayerId || null // 被拯救的提名者
     this.usedOnPlayerName = data?.usedOnPlayerName || ''
+    this.cardDraw = data?.cardDraw || null // POV 抽卡环节（存活>6时）：{ cards, drawerOrder, drawerIndex, participants, canPick, pickablePlayers }
     this.gameId = data?.gameId || 'bigbrother'
     this.createdAt = data?.createdAt || new Date().toISOString()
     this.updatedAt = data?.updatedAt || new Date().toISOString()

@@ -8,6 +8,36 @@ const BBCustomGame = require('../models/BBCustomGame')
 const { getCurrentSeason } = require('../helpers')
 const { clearCustomGameCache } = require('../minigames/customGame')
 
+const ALLOWED_TYPES = ['quiz', 'score', 'elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb']
+const MODE_TYPES = ['elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb']
+
+function normalizeQtype(q) {
+  if (q.qtype && ['text', 'choice', 'number', 'judge'].includes(q.qtype)) return q.qtype
+  return (q.options && q.options.length) ? 'choice' : 'text'
+}
+
+function hasAnswer(q) {
+  if (q.qtype === 'number') {
+    return q.correctAnswer !== '' && q.correctAnswer !== null && q.correctAnswer !== undefined && !Number.isNaN(Number(q.correctAnswer))
+  }
+  return !!(q.correctAnswer !== undefined && q.correctAnswer !== null && String(q.correctAnswer).trim())
+}
+
+function mapQuestion(q, idx) {
+  const qtype = normalizeQtype(q)
+  let options = (q.options || []).map(o => String(o).trim()).filter(Boolean)
+  if (qtype === 'judge' && options.length === 0) options = ['对', '错']
+  return {
+    id: q.id || `q-${idx + 1}`,
+    text: String(q.text || '').trim(),
+    qtype,
+    options: qtype === 'number' ? [] : options,
+    correctAnswer: qtype === 'number' ? Number(q.correctAnswer) : String(q.correctAnswer == null ? '' : q.correctAnswer).trim(),
+    points: q.points || 1,
+    tb: !!q.tb
+  }
+}
+
 // GET /list - 获取所有自定义游戏
 router.get('/list', async (req, res) => {
   try {
@@ -46,20 +76,21 @@ router.post('/', async (req, res) => {
     const {
       name, description, icon, type, questions, cooldownSeconds, maxAttempts,
       timeLimit, scoringRule, playerCount, winCondition,
-      submitMode, wrongFeedback, lockOnWrong, targetCorrect
+      submitMode, wrongFeedback, lockOnWrong, targetCorrect,
+      eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit
     } = req.body
 
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, error: '游戏名称不能为空' })
     }
-    if (!type || !['quiz', 'score'].includes(type)) {
-      return res.status(400).json({ success: false, error: '游戏类型必须为 quiz 或 score' })
+    if (!type || !ALLOWED_TYPES.includes(type)) {
+      return res.status(400).json({ success: false, error: '游戏类型无效' })
     }
     if (!questions || !Array.isArray(questions) || questions.length === 0) {
       return res.status(400).json({ success: false, error: '至少需要一道题目' })
     }
 
-    const finalWin = winCondition || (type === 'quiz' ? 'all_correct' : 'highest_score')
+    const finalWin = winCondition || (type === 'quiz' ? 'all_correct' : (type === 'score' ? 'highest_score' : 'elimination'))
     const allowEmptyAnswer = finalWin === 'admin_judge'
 
     // 验证题目
@@ -68,7 +99,7 @@ router.post('/', async (req, res) => {
       if (!q.text || !q.text.trim()) {
         return res.status(400).json({ success: false, error: `第${i + 1}题题目文本不能为空` })
       }
-      if (!allowEmptyAnswer && (!q.correctAnswer || !q.correctAnswer.trim())) {
+      if (!allowEmptyAnswer && !hasAnswer(q)) {
         return res.status(400).json({ success: false, error: `第${i + 1}题正确答案不能为空` })
       }
     }
@@ -82,13 +113,7 @@ router.post('/', async (req, res) => {
       description: (description || '').trim(),
       icon: icon || '🎮',
       type,
-      questions: questions.map((q, idx) => ({
-        id: q.id || `q-${idx + 1}`,
-        text: q.text.trim(),
-        options: (q.options || []).map(o => o.trim()).filter(Boolean),
-        correctAnswer: (q.correctAnswer || '').trim(),
-        points: q.points || 1
-      })),
+      questions: questions.map((q, idx) => mapQuestion(q, idx)),
       cooldownSeconds: cooldownSeconds ?? 5,
       maxAttempts: maxAttempts ?? 0,
       timeLimit: timeLimit ?? 120,
@@ -99,6 +124,10 @@ router.post('/', async (req, res) => {
       wrongFeedback: wrongFeedback || 'none',
       lockOnWrong: !!lockOnWrong,
       targetCorrect: targetCorrect ?? 1,
+      eliminateRule: eliminateRule || 'last',
+      showSubmissions: showSubmissions !== false,
+      basicTimeLimit: basicTimeLimit ?? 30,
+      tiebreakTimeLimit: tiebreakTimeLimit ?? 30,
       enabled: true
     })
 
@@ -123,7 +152,8 @@ router.put('/:id', async (req, res) => {
     const {
       name, description, icon, type, questions, cooldownSeconds, maxAttempts,
       timeLimit, scoringRule, playerCount, winCondition, enabled,
-      submitMode, wrongFeedback, lockOnWrong, targetCorrect
+      submitMode, wrongFeedback, lockOnWrong, targetCorrect,
+      eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit
     } = req.body
 
     const finalWin = winCondition !== undefined ? winCondition : existing.winCondition
@@ -135,7 +165,7 @@ router.put('/:id', async (req, res) => {
         if (!q.text || !q.text.trim()) {
           return res.status(400).json({ success: false, error: `第${i + 1}题题目文本不能为空` })
         }
-        if (!allowEmptyAnswer && (!q.correctAnswer || !q.correctAnswer.trim())) {
+        if (!allowEmptyAnswer && !hasAnswer(q)) {
           return res.status(400).json({ success: false, error: `第${i + 1}题正确答案不能为空` })
         }
       }
@@ -144,15 +174,9 @@ router.put('/:id', async (req, res) => {
     if (name !== undefined) existing.name = name.trim()
     if (description !== undefined) existing.description = description.trim()
     if (icon !== undefined) existing.icon = icon
-    if (type !== undefined && ['quiz', 'score'].includes(type)) existing.type = type
+    if (type !== undefined && ALLOWED_TYPES.includes(type)) existing.type = type
     if (questions !== undefined) {
-      existing.questions = questions.map((q, idx) => ({
-        id: q.id || `q-${idx + 1}`,
-        text: q.text.trim(),
-        options: (q.options || []).map(o => o.trim()).filter(Boolean),
-        correctAnswer: (q.correctAnswer || '').trim(),
-        points: q.points || 1
-      }))
+      existing.questions = questions.map((q, idx) => mapQuestion(q, idx))
     }
     if (cooldownSeconds !== undefined) existing.cooldownSeconds = cooldownSeconds
     if (maxAttempts !== undefined) existing.maxAttempts = maxAttempts
@@ -164,6 +188,10 @@ router.put('/:id', async (req, res) => {
     if (wrongFeedback !== undefined) existing.wrongFeedback = wrongFeedback
     if (lockOnWrong !== undefined) existing.lockOnWrong = !!lockOnWrong
     if (targetCorrect !== undefined) existing.targetCorrect = targetCorrect
+    if (eliminateRule !== undefined) existing.eliminateRule = eliminateRule
+    if (showSubmissions !== undefined) existing.showSubmissions = !!showSubmissions
+    if (basicTimeLimit !== undefined) existing.basicTimeLimit = basicTimeLimit
+    if (tiebreakTimeLimit !== undefined) existing.tiebreakTimeLimit = tiebreakTimeLimit
     if (enabled !== undefined) existing.enabled = enabled
     existing.updatedAt = new Date().toISOString()
 

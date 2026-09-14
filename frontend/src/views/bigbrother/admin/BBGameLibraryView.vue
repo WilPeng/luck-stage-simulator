@@ -68,6 +68,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useRouter } from 'vue-router'
 import {
   bbGetMinigameList, bbGetCustomGameList, bbDeleteCustomGame, bbToggleCustomGame
@@ -125,6 +126,7 @@ function goManage() {
   router.push('/games/bigbrother/admin/power-challenge')
 }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 

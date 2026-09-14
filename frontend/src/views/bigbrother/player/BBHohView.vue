@@ -16,13 +16,13 @@
     <!-- 小游戏模式：有活跃房间且玩家在参与者中 -->
     <div v-else-if="showMinigame" class="minigame-section">
       <component :is="gameComponent" :roomId="activeRoom.roomId"
-        :participants="activeRoom.participants" @finished="onMinigameFinished" />
+        :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
     </div>
 
     <!-- 已有结果 -->
     <div v-else-if="currentHoh" class="hoh-announcement">
       <div class="hoh-card" :class="{ 'is-me': isMe(currentHoh.winnerName) }">
-        <div class="hoh-crown">👑</div>
+        <BBAvatar :name="currentHoh.winnerName" :avatar="(currentHoh as any).winnerAvatar || avatarOf(currentHoh.winnerName)" size="lg" />
         <div class="hoh-body">
           <div class="hoh-label">一家之主（HOH）</div>
           <div class="hoh-name">
@@ -61,7 +61,9 @@ import { ref, computed, onMounted, onUnmounted, markRaw, type Component } from '
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetHohHistory, bbGetActiveMinigameRoom, bbRunHohCompetition, bbGetHohEligible } from '../../../services/bbApi'
+import { bbGetHohHistory, bbGetActiveMinigameRoom, bbRunHohCompetition, bbGetHohEligible, bbGetHouseguests } from '../../../services/bbApi'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import ClickSpeedGame from '../../../components/bigbrother/minigames/ClickSpeedGame.vue'
 import MemoryMatchGame from '../../../components/bigbrother/minigames/MemoryMatchGame.vue'
 import QuickMathGame from '../../../components/bigbrother/minigames/QuickMathGame.vue'
@@ -120,6 +122,9 @@ function isMe(name: string): boolean {
   return name === myName.value
 }
 
+const avatarMap = ref<Record<string, string | null>>({})
+function avatarOf(name: string) { return avatarMap.value[name] || null }
+
 async function onMinigameFinished(winner: { playerId: string; playerName: string }) {
   // 通知后端记录获胜者
   try {
@@ -136,15 +141,47 @@ async function onMinigameFinished(winner: { playerId: string; playerName: string
   }
 }
 
-onMounted(async () => {
-  // 加载 HOH 历史
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+async function loadCurrentHoh(): Promise<boolean> {
   try {
     const history = await bbGetHohHistory()
     const roundKey = `round-${roundNum.value}`
-    currentHoh.value = history.find(h => h.roundId === roundKey) || null
-  } catch {}
+    const rec = history.find(h => h.roundId === roundKey) || null
+    currentHoh.value = rec
+    if (rec) isPrevHoh.value = false
+    return !!rec
+  } catch { return false }
+}
 
-  // 检查当前用户是否为上一轮 HOH（不能连任）
+async function checkRoom() {
+  // 优先刷新 HOH 结果：管理员指定 / 比赛结束后无需刷新页面即可跳转
+  if (await loadCurrentHoh()) {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+    return
+  }
+  if (activeRoom.value?.status === 'finished') {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+    return
+  }
+  try {
+    const room = await bbGetActiveMinigameRoom('hoh')
+    if (room) {
+      activeRoom.value = room
+      if (room.minigameId?.startsWith('custom-')) {
+        gameComponent.value = markRaw(CustomGamePlayer)
+      } else {
+        gameComponent.value = gameComponentMap[room.minigameId] || null
+      }
+      if (room.status === 'finished' && pollTimer) {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
+    }
+  } catch {}
+}
+
+async function initEligibility() {
   if (!currentHoh.value && isCurrentRound.value) {
     try {
       const eligible = await bbGetHohEligible()
@@ -153,46 +190,35 @@ onMounted(async () => {
       }
     } catch {}
   }
+}
 
-  // 检查活跃的小游戏房间（初始 + 轮询）
-  let pollTimer: ReturnType<typeof setInterval> | null = null
+// 任意实时广播（含管理员指定 HOH）→ 立即刷新
+useBbRefresh(checkRoom)
 
-  const checkRoom = async () => {
-    // 已有结果或房间已结束，停止轮询
-    if (currentHoh.value || activeRoom.value?.status === 'finished') {
-      if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
-      return
+onMounted(async () => {
+  await loadCurrentHoh()
+
+  // 加载房客头像映射
+  try {
+    const res: any = await bbGetHouseguests()
+    const list = res?.list || res?.data?.list || res?.data || res || []
+    for (const h of (Array.isArray(list) ? list : [])) {
+      if (h?.name) avatarMap.value[h.name] = h.avatar || null
     }
-    try {
-      const room = await bbGetActiveMinigameRoom('hoh')
-      if (room) {
-        activeRoom.value = room
-        if (room.minigameId?.startsWith('custom-')) {
-          gameComponent.value = markRaw(CustomGamePlayer)
-        } else {
-          gameComponent.value = gameComponentMap[room.minigameId] || null
-        }
-        // 房间已存在，可以停止轮询（后续由小游戏组件的 socket 处理）
-        if (room.status === 'finished' && pollTimer) {
-          clearInterval(pollTimer)
-          pollTimer = null
-        }
-      }
-    } catch {}
-  }
+  } catch {}
 
-  // 首次检查
+  await initEligibility()
   await checkRoom()
-  // 每2秒轮询，直到房间出现或已有结果
+
   if (!currentHoh.value && (!activeRoom.value || activeRoom.value.status !== 'finished')) {
     pollTimer = setInterval(checkRoom, 2000)
   }
 
   loading.value = false
+})
 
-  onUnmounted(() => {
-    if (pollTimer) clearInterval(pollTimer)
-  })
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
 })
 </script>
 

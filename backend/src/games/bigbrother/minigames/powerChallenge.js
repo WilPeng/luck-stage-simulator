@@ -128,5 +128,17 @@ registerGame({
 
   checkTarget() {
     return false
+  },
+
+  describeEvent(state, playerId, action, result) {
+    if (action && action.type === 'answer') {
+      const q = (state.questions || []).find(x => x.id === action.questionId)
+      const correct = result && result.correct
+      return {
+        text: `抢答「${q ? q.text : action.questionId}」选择：${action.selectedOption}${correct ? '（正确）' : ''}`,
+        data: { questionId: action.questionId, selectedOption: action.selectedOption, correct }
+      }
+    }
+    return null
   }
 })

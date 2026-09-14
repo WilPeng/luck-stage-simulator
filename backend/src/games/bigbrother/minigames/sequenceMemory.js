@@ -24,6 +24,11 @@ function shuffle(a) {
   return arr
 }
 
+function pushReplay(state, type, text, data) {
+  if (!state._replayEvents) state._replayEvents = []
+  state._replayEvents.push({ type, text, data: data || null })
+}
+
 registerGame({
   id: 'sequence-memory',
   name: '顺序记忆',
@@ -37,7 +42,7 @@ registerGame({
   init(participants) {
     const playerStates = {}
     participants.forEach(p => {
-      playerStates[p.playerId] = { alive: true, eliminatedRound: null }
+      playerStates[p.playerId] = { alive: true, eliminatedRound: null, name: p.playerName || p.playerId }
     })
     return {
       playerStates,
@@ -58,7 +63,8 @@ registerGame({
       resolved: false,
       lastEliminated: [],
       winner: null,
-      finished: false
+      finished: false,
+      _replayEvents: []
     }
   },
 
@@ -145,6 +151,15 @@ registerGame({
 
     let eliminated = []
 
+    const nameOf = pid => (state.playerStates[pid] && state.playerStates[pid].name) || pid
+    const ansText = alive.map(([pid]) => {
+      const a = state.roundAnswers[pid]
+      return `${nameOf(pid)}:${a ? a.choice : '未作答'}`
+    }).join('、')
+    pushReplay(state, 'round', `第${state.round + 1}轮：问第${state.questionIndex}个 emoji（正确 ${state.correctEmoji}）；${ansText}`, {
+      round: state.round, questionIndex: state.questionIndex, correctEmoji: state.correctEmoji, answers: state.roundAnswers
+    })
+
     if (correctIds.length === alive.length && alive.length > 1) {
       // 全部答对：最慢者出局
       let slow = correctIds[0]
@@ -152,6 +167,7 @@ registerGame({
         if (state.roundAnswers[pid].time > state.roundAnswers[slow].time) slow = pid
       }
       eliminated = [slow]
+      pushReplay(state, 'eliminate', `全部答对，最慢者 ${nameOf(slow)} 出局`, { eliminatedId: slow })
     } else if (correctIds.length === 0 && wrongIds.length === alive.length && alive.length >= 1) {
       // 全部答错：最后一个作答者获胜
       let last = wrongIds[0]
@@ -160,9 +176,11 @@ registerGame({
       }
       state.finished = true
       state.winner = last
+      pushReplay(state, 'finish', `全部答错，最后作答的 ${nameOf(last)} 获胜`, { winnerId: last })
       return
     } else {
       eliminated = [...wrongIds, ...noAnsIds]
+      if (eliminated.length) pushReplay(state, 'eliminate', `${eliminated.map(nameOf).join('、')} 出局`, { eliminated })
     }
 
     for (const pid of eliminated) {
@@ -175,11 +193,13 @@ registerGame({
     if (survivors.length === 1) {
       state.finished = true
       state.winner = survivors[0][0]
+      pushReplay(state, 'finish', `${nameOf(state.winner)} 获胜`, { winnerId: state.winner })
       return
     }
     if (survivors.length === 0) {
       state.finished = true
       state.winner = null
+      pushReplay(state, 'finish', '全部出局，无胜者', {})
       return
     }
     this._startRound(state, state.round + 1)
@@ -238,5 +258,20 @@ registerGame({
 
   checkTarget() {
     return false
+  },
+
+  describeEvent(state, playerId, action, result) {
+    const ps = state.playerStates[playerId]
+    const name = ps ? ps.name : playerId
+    if (action && action.type === 'answer') {
+      return { text: `${name} 选择：${action.choice}`, data: { choice: action.choice } }
+    }
+    return null
+  },
+
+  takeReplayEvents(state) {
+    const evs = state._replayEvents || []
+    state._replayEvents = []
+    return evs
   }
 })

@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken')
 const { v4: uuidv4 } = require('uuid')
 const { getGame } = require('../games/bigbrother/minigames/loadAll')
 const { loadCustomGame, createCustomGameHandler, getCustomHandlerId } = require('../games/bigbrother/minigames/customGame')
+const { startSession, recordEvent, finalizeSession, listLiveSessions } = require('../games/bigbrother/minigameReplay')
 
 // 活跃游戏房间（内存管理）
 const activeRooms = new Map() // roomId -> GameRoom
@@ -25,6 +26,11 @@ class GameRoom {
     this.manualWinnerId = null    // 管理员手动指定的胜者
     this.tickTimer = null         // balance-bar 的定时器
     this.handler = null           // 自定义游戏 handler 缓存
+    this.minigameName = ''
+    this.category = ''
+    this.roundIndex = null
+    this.roundId = ''
+    this.replaySession = null     // 对局记录/复盘 session
   }
 
   getParticipant(playerId) {
@@ -173,8 +179,31 @@ const initBBMinigameSocket = (io) => {
       const handler = await resolveGameHandler(room.minigameId, room)
       if (!handler) return
 
-      const result = handler.handleAction(room.gameState, userId, data.action)
+      const result = handler.handleAction(room.gameState, userId, data.action, { isAdmin: socket.user.role === 'admin' })
       if (!result || !result.updated) return
+
+      // 记录操作事件（跳过高频 tick）
+      if (data.action && data.action.type !== 'tick') {
+        const player = room.getParticipant(userId)
+        const pname = player?.playerName || userName
+        let text = ''
+        let extra = null
+        try {
+          const d = handler.describeEvent ? handler.describeEvent(room.gameState, userId, data.action, result.result) : null
+          if (d && typeof d === 'object') { text = d.text || ''; extra = d.data || null }
+          else if (typeof d === 'string') text = d
+        } catch (e) { /* ignore */ }
+        if (!text) text = defaultDescribe(pname, data.action)
+        recordAndBroadcast(minigameNs, room, {
+          playerId: userId,
+          playerName: pname,
+          type: data.action.type,
+          text,
+          data: { action: data.action, result: result.result || null, extra }
+        })
+      }
+      // 处理器内部事件（回合结算/淘汰等）
+      drainHandlerEvents(minigameNs, room, handler)
 
       // 发送操作结果给该玩家
       const playerState = handler.getState
@@ -229,7 +258,7 @@ const initBBMinigameSocket = (io) => {
   })
 
   // 管理房间相关方法挂载到 minigameNs 上供路由使用
-  minigameNs.createRoom = (gameType, minigameId, participants, targetScore) => {
+  minigameNs.createRoom = (gameType, minigameId, participants, targetScore, meta) => {
     const roomId = uuidv4()
     const room = new GameRoom(roomId, gameType, minigameId, participants.map(p => ({
       playerId: p.playerId,
@@ -237,7 +266,13 @@ const initBBMinigameSocket = (io) => {
       avatar: p.avatar || null,
       connected: false
     })), targetScore)
+    if (meta) {
+      room.roundIndex = meta.roundIndex ?? null
+      room.roundId = meta.roundId || ''
+      room.minigameName = meta.name || ''
+    }
     activeRooms.set(roomId, room)
+    startSession(room)
     return room
   }
 
@@ -247,6 +282,14 @@ const initBBMinigameSocket = (io) => {
 
     const handler = await resolveGameHandler(room.minigameId, room)
     if (!handler) return callback({ success: false, error: '小游戏未找到' })
+
+    // 复盘 session：补充游戏名称/分类
+    room.minigameName = handler.name || room.minigameId
+    room.category = handler.category || ''
+    if (!room.replaySession) startSession(room)
+    room.replaySession.minigameName = room.minigameName
+    room.replaySession.category = room.category
+    room.replaySession.targetScore = room.targetScore ?? null
 
     // 初始化游戏状态（支持异步加载题目池）
     const participants = room.participants.map(p => ({
@@ -277,6 +320,15 @@ const initBBMinigameSocket = (io) => {
         if (room.gameState) room.gameState.targetScore = room.targetScore
         if (room.gameState) room.gameState.status = 'playing'
         minigameNs.to(roomId).emit('game_started', { startTime: room.startTime })
+        recordAndBroadcast(minigameNs, room, {
+          type: 'game_start',
+          text: `游戏开始：${room.minigameName}（${room.participants.length}人）`,
+          data: {
+            minigameId: room.minigameId,
+            targetScore: room.targetScore ?? null,
+            participants: room.participants.map(p => ({ playerId: p.playerId, playerName: p.playerName }))
+          }
+        })
 
         // 非 balance-bar 游戏：给每个已连接的选手发送各自的 game_state
         if (room.minigameId !== 'balance-bar' && handler.getState) {
@@ -329,13 +381,18 @@ const initBBMinigameSocket = (io) => {
             }
           }, TICK_INTERVAL)
         } else {
-          // 其他游戏：设置自动超时
-          const timeoutMs = (handler.duration || 60) * 1000
-          setTimeout(() => {
-            if (room.status === 'playing') {
-              finishGame(room, minigameNs)
-            }
-          }, timeoutMs)
+          // 需要服务端 tick 的对战模式（自定义游戏）
+          if (handler.needsServerTick) {
+            startServerTick(room, handler, minigameNs)
+          } else {
+            // 其他游戏：设置自动超时
+            const timeoutMs = (handler.duration || 60) * 1000
+            setTimeout(() => {
+              if (room.status === 'playing') {
+                finishGame(room, minigameNs)
+              }
+            }, timeoutMs)
+          }
         }
       }
     }, 1000)
@@ -448,6 +505,8 @@ const initBBMinigameSocket = (io) => {
           finishGame(room, minigameNs)
         }
       }, TICK_INTERVAL)
+    } else if (room.handler && room.handler.needsServerTick) {
+      startServerTick(room, room.handler, minigameNs)
     }
 
     minigameNs.to(roomId).emit('game_resumed', { status: 'playing' })
@@ -472,6 +531,8 @@ const initBBMinigameSocket = (io) => {
 
     minigameNs.to(roomId).emit('game_stopped', { status: 'finished', winner: null })
     broadcastProgress(room, minigameNs)
+    recordAndBroadcast(minigameNs, room, { type: 'game_stop', text: '管理员停止了游戏', data: {} })
+    finalizeSession(room, { status: 'stopped' }).catch(() => {})
     return { success: true }
   }
 
@@ -481,6 +542,28 @@ const initBBMinigameSocket = (io) => {
     if (!room) return null
     return buildProgress(room)
   }
+
+  // 列出所有活跃房间（管理员观战用）
+  minigameNs.listActiveRooms = () => {
+    return Array.from(activeRooms.values()).map(room => ({
+      roomId: room.roomId,
+      gameType: room.gameType,
+      minigameId: room.minigameId,
+      minigameName: room.minigameName || room.minigameId,
+      category: room.category || '',
+      status: room.status,
+      targetScore: room.targetScore,
+      roundIndex: room.roundIndex,
+      roundId: room.roundId,
+      participants: room.participants.map(p => ({ playerId: p.playerId, playerName: p.playerName, connected: p.connected })),
+      winner: room.winner,
+      eventCount: room.replaySession ? room.replaySession.events.length : 0,
+      progress: buildProgress(room)
+    }))
+  }
+
+  // 当前进行中的对局记录（内存）
+  minigameNs.getLiveSessions = () => listLiveSessions()
 }
 
 // 构建进度汇总数据（管理员观察用）
@@ -509,6 +592,80 @@ function buildProgress(room) {
 function broadcastProgress(room, minigameNs) {
   if (!room || room.status === 'finished') return
   minigameNs.to(room.roomId).emit('game_progress', buildProgress(room))
+}
+
+// ===== 对局复盘：事件记录与广播 =====
+function fmtAnswer(v) {
+  if (v === null || v === undefined || v === '') return '（空）'
+  return String(v)
+}
+
+function defaultDescribe(playerName, action) {
+  const t = action && action.type
+  if (!t) return `${playerName} 执行操作`
+  switch (t) {
+    case 'answer': return `${playerName} 作答：${fmtAnswer(action.answer)}`
+    case 'submit_all': return `${playerName} 提交全部答案`
+    case 'choose': return `${playerName} 选择：${action.choice === 0 ? 'A' : action.choice === 1 ? 'B' : action.choice}`
+    case 'roll': return `${playerName} 掷骰 ${action.count} 个`
+    case 'flip': return `${playerName} 翻牌 #${action.index}`
+    case 'move': return `${playerName} 移动方块 #${action.tileIndex}`
+    case 'mark': return `${playerName} 标记 #${action.index}`
+    case 'submit': return `${playerName} 提交答案`
+    case 'click': return `${playerName} 点击`
+    case 'hold': return `${playerName} ${action.holding ? '按住' : '松开'}`
+    case 'check': return `${playerName} 判定`
+    case 'start': return `${playerName} 准备开始`
+    case 'pick': return `${playerName} 选择淘汰目标`
+    case 'pick_pair': return `${playerName} 指定对决`
+    default: return `${playerName} ${t}`
+  }
+}
+
+function recordAndBroadcast(minigameNs, room, ev) {
+  const event = recordEvent(room, ev)
+  if (event) minigameNs.to(room.roomId).emit('game_event', event)
+  return event
+}
+
+function drainHandlerEvents(minigameNs, room, handler) {
+  if (!handler || !handler.takeReplayEvents) return
+  try {
+    const evs = handler.takeReplayEvents(room.gameState) || []
+    for (const e of evs) recordAndBroadcast(minigameNs, room, e)
+  } catch (e) { /* ignore */ }
+}
+
+// 推送每个参赛者的个性化状态
+function pushPlayerStates(room, handler, minigameNs) {
+  if (!handler || !handler.getState) return
+  minigameNs.fetchSockets().then(namespaceSockets => {
+    for (const s of namespaceSockets) {
+      const uid = s.user?.userId || s.user?.id
+      if (uid && room.getParticipant(uid) && s.rooms.has(room.roomId)) {
+        const ps = handler.getState(room.gameState, uid)
+        if (ps) s.emit('game_state', ps)
+      }
+    }
+  }).catch(() => {})
+}
+
+// 启动服务端 tick（对战模式）
+function startServerTick(room, handler, minigameNs) {
+  if (room.tickTimer) return
+  const ms = handler.serverTickMs || 500
+  room.tickTimer = setInterval(() => {
+    if (room.status !== 'playing') return
+    try { handler.tick(room.gameState) } catch (e) { console.error('[BBMinigame] tick error', e) }
+    drainHandlerEvents(minigameNs, room, handler)
+    pushPlayerStates(room, handler, minigameNs)
+    broadcastProgress(room, minigameNs)
+    if (handler.isFinished && handler.isFinished(room.gameState)) {
+      clearInterval(room.tickTimer)
+      room.tickTimer = null
+      finishGame(room, minigameNs)
+    }
+  }, ms)
 }
 
 function finishGame(room, minigameNs) {
@@ -570,6 +727,14 @@ function finishGame(room, minigameNs) {
   })
 
   minigameNs.to(room.roomId).emit('game_progress', buildProgress(room))
+
+  // 记录结束事件并落库复盘
+  recordAndBroadcast(minigameNs, room, {
+    type: 'game_end',
+    text: room.winner ? `游戏结束，胜者：${room.winner.playerName}` : '游戏结束（无胜者）',
+    data: { winner: room.winner, winners: room.winners, scores }
+  })
+  finalizeSession(room, { winner: room.winner, winners: room.winners, scores, status: 'finished' }).catch(() => {})
 
   room.cleanup()
 

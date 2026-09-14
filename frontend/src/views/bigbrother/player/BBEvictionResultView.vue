@@ -7,7 +7,26 @@
       <span v-else-if="isFuture" class="future-tag">未开始</span>
     </div>
 
-    <div v-if="evictionResult" class="result-section">
+    <!-- 淘汰夜宣布（实时） -->
+    <div v-if="night" class="announce-stage">
+      <template v-if="night.phase === 'announce'">
+        <div class="announce-title">📢 淘汰结果宣布</div>
+        <div class="ann-line shown" style="animation-delay: 0.2s">by a vote of {{ night.big }}-{{ night.small }},</div>
+        <template v-for="e in night.evicted" :key="e.id">
+          <div class="ann-line shown evicted-name" style="animation-delay: 1.2s">{{ e.name }}</div>
+          <div class="ann-line shown result out" style="animation-delay: 2.2s">你被淘汰了</div>
+        </template>
+      </template>
+      <template v-else>
+        <div class="door-stage">
+          <div class="door-icon">🚪</div>
+          <div v-for="e in night.evicted" :key="e.id" class="door-name">{{ e.name }}</div>
+          <div class="door-votes">{{ night.big }}-{{ night.small }}</div>
+        </div>
+      </template>
+    </div>
+
+    <div v-else-if="evictionResult" class="result-section">
       <div class="result-card">
         <div class="result-icon">🚪</div>
         <div class="result-info">
@@ -31,16 +50,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetEvictionHistory, bbGetNominationHistory } from '../../../services/bbApi'
+import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
+import { bbGetEvictionHistory, bbGetNominationHistory, bbGetEvictionNight } from '../../../services/bbApi'
 import type { BBEviction } from '../../../types/bigbrother'
 
 const route = useRoute()
 const authStore = useBbAuthStore()
 const seasonStore = useBbSeasonStore()
+const realtime = useBbRealtimeStore()
 
 const roundNum = computed(() => Number(route.params.round) || 1)
 const isHistory = computed(() => seasonStore.isStageCompleted(roundNum.value, 'eviction'))
@@ -48,10 +69,18 @@ const isFuture = computed(() => seasonStore.getStageStatus(roundNum.value, 'evic
 
 const evictionResult = ref<BBEviction | null>(null)
 const nomination = ref<any>(null)
+const night = ref<any>(null)
 
 function isMe(name: string): boolean { return name === authStore.currentUser?.name }
 
-onMounted(async () => {
+async function loadNight() {
+  try {
+    const r = await bbGetEvictionNight()
+    night.value = (r.night && r.night.round === roundNum.value) ? r.night : null
+  } catch {}
+}
+
+async function loadData() {
   try {
     const history = await bbGetEvictionHistory()
     const roundKey = `round-${roundNum.value}`
@@ -62,6 +91,15 @@ onMounted(async () => {
     const roundKey = `round-${roundNum.value}`
     nomination.value = nHistory.find(h => h.roundId === roundKey) || null
   } catch {}
+  await loadNight()
+}
+
+watch(() => realtime.lastEvictionNight, (v) => {
+  night.value = (v && v.round === roundNum.value) ? v : null
+})
+
+onMounted(() => {
+  loadData()
 })
 </script>
 
@@ -84,4 +122,15 @@ onMounted(async () => {
 .nomination-summary h3 { margin: 0 0 12px; font-size: 16px; color: #e0e0e0; }
 .nominees-list { display: flex; gap: 12px; flex-wrap: wrap; }
 .nominee-chip { background: #ffaa0015; border: 1px solid #ffaa0033; border-radius: 6px; padding: 8px 16px; font-size: 14px; color: #ffaa00; }
+.announce-stage { margin-top: 16px; background: #0f0f2e; border: 1px solid #ffaa0044; border-radius: 12px; padding: 28px 24px; text-align: center; }
+.announce-title { color: #ffaa00; font-size: 14px; margin-bottom: 18px; }
+.ann-line { min-height: 44px; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #e0e0e0; opacity: 0; transition: opacity 0.3s; }
+.ann-line.shown { opacity: 1; animation: fadeIn 0.6s ease both; }
+.ann-line.evicted-name { color: #ff4444; }
+.ann-line.result.out { color: #ff4444; }
+.door-stage { text-align: center; }
+.door-icon { font-size: 64px; margin-bottom: 12px; }
+.door-name { font-size: 30px; font-weight: 700; color: #ff4444; }
+.door-votes { margin-top: 8px; font-size: 18px; color: #aaa; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 </style>

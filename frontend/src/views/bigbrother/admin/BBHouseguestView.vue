@@ -122,6 +122,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { bbGetHouseguests, bbCreateHouseguest, bbUpdateHouseguest, bbDeleteHouseguest, bbUploadHouseguestAvatar, bbDeleteHouseguestAvatar } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBHouseguest } from '../../../types/bigbrother'
@@ -343,6 +344,7 @@ async function onImportFile(e: Event) {
   }
 }
 
+useBbRefresh(fetchData)
 onMounted(fetchData)
 </script>
 
