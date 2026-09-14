@@ -41,9 +41,9 @@
 
           <div class="nav-section">
             <div class="nav-section-title">其他</div>
-            <div v-for="item in otherItems" :key="item.path"
-              class="nav-item" :class="{ active: $route.path.startsWith(item.path) }"
-              @click="navigateTo(item.path)">
+            <div v-for="item in otherItems" :key="item.text"
+              class="nav-item" :class="{ active: item.path !== '#' && $route.path.startsWith(item.path) }"
+              @click="item.click ? nextStage() : navigateTo(item.path)">
               <span class="nav-icon">{{ item.icon }}</span>
               <span class="nav-text">{{ item.text }}</span>
             </div>
@@ -115,7 +115,6 @@ const stageItems = [
   { icon: '🎯', text: '赛季设置', path: '/games/bigbrother/admin/stage' },
   { icon: '🏁', text: '终局F3 / 冠军', path: '/games/bigbrother/admin/endgame' },
   { icon: '🏆', text: '季终结算', path: '/games/bigbrother/admin/season-result' },
-  { icon: '▶️', text: '推进到下一阶段', path: '#', click: 'nextStage' },
 ]
 
 const stageList = [
@@ -136,6 +135,7 @@ const otherItems = [
   { icon: '👁', text: '小游戏实时观战', path: '/games/bigbrother/admin/minigame-live' },
   { icon: '🎬', text: '小游戏复盘', path: '/games/bigbrother/admin/minigame-replay' },
   { icon: '📜', text: '操作日志', path: '/games/bigbrother/admin/logs' },
+  { icon: '▶️', text: '推进到下一阶段', path: '#', click: 'nextStage' },
 ]
 
 const adminStageMeta: Record<string, { icon: string; route: string }> = {
