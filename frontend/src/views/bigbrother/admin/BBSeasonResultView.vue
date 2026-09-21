@@ -46,9 +46,19 @@
                 <!-- 普通轮六小格 -->
                 <template v-if="colKind(c)==='normal'">
                   <div class="mini-cell cell-hoh" @click="startEdit(c.round, 'hohName')">{{ cellValue(c, 'hohName') }}</div>
-                  <div class="mini-cell cell-init-nom" @click="startEdit(c.round, 'initial')">{{ cellValue(c, 'initial') }}</div>
-                  <div class="mini-cell cell-pov" @click="startEdit(c.round, 'pov')">{{ cellValue(c, 'pov') }}</div>
-                  <div class="mini-cell cell-final-nom" @click="startEdit(c.round, 'final')">{{ cellValue(c, 'final') }}</div>
+          <div class="mini-cell cell-init-nom" @click="startEdit(c.round, 'initial')">
+            <template v-if="edits['r' + c.round + ':initial'] === undefined && nomineeDisplay(c, 'initial').length">
+              <span v-for="(n, i) in nomineeDisplay(c, 'initial')" :key="i" :class="{ struck: n.struck }">{{ n.name }}<span v-if="i < nomineeDisplay(c, 'initial').length - 1">、</span></span>
+            </template>
+            <template v-else>{{ cellValue(c, 'initial') }}</template>
+          </div>
+          <div class="mini-cell cell-pov" @click="startEdit(c.round, 'pov')">{{ cellValue(c, 'pov') }}</div>
+          <div class="mini-cell cell-final-nom" @click="startEdit(c.round, 'final')">
+            <template v-if="edits['r' + c.round + ':final'] === undefined && nomineeDisplay(c, 'final').length">
+              <span v-for="(n, i) in nomineeDisplay(c, 'final')" :key="i" :class="{ struck: n.struck }">{{ n.name }}<span v-if="i < nomineeDisplay(c, 'final').length - 1">、</span></span>
+            </template>
+            <template v-else>{{ cellValue(c, 'final') }}</template>
+          </div>
                   <div class="mini-cell cell-ticket" @click="startEdit(c.round, 'ticket')">{{ cellValue(c, 'ticket') }}</div>
                   <div class="mini-cell cell-evicted" @click="startEdit(c.round, 'evicted')">{{ cellValue(c, 'evicted') }}</div>
                 </template>
@@ -168,6 +178,23 @@ function rawPov(r: BBSettlementRound) { return r.povName || '-' }
 function rawFinal(r: BBSettlementRound) { return r.finalNomineeNames.join('、') || '-' }
 function rawTicket(r: BBSettlementRound) { return r.ticketText || '-' }
 function rawEvicted(r: BBSettlementRound) { return r.evicted.map(e => e.name).join('、') || '-' }
+
+function nomineeDisplay(r: BBSettlementRound, field: 'initial' | 'final'): { id: string; name: string; struck: boolean }[] {
+  const names = field === 'initial' ? (r.initialNomineeNames || []) : (r.finalNomineeNames || [])
+  const ids = field === 'initial' ? (r.initialNomineeIds || []) : (r.finalNomineeIds || [])
+  const list = names.map((name, i) => ({ id: ids[i] || '', name, struck: false }))
+  const bbbbId = (r as any).bbbbWinnerId
+  // 两行都补上 BBBB 胜者（保持 3 个名字）；仅「终极提名」行加删除线
+  if (bbbbId) {
+    const found = list.find(x => x.id === bbbbId)
+    if (found) {
+      if (field === 'final') found.struck = true
+    } else {
+      list.push({ id: bbbbId, name: (r as any).bbbbWinnerName || '', struck: field === 'final' })
+    }
+  }
+  return list
+}
 
 function cellValue(r: BBSettlementRound, field: string): string {
   const k = `r${r.round}:${field}`
@@ -534,6 +561,7 @@ onMounted(fetchData)
 .mini-cell.cell-init-nom { background: #ffaa0015; color: #ffaa00; }
 .mini-cell.cell-pov { background: #4488ff18; color: #4488ff; }
 .mini-cell.cell-final-nom { background: #ff660015; color: #ff6633; }
+.mini-cell .struck, .struck { text-decoration: line-through; opacity: 0.6; }
 .mini-cell.cell-ticket { color: var(--text); font-weight: 600; }
 .mini-cell.cell-evicted { background: #88888818; color: var(--text); }
 .mini-cell.mini-f3w { background: #4488ff22; color: #4488ff; font-weight: 700; font-size: 11px; }

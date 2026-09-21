@@ -5,7 +5,7 @@
       <span class="round-tag">第{{ $route.params.round }}周</span>
     </div>
 
-    <div v-if="nomination" class="nomination-card">
+    <div v-if="nomination && ceremonyDone" class="nomination-card">
       <div class="nomination-header">
         <span class="hoh-info">HOH: {{ nomination.hohName }}</span>
         <div class="header-badges">
@@ -31,6 +31,24 @@
 
     <div class="action-section">
       <h3>操作 - 初始提名</h3>
+
+      <!-- 钥匙仪式 -->
+      <KeyCeremony
+        v-if="!isDirectDemocracy"
+        :keyCeremony="keyCeremony"
+        :myId="''"
+        :isAdmin="true"
+        :eligible="keyEligible"
+        :nomineeCount="needThree ? 3 : 2"
+        :submitting="submittingKey"
+        :drawing="drawingKey"
+        :announcing="announcingKey"
+        @setup="onKeySetup"
+        @draw="onKeyDraw"
+        @announce="onKeyAnnounce"
+        @speech="onKeySpeech"
+      />
+
       <template v-if="isDirectDemocracy">
         <div class="twist-action-hint">
           🗳️ 当前为"直接民主"模式，提名由全员投票决定。请在下方为每位房客选择投票对象，系统自动统计票数（HOH票数双倍）。
@@ -111,11 +129,43 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
-import { bbGetCurrentNomination, bbSetNomination, bbGetNominationHistory, bbGetActiveHouseguests, bbVoteNominees, bbGetCurrentHoh, bbGetCurrentVeto } from '../../../services/bbApi'
-import type { BBNomination } from '../../../types/bigbrother'
+import { bbGetCurrentNomination, bbSetNomination, bbGetNominationHistory, bbGetActiveHouseguests, bbVoteNominees, bbGetCurrentHoh, bbGetCurrentVeto, bbKeySetup, bbKeyDraw, bbKeyAnnounce, bbKeySpeech, bbGetSeasonConfig } from '../../../services/bbApi'
+import type { BBNomination, BBRoundConfig } from '../../../types/bigbrother'
+import KeyCeremony from '../../../components/bigbrother/KeyCeremony.vue'
 
+const route = useRoute()
+const roundNum = computed(() => Number(route.params.round) || 1)
+const roundConfigs = ref<BBRoundConfig[]>([])
 const nomination = ref<BBNomination | null>(null)
+const keyCeremony = ref<any>(null)
+const submittingKey = ref(false)
+const drawingKey = ref(false)
+const announcingKey = ref(false)
+const keyEligible = computed(() => activeList.value.filter(h => h.id !== currentHoh.value?.winnerId))
+// 提名仪式是否已结束（HOH 结束发言后才公布被提名者）
+const ceremonyDone = computed(() => {
+  const kc = keyCeremony.value
+  if (!kc) return true
+  return !!kc.ended
+})
+
+async function onKeySetup(payload: { nominees: string[]; order: string[] }) {
+  submittingKey.value = true
+  try { await bbKeySetup(payload.nominees, payload.order); await fetchData() } catch (e: any) { alert(e?.message || '提交失败') } finally { submittingKey.value = false }
+}
+async function onKeyDraw() {
+  drawingKey.value = true
+  try { await bbKeyDraw(); await fetchData() } catch (e: any) { alert(e?.message || '抽钥匙失败') } finally { drawingKey.value = false }
+}
+async function onKeyAnnounce(text: string) {
+  announcingKey.value = true
+  try { await bbKeyAnnounce(text); await fetchData() } catch (e: any) { alert(e?.message || '宣布失败') } finally { announcingKey.value = false }
+}
+async function onKeySpeech(payload: { phase: 'opening' | 'closing'; text?: string; reason?: string; nomineeOrder?: string[] }) {
+  try { await bbKeySpeech(payload); await fetchData() } catch (e: any) { alert(e?.message || '发言失败') }
+}
 const twistInfo = ref<any>(null)
 const history = ref<BBNomination[]>([])
 const activeList = ref<{ id: string; name: string }[]>([])
@@ -146,19 +196,23 @@ const listForNominee3 = computed(() => baseAvailable.value.filter(h => h.id !== 
 
 const democracyCandidates = computed(() => activeList.value)
 
-// 直接民主：同时检查 nomination 和 twistInfo，确保无提名记录时也能正确识别
+// 本轮 twist（优先用赛季配置，无需提名记录即可识别）
+const roundTwists = computed<string[]>(() => roundConfigs.value.find(c => c.round === roundNum.value)?.twists || [])
+const hasTwist = (key: string, fallback: any) => roundConfigs.value.length ? roundTwists.value.includes(key) : !!fallback
+
+// 直接民主
 const isDirectDemocracy = computed(() =>
-  (nomination.value as any)?.isDirectDemocracy || twistInfo.value?.isDirectDemocracy
+  hasTwist('direct_democracy', (nomination.value as any)?.isDirectDemocracy || twistInfo.value?.isDirectDemocracy)
 )
 
-// 三重献祭：同时检查 nomination 和 twistInfo，确保无提名记录时也能正确识别
+// 三重献祭
 const isTripleOffering = computed(() =>
-  (nomination.value as any)?.isTripleOffering || twistInfo.value?.isTripleOffering
+  hasTwist('triple_offering', (nomination.value as any)?.isTripleOffering || twistInfo.value?.isTripleOffering)
 )
 
 // BBBB：本轮提名 3 人
 const isBbbb = computed(() =>
-  (nomination.value as any)?.isBbbb || twistInfo.value?.isBbbb
+  hasTwist('bbbb', (nomination.value as any)?.isBbbb || twistInfo.value?.isBbbb)
 )
 const needThree = computed(() => isTripleOffering.value || isBbbb.value)
 
@@ -166,6 +220,7 @@ async function fetchData() {
   try {
     const data = await bbGetCurrentNomination()
     nomination.value = data as any
+    keyCeremony.value = (data as any)?.keyCeremony || null
     twistInfo.value = (data as any)?.twists || null
   } catch {}
   try {
@@ -178,6 +233,17 @@ async function fetchData() {
     savedPlayerId.value = (veto as any)?.usedOnPlayerId || ''
   } catch {}
   try { history.value = await bbGetNominationHistory() } catch {}
+  try {
+    const config = await bbGetSeasonConfig()
+    roundConfigs.value = config.roundConfigs || []
+    const tw = roundConfigs.value.find(c => c.round === roundNum.value)?.twists || []
+    twistInfo.value = {
+      isDirectDemocracy: tw.includes('direct_democracy'),
+      isTripleOffering: tw.includes('triple_offering'),
+      isBbbb: tw.includes('bbbb'),
+      isSecretKeeper: tw.includes('secret_keeper')
+    }
+  } catch {}
   try {
     const list = await bbGetActiveHouseguests()
     activeList.value = list
@@ -259,6 +325,12 @@ onMounted(fetchData)
 .nominee-order { font-size: 12px; color: #888; }
 .action-section { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
 .action-section h3 { margin: 0 0 12px; font-size: 16px; color: #e0e0e0; }
+.key-ceremony-admin { background: #0f0f2e; border: 1px solid #ffaa0044; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+.kc-title { font-size: 14px; color: #ffaa00; margin-bottom: 10px; }
+.kc-keys { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.kc-key { padding: 8px 14px; border-radius: 8px; background: #ffffff08; border: 1px solid #ffffff18; color: #666; font-size: 13px; }
+.kc-key.drawn { background: #00ff8822; border-color: #00ff88; color: #00ff88; font-weight: 600; }
+.kc-nominees { margin-top: 10px; font-size: 14px; color: #ff6666; }
 .action-buttons { display: flex; gap: 12px; }
 .bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
 .bb-btn:hover { background: #00ff8822; }

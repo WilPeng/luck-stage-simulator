@@ -538,7 +538,7 @@ export function mockCalculatePerformance(): Promise<PerformanceResult[]> {
       
       const attrScore = calculateSongAttrScore(teamAvg, song)
       const randomScore = randomInt(-10, 20)
-      const finalScore = calculateTeamFinalScore(song.baseScore, attrScore, randomScore)
+      const finalScore = calculateTeamFinalScore((song as any).baseScore ?? 100, attrScore, randomScore)
       
       results.push({
         id: 'perf_' + team.id,
@@ -581,9 +581,9 @@ export function mockCalculatePerformance(): Promise<PerformanceResult[]> {
           id: 'ps_' + memberId,
           userId: memberId,
           teamId: team.id,
-          vocalScore: user.attributes.vocal * song.vocalWeight,
-          danceScore: user.attributes.dance * song.danceWeight,
-          charmScore: user.attributes.charm * song.charmWeight,
+          vocalScore: user.attributes.vocal * ((song as any).vocalWeight ?? 3),
+          danceScore: user.attributes.dance * ((song as any).danceWeight ?? 3),
+          charmScore: user.attributes.charm * ((song as any).charmWeight ?? 3),
           randomScore: randomScoreVal,
           teamBonus,
           finalScore: finalScoreVal,

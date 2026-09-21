@@ -37,18 +37,16 @@
               </div>
             </div>
             <div class="song-score-info">
-              <span class="base-score">{{ rs.song?.baseScore }}分</span>
-              <div class="difficulty-stars">
-                <span v-for="i in 5" :key="i" :class="{ filled: i <= (rs.song?.difficulty || 0) }">★</span>
-              </div>
+              <span class="base-score">难度 {{ rs.song?.difficulty || 3 }}</span>
+              <span class="base-score">主属性 {{ mainAttrLabel(rs.song?.mainAttribute) }}</span>
             </div>
           </div>
 
-          <!-- 歌曲权重 -->
+          <!-- 歌曲配置 -->
           <div class="song-weights">
-            <span class="weight-item">🎤 {{ rs.song?.vocalWeight || 0 }}</span>
-            <span class="weight-item">💃 {{ rs.song?.danceWeight || 0 }}</span>
-            <span class="weight-item">✨ {{ rs.song?.charmWeight || 0 }}</span>
+            <span class="weight-item">🎤 {{ rs.song?.baseVocal ?? 30 }}</span>
+            <span class="weight-item">💃 {{ rs.song?.baseDance ?? 30 }}</span>
+            <span class="weight-item">⚠ {{ rs.song?.risk ?? 10 }}</span>
           </div>
 
           <!-- 分配的队伍和参赛人员 -->
@@ -79,10 +77,10 @@
             <div v-else-if="rs.released && isCaptain && !getAssignment(rs.id)" class="released-state">
               <div class="released-badge">🔥 已释放 · 可抢选</div>
               <div class="released-song-meta">
-                <span class="meta-item">🎤 声乐 {{ rs.song?.vocalWeight || 0 }}</span>
-                <span class="meta-item">💃 舞蹈 {{ rs.song?.danceWeight || 0 }}</span>
-                <span class="meta-item">✨ 魅力 {{ rs.song?.charmWeight || 0 }}</span>
-                <span class="meta-item">⭐ 难度 {{ '★'.repeat(rs.song?.difficulty || 0) }}{'☆'.repeat(5 - (rs.song?.difficulty || 0)) }</span>
+                <span class="meta-item">🎤 基准 {{ rs.song?.baseVocal ?? 30 }}</span>
+                <span class="meta-item">💃 基准 {{ rs.song?.baseDance ?? 30 }}</span>
+                <span class="meta-item">⚠ 风险 {{ rs.song?.risk ?? 10 }}</span>
+                <span class="meta-item">⭐ 难度 {{ rs.song?.difficulty || 3 }}</span>
               </div>
               <t-button
                 v-if="!hasClaimedSong"
@@ -273,6 +271,11 @@ function getSongTypeLabel(type: string): string {
     pk_show: 'PK秀'
   }
   return labels[type] || type
+}
+
+function mainAttrLabel(attr?: string): string {
+  const m: Record<string, string> = { vocal: '🎤 声乐', dance: '💃 舞蹈', charm: '✨ 魅力' }
+  return m[attr || ''] || '🎤 声乐'
 }
 
 function getScoringMethodLabel(method: string): string {

@@ -286,6 +286,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useSfRefresh } from '../../composables/useSfRefresh'
 import { useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useSeasonStore } from '../../stores/seasonStore'
@@ -638,6 +639,15 @@ async function loadAll() {
 }
 
 let releaseTimer: number | undefined
+
+// websocket：并发开放/关闭、组队、申请/邀请等实时刷新
+useSfRefresh(() => {
+  loadReleaseStatus()
+  loadGroupingMode()
+  loadAll()
+  loadApplications()
+  loadInvites()
+})
 
 onMounted(async () => {
   await Promise.all([

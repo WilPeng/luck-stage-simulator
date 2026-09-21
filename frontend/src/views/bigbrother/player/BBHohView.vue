@@ -13,6 +13,12 @@
       <span>加载中...</span>
     </div>
 
+    <!-- 准备环节：房间已创建、等待开始 -->
+    <div v-else-if="showLobby" class="minigame-section">
+      <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
+        :participants="activeRoom.participants" :myId="myId" />
+    </div>
+
     <!-- 小游戏模式：有活跃房间且玩家在参与者中 -->
     <div v-else-if="showMinigame" class="minigame-section">
       <component :is="gameComponent" :roomId="activeRoom.roomId"
@@ -64,6 +70,7 @@ import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
 import { bbGetHohHistory, bbGetActiveMinigameRoom, bbRunHohCompetition, bbGetHohEligible, bbGetHouseguests } from '../../../services/bbApi'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
+import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
 import ClickSpeedGame from '../../../components/bigbrother/minigames/ClickSpeedGame.vue'
 import MemoryMatchGame from '../../../components/bigbrother/minigames/MemoryMatchGame.vue'
 import QuickMathGame from '../../../components/bigbrother/minigames/QuickMathGame.vue'
@@ -102,6 +109,8 @@ const showMinigame = computed(() => {
   if (!activeRoom.value.participants) return false
   return activeRoom.value.participants.some(p => p.playerId === myId.value)
 })
+
+const showLobby = computed(() => showMinigame.value && activeRoom.value?.status === 'waiting')
 
 const gameComponentMap: Record<string, Component> = {
   'click-speed': markRaw(ClickSpeedGame),

@@ -314,7 +314,7 @@ export async function updateRound(params: RoundUpdateParams): Promise<void> {
 
 export async function getRounds(): Promise<Round[]> {
   return safeCall(
-    () => doRequest<Round[]>('/rounds'),
+    () => doRequest<Round[]>('/season/rounds'),
     async () => [],
     'getRounds'
   )
@@ -524,8 +524,15 @@ export async function updateUser(userData: Partial<User>): Promise<User> {
   )
 }
 
-export async function deleteUser(id: string): Promise<void> {
-  return safeCall(
+// 一键随机全部（非管理员）选手属性
+export async function randomizePlayerAttributes(min: number, max: number, playerIds?: string[]): Promise<{ count: number }> {
+  return doRequest<any>('/users/randomize-attributes', {
+    method: 'POST',
+    body: JSON.stringify({ min, max, playerIds })
+  })
+}
+
+export async function deleteUser(id: string): Promise<void> {  return safeCall(
     () => doRequest<void>(`/users/${id}`, { method: 'DELETE' }),
     async () => { throw new Error('Mock not supported for deleteUser') },
     'deleteUser'
@@ -1053,13 +1060,23 @@ export async function getMyCaptainPreference(roundId: string): Promise<{ preferr
 }
 
 // 获取本轮分组模式（选手/管理员均可读）
-export async function getGroupingMode(roundId: string): Promise<'captain' | 'song' | 'captain_choice'> {  return safeCall(
+export const GROUPING_MODES = ['captain', 'song', 'captain_choice', 'random', 'balanced', 'captain_draft'] as const
+export type GroupingMode = typeof GROUPING_MODES[number]
+export async function getGroupingMode(roundId: string): Promise<GroupingMode> {  return safeCall(
     () => doRequest<{ groupingMode: string }>(`/teams/grouping-mode?roundId=${roundId}`),
     async () => ({ groupingMode: 'captain' }),
     'getGroupingMode'
   ).then(res => {
     const mode = res?.groupingMode
-    return ['captain', 'song', 'captain_choice'].includes(mode) ? mode : 'captain'
+    return (GROUPING_MODES as readonly string[]).includes(mode) ? mode as GroupingMode : 'captain'
+  })
+}
+
+// 一键按分组模式自动组队（随机 / 实力均衡 / 队长蛇形）
+export async function autoFormTeams(roundId: string, mode: GroupingMode, captainIds?: string[]): Promise<any> {
+  return doRequest<any>('/teams/auto-form', {
+    method: 'POST',
+    body: JSON.stringify({ roundId, mode, captainIds })
   })
 }
 
@@ -1377,7 +1394,7 @@ export async function getSongStats(): Promise<SongStats> {
   )
 }
 
-export async function createSong(songData: { name: string; type?: string; style?: string; difficulty?: number; vocalWeight?: number; danceWeight?: number; charmWeight?: number; baseScore?: number; riskFactor?: number; description?: string; singerGender?: 'male' | 'female' }): Promise<Song> {
+export async function createSong(songData: { name: string; type?: string; style?: string; difficulty?: number; mainAttribute?: 'vocal' | 'dance' | 'charm'; baseVocal?: number; baseDance?: number; risk?: number; description?: string; singerGender?: 'male' | 'female' }): Promise<Song> {
   return safeCall(
     () => doRequest<Song>('/songs', {
       method: 'POST',
@@ -1586,6 +1603,58 @@ export async function drawTrainingCard(userId: string, round?: number): Promise<
 }
 export const drawTraining = drawTrainingCard
 
+// ===== 每轮有限卡池（带序号，每张仅可被一人抽中） =====
+export async function setupTrainingPool(data: { roundId?: string | number; roundIndex?: number; perPersonDrawCount: number; totalCards?: number; counts?: { cardId: string; count: number }[] }): Promise<any> {
+  return doRequest<any>('/training/pool/setup', { method: 'POST', body: JSON.stringify(data) })
+}
+export async function getTrainingPool(roundId?: string | number): Promise<{ roundId: any; totalCards: number; perPersonDrawCount: number; cards: { index: number; drawn: boolean; mine: boolean; drawnByName: string; card: any }[] }> {
+  const qs = roundId !== undefined ? `?roundId=${encodeURIComponent(String(roundId))}` : ''
+  return doRequest<any>(`/training/pool${qs}`)
+}
+export async function drawFromPool(data: { roundId?: string | number; slotIndex: number; playerId?: string; userId?: string }): Promise<any> {
+  return doRequest<any>('/training/pool/draw', { method: 'POST', body: JSON.stringify(data) })
+}
+
+// ===== 3.3 公演个人评级掷骰（选手点击） =====
+export async function rollPerformanceRating(roundId?: string | number): Promise<any> {
+  return doRequest<any>('/performance/roll-rating', { method: 'POST', body: JSON.stringify({ roundId }) })
+}
+
+// ===== 训练结束确认 =====
+export async function finishTraining(roundId?: string | number, finished = true): Promise<{ roundId: any; finished: boolean; finishedAt: string | null }> {
+  return doRequest<any>('/training/finish', { method: 'POST', body: JSON.stringify({ roundId, finished }) })
+}
+export async function getTrainingFinishStatus(roundId?: string | number): Promise<{ roundId: any; finished: boolean; finishedAt: string | null }> {
+  const qs = roundId !== undefined ? `?roundId=${encodeURIComponent(String(roundId))}` : ''
+  return doRequest<any>(`/training/finish-status${qs}`)
+}
+export async function getAllTrainingFinishStatus(roundId?: string | number): Promise<{ roundId: any; list: { playerId: string; finished: boolean; finishedAt: string | null }[] }> {
+  const qs = roundId !== undefined ? `?roundId=${encodeURIComponent(String(roundId))}` : ''
+  return doRequest<any>(`/training/finish-status-all${qs}`)
+}
+
+// ===== 3.3 选手本人公演骰子信息（歌曲/难度/风险/各点数评级）=====
+export async function getMyRatingInfo(): Promise<any> {
+  return doRequest<any>('/performance/my-rating-info')
+}
+
+// ===== 3.3 管理员查看全部选手掷骰情况 / 代理掷骰 =====
+export async function getRatingOverview(roundId?: string | number): Promise<{ roundId: any; list: any[] }> {
+  const qs = roundId !== undefined ? `?roundId=${encodeURIComponent(String(roundId))}` : ''
+  return doRequest<any>(`/performance/ratings${qs}`)
+}
+export async function adminRollRating(playerId: string, roundId?: string | number): Promise<any> {
+  return doRequest<any>('/performance/roll-rating-admin', { method: 'POST', body: JSON.stringify({ playerId, roundId }) })
+}
+
+// ===== 3.4 团队评级规则（管理员配置） =====
+export async function getTeamRatingRules(): Promise<{ rules: any; defaults: any }> {
+  return doRequest<any>('/performance/team-rating-rules')
+}
+export async function updateTeamRatingRules(rules: any): Promise<any> {
+  return doRequest<any>('/performance/team-rating-rules', { method: 'PUT', body: JSON.stringify({ rules }) })
+}
+
 export async function applySelfSelect(recordId: string, selectedAttr: string): Promise<{ selectedAttr: string; delta: number; attributes: { vocal: number; dance: number; charm: number } }> {
   return safeCall(
     () => doRequest('/training/apply-self-select', {
@@ -1765,7 +1834,7 @@ export async function savePerformanceConfig(roundId: string, yesRateDenominator:
 // 管理员打开公演管理页面
 export async function openPerformance(roundId: string): Promise<{ opened: boolean; started: boolean; generationMode: PerformanceGenerationMode }> {
   return safeCall(
-    () => doRequest<{ opened: boolean; started: boolean; generationMode: PerformanceGenerationMode }>('/performance/open', { method: 'POST', body: { roundId } }),
+    () => doRequest<{ opened: boolean; started: boolean; generationMode: PerformanceGenerationMode }>('/performance/open', { method: 'POST', body: JSON.stringify({ roundId }) }),
     async () => ({ opened: true, started: false, generationMode: 'random' }),
     'openPerformance'
   )
@@ -1781,6 +1850,14 @@ export async function revealTeam(roundId: string, teamId: string): Promise<any> 
     async () => ({ success: true, data: { teamId } }),
     'revealTeam'
   )
+}
+
+// 管理员逐位揭晓队伍票数（hundreds/tens/units）
+export async function revealVoteDigit(roundId: string, teamId: string, digit: 'hundreds' | 'tens' | 'units', revealed = true): Promise<any> {
+  return doRequest<any>('/performance/reveal-vote-digit', {
+    method: 'POST',
+    body: JSON.stringify({ roundId, teamId, digit, revealed })
+  })
 }
 
 // 获取已揭晓的团队列表（选手端据此展示评审矩阵）

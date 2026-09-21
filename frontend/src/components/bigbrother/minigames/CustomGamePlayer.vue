@@ -60,7 +60,6 @@
               <div class="batch-q-head">
                 <span class="q-index">Q{{ qi + 1 }}</span>
                 <span v-if="q.locked" class="q-locked">🔒 已锁定</span>
-                <span v-if="showReveal && q.locked" class="q-reveal">正确答案：{{ q.correctAnswer }}</span>
               </div>
               <div class="batch-q-text">{{ q.text }}</div>
               <div v-if="q.options && q.options.length" class="options-grid">
@@ -189,7 +188,6 @@ let startSent = false
 const isAdminJudge = computed(() => winCondition.value === 'admin_judge')
 const isModeGame = computed(() => !!modeState.value)
 const isBatch = computed(() => submitMode.value === 'batch' || isAdminJudge.value)
-const showReveal = computed(() => wrongFeedback.value === 'reveal')
 
 const gameStarted = computed(() => {
   const gs: any = gameState.value
@@ -266,17 +264,11 @@ function buildFeedback(result: any) {
     feedback.value = { type: 'correct', text: '✅ 正确' }
     return
   }
-  // 错误
+  // 错误（不透露正确答案）
   const parts: string[] = ['❌ 错误']
   let detail = ''
   if (result.gradedCount !== undefined) {
     detail = `本次答对 ${result.gradedCorrect}/${result.gradedCount} 题`
-  }
-  if (result.correctAnswer) {
-    detail = `正确答案：${result.correctAnswer}`
-  }
-  if (result.correctAnswers && Object.keys(result.correctAnswers).length) {
-    detail = '正确答案：' + Object.values(result.correctAnswers).join('、')
   }
   feedback.value = { type: 'wrong', text: parts.join('，'), detail }
 }

@@ -8,7 +8,11 @@
 
     <!-- F3：参与小游戏 -->
     <template v-if="isFinal3">
-      <div v-if="activeRoom && inMe(activeRoom)" class="minigame-section">
+      <div v-if="showLobby" class="minigame-section">
+        <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
+          :participants="activeRoom.participants" :myId="myId" />
+      </div>
+      <div v-else-if="activeRoom && inMe(activeRoom)" class="minigame-section">
         <div class="game-stage-tip">第 {{ currentGameStageText }} 场挑战</div>
         <component :is="gameComponent" :roomId="activeRoom.roomId"
           :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
@@ -22,6 +26,7 @@
 
     <!-- 冠军投票 -->
     <template v-else-if="isChampionVote">
+      <JuryQA :isJury="isJury" :isFinalist="isFinalist" />
       <div v-if="finalTwo.length === 2" class="vote-section">
         <div class="vote-title">🏆 陪审团冠军投票</div>
         <p v-if="isFinalist" class="note">你是决赛选手，无需投票。</p>
@@ -71,6 +76,8 @@ import MinorityGame from '../../../components/bigbrother/minigames/MinorityGame.
 import SpotDifferenceGame from '../../../components/bigbrother/minigames/SpotDifferenceGame.vue'
 import ReactionGame from '../../../components/bigbrother/minigames/ReactionGame.vue'
 import SequenceMemoryGame from '../../../components/bigbrother/minigames/SequenceMemoryGame.vue'
+import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
+import JuryQA from '../../../components/bigbrother/JuryQA.vue'
 import type { MinigameRoom, BBEndgameStatus } from '../../../types/bigbrother'
 
 const authStore = useBbAuthStore()
@@ -107,6 +114,8 @@ const gameComponentMap: Record<string, Component> = {
 function inMe(room: MinigameRoom): boolean {
   return (room.participants || []).some(p => p.playerId === myId.value)
 }
+
+const showLobby = computed(() => !!activeRoom.value && activeRoom.value.status === 'waiting' && inMe(activeRoom.value))
 
 const currentGameStageText = computed(() => {
   const w = (eg.value as any)?.final3Winners || {}

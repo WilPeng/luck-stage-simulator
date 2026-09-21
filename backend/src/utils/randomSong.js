@@ -38,28 +38,31 @@ function randomWeighted(min, max) {
 }
 
 /**
- * 生成难度 1-5（偏向中间 2-4）
+ * 生成难度 4-10
  */
 function generateDifficulty() {
-  const weights = [1, 2, 3, 4, 5] // 值
-  const probs = [0.05, 0.25, 0.35, 0.25, 0.1] // 权重分布：偏向3
-  const total = probs.reduce((a, b) => a + b, 0)
-  let r = Math.random() * total
-  for (let i = 0; i < weights.length; i++) {
-    r -= probs[i]
-    if (r <= 0) return weights[i]
-  }
-  return 3
+  return randomInt(4, 10)
 }
 
 /**
- * 生成声乐/舞蹈/魅力权重（1-10 之间的整数）
+ * 生成主属性
  */
-function generateWeights() {
-  let vocal = randomInt(1, 10)
-  let dance = randomInt(1, 10)
-  let charm = randomInt(1, 10)
-  return { vocalWeight: vocal, danceWeight: dance, charmWeight: charm }
+function generateMainAttribute() {
+  return randomPick(['vocal', 'dance', 'charm'])
+}
+
+/**
+ * 生成基准声乐/舞蹈（20-50）
+ */
+function generateBaseAttributes() {
+  return { baseVocal: randomInt(20, 50), baseDance: randomInt(20, 50) }
+}
+
+/**
+ * 生成风险值（5-15）
+ */
+function generateRisk() {
+  return randomInt(5, 15)
 }
 
 /**
@@ -79,28 +82,6 @@ function generateType() {
     if (r <= 0) return t.value
   }
   return 'team_show'
-}
-
-/**
- * 生成基础分（80-150，偏向100-130）
- */
-function generateBaseScore() {
-  return randomWeighted(80, 150)
-}
-
-/**
- * 生成风险系数（0.05-0.50，步长0.05，偏向0.15-0.30）
- */
-function generateRiskFactor() {
-  const values = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50]
-  const weights = [0.04, 0.10, 0.20, 0.22, 0.18, 0.12, 0.07, 0.04, 0.02, 0.01]
-  const total = weights.reduce((a, b) => a + b, 0)
-  let r = Math.random() * total
-  for (let i = 0; i < values.length; i++) {
-    r -= weights[i]
-    if (r <= 0) return values[i]
-  }
-  return 0.2
 }
 
 /**
@@ -127,18 +108,17 @@ function generateDescription(song, type, style) {
 function generateRandomSong(songInfo) {
   const type = generateType()
   const style = randomPick(SONG_STYLES)
-  const weights = generateWeights()
+  const base = generateBaseAttributes()
 
   return {
     name: songInfo.title,
     artist: songInfo.artist,
     style,
     difficulty: generateDifficulty(),
-    vocalWeight: weights.vocalWeight,
-    danceWeight: weights.danceWeight,
-    charmWeight: weights.charmWeight,
-    baseScore: generateBaseScore(),
-    riskFactor: generateRiskFactor(),
+    mainAttribute: generateMainAttribute(),
+    baseVocal: base.baseVocal,
+    baseDance: base.baseDance,
+    risk: generateRisk(),
     type,
     description: generateDescription(songInfo, type, style),
     enabled: true
@@ -148,10 +128,10 @@ function generateRandomSong(songInfo) {
 module.exports = {
   generateRandomSong,
   generateDifficulty,
-  generateWeights,
+  generateMainAttribute,
+  generateBaseAttributes,
+  generateRisk,
   generateType,
-  generateBaseScore,
-  generateRiskFactor,
   generateDescription,
   randomInt,
   randomPick,

@@ -115,29 +115,20 @@ function createCustomGameHandler(gameDef) {
     return { ok: true }
   }
 
-  // 单题反馈
+  // 单题反馈（不向选手透露正确答案）
   function singleFeedback(ps, q, correct) {
     const out = { correct }
     if (correct) return out
     const fb = gameDef.wrongFeedback
-    if (fb === 'reveal') out.correctAnswer = q.correctAnswer
-    else if (fb === 'count') out.correctCount = ps.correctCount
-    // none / all_correct_only 不额外告知
+    if (fb === 'count') out.correctCount = ps.correctCount
+    // reveal / none / all_correct_only 均不告知正确答案
     return out
   }
 
-  // 批量反馈
+  // 批量反馈（不向选手透露正确答案）
   function batchFeedback(ps, gradedCorrect, gradedCount, wrongAnswers) {
     const out = { correct: gradedCorrect > 0, gradedCorrect, gradedCount, correctCount: ps.correctCount }
-    const fb = gameDef.wrongFeedback
-    const allCorrect = ps.correctCount >= totalQuestions
-    if (fb === 'reveal') {
-      out.correctAnswers = wrongAnswers
-    } else if (fb === 'count') {
-      // 保留 gradedCorrect / correctCount
-    } else if (fb === 'all_correct_only') {
-      if (allCorrect) out.correctAnswers = wrongAnswers
-    }
+    // 不再返回 correctAnswers（正确答案不下发选手）
     return out
   }
 
@@ -362,11 +353,8 @@ function createCustomGameHandler(gameDef) {
 
       if (submitMode === 'batch' || isAdminJudge) {
         const allCorrect = ps.correctCount >= totalQuestions
-        const canReveal = gameDef.wrongFeedback === 'reveal' ||
-          (gameDef.wrongFeedback === 'all_correct_only' && allCorrect)
         base.questions = ps.questions.map(q => {
           const rec = ps.answers[q.id]
-          const revealed = canReveal && (allCorrect || (rec && rec.correct === false))
           return {
             id: q.id,
             text: q.text,
@@ -376,8 +364,7 @@ function createCustomGameHandler(gameDef) {
             points: q.points,
             userAnswer: rec ? rec.userAnswer : '',
             correct: rec ? !!rec.correct : false,
-            locked: !!ps.locked[q.id],
-            correctAnswer: revealed ? q.correctAnswer : undefined
+            locked: !!ps.locked[q.id]
           }
         })
       } else {

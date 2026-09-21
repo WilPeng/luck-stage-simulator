@@ -80,6 +80,16 @@
       </div>
     </div>
 
+    <!-- 餐厅照片墙（可调整顺序） -->
+    <div class="photo-wall-section">
+      <h3>🖼️ 餐厅照片墙（可调整展示顺序）</h3>
+      <p class="pw-hint">已淘汰 / 陪审团成员显示为黑白，其余为彩色。</p>
+      <PhotoWall :players="photoWall" editable show-names @move="movePhoto" />
+      <div class="pw-actions">
+        <button class="bb-btn bb-btn-primary" @click="savePhotoWallOrder">保存顺序</button>
+      </div>
+    </div>
+
     <!-- 玩家位置总览 -->
     <div class="locations-section">
       <h3>📍 玩家位置总览</h3>
@@ -122,17 +132,39 @@ import {
   bbAdminBroadcast,
   bbAdminSetRoom,
   bbAdminSetSeason,
-  bbAdminChatLogs
+  bbAdminChatLogs,
+  bbGetPhotoWall,
+  bbAdminSetPhotoWallOrder
 } from '../../../services/bbHouseApi'
 import { bbGetSeason } from '../../../services/bbApi'
 import type { BBHouseRoomWithCount } from '../../../types/bigbrother'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
+import PhotoWall from '../../../components/bigbrother/PhotoWall.vue'
 
 const rooms = ref<BBHouseRoomWithCount[]>([])
 const locations = ref<Record<string, { room: any; players: any[] }>>({})
 const backyardDoorOpen = ref(true)
 
 const allRooms = ref<BBHouseRoomWithCount[]>([])
+
+// 餐厅照片墙
+const photoWall = ref<any[]>([])
+async function loadPhotoWall() {
+  try { const res = await bbGetPhotoWall(); photoWall.value = res?.players || [] } catch { photoWall.value = [] }
+}
+function movePhoto(index: number, dir: -1 | 1) {
+  const target = index + dir
+  if (target < 0 || target >= photoWall.value.length) return
+  const arr = [...photoWall.value]
+  ;[arr[index], arr[target]] = [arr[target], arr[index]]
+  photoWall.value = arr
+}
+async function savePhotoWallOrder() {
+  try {
+    await bbAdminSetPhotoWallOrder(photoWall.value.map(p => p.id))
+    alert('照片墙顺序已保存')
+  } catch (e: any) { alert(e?.message || '保存失败') }
+}
 
 const broadcastType = ref<'notice' | 'invite'>('notice')
 const broadcastRoom = ref('')
@@ -231,6 +263,7 @@ async function loadData() {
     locations.value = locRes || {}
     // 获取后院门状态
     backyardDoorOpen.value = mapRes?.backyardDoorOpen ?? true
+    await loadPhotoWall()
 
     // 初始化房间编辑表单
     for (const r of allRooms.value) {
@@ -420,4 +453,11 @@ async function handleForceMove(playerId: string, targetRoomId: string) {
 .cl-time { color: #666; margin-left: auto; }
 .cl-content { color: #ddd; font-size: 13px; margin-top: 6px; }
 .cl-detail { margin-top: 8px; font-size: 12px; color: #ffaa00; background: #ffaa0010; border-radius: 6px; padding: 6px 10px; }
+.photo-wall-section { margin: 24px 0; }
+.photo-wall-section h3 { font-size: 16px; color: #e0e0e0; margin: 0 0 6px; }
+.pw-hint { font-size: 12px; color: #8a8aa5; margin: 0 0 12px; }
+.pw-actions { margin-top: 12px; }
+.bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.bb-btn:hover { background: #00ff8822; }
+.bb-btn-primary { border-color: #00ff88; background: #00ff8822; }
 </style>

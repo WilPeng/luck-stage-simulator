@@ -48,6 +48,15 @@
             <t-alert v-if="config.groupingMode === 'captain_choice'" theme="info" style="margin-top: 12px">
               意向队长分组：先完成队长选举/指定，选手选择意向队长，管理员在组队阶段点击"按意向匹配"完成分组。
             </t-alert>
+            <t-alert v-if="config.groupingMode === 'random'" theme="info" style="margin-top: 12px">
+              随机分组：配置好队伍数量后，在组队管理页点击「一键分组」，系统将全部存活选手随机分入各队（无队长）。
+            </t-alert>
+            <t-alert v-if="config.groupingMode === 'balanced'" theme="info" style="margin-top: 12px">
+              实力均衡分组：系统按选手声乐+舞蹈+魅力综合分从高到低蛇形分配，使各队总实力尽量接近（无队长）。
+            </t-alert>
+            <t-alert v-if="config.groupingMode === 'captain_draft'" theme="info" style="margin-top: 12px">
+              队长蛇形选人：队长默认取综合分最高的前 N 名，系统按蛇形顺序轮流从剩余选手中选人；也可在组队管理页手动指定队长后一键选人。
+            </t-alert>
           </div>
 
           <div class="config-section">
@@ -101,55 +110,6 @@
       </t-col>
     </t-row>
 
-    <t-row :gutter="16" style="margin-top: 16px">
-      <!-- 训练配置 -->
-      <t-col :xs="24" :sm="8">
-        <t-card title="训练配置" :bordered="false" class="stage-card">
-          <div class="config-item">
-            <span class="config-label">每人训练次数</span>
-            <t-input-number
-              v-model="config.trainingTimesAllowed"
-              :min="0"
-              :max="20"
-              theme="normal"
-            />
-          </div>
-        </t-card>
-      </t-col>
-
-      <!-- 公演配置 -->
-      <t-col :xs="24" :sm="8">
-        <t-card title="公演配置" :bordered="false" class="stage-card">
-          <div class="config-item">
-            <span class="config-label">淘汰人数</span>
-            <t-input-number
-              v-model="config.eliminationCount"
-              :min="0"
-              :max="20"
-              theme="normal"
-            />
-          </div>
-        </t-card>
-      </t-col>
-
-      <!-- 危险线配置 -->
-      <t-col :xs="24" :sm="8">
-        <t-card title="危险线配置" :bordered="false" class="stage-card">
-          <div class="config-item">
-            <span class="config-label">危险线比例</span>
-            <t-input-number
-              v-model="config.dangerLineRatio"
-              :min="0"
-              :max="1"
-              :step="0.1"
-              theme="normal"
-              :decimal="2"
-            />
-          </div>
-        </t-card>
-      </t-col>
-    </t-row>
-
     <!-- 保存按钮 -->
     <div class="actions-bar">
       <t-button
@@ -178,7 +138,7 @@ import { MessagePlugin } from 'tdesign-vue-next'
 import { useRoute } from 'vue-router'
 import { useSeasonStore } from '../../stores/seasonStore'
 import { usePlayerStore } from '../../stores/playerStore'
-import { updateTeamSetup, updateRound, getTrainingConfig, getRoundTeams, doRequest } from '../../services/api'
+import { updateTeamSetup, updateRound, getRoundTeams, doRequest } from '../../services/api'
 
 const route = useRoute()
 const seasonStore = useSeasonStore()
@@ -191,16 +151,16 @@ const saving = ref(false)
 const config = reactive({
   teamCount: 5,
   teamSizes: [6, 6, 6, 6, 6] as number[],
-  trainingTimesAllowed: 5,
-  eliminationCount: 5,
-  dangerLineRatio: 0.2,
-  groupingMode: 'captain' as 'captain' | 'song' | 'captain_choice'
+  groupingMode: 'captain' as 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft'
 })
 
-// 组队模式（当前启用：队长选歌组队 / 意向队长分组）
+// 组队模式
 const groupingModes = [
   { value: 'captain', icon: '👑', name: '队长选歌组队', desc: '队长选举 → 队员申请/邀请入队 → 队长选歌' },
-  { value: 'captain_choice', icon: '🤝', name: '意向队长分组', desc: '先选队长，选手选意向队长，按匹配分组' }
+  { value: 'captain_choice', icon: '🤝', name: '意向队长分组', desc: '先选队长，选手选意向队长，按匹配分组' },
+  { value: 'random', icon: '🎲', name: '随机分组', desc: '管理员一键将全部存活选手随机分入各队' },
+  { value: 'balanced', icon: '⚖️', name: '实力均衡分组', desc: '按属性综合分蛇形分配，各队实力尽量均衡' },
+  { value: 'captain_draft', icon: '🐍', name: '队长蛇形选人', desc: '队长由系统按实力选出（或管理员指定），蛇形轮流选人' }
 ]
 
 // 可用选手数量（排除管理员和已淘汰的选手）
@@ -236,7 +196,7 @@ function handleTeamCountChange(value: number) {
   }
 }
 
-// 保存配置（只保存队伍结构与训练等参数；选曲在选歌页面进行）
+// 保存配置（只保存队伍结构与分组模式；选曲在选歌页面进行）
 async function handleSave() {
   saving.value = true
   try {
@@ -251,7 +211,6 @@ async function handleSave() {
       }),
       updateRound({
         performanceRound: currentRound.value,
-        drawsPerPlayer: config.trainingTimesAllowed,
         groupingMode: config.groupingMode
       })
     ])
@@ -268,9 +227,6 @@ async function handleSave() {
 function handleReset() {
   config.teamCount = 5
   config.teamSizes = [6, 6, 6, 6, 6]
-  config.trainingTimesAllowed = 5
-  config.eliminationCount = 5
-  config.dangerLineRatio = 0.2
 }
 
 // 加载数据
@@ -292,7 +248,7 @@ async function loadSavedConfig() {
   try {
     const prep = await doRequest<any>(`/admin/round/${currentRound.value}/preparation`, { method: 'GET' })
     if (prep?.groupingMode) {
-      config.groupingMode = ['captain', 'song', 'captain_choice'].includes(prep.groupingMode) ? prep.groupingMode : 'captain'
+        config.groupingMode = ['captain', 'song', 'captain_choice', 'random', 'balanced', 'captain_draft'].includes(prep.groupingMode) ? prep.groupingMode : 'captain'
     }
   } catch (e) {
     console.warn('[Preparation] 加载分组模式失败:', e)
@@ -307,16 +263,6 @@ async function loadSavedConfig() {
     }
   } catch (e) {
     console.warn('[Preparation] 加载队伍配置失败:', e)
-  }
-
-  // 3. 加载训练配置
-  try {
-    const trainingConfig = await getTrainingConfig()
-    if (trainingConfig?.drawsPerPlayer !== undefined) {
-      config.trainingTimesAllowed = trainingConfig.drawsPerPlayer
-    }
-  } catch (e) {
-    console.warn('[Preparation] 加载训练配置失败:', e)
   }
 }
 

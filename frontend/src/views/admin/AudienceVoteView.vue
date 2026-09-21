@@ -36,32 +36,32 @@
                 <th class="col-player">选手</th>
                 <th class="col-team">队伍</th>
                 <th class="col-editable">
-                  基础属性贡献
-                  <t-tooltip content="选手基础属性（vocal/dance/charm）折算分" placement="top">
+                  基础值 (charm×2)
+                  <t-tooltip content="选手自身魅力 × 2" placement="top">
                     <t-icon name="info-circle" class="hint-icon" />
                   </t-tooltip>
                 </th>
                 <th class="col-editable">
-                  实时发挥贡献
-                  <t-tooltip content="选手在公演中的实时发挥得分" placement="top">
+                  个人评级加权
+                  <t-tooltip content="按个人评级（S/A/B/C/D）取值，可在管理端配置" placement="top">
                     <t-icon name="info-circle" class="hint-icon" />
                   </t-tooltip>
                 </th>
                 <th class="col-editable">
-                  团队排名加成
-                  <t-tooltip content="团队排名越高加成越多" placement="top">
+                  团队评级加权
+                  <t-tooltip content="按团队评级取值，可在管理端配置" placement="top">
                     <t-icon name="info-circle" class="hint-icon" />
                   </t-tooltip>
                 </th>
                 <th class="col-editable">
-                  MVP加成
-                  <t-tooltip content="队内排名第一的额外加成" placement="top">
+                  队伍排名加成
+                  <t-tooltip content="团队排名越高加成越多（等差递减）" placement="top">
                     <t-icon name="info-circle" class="hint-icon" />
                   </t-tooltip>
                 </th>
                 <th class="col-editable">
-                  随机观众缘
-                  <t-tooltip content="运气成分/观众随机喜好" placement="top">
+                  队内MVP加成
+                  <t-tooltip content="队内表现第一的额外加成" placement="top">
                     <t-icon name="info-circle" class="hint-icon" />
                   </t-tooltip>
                 </th>
@@ -87,13 +87,10 @@
                   />
                 </td>
                 <td class="col-editable">
-                  <t-input
-                    v-model="item.performanceContribution"
-                    type="number"
-                    size="small"
-                    class="weight-input"
-                    @change="recalcTotal(index)"
-                  />
+                  <span class="weight-static">× {{ item.personalWeight ?? 1 }}<template v-if="item.stageRating">（{{ item.stageRating }}）</template></span>
+                </td>
+                <td class="col-editable">
+                  <span class="weight-static">× {{ item.teamWeight ?? 1 }}<template v-if="item.teamRating">（{{ item.teamRating }}）</template></span>
                 </td>
                 <td class="col-editable">
                   <t-input
@@ -107,15 +104,6 @@
                 <td class="col-editable">
                   <t-input
                     v-model="item.mvpBonus"
-                    type="number"
-                    size="small"
-                    class="weight-input"
-                    @change="recalcTotal(index)"
-                  />
-                </td>
-                <td class="col-editable">
-                  <t-input
-                    v-model="item.audienceLuck"
                     type="number"
                     size="small"
                     class="weight-input"
@@ -399,6 +387,10 @@ const releasing = ref(false)
 const currentRoundId = computed(() => props.roundId || seasonStore.currentRoundId || '')
 
 // 权重编辑表单（每个选手一行，可编辑各项权重值）
+const ratingWeights = {
+  personal: { S: 1, A: 0.9, B: 0.8, C: 0.7, D: 0.6 } as Record<string, number>,
+  team: { S: 1, A: 0.9, B: 0.8, C: 0.7, D: 0.6 } as Record<string, number>
+}
 const weightForm = ref<PlayerPopularityWeight[]>([])
 
 // 加载选手列表并初始化权重表单（使用实际数据推算默认值）
@@ -442,46 +434,38 @@ async function loadPlayers() {
 
   for (const team of teams) {
     if (!team.members) continue
+    const tr = teamResults.find(t => t.teamId === team.id)
+    const teamRating = tr?.teamRating || ''
+    const memberPerfs = tr?.memberPerformances || tr?.players || []
     for (const member of team.members) {
       if (!member.player) continue
 
       const charm = member.player.attributes?.charm || member.player.attributes?.魅力 || 0
       const playerId = member.playerId
-      const perfData = perfMap[playerId]
-      const teamRank = teamRankMap[team.id] || 1
+      const mp = memberPerfs.find((p: any) => p.playerId === playerId)
+      const stageRating = mp?.stageRating || ''
 
-      // ① 基础属性贡献 = 魅力 × 2
+      // 基础值 = 自身charm × 2 × 个人评级加权 × 团队评级加权 + 队伍排名加成 + 队内MVP加成
       const baseContribution = Math.round(charm * 2)
-
-      // ② 实时发挥贡献（有实际发挥值时使用，否则按默认范围随机）
-      let performanceContribution: number
-      if (perfData) {
-        performanceContribution = Math.max(0, perfData.performanceValue)
-      } else {
-        performanceContribution = Math.floor(Math.random() * 20) + 1
-      }
-
-      // ③ 团队排名加成（等差递减）
-      const teamRankBonus = calcTeamRankBonus(teamRank, totalTeams || 1)
-
-      // ④ 队内 MVP 加成
-      const mvpBonus = (perfData && perfData.rankInTeam === 1) ? Math.floor(Math.random() * 11) + 10 : 0
-
-      // ⑤ 观众缘随机值
-      const audienceLuck = Math.floor(Math.random() * 16)
-
-      const totalWeight = baseContribution + performanceContribution + teamRankBonus + mvpBonus + audienceLuck
+      const personalWeight = ratingWeights.personal[stageRating] ?? 1
+      const teamWeight = ratingWeights.team[teamRating] ?? 1
+      const teamRank = tr?.rank || teamResults.length
+      const teamRankBonus = teamResults.length > 1 ? Math.round(30 * (teamResults.length - teamRank) / (teamResults.length - 1)) : 0
+      const mvpBonus = (mp?.rankInTeam === 1) ? 20 : 0
+      const totalWeight = Math.max(0, Math.round(baseContribution * personalWeight * teamWeight) + teamRankBonus + mvpBonus)
 
       weightForm.value.push({
         playerId,
         playerName: member.player.name || member.playerId,
         teamId: team.id,
         teamName: team.name || '',
+        stageRating,
+        teamRating,
         baseContribution,
-        performanceContribution,
+        personalWeight,
+        teamWeight,
         teamRankBonus,
         mvpBonus,
-        audienceLuck,
         totalWeight
       })
     }
@@ -492,7 +476,7 @@ async function loadPlayers() {
 function recalcTotal(index: number) {
   const item = weightForm.value[index]
   if (item) {
-    item.totalWeight = item.baseContribution + item.performanceContribution + item.teamRankBonus + item.mvpBonus + item.audienceLuck
+    item.totalWeight = Math.max(0, Math.round((item.baseContribution || 0) * (item.personalWeight ?? 1) * (item.teamWeight ?? 1)) + (item.teamRankBonus || 0) + (item.mvpBonus || 0))
   }
 }
 
@@ -568,11 +552,12 @@ const sortedWeights = computed<PlayerPopularityWeight[]>(() => {
 
 function getWeightBreakdown(item: PlayerPopularityWeight): string {
   return [
-    `基础属性贡献：${item.baseContribution}`,
-    `实时发挥贡献：${item.performanceContribution}`,
-    `团队排名加成：${item.teamRankBonus}`,
-    `队内MVP加成：${item.mvpBonus}`,
-    `随机观众缘：${item.audienceLuck}`
+    `基础值 (charm×2)：${item.baseContribution}`,
+    `个人评级加权：×${item.personalWeight ?? 1}${item.stageRating ? ' (' + item.stageRating + ')' : ''}`,
+    `团队评级加权：×${item.teamWeight ?? 1}${item.teamRating ? ' (' + item.teamRating + ')' : ''}`,
+    `队伍排名加成：+${item.teamRankBonus ?? 0}`,
+    `队内MVP加成：+${item.mvpBonus ?? 0}`,
+    `总权重：${item.totalWeight}`
   ].join('\n')
 }
 
@@ -587,7 +572,7 @@ function handleExport() {
   const weightsMap = new Map(store.audienceWeights.map(w => [w.playerId, w]))
 
   // CSV 表头
-  const headers = ['排名', '选手', '队伍', '得票数', '总权重', '基础属性贡献', '实时发挥贡献', '团队排名加成', 'MVP加成', '随机观众缘']
+  const headers = ['排名', '选手', '队伍', '得票数', '总权重', '基础值(charm×2)', '个人评级加权', '团队评级加权', '队伍排名加成', '队内MVP加成']
 
   // 构造每一行
   const rows = rankings.map((item) => {
@@ -599,10 +584,10 @@ function handleExport() {
       item.votes,
       w?.totalWeight ?? item.totalWeight ?? '',
       w?.baseContribution ?? '',
-      w?.performanceContribution ?? '',
-      w?.teamRankBonus ?? '',
-      w?.mvpBonus ?? '',
-      w?.audienceLuck ?? ''
+      w?.personalWeight ?? 1,
+      w?.teamWeight ?? 1,
+      w?.teamRankBonus ?? 0,
+      w?.mvpBonus ?? 0
     ].map(v => `"${v}"`).join(',')
   })
 
@@ -629,7 +614,7 @@ async function handleGenerate() {
   // 收集编辑后的权重数据
   const weights = weightForm.value.map(w => ({
     ...w,
-    totalWeight: w.baseContribution + w.performanceContribution + w.teamRankBonus + w.mvpBonus + w.audienceLuck
+    totalWeight: Math.max(0, Math.round((w.baseContribution || 0) * (w.personalWeight ?? 1) * (w.teamWeight ?? 1)) + (w.teamRankBonus || 0) + (w.mvpBonus || 0))
   }))
 
   // 校验：至少有一个选手有权重
@@ -837,6 +822,13 @@ watch(currentRoundId, (newVal, oldVal) => {
   .weight-input {
     width: 80px;
     margin: 0 auto;
+  }
+
+  .weight-static {
+    display: inline-block;
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: nowrap;
   }
 
   .total-value {

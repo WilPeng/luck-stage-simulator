@@ -157,6 +157,30 @@ router.delete('/:id', async (req, res) => {
   }
 })
 
+// POST /batch-delete - 批量删除房客（管理员保护：不删除 admin）
+router.post('/batch-delete', async (req, res) => {
+  try {
+    const { ids } = req.body || {}
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: '请选择要删除的房客', code: 'INVALID_IDS' })
+    }
+    // 过滤掉管理员与不存在的 id
+    const guests = await BBHouseguest.find({ gameId: 'bigbrother' })
+    const adminIds = new Set(guests.filter(g => g.role === 'admin').map(g => g.id))
+    const idSet = new Set(ids)
+    const targets = guests.filter(g => idSet.has(g.id) && !adminIds.has(g.id))
+    let deleted = 0
+    for (const g of targets) {
+      await BBHouseguest.deleteOne({ id: g.id, gameId: 'bigbrother' })
+      deleted++
+    }
+    res.json({ success: true, data: { deleted, skipped: ids.length - deleted } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '批量删除失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // ===== 头像管理 =====
 
 // POST /me/avatar - 选手自行上传头像（必须在 /:id/avatar 之前）

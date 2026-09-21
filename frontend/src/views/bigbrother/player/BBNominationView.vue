@@ -30,39 +30,25 @@
       <div v-else class="empty-hint">暂无活跃房客可供投票</div>
     </div>
 
-    <!-- 非直接民主模式：当前轮次且用户是 HOH 且处于提名阶段：显示提名操作 -->
-    <div v-else-if="isCurrentRound && isCurrentHoh && isNominationStage" class="nomination-action">
-      <div class="hoh-banner">🏆 你是本周的 HOH！{{ needThree ? '请选择三名被提名人' : '请选择两名被提名人' }}</div>
-      <div class="nomination-form">
-        <div class="form-group">
-          <label>被提名人 1</label>
-          <select v-model="nominee1" class="bb-select">
-            <option value="" disabled>请选择</option>
-            <option v-for="h in listForNominee1" :key="h.id" :value="h.id">{{ h.name }}</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>被提名人 2</label>
-          <select v-model="nominee2" class="bb-select">
-            <option value="" disabled>请选择</option>
-            <option v-for="h in listForNominee2" :key="h.id" :value="h.id">{{ h.name }}</option>
-          </select>
-        </div>
-        <div v-if="needThree" class="form-group">
-          <label>被提名人 3</label>
-          <select v-model="nominee3" class="bb-select">
-            <option value="" disabled>请选择</option>
-            <option v-for="h in listForNominee3" :key="h.id" :value="h.id">{{ h.name }}</option>
-          </select>
-        </div>
-        <button class="bb-btn" @click="submitNomination" :disabled="!nominee1 || !nominee2 || (needThree && !nominee3) || submitting">
-          {{ submitting ? '提交中...' : '提交提名' }}
-        </button>
-      </div>
-    </div>
+    <!-- 钥匙仪式：所有选手可见；HOH 可设置（先选被提名者，再排安全顺序） -->
+    <KeyCeremony
+      v-else-if="isCurrentRound && isNominationStage"
+      :keyCeremony="keyCeremony"
+      :myId="authStore.currentUser?.id || ''"
+      :isHoh="isCurrentHoh"
+      :eligible="keyEligible"
+      :nomineeCount="nomineeCount"
+      :submitting="submittingKey"
+      :drawing="drawingKey"
+      :announcing="announcingKey"
+      @setup="onKeySetup"
+      @draw="onKeyDraw"
+      @announce="onKeyAnnounce"
+      @speech="onKeySpeech"
+    />
 
-    <!-- 已有提名结果 -->
-    <div v-if="nomination" class="nomination-card">
+    <!-- 已有提名结果（钥匙仪式全部揭晓后才显示） -->
+    <div v-if="nomination && ceremonyDone" class="nomination-card">
       <div class="hoh-info">HOH: {{ nomination.hohName }}</div>
       <div class="nominees">
         <div v-for="(name, i) in (nomination.nomineeNames || [])" :key="i" class="nominee-item"
@@ -92,7 +78,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetNominationHistory, bbSetNomination, bbGetActiveHouseguests, bbGetHohHistory, bbGetCurrentVeto, bbGetSeasonConfig, bbVoteNominees } from '../../../services/bbApi'
+import { bbGetNominationHistory, bbGetActiveHouseguests, bbGetHohHistory, bbGetSeasonConfig, bbVoteNominees, bbGetCurrentNomination, bbKeySetup, bbKeyDraw, bbKeyAnnounce, bbKeySpeech } from '../../../services/bbApi'
+import KeyCeremony from '../../../components/bigbrother/KeyCeremony.vue'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBRoundConfig } from '../../../types/bigbrother'
 
@@ -109,12 +96,8 @@ const nomination = ref<any>(null)
 const currentHoh = ref<any>(null)
 const activeList = ref<{ id: string; name: string; avatar: string | null }[]>([])
 const activeMap = ref<Record<string, string>>({})
-const nominee1 = ref('')
-const nominee2 = ref('')
-const nominee3 = ref('')
 const submitting = ref(false)
 const submitSuccess = ref(false)
-const savedPlayerId = ref('') // 被 POV 拯救的选手 ID
 const roundConfigs = ref<BBRoundConfig[]>([]) // twist 配置
 const democracyVotes = ref<Record<string, string>>({})
 
@@ -143,52 +126,75 @@ const isBbbb = computed(() => {
 })
 const needThree = computed(() => isTripleOffering.value || isBbbb.value)
 
+// 钥匙仪式
+const keyCeremony = ref<any>(null)
+const submittingKey = ref(false)
+const drawingKey = ref(false)
+const announcingKey = ref(false)
+const nomineeCount = computed(() => needThree.value ? 3 : 2)
+const keyEligible = computed(() => activeList.value.filter(h => h.id !== authStore.currentUser?.id))
+// 提名仪式是否已结束（HOH 结束发言后才公布被提名者）
+const ceremonyDone = computed(() => {
+  const kc = keyCeremony.value
+  if (!kc) return true
+  return !!kc.ended
+})
+async function onKeySetup(payload: { nominees: string[]; order: string[] }) {
+  submittingKey.value = true
+  try {
+    await bbKeySetup(payload.nominees, payload.order)
+    await refreshNomination()
+  } catch (e: any) {
+    alert(e?.message || '提交失败')
+  } finally {
+    submittingKey.value = false
+  }
+}
+async function onKeyDraw() {
+  drawingKey.value = true
+  try {
+    await bbKeyDraw()
+    await refreshNomination()
+  } catch (e: any) {
+    alert(e?.message || '抽钥匙失败')
+  } finally {
+    drawingKey.value = false
+  }
+}
+async function onKeyAnnounce(text: string) {
+  announcingKey.value = true
+  try {
+    await bbKeyAnnounce(text)
+    await refreshNomination()
+  } catch (e: any) {
+    alert(e?.message || '宣布失败')
+  } finally {
+    announcingKey.value = false
+  }
+}
+async function onKeySpeech(payload: { phase: 'opening' | 'closing'; text?: string; reason?: string; nomineeOrder?: string[] }) {
+  try {
+    await bbKeySpeech(payload)
+    await refreshNomination()
+  } catch (e: any) {
+    alert(e?.message || '发言失败')
+  }
+}
+async function refreshNomination() {
+  try {
+    const nom: any = await bbGetCurrentNomination()
+    if (nom) {
+      nomination.value = nom
+      keyCeremony.value = nom.keyCeremony || null
+    }
+  } catch {}
+}
+
 // 直接民主投票候选人（所有活跃玩家）
 const democracyCandidates = computed(() => activeList.value)
 
-const baseAvailable = computed(() => {
-  const vetoWinnerId = nomination.value?.vetoWinnerId || ''
-  const excludeSet = new Set([authStore.currentUser?.id, vetoWinnerId, savedPlayerId.value])
-  return activeList.value.filter(h => !excludeSet.has(h.id))
-})
-
-const listForNominee1 = computed(() => {
-  return baseAvailable.value.filter(h => h.id !== nominee2.value && h.id !== nominee3.value)
-})
-
-const listForNominee2 = computed(() => {
-  return baseAvailable.value.filter(h => h.id !== nominee1.value && h.id !== nominee3.value)
-})
-
-const listForNominee3 = computed(() => {
-  return baseAvailable.value.filter(h => h.id !== nominee1.value && h.id !== nominee2.value)
-})
-
 function isMe(name: string): boolean {
   return name === authStore.currentUser?.name
-}
-
-async function submitNomination() {
-  if (!nominee1.value || !nominee2.value) return
-  if (needThree.value && !nominee3.value) return
-  submitting.value = true
-  try {
-    const ids = [nominee1.value, nominee2.value]
-    if (needThree.value && nominee3.value) ids.push(nominee3.value)
-    const names = ids.map(id => activeMap.value[id] || '')
-    await bbSetNomination(ids, names)
-    submitSuccess.value = true
-    setTimeout(() => submitSuccess.value = false, 2000)
-    try {
-      const history = await bbGetNominationHistory()
-      const roundKey = `round-${roundNum.value}`
-      nomination.value = history.find(h => h.roundId === roundKey || h.roundId === roundKey) || null
-    } catch {}
-  } catch (e) {
-    console.error('提交提名失败:', e)
-  } finally {
-    submitting.value = false
-  }
 }
 
 async function submitDemocracyVotes() {
@@ -225,10 +231,6 @@ onMounted(async () => {
     currentHoh.value = hohHistory.find(h => h.roundId === roundKey) || null
   } catch {}
   try {
-    const vetoData = await bbGetCurrentVeto()
-    savedPlayerId.value = vetoData?.usedOnPlayerId || ''
-  } catch {}
-  try {
     const config = await bbGetSeasonConfig()
     roundConfigs.value = config.roundConfigs || []
   } catch {}
@@ -245,6 +247,7 @@ onMounted(async () => {
       list.forEach(h => { map[h.id] = h.name; democracyVotes.value[h.id] = '' })
       activeMap.value = map
     } catch {}
+    await refreshNomination()
   }
 })
 </script>
@@ -295,4 +298,14 @@ onMounted(async () => {
 .bb-select-sm:focus { border-color: #3498db; outline: none; }
 .bb-select-sm option { background: #0f0f2e; color: #fff; }
 .empty-hint { text-align: center; color: #666; font-size: 14px; padding: 20px; }
+.key-ceremony-panel, .key-setup-panel { background: #0f0f2e; border: 1px solid #ffaa0044; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+.kc-title { font-size: 14px; color: #ffaa00; margin-bottom: 10px; }
+.kc-keys { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.kc-key { padding: 8px 14px; border-radius: 8px; background: #ffffff08; border: 1px solid #ffffff18; color: #666; font-size: 13px; }
+.kc-key.drawn { background: #00ff8822; border-color: #00ff88; color: #00ff88; font-weight: 600; }
+.kc-nominees { font-size: 14px; color: #ff6666; }
+.kc-eligible { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.kc-pick { padding: 8px 14px; border: 1px solid #ffffff22; background: #ffffff08; color: #ccc; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.kc-pick.chosen { background: #ffaa0022; border-color: #ffaa00; color: #ffaa00; }
+.kc-order-line { font-size: 13px; color: #8a8aa5; margin-bottom: 12px; }
 </style>

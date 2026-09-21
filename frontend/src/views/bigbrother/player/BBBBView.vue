@@ -9,8 +9,14 @@
       3 名被提名人进行比赛：胜者安全，其余 2 人进入淘汰投票。
     </div>
 
+    <!-- 准备环节 -->
+    <div v-if="showLobby" class="minigame-section">
+      <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
+        :participants="activeRoom.participants" :myId="myId" />
+    </div>
+
     <!-- 比赛进行中：渲染小游戏 -->
-    <div v-if="gameComponent" class="minigame-section">
+    <div v-else-if="gameComponent" class="minigame-section">
       <component :is="gameComponent" :roomId="activeRoom.roomId" :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
     </div>
 
@@ -39,6 +45,7 @@ import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { bbGetCurrentNomination, bbGetActiveMinigameRoom, bbSetBbbbWinner } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
+import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
 import ClickSpeedGame from '../../../components/bigbrother/minigames/ClickSpeedGame.vue'
 import MemoryMatchGame from '../../../components/bigbrother/minigames/MemoryMatchGame.vue'
 import QuickMathGame from '../../../components/bigbrother/minigames/QuickMathGame.vue'
@@ -66,6 +73,11 @@ const gameComponent = ref<Component | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const winnerName = computed(() => bbbbWinnerName.value || nominees.value.find(n => n.id === bbbbWinnerId.value)?.name || '')
+
+const showLobby = computed(() => {
+  if (!activeRoom.value || activeRoom.value.status !== 'waiting') return false
+  return (activeRoom.value.participants || []).some((p: any) => p.playerId === myId.value)
+})
 
 const gameComponentMap: Record<string, Component> = {
   'click-speed': markRaw(ClickSpeedGame),

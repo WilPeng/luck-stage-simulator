@@ -53,6 +53,10 @@
         </div>
       </div>
 
+      <!-- 准备环节 -->
+      <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
+        :gameTitle="activeRoom.minigameName" :summoning="summoning" @summon="summonPlayers" />
+
       <!-- 实时观战 -->
       <div v-if="activeRoom" class="observer-wrap">
         <MinigameObserver :roomId="activeRoom.roomId" :room="activeRoom" />
@@ -126,10 +130,11 @@ import { useRoute } from 'vue-router'
 import {
   bbGetCurrentHoh, bbGetHohHistory, bbRunHohCompetition, bbAssignHoh,
   bbGetHohEligible, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom,
-  bbPauseMinigame, bbResumeMinigame, bbStopMinigame
+  bbPauseMinigame, bbResumeMinigame, bbStopMinigame, bbSummonMinigamePlayers
 } from '../../../services/bbApi'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
 import MinigameObserver from '../../../components/bigbrother/MinigameObserver.vue'
+import MinigameReadyPanel from '../../../components/bigbrother/MinigameReadyPanel.vue'
 import type { BBHohRecord, MinigameRoom } from '../../../types/bigbrother'
 
 const route = useRoute()
@@ -145,6 +150,7 @@ const activeRoom = ref<MinigameRoom | null>(null)
 const selectedMinigameId = ref<string | null>(null)
 const targetScore = ref<number | null>(null)
 const creating = ref(false)
+const summoning = ref(false)
 
 const targetInputHint = computed(() => {
   if (!selectedMinigameId.value) return ''
@@ -263,6 +269,19 @@ async function createRoomWithTarget() {
 function cancelCreateRoom() {
   selectedMinigameId.value = null
   targetScore.value = null
+}
+
+async function summonPlayers() {
+  if (!activeRoom.value || summoning.value) return
+  summoning.value = true
+  try {
+    await bbSummonMinigamePlayers(activeRoom.value.roomId)
+    alert('已召集所有参赛选手，请等待他们点击准备。')
+  } catch (e: any) {
+    alert(e?.message || '召集失败')
+  } finally {
+    summoning.value = false
+  }
 }
 
 async function startMinigame() {

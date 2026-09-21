@@ -473,6 +473,14 @@ router.get('/pickable', auth, async (req, res) => {
     if (existingRecord.winnerId) {
       return res.json({ success: true, data: { canPick: false, pickablePlayers: [] } })
     }
+    // 抽卡模式下：必须等全部抽卡结束，才进入房客自选环节
+    if (existingRecord.cardDraw) {
+      const cd = existingRecord.cardDraw
+      const done = (cd.drawerIndex || 0) >= (cd.drawerOrder || []).length
+      if (!done) {
+        return res.json({ success: true, data: { canPick: false, pickablePlayers: [], waitingDraw: true } })
+      }
+    }
 
     // 可选池：活跃房客 - 已参与者
     const allActive = await col.find({ gameId: 'bigbrother', status: 'active', role: 'houseguest' }).toArray()

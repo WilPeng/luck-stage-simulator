@@ -184,6 +184,8 @@ export interface BBSettlementRound {
   povUsedOnId: string | null
   finalNomineeIds: string[]
   finalNomineeNames: string[]
+  bbbbWinnerId?: string | null
+  bbbbWinnerName?: string
   replacementName: string
   vetoUsed: boolean
   ticketText: string
@@ -399,6 +401,7 @@ export interface BBEviction {
   evictedId: string
   evictedName: string
   voteCount: number
+  otherVotes?: number | null
   totalVotes: number
   voteResults: { playerId: string; playerName: string; votes: number }[]
   gameId: string

@@ -7,6 +7,7 @@
         <label class="bb-btn upload-btn">📥 导入表格
           <input type="file" accept=".csv,text/csv" hidden @change="onImportFile" />
         </label>
+        <button v-if="selectedIds.length" class="bb-btn bb-btn-danger" @click="confirmBatchDelete">🗑 批量删除（{{ selectedIds.length }}）</button>
         <button class="bb-btn bb-btn-primary" @click="showCreateModal = true">+ 新建房客</button>
       </div>
     </div>
@@ -25,6 +26,7 @@
       <table class="bb-table">
         <thead>
           <tr>
+            <th class="check-col"><input type="checkbox" :checked="allSelected" @change="toggleAll" /></th>
             <th>头像</th>
             <th>名称</th>
             <th>登录码</th>
@@ -37,6 +39,9 @@
         </thead>
         <tbody>
           <tr v-for="h in list" :key="h.id">
+            <td class="check-col">
+              <input type="checkbox" :value="h.id" v-model="selectedIds" :disabled="h.role === 'admin'" />
+            </td>
             <td><BBAvatar :name="h.name" :avatar="h.avatar" size="sm" /></td>
             <td class="name-cell">{{ h.name }}</td>
             <td><code class="code-tag">{{ h.loginCode }}</code></td>
@@ -54,7 +59,7 @@
               <button v-if="h.role !== 'admin'" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
             </td>
           </tr>
-          <tr v-if="list.length === 0"><td colspan="8" class="empty-cell">暂无数据</td></tr>
+          <tr v-if="list.length === 0"><td colspan="9" class="empty-cell">暂无数据</td></tr>
         </tbody>
       </table>
     </div>
@@ -121,9 +126,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
-import { bbGetHouseguests, bbCreateHouseguest, bbUpdateHouseguest, bbDeleteHouseguest, bbUploadHouseguestAvatar, bbDeleteHouseguestAvatar } from '../../../services/bbApi'
+import { bbGetHouseguests, bbCreateHouseguest, bbUpdateHouseguest, bbDeleteHouseguest, bbBatchDeleteHouseguests, bbUploadHouseguestAvatar, bbDeleteHouseguestAvatar } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBHouseguest } from '../../../types/bigbrother'
 
@@ -139,6 +144,28 @@ const formCode = ref('')
 const formStatus = ref('active')
 const formIsHaveNot = ref(false)
 const editingAvatar = ref<string | null>(null)
+const selectedIds = ref<string[]>([])
+
+const selectableList = computed(() => list.value.filter(h => h.role !== 'admin'))
+const allSelected = computed(() => selectableList.value.length > 0 && selectableList.value.every(h => selectedIds.value.includes(h.id)))
+
+function toggleAll(e: Event) {
+  const checked = (e.target as HTMLInputElement).checked
+  selectedIds.value = checked ? selectableList.value.map(h => h.id) : []
+}
+
+async function confirmBatchDelete() {
+  if (!selectedIds.value.length) return
+  if (!confirm(`确定删除选中的 ${selectedIds.value.length} 位房客吗？此操作不可恢复。`)) return
+  try {
+    const res = await bbBatchDeleteHouseguests(selectedIds.value)
+    selectedIds.value = []
+    await fetchData()
+    alert(`已删除 ${res.deleted} 位房客${res.skipped ? `，跳过 ${res.skipped} 位（管理员不可删除）` : ''}`)
+  } catch (e: any) {
+    alert(e?.message || '批量删除失败')
+  }
+}
 
 async function fetchData() {
   try {
@@ -150,6 +177,8 @@ async function fetchData() {
     })
     list.value = result.list
     totalPages.value = result.totalPages
+    // 清空选择，避免跨页误删
+    selectedIds.value = selectedIds.value.filter(id => list.value.some(h => h.id === id))
   } catch {}
 }
 
@@ -392,6 +421,8 @@ onMounted(fetchData)
 .checkbox-row { display: flex; align-items: center; gap: 8px; color: #ccc; cursor: pointer; }
 .checkbox-row input { width: 16px; height: 16px; accent-color: #00ff88; }
 .actions { display: flex; gap: 6px; }
+.check-col { width: 40px; text-align: center; }
+.check-col input { width: 16px; height: 16px; accent-color: #00ff88; cursor: pointer; }
 .empty-cell { text-align: center; color: #666; padding: 40px; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
 .page-info { font-size: 13px; color: #888; }

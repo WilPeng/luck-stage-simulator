@@ -90,14 +90,10 @@
         size="medium"
       >
         <template #difficulty="{ row }">
-          <t-rate :value="row.difficulty" :count="5" size="small" disabled />
+          <span class="difficulty-num">{{ row.difficulty || 3 }}</span>
         </template>
-        <template #weights="{ row }">
-          <div class="weights-bar">
-            <span class="weight-tag vocal">声{{ row.vocalWeight || 3 }}</span>
-            <span class="weight-tag dance">舞{{ row.danceWeight || 3 }}</span>
-            <span class="weight-tag charm">魅{{ row.charmWeight || 3 }}</span>
-          </div>
+        <template #mainAttribute="{ row }">
+          <span>{{ mainAttrLabel(row.mainAttribute) }}</span>
         </template>
         <template #type="{ row }">
           <t-tag :theme="typeTheme(row.type)" variant="light" size="small">
@@ -133,47 +129,48 @@
       width="600px"
       @confirm="doSave"
     >
-      <t-form ref="formRef" :data="form" :rules="rules" label-width="80px">
-        <t-form-item label="歌名" name="name">
-          <t-input v-model="form.name" placeholder="请输入歌名" />
-        </t-form-item>
-        <t-form-item label="类型" name="type">
-          <t-select v-model="form.type">
-            <t-option value="team_show" label="公演" />
-            <t-option value="solo" label="独唱" />
-            <t-option value="duet" label="合唱" />
-            <t-option value="group" label="团秀" />
-          </t-select>
-        </t-form-item>
-        <t-form-item label="歌手性别" name="singerGender">
-          <t-radio-group v-model="form.singerGender" variant="default-filled">
-            <t-radio-button value="male">男歌手</t-radio-button>
-            <t-radio-button value="female">女歌手</t-radio-button>
-          </t-radio-group>
-        </t-form-item>
-        <t-form-item label="风格" name="style">
-          <t-input v-model="form.style" placeholder="如：流行、摇滚" />
-        </t-form-item>
-        <t-form-item label="难度" name="difficulty">
-          <t-rate v-model="form.difficulty" :count="5" />
-        </t-form-item>
-        <div class="weights-form-row">
-          <t-form-item label="声乐权重" class="weight-item">
-            <t-slider v-model="form.vocalWeight" :min="1" :max="10" />
+      <t-form ref="formRef" :data="form" :rules="rules" label-width="90px" class="song-form">
+        <div class="form-grid">
+          <t-form-item label="歌名" name="name">
+            <t-input v-model="form.name" placeholder="请输入歌名" />
           </t-form-item>
-          <t-form-item label="舞蹈权重" class="weight-item">
-            <t-slider v-model="form.danceWeight" :min="1" :max="10" />
+          <t-form-item label="风格" name="style">
+            <t-input v-model="form.style" placeholder="如：流行、摇滚" />
           </t-form-item>
-          <t-form-item label="魅力权重" class="weight-item">
-            <t-slider v-model="form.charmWeight" :min="1" :max="10" />
+          <t-form-item label="类型" name="type">
+            <t-select v-model="form.type">
+              <t-option value="team_show" label="公演" />
+              <t-option value="solo" label="独唱" />
+              <t-option value="duet" label="合唱" />
+              <t-option value="group" label="团秀" />
+            </t-select>
+          </t-form-item>
+          <t-form-item label="歌手性别" name="singerGender">
+            <t-radio-group v-model="form.singerGender" variant="default-filled">
+              <t-radio-button value="male">男歌手</t-radio-button>
+              <t-radio-button value="female">女歌手</t-radio-button>
+            </t-radio-group>
+          </t-form-item>
+          <t-form-item label="难度" name="difficulty">
+            <t-input-number v-model="form.difficulty" :min="1" :max="5" />
+          </t-form-item>
+          <t-form-item label="主属性" name="mainAttribute">
+            <t-select v-model="form.mainAttribute">
+              <t-option value="vocal" label="🎤 声乐" />
+              <t-option value="dance" label="💃 舞蹈" />
+              <t-option value="charm" label="✨ 魅力" />
+            </t-select>
+          </t-form-item>
+          <t-form-item label="基准Vocal">
+            <t-input-number v-model="form.baseVocal" :min="0" :max="200" />
+          </t-form-item>
+          <t-form-item label="基准Dance">
+            <t-input-number v-model="form.baseDance" :min="0" :max="200" />
+          </t-form-item>
+          <t-form-item label="风险值">
+            <t-input-number v-model="form.risk" :min="1" :max="100" />
           </t-form-item>
         </div>
-        <t-form-item label="基础分">
-          <t-input-number v-model="form.baseScore" :min="0" :max="200" />
-        </t-form-item>
-        <t-form-item label="风险系数">
-          <t-input-number v-model="form.riskFactor" :min="0" :max="1" :step="0.1" />
-        </t-form-item>
         <t-form-item label="描述">
           <t-textarea v-model="form.description" :rows="2" placeholder="选填" />
         </t-form-item>
@@ -237,29 +234,29 @@
                 </div>
                 <div class="batch-field">
                   <label class="batch-label">难度</label>
-                  <t-rate v-model="item.difficulty" :count="5" size="small" />
+                  <t-input-number v-model="item.difficulty" :min="1" :max="5" />
                 </div>
               </div>
               <div class="batch-row-right">
                 <div class="batch-field">
-                  <label class="batch-label">声乐</label>
-                  <t-input-number v-model="item.vocalWeight" :min="1" :max="10" />
+                  <label class="batch-label">主属性</label>
+                  <t-select v-model="item.mainAttribute">
+                    <t-option value="vocal" label="声乐" />
+                    <t-option value="dance" label="舞蹈" />
+                    <t-option value="charm" label="魅力" />
+                  </t-select>
                 </div>
                 <div class="batch-field">
-                  <label class="batch-label">舞蹈</label>
-                  <t-input-number v-model="item.danceWeight" :min="1" :max="10" />
+                  <label class="batch-label">基准Vocal</label>
+                  <t-input-number v-model="item.baseVocal" :min="0" :max="200" />
                 </div>
                 <div class="batch-field">
-                  <label class="batch-label">魅力</label>
-                  <t-input-number v-model="item.charmWeight" :min="1" :max="10" />
+                  <label class="batch-label">基准Dance</label>
+                  <t-input-number v-model="item.baseDance" :min="0" :max="200" />
                 </div>
                 <div class="batch-field">
-                  <label class="batch-label">基础分</label>
-                  <t-input-number v-model="item.baseScore" :min="0" :max="200" />
-                </div>
-                <div class="batch-field">
-                  <label class="batch-label">风险系数</label>
-                  <t-input-number v-model="item.riskFactor" :min="0" :max="1" :step="0.1" />
+                  <label class="batch-label">风险值</label>
+                  <t-input-number v-model="item.risk" :min="1" :max="100" />
                 </div>
               </div>
             </div>
@@ -315,20 +312,20 @@ function exportSongsCsv() {
     MessagePlugin.warning('没有可导出的歌曲')
     return
   }
-  const header = ['歌名', '类型', '歌手性别', '风格', '难度', '声乐权重', '舞蹈权重', '魅力权重', '基础分', '风险系数']
+  const header = ['歌名', '类型', '歌手性别', '风格', '难度', '主属性', '基准Vocal', '基准Dance', '风险值']
   const typeText: Record<string, string> = { solo: '独唱', duet: '合唱', group: '团秀', team_show: '公演' }
   const genderText: Record<string, string> = { male: '男歌手', female: '女歌手' }
+  const mainAttrText: Record<string, string> = { vocal: '声乐', dance: '舞蹈', charm: '魅力' }
   const rows = songs.value.map(s => [
     s.name,
     typeText[s.type || 'team_show'] || s.type || '公演',
     genderText[s.singerGender || ''] || '',
     s.style || '',
     s.difficulty ?? 3,
-    s.vocalWeight ?? 3,
-    s.danceWeight ?? 3,
-    s.charmWeight ?? 3,
-    s.baseScore ?? 100,
-    s.riskFactor ?? 0.2
+    mainAttrText[s.mainAttribute || 'vocal'] || '声乐',
+    s.baseVocal ?? 30,
+    s.baseDance ?? 30,
+    s.risk ?? 10
   ])
   const csv = [header.join(','), ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))].join('\n')
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -369,6 +366,7 @@ async function handleImportCsv(e: Event) {
     const headers = lines[0].replace(/^\uFEFF/, '').split(',').map(h => h.trim())
     const typeTextReverse: Record<string, string> = { 独唱: 'solo', 合唱: 'duet', 团秀: 'group', 公演: 'team_show' }
     const genderTextReverse: Record<string, string> = { 男歌手: 'male', 女歌手: 'female' }
+    const mainAttrTextReverse: Record<string, string> = { 声乐: 'vocal', 舞蹈: 'dance', 魅力: 'charm' }
 
     // 解析一行（支持带引号）
     function parseLine(line: string): string[] {
@@ -405,17 +403,17 @@ async function handleImportCsv(e: Event) {
       }
       const typeVal = idx('类型') >= 0 ? (cols[idx('类型')] || '') : ''
       const genderVal = idx('歌手性别') >= 0 ? (cols[idx('歌手性别')] || '') : ''
+      const mainAttrVal = idx('主属性') >= 0 ? (cols[idx('主属性')] || '') : ''
       songsToImport.push({
         name,
         type: typeTextReverse[typeVal] || typeVal || 'team_show',
         singerGender: genderTextReverse[genderVal] || genderVal || '',
         style: idx('风格') >= 0 ? cols[idx('风格')] : '流行',
         difficulty: idx('难度') >= 0 ? (parseInt(cols[idx('难度')]) || 3) : 3,
-        vocalWeight: idx('声乐权重') >= 0 ? (parseInt(cols[idx('声乐权重')]) || 3) : 3,
-        danceWeight: idx('舞蹈权重') >= 0 ? (parseInt(cols[idx('舞蹈权重')]) || 3) : 3,
-        charmWeight: idx('魅力权重') >= 0 ? (parseInt(cols[idx('魅力权重')]) || 3) : 3,
-        baseScore: idx('基础分') >= 0 ? (parseInt(cols[idx('基础分')]) || 100) : 100,
-        riskFactor: idx('风险系数') >= 0 ? (parseFloat(cols[idx('风险系数')]) || 0.2) : 0.2
+        mainAttribute: mainAttrTextReverse[mainAttrVal] || 'vocal',
+        baseVocal: idx('基准Vocal') >= 0 ? (parseInt(cols[idx('基准Vocal')]) || 30) : 30,
+        baseDance: idx('基准Dance') >= 0 ? (parseInt(cols[idx('基准Dance')]) || 30) : 30,
+        risk: idx('风险值') >= 0 ? (parseInt(cols[idx('风险值')]) || 10) : 10
       })
     }
 
@@ -452,11 +450,10 @@ interface BatchSongItem {
   type: string
   style: string
   difficulty: number
-  vocalWeight: number
-  danceWeight: number
-  charmWeight: number
-  baseScore: number
-  riskFactor: number
+  mainAttribute: string
+  baseVocal: number
+  baseDance: number
+  risk: number
   singerGender: string
 }
 
@@ -466,11 +463,10 @@ function createEmptyBatchSong(): BatchSongItem {
     type: 'team_show',
     style: '流行',
     difficulty: 3,
-    vocalWeight: 3,
-    danceWeight: 3,
-    charmWeight: 3,
-    baseScore: 100,
-    riskFactor: 0.2,
+    mainAttribute: 'vocal',
+    baseVocal: 30,
+    baseDance: 30,
+    risk: 10,
     singerGender: ''
   }
 }
@@ -490,11 +486,10 @@ const form = reactive({
   type: 'team_show',
   style: '流行',
   difficulty: 3,
-  vocalWeight: 3,
-  danceWeight: 3,
-  charmWeight: 3,
-  baseScore: 100,
-  riskFactor: 0.2,
+  baseVocal: 30,
+  baseDance: 30,
+  risk: 10,
+  mainAttribute: 'vocal',
   description: '',
   singerGender: ''
 })
@@ -506,12 +501,13 @@ const rules = {
 const columns = [
   { colKey: 'name', title: '歌名', width: 160, ellipsis: true },
   { colKey: 'style', title: '风格', width: 100 },
-  { colKey: 'difficulty', title: '难度', width: 160 },
-  { colKey: 'weights', title: '声/舞/魅', width: 150 },
+  { colKey: 'difficulty', title: '难度', width: 80 },
+  { colKey: 'mainAttribute', title: '主属性', width: 100 },
+  { colKey: 'baseVocal', title: '基准Vocal', width: 100 },
+  { colKey: 'baseDance', title: '基准Dance', width: 100 },
+  { colKey: 'risk', title: '风险值', width: 80 },
   { colKey: 'type', title: '类型', width: 100 },
   { colKey: 'singerGender', title: '歌手性别', width: 100 },
-  { colKey: 'baseScore', title: '基础分', width: 80 },
-  { colKey: 'riskFactor', title: '风险系数', width: 90 },
   { colKey: 'enabled', title: '状态', width: 80 },
   { colKey: 'action', title: '操作', width: 120 }
 ]
@@ -524,6 +520,11 @@ function typeTheme(type?: string) {
 function typeLabel(type?: string) {
   const map: Record<string, string> = { solo: '独唱', duet: '合唱', group: '团秀', team_show: '公演' }
   return map[type || 'team_show'] || type || '公演'
+}
+
+function mainAttrLabel(attr?: string) {
+  const map: Record<string, string> = { vocal: '🎤 声乐', dance: '💃 舞蹈', charm: '✨ 魅力' }
+  return map[attr || ''] || '🎤 声乐'
 }
 
 function genderTheme(gender?: string) {
@@ -571,11 +572,10 @@ function editSong(song: Song) {
   form.type = song.type || 'team_show'
   form.style = song.style || '流行'
   form.difficulty = song.difficulty || 3
-  form.vocalWeight = song.vocalWeight || 3
-  form.danceWeight = song.danceWeight || 3
-  form.charmWeight = song.charmWeight || 3
-  form.baseScore = song.baseScore || 100
-  form.riskFactor = song.riskFactor ?? 0.2
+  form.baseVocal = song.baseVocal ?? 30
+  form.baseDance = song.baseDance ?? 30
+  form.risk = song.risk ?? 10
+  form.mainAttribute = song.mainAttribute || 'vocal'
   form.description = song.description || ''
   form.singerGender = song.singerGender || ''
   showAddDialog.value = true
@@ -587,11 +587,10 @@ function resetForm() {
   form.type = 'team_show'
   form.style = '流行'
   form.difficulty = 3
-  form.vocalWeight = 3
-  form.danceWeight = 3
-  form.charmWeight = 3
-  form.baseScore = 100
-  form.riskFactor = 0.2
+  form.baseVocal = 30
+  form.baseDance = 30
+  form.risk = 10
+  form.mainAttribute = 'vocal'
   form.description = ''
   form.singerGender = ''
 }
@@ -720,38 +719,20 @@ onMounted(loadSongs)
   border-radius: 12px;
 }
 
-.weights-bar {
-  display: flex;
-  gap: 4px;
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
 }
 
-.weights-form-row {
-  display: flex;
-  gap: 16px;
-
-  .weight-item {
-    flex: 1;
-  }
+.song-form :deep(.t-input-number),
+.song-form :deep(.t-select),
+.song-form :deep(.t-input) {
+  width: 100%;
 }
 
-.weight-tag {
-  font-size: 11px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-weight: 500;
-
-  &.vocal {
-    background: rgba(255, 107, 107, 0.1);
-    color: #ff6b6b;
-  }
-  &.dance {
-    background: rgba(78, 205, 196, 0.1);
-    color: #4ecdc4;
-  }
-  &.charm {
-    background: rgba(162, 155, 254, 0.1);
-    color: #a29bfe;
-  }
+.difficulty-num {
+  font-weight: 600;
 }
 
 .batch-import {

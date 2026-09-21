@@ -137,6 +137,10 @@
           </div>
         </div>
 
+        <!-- 准备环节 -->
+        <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
+          :gameTitle="activeRoom.minigameName" :summoning="summoning" @summon="summonPlayers" />
+
         <!-- 目标设置确认创建 -->
         <div v-if="selectedMinigameId" class="target-setup">
           <div class="target-setup-title">🎮 已选择「{{ selectedMinigameId }}」，设置胜出目标（可选）</div>
@@ -222,11 +226,12 @@ import {
   bbGetCurrentVeto, bbRunVetoCompetition, bbDrawVetoParticipants, bbGetCurrentHoh,
   bbGetCurrentNomination, bbPickVetoParticipant, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom,
   bbGetMinigameRoomProgress, bbSetMinigameWinner, bbGetHouseguests,
-  bbPauseMinigame, bbResumeMinigame, bbStopMinigame
+  bbPauseMinigame, bbResumeMinigame, bbStopMinigame, bbSummonMinigamePlayers
 } from '../../../services/bbApi'
 import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import VetoCardDraw from '../../../components/bigbrother/VetoCardDraw.vue'
+import MinigameReadyPanel from '../../../components/bigbrother/MinigameReadyPanel.vue'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
 import type { BBVetoRecord, MinigameRoom, MinigameProgress } from '../../../types/bigbrother'
 
@@ -240,6 +245,7 @@ const nomineeIds = ref<string[]>([])
 const drawing = ref(false)
 const competing = ref(false)
 const creating = ref(false)
+const summoning = ref(false)
 const showMinigameModal = ref(false)
 const activeRoom = ref<MinigameRoom | null>(null)
 
@@ -604,6 +610,19 @@ async function confirmManualWinner() {
   } finally {
     settingWinner.value = false
     selectingManualWinnerId.value = ''
+  }
+}
+
+async function summonPlayers() {
+  if (!activeRoom.value || summoning.value) return
+  summoning.value = true
+  try {
+    await bbSummonMinigamePlayers(activeRoom.value.roomId)
+    alert('已召集所有参赛选手，请等待他们点击准备。')
+  } catch (e: any) {
+    alert(e?.message || '召集失败')
+  } finally {
+    summoning.value = false
   }
 }
 

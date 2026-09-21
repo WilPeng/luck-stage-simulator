@@ -217,6 +217,11 @@ router.post('/set', auth, requireAdmin, async (req, res) => {
     if (round !== prevRound) await clearRoundData(prevRound)
     season.currentRound = round
     season.currentStage = stage
+    // 设置到淘汰投票/新一轮/终局时，清理残留的淘汰夜与投票锁
+    if (['eviction_vote', 'hoh_competition', 'final3', 'champion_vote'].includes(stage)) {
+      season.votesLocked = false
+      season.evictionNight = null
+    }
     season.updatedAt = new Date().toISOString()
     await season.save()
     await logAction(req.user.userId, req.user.name || 'admin', 'admin',
@@ -323,6 +328,12 @@ router.post('/next', auth, requireAdmin, async (req, res) => {
       }
     } else {
       season.currentStage = targetStage
+    }
+
+    // 进入淘汰投票 / 新一轮 / 终局时，清理残留的淘汰夜与投票锁
+    if (['eviction_vote', 'hoh_competition', 'final3', 'champion_vote'].includes(season.currentStage)) {
+      season.votesLocked = false
+      season.evictionNight = null
     }
 
     season.updatedAt = new Date().toISOString()
@@ -891,6 +902,8 @@ router.get('/settlement', auth, requireAdmin, async (req, res) => {
         povUsedOnId: vetoDoc?.usedOnPlayerId || null,
         finalNomineeIds: finalIds,
         finalNomineeNames: nameList(finalIds),
+        bbbbWinnerId: nomDoc?.bbbbWinnerId || null,
+        bbbbWinnerName: nomDoc?.bbbbWinnerName || '',
         replacementName: nomDoc?.replacementNomineeName || '',
         vetoUsed: nomDoc?.vetoUsed || false,
         ticketText,

@@ -93,9 +93,20 @@
           </t-row>
         </div>
 
+        <!-- 效果预览 -->
+        <div class="form-block">
+          <div class="block-title">👁 效果预览（选手所见的卡面）</div>
+          <div class="card-preview" :class="form.type">
+            <span class="cp-type">{{ typeLabel(form.type) }}</span>
+            <span class="cp-name">{{ form.name || '未命名卡牌' }}</span>
+            <span class="cp-effect">{{ effectPreviewText }}</span>
+            <span v-if="form.description" class="cp-desc">{{ form.description }}</span>
+          </div>
+        </div>
+
         <!-- 属性效果 -->
         <div class="form-block">
-          <div class="block-title">📊 属性效果（填写生效，0 表示不使用）</div>
+          <div class="block-title">📊 属性效果（填写即生效；0 或留空表示不使用）</div>
           <div class="effect-grid">
             <!-- 固定属性 -->
             <div class="effect-card fixed">
@@ -205,7 +216,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { AddIcon } from 'tdesign-icons-vue-next'
 import type { TrainingCard } from '../../types/training'
@@ -244,6 +255,31 @@ const form = reactive({
 const rules = {
   name: [{ required: true, message: '请输入卡牌名称', type: 'error' }]
 }
+
+// 效果自然语言预览
+function sign(n: number): string {
+  return n > 0 ? `+${n}` : `${n}`
+}
+const effectPreviewText = computed(() => {
+  const e = form.effect as Record<string, number>
+  const parts: string[] = []
+  if (e.vocal) parts.push(`🎤 声乐 ${sign(e.vocal)}`)
+  if (e.dance) parts.push(`💃 舞蹈 ${sign(e.dance)}`)
+  if (e.charm) parts.push(`✨ 魅力 ${sign(e.charm)}`)
+  if (e.randomOne) parts.push(`随机一项 ${sign(e.randomOne)}`)
+  if (e.randomTwo) parts.push(`随机两项 ${sign(e.randomTwo)}`)
+  if (e.lucky) parts.push(`幸运：随机一项大幅 ${sign(e.lucky)}`)
+  if (e.lowest) parts.push(`补弱：最低项 ${sign(e.lowest)}`)
+  if (e.highest) parts.push(`增强：最高项 ${sign(e.highest)}`)
+  if (e.balance) parts.push('均衡化三项')
+  if (e.multiply && e.multiply !== 1) parts.push(`随机一项 ×${e.multiply}`)
+  if (e.multiplyAll && e.multiplyAll !== 1) parts.push(`三项 ×${e.multiplyAll}`)
+  if (e.teamAll) parts.push(`三项等额 ${sign(e.teamAll)}`)
+  if (e.roundUp) parts.push(`随机一项向上取整至 ${e.roundUp} 的倍数`)
+  if (e.roundDown) parts.push(`随机一项向下取整至 ${e.roundDown} 的倍数`)
+  if (e.selfSelect) parts.push(`自选一项 ${sign(e.selfSelect)}`)
+  return parts.length ? parts.join(' · ') : '（未设置任何效果）'
+})
 
 const columns = [
   { colKey: 'name', title: '卡牌名称', width: 160 },
@@ -545,4 +581,10 @@ onMounted(loadCards)
     grid-template-columns: 1fr;
   }
 }
+
+.card-preview { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px; border-radius: 12px; border: 2px solid #00d6a4; background: linear-gradient(160deg, rgba(0,214,164,0.10), rgba(0,214,164,0.02)); max-width: 260px; margin: 0 auto; text-align: center; }
+.card-preview .cp-type { font-size: 11px; padding: 1px 8px; border-radius: 8px; background: rgba(0,214,164,0.18); color: #00a870; }
+.card-preview .cp-name { font-size: 16px; font-weight: 700; }
+.card-preview .cp-effect { font-size: 12px; color: #00a870; line-height: 1.6; }
+.card-preview .cp-desc { font-size: 12px; opacity: .7; }
 </style>

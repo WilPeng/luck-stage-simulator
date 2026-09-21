@@ -57,10 +57,10 @@
             </div>
           </div>
           <div class="claimed-weights">
-            <span>🎤 {{ claimedSong.song?.vocalWeight || 0 }}</span>
-            <span>💃 {{ claimedSong.song?.danceWeight || 0 }}</span>
-            <span>✨ {{ claimedSong.song?.charmWeight || 0 }}</span>
-            <span>⭐ {{ claimedSong.song?.baseScore }}分</span>
+            <span>🎤 {{ claimedSong.song?.baseVocal ?? 30 }}</span>
+            <span>💃 {{ claimedSong.song?.baseDance ?? 30 }}</span>
+            <span>⚠ {{ claimedSong.song?.risk ?? 10 }}</span>
+            <span>⭐ {{ claimedSong.song?.difficulty || 3 }}难度</span>
           </div>
         </div>
       </div>
@@ -85,21 +85,19 @@
 
                 <div class="song-stats">
                   <div class="stat-item">
-                    <span class="stat-label">基础分</span>
-                    <span class="stat-value">{{ rs.song?.baseScore }}</span>
+                    <span class="stat-label">难度</span>
+                    <span class="stat-value">{{ rs.song?.difficulty || 3 }}</span>
                   </div>
                   <div class="stat-item">
-                    <span class="stat-label">难度</span>
-                    <div class="difficulty-stars">
-                      <span v-for="i in 5" :key="i" :class="{ filled: i <= (rs.song?.difficulty || 0) }">★</span>
-                    </div>
+                    <span class="stat-label">主属性</span>
+                    <span class="stat-value">{{ mainAttrLabel(rs.song?.mainAttribute) }}</span>
                   </div>
                 </div>
 
                 <div class="song-weights">
-                  <span class="weight">🎤 {{ rs.song?.vocalWeight || 0 }}</span>
-                  <span class="weight">💃 {{ rs.song?.danceWeight || 0 }}</span>
-                  <span class="weight">✨ {{ rs.song?.charmWeight || 0 }}</span>
+                  <span class="weight">🎤 {{ rs.song?.baseVocal ?? 30 }}</span>
+                  <span class="weight">💃 {{ rs.song?.baseDance ?? 30 }}</span>
+                  <span class="weight">⚠ {{ rs.song?.risk ?? 10 }}</span>
                 </div>
 
                 <div class="card-action">
@@ -155,10 +153,10 @@
             </div>
           </div>
           <div class="claimed-weights">
-            <span>🎤 {{ claimedSong.song?.vocalWeight || 0 }}</span>
-            <span>💃 {{ claimedSong.song?.danceWeight || 0 }}</span>
-            <span>✨ {{ claimedSong.song?.charmWeight || 0 }}</span>
-            <span>⭐ {{ claimedSong.song?.baseScore }}分</span>
+            <span>🎤 {{ claimedSong.song?.baseVocal ?? 30 }}</span>
+            <span>💃 {{ claimedSong.song?.baseDance ?? 30 }}</span>
+            <span>⚠ {{ claimedSong.song?.risk ?? 10 }}</span>
+            <span>⭐ {{ claimedSong.song?.difficulty || 3 }}难度</span>
           </div>
         </div>
       </div>
@@ -193,8 +191,8 @@
               </div>
             </div>
             <div class="result-stats">
-              <span class="result-stat">基础分：{{ rs.song?.baseScore }}</span>
-              <span class="result-stat">难度：{{ '★'.repeat(rs.song?.difficulty || 0) }}</span>
+              <span class="result-stat">难度：{{ rs.song?.difficulty || 3 }}</span>
+              <span class="result-stat">主属性：{{ mainAttrLabel(rs.song?.mainAttribute) }}</span>
             </div>
           </div>
         </div>
@@ -211,6 +209,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, onMounted } from 'vue'
+import { useSfRefresh } from '../../composables/useSfRefresh'
 import { useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useSeasonStore } from '../../stores/seasonStore'
@@ -347,6 +346,11 @@ function getSongTypeLabel(type: string): string {
   return m[type] || type
 }
 
+function mainAttrLabel(attr?: string): string {
+  const m: Record<string, string> = { vocal: '🎤 声乐', dance: '💃 舞蹈', charm: '✨ 魅力' }
+  return m[attr || ''] || '🎤 声乐'
+}
+
 async function loadReleaseStatus() {
   try {
     releaseStatus.value = await getConcurrentReleaseStatus(`round-${round.value}`)
@@ -364,6 +368,12 @@ async function loadGroupingMode() {
 }
 
 let releaseTimer: number | undefined
+
+// websocket：并发开放/关闭、组队与选歌实时刷新
+useSfRefresh(() => {
+  loadReleaseStatus()
+  loadGroupingMode()
+})
 
 onMounted(async () => {
   const roundId = `round-${round.value}`

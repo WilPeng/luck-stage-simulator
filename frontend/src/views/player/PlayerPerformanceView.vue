@@ -48,14 +48,40 @@
         <span class="perf-text" :class="resultLevel">{{ resultText }}</span>
       </div>
 
-      <!-- 队伍成绩 -->
-      <div class="results-preview">
-        <div v-if="teamResult" class="info-card">
-          <span class="info-label">{{ teamResult.teamName }}</span>
-          <span class="info-value">{{ teamResult.finalVotes }}票·第{{ teamResult.rank }}名</span>
+      <!-- 3.3 个人评级掷骰 -->
+      <div class="rating-roll-card">
+        <div class="rr-title">🎯 个人评级</div>
+        <div v-if="ratingResult" class="rr-result">
+          <span class="rr-badge" :class="'r-' + ratingResult.rating">{{ ratingResult.rating }} · {{ ratingResult.ratingText }}</span>
+          <span class="rr-detail">
+            歌曲「{{ ratingResult.songName }}」 · 难度 {{ ratingResult.difficulty }} 面骰 · 掷出 {{ ratingResult.roll ?? '—' }}
+            （A面{{ ratingResult.faces.a }} / B面{{ ratingResult.faces.b }} / C面{{ ratingResult.faces.c }} / D面{{ ratingResult.faces.d ?? 0 }}） · 主属性 {{ ratingResult.mainAttr }}
+          </span>
         </div>
-        <div v-if="!teamResult && phase >= 3" class="info-card dim"><span>等待队伍揭晓</span></div>
-        <div v-if="!teamResult && phase < 3" class="info-card dim"><span>等待公演结算</span></div>
+        <div v-else-if="ratingError" class="rr-error">{{ ratingError }}</div>
+        <button v-else class="rr-btn" :disabled="rolling" @click="doRollRating">
+          {{ rolling ? '掷骰中…' : '🎲 点击掷骰，评定个人评级' }}
+        </button>
+      </div>
+
+      <!-- 团队得票揭晓（所有团队） -->
+      <div class="results-preview">
+        <div class="section-title-bar"><span class="section-icon">🎫</span><span>团队得票揭晓</span></div>
+        <div class="team-votes-list">
+          <div
+            v-for="t in performanceStore.teamPerformanceResults"
+            :key="t.teamId"
+            class="team-vote-item"
+            :class="{ 'is-my-team': t.teamId === myTeamId }"
+          >
+            <span class="tv-name">{{ t.teamName }}<template v-if="t.songName">《{{ t.songName }}》</template></span>
+            <VoteRevealDigits
+              :votes="t.finalVotes || 0"
+              :reveal="{ hundreds: !!t.revealHundreds, tens: !!t.revealTens, units: !!t.revealUnits }"
+            />
+          </div>
+          <div v-if="performanceStore.teamPerformanceResults.length === 0" class="info-card dim"><span>等待公演结算</span></div>
+        </div>
       </div>
 
       <!-- ===== 已揭晓队伍的大众评审投票矩阵（管理员逐个揭晓后展示） ===== -->
@@ -137,45 +163,28 @@
           <span>得分计算详情</span>
         </div>
 
-        <!-- 个人得分拆解 -->
-        <div class="detail-block">
-          <div class="detail-block-title">① 个人得分</div>
+        <!-- 个人评级（骰子制，不再展示旧的分数公式） -->
+        <div class="detail-block" v-if="myPerformance">
+          <div class="detail-block-title">① 个人评级</div>
           <table class="breakdown-table">
             <tr>
-              <td class="label">选手属性</td>
-              <td class="value">声乐 {{ scoreBreakdown.attrs.vocal }} · 舞蹈 {{ scoreBreakdown.attrs.dance }} · 魅力 {{ scoreBreakdown.attrs.charm }}</td>
-            </tr>
-            <tr>
-              <td class="label">歌曲权重</td>
-              <td class="value">声乐 {{ (scoreBreakdown.songWeights.vocal * 100).toFixed(0) }}% · 舞蹈 {{ (scoreBreakdown.songWeights.dance * 100).toFixed(0) }}% · 魅力 {{ (scoreBreakdown.songWeights.charm * 100).toFixed(0) }}%</td>
-            </tr>
-            <tr class="formula-row">
-              <td class="label">属性分</td>
-              <td class="value formula">
-                {{ scoreBreakdown.attrs.vocal }}×{{ (scoreBreakdown.songWeights.vocal * 100).toFixed(0) }}%
-                + {{ scoreBreakdown.attrs.dance }}×{{ (scoreBreakdown.songWeights.dance * 100).toFixed(0) }}%
-                + {{ scoreBreakdown.attrs.charm }}×{{ (scoreBreakdown.songWeights.charm * 100).toFixed(0) }}%
-                = <strong>{{ scoreBreakdown.attrScore }}</strong>
+              <td class="label">评级</td>
+              <td class="value"><strong>{{ myPerformance.stageRating }}</strong> · {{ myPerformance.stageRatingText }}
+                <span v-if="myPerformance.ratingRoll != null">（骰子 {{ myPerformance.ratingRoll }} 点）</span>
               </td>
             </tr>
-            <tr>
-              <td class="label">难度系数</td>
-              <td class="value">1 - ({{ scoreBreakdown.difficulty }} - 1) × 0.1 = <strong>{{ scoreBreakdown.difficultyFactor }}</strong></td>
-            </tr>
-            <tr>
-              <td class="label">发挥加分</td>
-              <td class="value">{{ scoreBreakdown.perfValue }} × 2 = <strong>{{ scoreBreakdown.performanceBonus > 0 ? '+' : '' }}{{ scoreBreakdown.performanceBonus }}</strong></td>
-            </tr>
-            <tr class="formula-row">
-              <td class="label">原始分</td>
-              <td class="value formula">
-                {{ scoreBreakdown.attrScore }} × {{ scoreBreakdown.difficultyFactor }} + {{ scoreBreakdown.performanceBonus }}
-                = <strong>{{ scoreBreakdown.rawScore }}</strong>
+            <tr v-if="myPerformance.ratingMainAttr">
+              <td class="label">主属性</td>
+              <td class="value">
+                {{ { vocal: '🎤 声乐', dance: '💃 舞蹈', charm: '✨ 魅力' }[myPerformance.ratingMainAttr] || myPerformance.ratingMainAttr }}
+                · 难度 {{ myPerformance.ratingDifficulty }} 面骰 · 风险值 {{ myPerformance.ratingRisk }}
               </td>
             </tr>
-            <tr class="result-row">
-              <td class="label">最终得分</td>
-              <td class="value highlight">截断 0~120 → <strong>{{ scoreBreakdown.finalScore }}分</strong></td>
+            <tr v-if="myPerformance.ratingFaces">
+              <td class="label">骰面构成</td>
+              <td class="value">
+                A {{ myPerformance.ratingFaces.a }} / B {{ myPerformance.ratingFaces.b }} / C {{ myPerformance.ratingFaces.c }} / D {{ myPerformance.ratingFaces.d || 0 }}
+              </td>
             </tr>
           </table>
         </div>
@@ -332,9 +341,12 @@ import { usePerformanceStore } from '../../stores/performanceStore'
 import {
   getPlayerPerformanceStatus, getAudienceFinalRanking,
   getPerformanceRoundStatus, getPlayerAudienceSeats,
-  getPlayerAudienceSeatDetail, savePerformancePlayerStatus
+  getPlayerAudienceSeatDetail, getMyRatingInfo
 } from '../../services/api'
+import { useSfRefresh } from '../../composables/useSfRefresh'
+import VoteRevealDigits from '../../components/common/VoteRevealDigits.vue'
 import { savePlayerStatuses, loadPlayerStatuses } from '../../services/performanceService'
+import { rollPerformanceRating } from '../../services/api'
 import type { AudienceSeat, PerformanceGenerationMode } from '../../types/performance'
 
 const route = useRoute()
@@ -343,6 +355,24 @@ const teamStore = useTeamStore()
 const performanceStore = usePerformanceStore()
 
 const currentRound = computed(() => Number(route.params.round) || 1)
+
+// 3.3 个人评级掷骰
+const ratingResult = ref<any>(null)
+const ratingError = ref('')
+const rolling = ref(false)
+async function doRollRating() {
+  if (rolling.value) return
+  rolling.value = true
+  ratingError.value = ''
+  try {
+    const res: any = await rollPerformanceRating(`round-${currentRound.value}`)
+    ratingResult.value = res
+  } catch (e: any) {
+    ratingError.value = e?.message || '掷骰失败'
+  } finally {
+    rolling.value = false
+  }
+}
 const currentUser = computed(() => authStore.currentUser)
 const roundId = computed(() => `round-${currentRound.value}`)
 
@@ -366,53 +396,35 @@ const showSeats = computed(() => phase.value >= 4 && seatsLoaded.value)
 
 // ===== 抽取状态 =====
 const hasDrawn = ref(false)
-const drawing = ref(false)
-const revealed = ref(false)
 const drawValue = ref(0)
-const slotNumbers = [-10, -8, -6, -5, -3, -1, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
-const currentSlot = ref(0)
-let slotTimer: number | null = null
-
-// ===== 指针模式状态 =====
-const pointerScaleRef = ref<HTMLElement | null>(null)
-const pointerNumbers = Array.from({ length: 31 }, (_, i) => i - 10) // -10 ~ 20
-const pointerPosition = ref(0) // 0 ~ 100
-const pointerDirection = ref(1) // 1 = 向右, -1 = 向左
-const pointerSpeed = ref(2.5) // 每次移动百分比
-let pointerRafId: number | null = null
-
-const MIN_POINTER_VALUE = -10
-const MAX_POINTER_VALUE = 20
-const POINTER_RANGE = MAX_POINTER_VALUE - MIN_POINTER_VALUE // 30
-
-const currentPointerValue = computed(() => {
-  const ratio = pointerPosition.value / 100
-  const raw = MIN_POINTER_VALUE + ratio * POINTER_RANGE
-  return Math.round(raw)
-})
 
 const resultLevel = computed(() => {
   const v = drawValue.value
-  if (v >= 30) return 'legendary'
-  if (v >= 18) return 'epic'
-  if (v >= 8) return 'rare'
-  if (v >= 0) return 'normal'
-  if (v >= -10) return 'poor'
-  return 'disaster'
+  if (v >= 80) return 'legendary'
+  if (v >= 60) return 'epic'
+  if (v >= 40) return 'rare'
+  if (v >= 20) return 'normal'
+  return 'poor'
 })
 const resultText = computed(() => {
   const v = drawValue.value
-  if (v >= 30) return '超神发挥！'
-  if (v >= 18) return '超常发挥！'
-  if (v >= 8) return '表现出色'
-  if (v >= 0) return '稳定发挥'
-  if (v >= -10) return '略有失误'
-  return '严重失误'
+  if (v >= 80) return '非常出色！'
+  if (v >= 60) return '表现优秀'
+  if (v >= 40) return '表现良好'
+  if (v >= 20) return '发挥一般'
+  return '发挥欠佳'
 })
-const barWidth = computed(() => ((drawValue.value + 10) / 30) * 100)
 
 // ===== 队伍结果 =====
 const currentTeam = computed(() => teamStore.getTeamById(currentUser.value?.teamId || ''))
+
+// 自己所属队伍（优先按本轮队伍成员匹配，兼容 user.teamId 未设置的情况）
+const myTeamId = computed(() => {
+  const uid = currentUser.value?.id
+  if (!uid) return ''
+  const t = (teamStore.teams || []).find((team: any) => team.members?.some((m: any) => m.playerId === uid))
+  return t?.id || currentTeam.value?.id || ''
+})
 const teamResult = computed(() =>
   performanceStore.teamPerformanceResults.find(t => t.teamId === currentTeam.value?.id)
 )
@@ -661,102 +673,41 @@ async function fetchRankings() {
   } catch { /* ignore */ }
 }
 
-// ===== 抽取发挥值 =====
-async function doDraw() {
-  if (drawing.value) return
-  drawing.value = true
-  revealed.value = false
-  let ticks = 0
-  const maxTicks = 20
-  slotTimer = window.setInterval(() => {
-    currentSlot.value = Math.floor(Math.random() * slotNumbers.length)
-    ticks++
-    if (ticks >= maxTicks) {
-      if (slotTimer !== null) clearInterval(slotTimer)
-      finishDraw()
+// ===== 抽取发挥值已迁移至独立页面（performance-draw），此处仅展示结果 =====
+
+async function loadRoundStatus() {
+  try {
+    roundStatus.value = await getPerformanceRoundStatus(roundId.value)
+  } catch {
+    roundStatus.value = { started: false, settled: false, released: false, opened: false, seasonStage: null, generationMode: 'random' }
+  }
+}
+
+async function loadMyRating() {
+  try {
+    const info = await getMyRatingInfo()
+    if (info?.rating) {
+      const RT: Record<string, string> = { S: '超级完美', A: '完美', B: '正常', C: '翻车', D: '超级翻车' }
+      ratingResult.value = {
+        rating: info.rating,
+        ratingText: RT[info.rating] || info.rating,
+        roll: info.roll ?? null,
+        difficulty: info.faces?.difficulty ?? info.song?.difficulty ?? 0,
+        faces: info.faces?.faces || { a: 0, b: 0, c: 0, d: 0 },
+        mainAttr: info.faces?.mainAttr || info.song?.mainAttribute || '',
+        songName: info.song?.name || ''
+      }
     }
-  }, 80)
+  } catch { /* ignore */ }
 }
 
-function animatePointer() {
-  if (!drawing.value) return
-  pointerPosition.value += pointerDirection.value * pointerSpeed.value
-  if (pointerPosition.value >= 100) {
-    pointerPosition.value = 100
-    pointerDirection.value = -1
-  } else if (pointerPosition.value <= 0) {
-    pointerPosition.value = 0
-    pointerDirection.value = 1
-  }
-  pointerRafId = window.requestAnimationFrame(animatePointer)
-}
-
-async function startPointer() {
-  if (drawing.value) return
-  drawing.value = true
-  revealed.value = false
-  // 随机起始位置和方向
-  pointerPosition.value = Math.random() * 100
-  pointerDirection.value = Math.random() > 0.5 ? 1 : -1
-  pointerSpeed.value = 2.5
-  pointerRafId = window.requestAnimationFrame(animatePointer)
-}
-
-async function stopPointer() {
-  if (!drawing.value) return
-  if (pointerRafId !== null) {
-    window.cancelAnimationFrame(pointerRafId)
-    pointerRafId = null
-  }
-  const value = currentPointerValue.value
-  drawValue.value = value
-  drawing.value = false
-  revealed.value = true
-
-  // 持久化
-  const uid = currentUser.value?.id || ''
-  try {
-    await savePerformancePlayerStatus(roundId.value, [{ playerId: uid, performanceValue: value }])
-  } catch (e: any) {
-    console.warn('[Performance] 保存发挥值失败，仅本地存储:', e.message)
-  }
-
-  // 本地存储兜底
-  const statuses = loadPlayerStatuses(roundId.value)
-  const idx = statuses.findIndex(s => s.playerId === uid)
-  const entry = { playerId: uid, playerName: currentUser.value?.name || '', teamId: currentUser.value?.teamId || '', teamName: currentTeam.value?.name || '', generated: true, performanceValue: value }
-  if (idx >= 0) statuses[idx] = entry
-  else statuses.push(entry)
-  savePlayerStatuses(roundId.value, statuses)
-  hasDrawn.value = true
-}
-
-async function finishDraw() {
-  const uid = currentUser.value?.id || ''
-  // 客户端生成随机发挥值（-10 ~ 20）
-  const value = Math.floor(Math.random() * 31) - 10
-  drawValue.value = value
-  revealed.value = true
-  drawing.value = false
-
-  // 使用统一的 player-status/save 接口持久化
-  try {
-    await savePerformancePlayerStatus(roundId.value, [{ playerId: uid, performanceValue: value }])
-  } catch (e: any) {
-    console.warn('[Performance] 保存发挥值失败，仅本地存储:', e.message)
-  }
-
-  // 本地存储作为回退
-  const statuses = loadPlayerStatuses(roundId.value)
-  const idx = statuses.findIndex(s => s.playerId === uid)
-  const entry = { playerId: uid, playerName: currentUser.value?.name || '', teamId: currentUser.value?.teamId || '', teamName: currentTeam.value?.name || '', generated: true, performanceValue: value }
-  if (idx >= 0) statuses[idx] = entry
-  else statuses.push(entry)
-  savePlayerStatuses(roundId.value, statuses)
-  hasDrawn.value = true
-}
-
-function onRevealEnd() {}
+// websocket：管理员开始公演 / 揭晓队伍后，选手端实时刷新（含自动进入下一阶段）
+useSfRefresh(() => {
+  loadRoundStatus()
+  loadMyRating()
+  loadRevealedTeamsData()
+  performanceStore.fetchPlayerPerformanceResults(String(currentRound.value)).catch(() => {})
+})
 
 onMounted(async () => {
   const uid = currentUser.value?.id
@@ -776,7 +727,6 @@ onMounted(async () => {
     if (saved?.generated && saved?.performanceValue !== null) {
       hasDrawn.value = true
       drawValue.value = saved.performanceValue
-      revealed.value = true
     }
   } catch { /* ignore */ }
 
@@ -790,16 +740,28 @@ onMounted(async () => {
     if (myStatus?.generated && myStatus?.performanceValue !== null) {
       hasDrawn.value = true
       drawValue.value = myStatus.performanceValue
-      revealed.value = true
     } else {
       // ★ 后端显示未生成 → 覆盖 localStorage 的旧数据 ★
       hasDrawn.value = false
-      revealed.value = false
       drawValue.value = 0
       // 清理 localStorage 中该选手的旧数据
       const statuses = loadPlayerStatuses(roundId.value)
       const filtered = statuses.filter((s: any) => s.playerId !== uid)
       savePlayerStatuses(roundId.value, filtered)
+    }
+    // 3.3 恢复已投掷的个人评级（选手只能投一次）
+    if (myStatus?.rating && !ratingResult.value) {
+      const RT: Record<string, string> = { S: '超级完美', A: '完美', B: '正常', C: '翻车', D: '超级翻车' }
+      ratingResult.value = {
+        rating: myStatus.rating,
+        ratingText: RT[myStatus.rating] || myStatus.rating,
+        roll: myStatus.ratingRoll,
+        difficulty: myStatus.ratingFaces?.difficulty || 0,
+        faces: myStatus.ratingFaces || { a: 0, b: 0, c: 0 },
+        mainAttr: myStatus.ratingMainAttr,
+        songName: '',
+        alreadyRolled: true
+      }
     }
   } catch { /* ignore */ }
 
@@ -821,13 +783,14 @@ onMounted(async () => {
 
   // 加载已揭晓队伍评审矩阵（管理员逐个揭晓后逐步展示）
   await loadRevealedTeamsData()
+  // 3.3 加载本人公演骰子信息（歌曲/难度/各点数评级，补全展示）
+  await loadMyRating()
   // 轮询刷新：管理员揭晓新队伍后选手端自动更新
   revealedTimer = window.setInterval(loadRevealedTeamsData, 8000)
 })
 
 onBeforeUnmount(() => {
   if (revealedTimer) window.clearInterval(revealedTimer)
-  if (slotTimer !== null) window.clearInterval(slotTimer)
 })
 </script>
 
@@ -892,81 +855,7 @@ onBeforeUnmount(() => {
   }
 }
 
-// ===== 指针模式 =====
-.pointer-scale {
-  position: relative;
-  width: 100%;
-  max-width: 360px;
-  margin: 24px auto;
-  padding: 30px 12px 12px;
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-}
-.pointer-scale-track {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  height: 40px;
-  position: relative;
-}
-.pointer-tick {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
-  .tick-line {
-    width: 1px;
-    height: 8px;
-    background: var(--text-muted);
-    opacity: 0.5;
-  }
-  .tick-label {
-    font-size: 10px;
-    color: var(--text-tertiary);
-    margin-top: 4px;
-  }
-  &.major {
-    .tick-line { width: 2px; height: 14px; background: var(--text-secondary); opacity: 0.8; }
-    .tick-label { font-size: 12px; font-weight: 600; color: var(--text-primary); }
-  }
-}
-.pointer-cursor {
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  transition: left 0.05s linear;
-  .cursor-head {
-    width: 0;
-    height: 0;
-    border-left: 10px solid transparent;
-    border-right: 10px solid transparent;
-    border-top: 14px solid #ffd700;
-    filter: drop-shadow(0 2px 4px rgba(255,215,0,0.4));
-  }
-  .cursor-value {
-    margin-top: 2px;
-    padding: 2px 8px;
-    background: rgba(255,215,0,0.15);
-    border: 1px solid rgba(255,215,0,0.3);
-    border-radius: 10px;
-    font-size: 13px;
-    font-weight: 700;
-    color: #ffd700;
-    min-width: 28px;
-    text-align: center;
-  }
-}
-
-.slot-machine { margin: 20px 0; }
-.slot-numbers { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; max-width: 320px; margin: 0 auto; }
-.slot-num { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; font-size: 16px; font-weight: 700; color: var(--text-muted); transition: all 0.05s;
-  &.active { background: linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,107,107,0.12)); border-color: rgba(255,215,0,0.4); color: #ffd700; transform: scale(1.15); box-shadow: 0 0 15px rgba(255,215,0,0.2); }
-}
+// ===== 结果展示 =====
 .result-reveal { margin-top: 20px; position: relative; animation: revealIn 0.6s ease; }
 .result-glow { position: absolute; top: 50%; left: 50%; width: 200px; height: 200px; transform: translate(-50%, -50%); border-radius: 50%;
   &.legendary { background: radial-gradient(circle, rgba(255,215,0,0.3) 0%, transparent 70%); }
@@ -1284,11 +1173,6 @@ onBeforeUnmount(() => {
   .draw-stage .stage-badge { font-size: 12px; padding: 4px 16px; }
   .draw-area .draw-icon { font-size: 48px; } .draw-area h2 { font-size: 18px; }
   .draw-btn { padding: 14px 36px; font-size: 16px; }
-  .pointer-scale { max-width: 300px; padding: 26px 8px 10px; }
-  .pointer-tick .tick-label { font-size: 9px; }
-  .pointer-tick.major .tick-label { font-size: 11px; }
-  .slot-numbers { max-width: 280px; }
-  .slot-num { width: 36px; height: 36px; font-size: 14px; }
   .result-value { font-size: 56px; }
   .result-label { font-size: 16px; }
   .results-stage { padding-top: 12px; }
@@ -1409,4 +1293,48 @@ onBeforeUnmount(() => {
   }
 }
 
+
+.rating-roll-card { margin: 16px auto; max-width: 520px; padding: 16px; border-radius: 12px; border: 1px solid rgba(0,214,164,0.3); background: rgba(0,214,164,0.06); text-align: center; }
+.rr-title { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+.rr-result { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.rr-badge { font-size: 22px; font-weight: 800; padding: 4px 16px; border-radius: 10px; }
+.rr-badge.r-S { color: #ffcc00; background: rgba(255,204,0,0.15); }
+.rr-badge.r-A { color: #00d6a4; background: rgba(0,214,164,0.15); }
+.rr-badge.r-B { color: #409eff; background: rgba(64,158,255,0.15); }
+.rr-badge.r-C { color: #ff9900; background: rgba(255,153,0,0.15); }
+.rr-badge.r-D { color: #f56c6c; background: rgba(245,108,108,0.15); }
+.rr-detail { font-size: 12px; opacity: .8; line-height: 1.6; }
+.rr-error { color: #f56c6c; font-size: 13px; }
+.rr-btn { padding: 12px 28px; border: none; border-radius: 10px; background: linear-gradient(135deg,#00d6a4,#00b48a); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+.rr-btn:disabled { opacity: .6; cursor: not-allowed; }
+.team-votes-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+}
+@media (min-width: 700px) {
+  .team-votes-list { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+}
+.team-vote-item {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 10px 8px; border-radius: 10px;
+  background: var(--card-bg); border: 1px solid var(--border-color);
+}
+.team-vote-item .tv-name { font-size: 13px; font-weight: 700; }
+.team-vote-item.is-my-team {
+  border: 2px solid #ffd700;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.18), rgba(255, 215, 0, 0.06));
+  box-shadow: 0 0 16px rgba(255, 215, 0, 0.55);
+}
+.team-vote-item.is-my-team .tv-name { color: #ffb300; }
+.team-vote-item.is-my-team::after {
+  content: '我的队伍';
+  font-size: 10px;
+  color: #ffb300;
+  font-weight: 700;
+}
+.team-vote-item :deep(.digit-slot) { width: 34px; height: 48px; }
+.team-vote-item :deep(.digit-slot .digit-num) { font-size: 26px; }
 </style>

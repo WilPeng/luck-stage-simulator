@@ -68,6 +68,10 @@
           <template #icon><span>🗑️</span></template>
           清空所有玩家
         </t-button>
+        <t-button variant="outline" theme="warning" @click="openRandomAttrDialog">
+          <template #icon><span>🎲</span></template>
+          一键随机属性
+        </t-button>
         <input
           ref="importFileInput"
           type="file"
@@ -325,6 +329,26 @@
         </div>
       </t-form>
     </t-dialog>
+
+    <!-- 一键随机属性弹窗 -->
+    <t-dialog
+      v-model:visible="showRandomAttrDialog"
+      header="一键随机属性"
+      :confirm-btn="{ content: '开始随机', loading: randomizing }"
+      :cancel-btn="{}"
+      width="420px"
+      @confirm="handleRandomizeAttributes"
+    >
+      <p style="margin: 0 0 12px; color: var(--text-secondary); font-size: 13px;">将把全部（非管理员）选手的 声乐 / 舞蹈 / 魅力 在下列范围内随机重置。</p>
+      <t-form label-width="90px">
+        <t-form-item label="最小值">
+          <t-input-number v-model="randomAttrMin" :min="0" :max="999" style="width: 140px" />
+        </t-form-item>
+        <t-form-item label="最大值">
+          <t-input-number v-model="randomAttrMax" :min="0" :max="999" style="width: 140px" />
+        </t-form-item>
+      </t-form>
+    </t-dialog>
   </div>
 </template>
 
@@ -335,7 +359,7 @@ import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useTeamStore } from '../../stores/teamStore'
-import { getAvatarUrl, uploadAvatar, deleteAvatar, batchCreateUsers, createUser, getUsers, clearNonAdminUsers } from '../../services/api'
+import { getAvatarUrl, uploadAvatar, deleteAvatar, batchCreateUsers, createUser, getUsers, clearNonAdminUsers, randomizePlayerAttributes } from '../../services/api'
 import type { User } from '../../types/user'
 import type { FormRule } from 'tdesign-vue-next'
 import { AddIcon } from 'tdesign-icons-vue-next'
@@ -350,6 +374,10 @@ const filterStatus = ref('')
 const showDetail = ref(false)
 const showEditDialog = ref(false)
 const isEditMode = ref(false)
+const showRandomAttrDialog = ref(false)
+const randomAttrMin = ref(30)
+const randomAttrMax = ref(80)
+const randomizing = ref(false)
 const selectedPlayer = ref<User | null>(null)
 const currentPage = ref(1)
 
@@ -426,6 +454,30 @@ async function handleSearch() {
   currentPage.value = 1
   playerStore.setPage(1)
   await loadData()
+}
+
+// ===== 一键随机属性 =====
+function openRandomAttrDialog() {
+  showRandomAttrDialog.value = true
+}
+async function handleRandomizeAttributes() {
+  const min = Number(randomAttrMin.value)
+  const max = Number(randomAttrMax.value)
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) {
+    MessagePlugin.error('范围不合法（需 最小值 ≤ 最大值）')
+    return
+  }
+  randomizing.value = true
+  try {
+    const res = await randomizePlayerAttributes(min, max)
+    MessagePlugin.success(`已随机 ${res?.count ?? 0} 位选手的属性（${min}~${max}）`)
+    showRandomAttrDialog.value = false
+    await loadData()
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '随机属性失败')
+  } finally {
+    randomizing.value = false
+  }
 }
 
 async function handleFilterChange() {

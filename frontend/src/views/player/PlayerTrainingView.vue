@@ -46,44 +46,103 @@
       </div>
     </div>
 
-    <!-- ===== 卡牌网格 ===== -->
-    <div class="cards-section">
-      <h2 class="section-title">🎴 训练卡牌 <span class="section-sub">点击翻开一张</span></h2>
-      <div class="cards-grid">
-        <div
-          v-for="(card, idx) in cardSlots"
-          :key="idx"
-          class="card-slot"
-          :class="{
-            'flipped': card.flipped,
-            'disabled': isTrainingLocked || card.flipped
-          }"
-          @click="handleFlip(idx)"
-        >
-          <div class="card-inner">
-            <!-- 卡背 -->
-            <div class="card-back">
-              <span class="cb-icon">🎴</span>
-              <span class="cb-num">{{ idx + 1 }}</span>
-            </div>
-            <!-- 卡面（翻开后显示效果） -->
-            <div v-if="card.flipped && card.result" class="card-front" :class="card.result.type">
-              <span class="cf-type">{{ getTypeLabel(card.result.type) }}</span>
-              <span class="cf-name">{{ card.result.name }}</span>
-              <span v-if="card.result.desc" class="cf-desc">{{ card.result.desc }}</span>
-              <div class="cf-effects">
-                <span v-if="card.result.vocal" class="cf-effect" :class="card.result.vocal > 0 ? 'up' : 'down'">
-                  🎤{{ card.result.vocal > 0 ? '+' : '' }}{{ card.result.vocal }}
-                </span>
-                <span v-if="card.result.dance" class="cf-effect" :class="card.result.dance > 0 ? 'up' : 'down'">
-                  💃{{ card.result.dance > 0 ? '+' : '' }}{{ card.result.dance }}
-                </span>
-                <span v-if="card.result.charm" class="cf-effect" :class="card.result.charm > 0 ? 'up' : 'down'">
-                  ✨{{ card.result.charm > 0 ? '+' : '' }}{{ card.result.charm }}
-                </span>
-              </div>
-            </div>
+    <!-- ===== 训练结束确认 & 公演骰子 ===== -->
+    <div class="finish-rating-section">
+      <div class="finish-row">
+        <div class="finish-info">
+          <span class="finish-title">训练结束确认</span>
+          <span class="finish-desc">确认后本轮不可再抽卡，并可投掷公演骰子（个人评级，仅受声乐/舞蹈影响）</span>
+        </div>
+        <t-button v-if="!trainingFinished" theme="primary" :loading="finishing" @click="handleFinishTraining">确定训练结束</t-button>
+        <t-tag v-else theme="success" variant="light">已确认训练结束</t-tag>
+      </div>
+
+      <div v-if="trainingFinished" class="rating-box" :class="{ rolling, settling }">
+        <div class="rating-title">🎯 个人评级掷骰</div>
+        <!-- 骰子：滚动 / 落定 / 已投掷 均显示，点数不消失 -->
+        <div v-if="rolling || settling || ratingInfo?.rating" class="dice-anim">
+          <div class="dice-face" :class="{ settle: !rolling }">{{ diceDisplay }}</div>
+          <div class="dice-hint">{{ rolling ? '骰子投掷中…' : (settling ? '点数已定…' : '最终点数') }}</div>
+        </div>
+        <template v-if="ratingInfo">
+          <div v-if="ratingInfo.rating" class="rating-result">
+            <span class="rr-badge" :class="'r-' + ratingInfo.rating">{{ ratingInfo.rating }}</span>
+            <span>{{ ratingText(ratingInfo.rating) }} · 掷出点数 {{ ratingInfo.roll ?? '—' }}</span>
           </div>
+          <template v-else-if="!rolling && !settling">
+            <div v-if="!ratingInfo.hasSong" class="rating-warn">你的队伍尚未选择歌曲，无法投掷公演骰子</div>
+            <template v-else>
+              <div class="rating-info-line">
+                歌曲「{{ ratingInfo.song.name }}」 · 难度 {{ ratingInfo.song.difficulty }} 面骰 · 风险值 {{ ratingInfo.song.risk }} · 主属性 {{ attrText(ratingInfo.song.mainAttribute) }}
+              </div>
+              <div class="face-table">
+                <div class="face-row"><span class="fr-name">A 完美</span><span class="fr-range">{{ faceRangeText('a') }}</span></div>
+                <div class="face-row"><span class="fr-name">B 正常</span><span class="fr-range">{{ faceRangeText('b') }}</span></div>
+                <div class="face-row"><span class="fr-name">C 翻车</span><span class="fr-range">{{ faceRangeText('c') }}</span></div>
+                <div class="face-row"><span class="fr-name">D 超级翻车</span><span class="fr-range">{{ faceRangeText('d') }}</span></div>
+              </div>
+              <t-button theme="primary" size="large" @click="handleRollRating">🎲 点击投掷公演骰子</t-button>
+            </template>
+          </template>
+        </template>
+        <div v-else-if="!rolling && !settling" class="rating-loading">加载中...</div>
+      </div>
+    </div>
+
+    <!-- ===== 有限卡池（带序号，每张仅可被一人抽走） ===== -->
+    <div v-if="pool && pool.totalCards > 0" class="cards-section">
+      <div class="pool-header">
+        <h2 class="section-title">🎴 卡池 <span class="section-sub">共 {{ pool.totalCards }} 张 · 每人可抽 {{ pool.perPersonDrawCount }} 张 · 已抽 {{ myDrawnCount }} 张</span></h2>
+        <div class="pool-controls">
+          <t-radio-group v-model="poolFilter" variant="default-filled" size="small">
+            <t-radio-button value="all">全部</t-radio-button>
+            <t-radio-button value="unopened">未翻开</t-radio-button>
+          </t-radio-group>
+          <t-select v-model="poolPageSize" size="small" style="width: 120px">
+            <t-option :value="20" label="每页 20 张" />
+            <t-option :value="50" label="每页 50 张" />
+          </t-select>
+        </div>
+      </div>
+      <div class="pool-grid">
+        <div
+          v-for="c in pagedPoolCards"
+          :key="c.index"
+          class="pool-slot"
+          :class="{
+            mine: c.mine,
+            taken: c.drawn && !c.mine,
+            disabled: isTrainingLocked || c.drawn
+          }"
+          @click="handlePoolDraw(c)"
+        >
+          <template v-if="c.drawn && c.mine && c.card">
+            <span class="cf-type">{{ getTypeLabel(c.card.type) }}</span>
+            <span class="cf-name">{{ c.card.name }}</span>
+            <span class="cf-desc">{{ formatEffect(c.delta || c.card.effect) }}</span>
+          </template>
+          <template v-else-if="c.drawn">
+            <span class="taken-text">已被<br/><strong>{{ c.drawnByName }}</strong><br/>抽走</span>
+          </template>
+          <template v-else>
+            <span class="cb-icon">🎴</span>
+            <span class="cb-num">{{ c.index }}</span>
+          </template>
+        </div>
+      </div>
+      <div v-if="poolTotalPages > 1" class="pool-pager">
+        <t-pagination v-model="poolPage" :total="filteredPoolCards.length" :page-size="poolPageSize" theme="simple" />
+      </div>
+    </div>
+
+    <!-- ===== 尚未生成卡池：需等待管理员生成后才能抽取 ===== -->
+    <div v-else class="cards-section">
+      <h2 class="section-title">🎴 训练卡池</h2>
+      <div class="pool-locked">
+        <span class="pl-icon">🔒</span>
+        <div class="pl-text">
+          <div class="pl-title">卡池尚未生成</div>
+          <div class="pl-desc">请等待管理员在本轮「卡池设置」中生成卡池后再抽取</div>
         </div>
       </div>
     </div>
@@ -119,12 +178,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { useTrainingCardStore } from '../../stores/trainingCardStore'
 import { usePlayerStore } from '../../stores/playerStore'
-import { getConcurrentReleaseStatus } from '../../services/api'
+import { getConcurrentReleaseStatus, getTrainingPool, drawFromPool, getMyRatingInfo, rollPerformanceRating, finishTraining } from '../../services/api'
+import { useSfRefresh } from '../../composables/useSfRefresh'
 import type { ConcurrentReleaseStatusResponse } from '../../types/season'
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next'
 
@@ -146,7 +206,98 @@ const attributes = reactive({ vocal: 50, dance: 50, charm: 50 })
 // 训练次数
 const remainingDraws = ref(0)
 const trainingCount = ref(0)
-const isTrainingLocked = computed(() => remainingDraws.value <= 0 || !isTrainingReleased.value)
+
+// ===== 训练结束确认 & 公演骰子 =====
+const trainingFinished = ref(false)
+const finishing = ref(false)
+const ratingInfo = ref<any>(null)
+const rolling = ref(false)
+const settling = ref(false)
+const diceDisplay = ref(1)
+let diceTimer: number | undefined
+function ratingText(r: string): string {
+  const m: Record<string, string> = { S: '超级完美', A: '完美', B: '正常', C: '翻车', D: '超级翻车' }
+  return m[r] || r
+}
+function attrText(a?: string): string {
+  const m: Record<string, string> = { vocal: '🎤 声乐', dance: '💃 舞蹈', charm: '✨ 魅力' }
+  return m[a || 'vocal'] || '—'
+}
+function faceRangeText(key: 'a' | 'b' | 'c' | 'd'): string {
+  const f = ratingInfo.value?.faces?.faces
+  if (!f) return '-'
+  const total = f.total || 1
+  let start = 1
+  const mk = (n: number) => {
+    if (!n || n <= 0) return '—'
+    const s = start
+    start += n
+    return `${s}${n > 1 ? '-' + (s + n - 1) : ''} 点（${Math.round((n / total) * 100)}%）`
+  }
+  const map: Record<'a' | 'b' | 'c' | 'd', string> = { a: mk(f.a), b: mk(f.b), c: mk(f.c), d: mk(f.d || 0) }
+  return map[key]
+}
+async function loadRatingInfo() {
+  try {
+    ratingInfo.value = await getMyRatingInfo()
+    trainingFinished.value = !!ratingInfo.value?.finished
+    if (ratingInfo.value?.rating && ratingInfo.value?.roll != null) {
+      diceDisplay.value = ratingInfo.value.roll
+    }
+  } catch { /* ignore */ }
+}
+async function handleFinishTraining() {
+  finishing.value = true
+  try {
+    await finishTraining(`round-${currentRound.value}`, true)
+    trainingFinished.value = true
+    await loadRatingInfo()
+    MessagePlugin.success('已确认训练结束，可投掷公演骰子')
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '操作失败')
+  } finally {
+    finishing.value = false
+  }
+}
+async function handleRollRating() {
+  if (rolling.value || settling.value) return
+  rolling.value = true
+  settling.value = false
+  const maxFace = ratingInfo.value?.faces?.difficulty || ratingInfo.value?.song?.difficulty || 6
+  diceDisplay.value = 1
+  const start = Date.now()
+  if (diceTimer) window.clearInterval(diceTimer)
+  diceTimer = window.setInterval(() => {
+    diceDisplay.value = Math.floor(Math.random() * maxFace) + 1
+  }, 70)
+
+  try {
+    const res = await rollPerformanceRating(`round-${currentRound.value}`)
+    // 至少滚动 1.4s 再定格点数
+    const wait = Math.max(0, 1400 - (Date.now() - start))
+    if (wait) await new Promise(r => setTimeout(r, wait))
+    if (diceTimer) { window.clearInterval(diceTimer); diceTimer = undefined }
+    // 先定格最终点数，做一次“落定”动画
+    diceDisplay.value = res.roll ?? maxFace
+    rolling.value = false
+    settling.value = true
+    await new Promise(r => setTimeout(r, 650))
+    // 再显示评级徽章（带弹出动画）
+    settling.value = false
+    if (ratingInfo.value) {
+      ratingInfo.value.rating = res.rating
+      ratingInfo.value.roll = res.roll
+    }
+    MessagePlugin.success(`掷骰结果：${res.rating}（${res.roll ?? '—'} 点）`)
+  } catch (e: any) {
+    if (diceTimer) { window.clearInterval(diceTimer); diceTimer = undefined }
+    rolling.value = false
+    settling.value = false
+    MessagePlugin.error(e?.message || '投掷失败')
+  }
+}
+
+const isTrainingLocked = computed(() => remainingDraws.value <= 0 || !isTrainingReleased.value || trainingFinished.value)
 
 // 50 个卡槽
 interface CardResult {
@@ -163,6 +314,132 @@ const cardSlots = reactive<CardSlot[]>(
 
 // 变动记录
 const changeLog = reactive<{ cardName: string; vocal: number; dance: number; charm: number; desc?: string }[]>([])
+
+// ===== 有限卡池 =====
+const pool = ref<{ totalCards: number; perPersonDrawCount: number; cards: any[] } | null>(null)
+const poolFilter = ref<'all' | 'unopened'>('all')
+const poolPage = ref(1)
+const poolPageSize = ref(20)
+
+const myDrawnCount = computed(() => pool.value ? pool.value.cards.filter((c: any) => c.mine).length : 0)
+const filteredPoolCards = computed(() => {
+  const cards = pool.value?.cards || []
+  return poolFilter.value === 'unopened' ? cards.filter((c: any) => !c.drawn) : cards
+})
+const poolTotalPages = computed(() => Math.max(1, Math.ceil(filteredPoolCards.value.length / poolPageSize.value)))
+const pagedPoolCards = computed(() => {
+  const start = (poolPage.value - 1) * poolPageSize.value
+  return filteredPoolCards.value.slice(start, start + poolPageSize.value)
+})
+
+watch([poolFilter, poolPageSize], () => { poolPage.value = 1 })
+
+function formatEffect(effect: any): string {
+  if (!effect) return '无属性变化'
+  const parts: string[] = []
+  const n = (v: number) => `${v > 0 ? '+' : ''}${v}`
+  if (effect.vocal) parts.push(`🎤${n(effect.vocal)}`)
+  if (effect.dance) parts.push(`💃${n(effect.dance)}`)
+  if (effect.charm) parts.push(`✨${n(effect.charm)}`)
+  if (effect.selfSelect) parts.push(`自选一项${n(effect.selfSelect)}`)
+  if (effect.randomOne) parts.push(`随机一项${n(effect.randomOne)}`)
+  if (effect.randomTwo) parts.push(`随机两项各${n(effect.randomTwo)}`)
+  if (effect.lowest) parts.push(`最低属性${n(effect.lowest)}`)
+  if (effect.highest) parts.push(`最高属性${n(effect.highest)}`)
+  if (effect.lucky) parts.push(`随机一项${n(effect.lucky)}`)
+  if (effect.teamAll) parts.push(`三项各${n(effect.teamAll)}`)
+  if (effect.multiply && effect.multiply !== 1) parts.push(`随机一项×${effect.multiply}`)
+  if (effect.multiplyAll && effect.multiplyAll !== 1) parts.push(`三项×${effect.multiplyAll}`)
+  if (effect.balance) parts.push(`最高↓最低↑各${Math.abs(effect.balance)}`)
+  if (effect.roundUp) parts.push(`随机一项向上取整至${effect.roundUp}的倍数`)
+  if (effect.roundDown) parts.push(`随机一项向下取整至${effect.roundDown}的倍数`)
+  return parts.join(' ') || '无属性变化'
+}
+
+// 用卡池数据同步"已训练 / 剩余训练"（以每人可抽张数为准，修复只显示 3 次的问题）
+function syncFromPool() {
+  if (!pool.value) return
+  trainingCount.value = myDrawnCount.value
+  remainingDraws.value = Math.max(0, (pool.value.perPersonDrawCount || 0) - myDrawnCount.value)
+}
+
+async function loadPool() {
+  try {
+    const res: any = await getTrainingPool(`round-${currentRound.value}`)
+    pool.value = (res && res.totalCards > 0) ? res : null
+    if (pool.value) syncFromPool()
+  } catch { pool.value = null }
+}
+
+useSfRefresh(async () => {
+  await loadPool()
+  const uid = currentUser.value?.id
+  if (uid) {
+    const userData = await playerStore.fetchUserById(uid).catch(() => null)
+    if (userData?.attributes) {
+      attributes.vocal = userData.attributes.vocal
+      attributes.dance = userData.attributes.dance
+      attributes.charm = userData.attributes.charm
+    }
+  }
+})
+
+async function handlePoolDraw(c: any) {
+  if (!pool.value || c.drawn || isTrainingLocked.value || !currentUser.value) return
+  try {
+    const res: any = await drawFromPool({ roundId: `round-${currentRound.value}`, slotIndex: c.index, playerId: currentUser.value.id })
+    if (res?.attributesAfter) {
+      attributes.vocal = res.attributesAfter.vocal ?? attributes.vocal
+      attributes.dance = res.attributesAfter.dance ?? attributes.dance
+      attributes.charm = res.attributesAfter.charm ?? attributes.charm
+    }
+    const delta = res?.attrDelta || {}
+    changeLog.unshift({ cardName: res?.card?.name || '', vocal: delta.vocal || 0, dance: delta.dance || 0, charm: delta.charm || 0, desc: formatEffect(res?.card?.effect) })
+    trainingCount.value += 1
+    if (typeof res?.remainingDraws === 'number') remainingDraws.value = res.remainingDraws
+    if (res?.isSelfSelect) {
+      showSelectDialogForPool(res.card?.effect?.selfSelect || 5, res.card?.name || '', res.recordId)
+    }
+    await loadPool()
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '抽卡失败')
+  }
+}
+
+function showSelectDialogForPool(val: number, cardName: string, recordId?: string) {
+  const attrs = [
+    { key: 'vocal', label: '🎤 声乐', current: attributes.vocal },
+    { key: 'dance', label: '💃 舞蹈', current: attributes.dance },
+    { key: 'charm', label: '✨ 魅力', current: attributes.charm }
+  ]
+  const dialog = DialogPlugin({
+    header: `「${cardName}」— 选择属性`,
+    body: () => h('div', { class: 'select-dialog' }, [
+      h('p', { class: 'select-hint' }, `请选择要${val > 0 ? '增加' : '减少'} ${Math.abs(val)} 点的属性：`),
+      h('div', { class: 'select-options' }, attrs.map(a =>
+        h('button', {
+          class: 'select-option',
+          onClick: async () => {
+            if (recordId) {
+              try {
+                const { applySelfSelect } = await import('../../services/api')
+                const r = await applySelfSelect(recordId, a.key)
+                attributes.vocal = r.attributes?.vocal ?? attributes.vocal
+                attributes.dance = r.attributes?.dance ?? attributes.dance
+                attributes.charm = r.attributes?.charm ?? attributes.charm
+              } catch { const k = a.key as 'vocal' | 'dance' | 'charm'; attributes[k] = Math.max(0, attributes[k] + val) }
+            } else {
+              const k = a.key as 'vocal' | 'dance' | 'charm'; attributes[k] = Math.max(0, attributes[k] + val)
+            }
+            dialog.hide()
+            await loadPool()
+          }
+        }, `${a.label}  →  ${a.current} ${val > 0 ? '+' : ''}${val}`)
+      ))
+    ]),
+    footer: false, closeBtn: false, width: '360px'
+  })
+}
 
 // 自选属性缓存（正在等待选择的卡槽索引）
 const pendingSelectIdx = ref<number | null>(null)
@@ -384,7 +661,12 @@ onMounted(async () => {
       })
     }
 
-    // 5. 启动释放状态轮询
+    // 5. 加载有限卡池（若管理员已配置）
+    await loadPool()
+    // 5.1 加载训练结束状态与公演骰子信息
+    await loadRatingInfo()
+
+    // 6. 启动释放状态轮询
     startReleasePolling()
   } catch (e) {
     console.warn('[Training] 加载失败:', e)
@@ -395,6 +677,7 @@ let releaseTimer: number | undefined
 
 onBeforeUnmount(() => {
   if (releaseTimer) window.clearInterval(releaseTimer)
+  if (diceTimer) window.clearInterval(diceTimer)
 })
 
 // 轮询释放状态：管理员开放后选手端自动解锁
@@ -661,4 +944,92 @@ color: var(--text-primary);
     }
   }
 }
+
+.pool-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }.pool-controls { display: flex; align-items: center; gap: 10px; }
+.pool-pager { display: flex; justify-content: center; margin-top: 14px; }
+.pool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.pool-slot { aspect-ratio: 3/4; border-radius: 10px; border: 1px solid var(--border-color, #333); background: rgba(255,255,255,0.03); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; text-align: center; padding: 6px; transition: all .15s; }
+.pool-slot:hover:not(.disabled) { border-color: #00d6a4; transform: translateY(-2px); }
+.pool-slot.disabled { cursor: not-allowed; opacity: .85; }
+.pool-slot.mine { border-color: #00d6a4; background: rgba(0,214,164,0.12); cursor: default; }
+.pool-slot.taken { background: rgba(255,255,255,0.02); opacity: .5; cursor: not-allowed; }
+.pool-slot .cb-icon { font-size: 26px; }
+.pool-slot .cb-num { font-size: 12px; opacity: .6; }
+.pool-slot .cf-type { font-size: 10px; padding: 1px 6px; border-radius: 6px; background: rgba(0,214,164,0.2); }
+.pool-slot .cf-name { font-size: 12px; font-weight: 600; word-break: break-all; }
+.pool-slot .cf-desc { font-size: 10px; opacity: .75; word-break: break-all; }
+.pool-slot .taken-text { font-size: 12px; opacity: .7; line-height: 1.4; }
+
+.finish-rating-section { margin: 16px 0 24px; padding: 14px 16px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--card-bg); }
+.finish-rating-section .finish-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.finish-rating-section .finish-info { display: flex; flex-direction: column; gap: 2px; }
+.finish-rating-section .finish-title { font-size: 14px; font-weight: 700; }
+.finish-rating-section .finish-desc { font-size: 12px; color: var(--text-tertiary); }
+.finish-rating-section .rating-box { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.finish-rating-section .rating-title { font-size: 15px; font-weight: 700; }
+.finish-rating-section .rating-loading,
+.finish-rating-section .rating-warn { font-size: 13px; color: var(--text-tertiary); }
+.finish-rating-section .rating-result { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.finish-rating-section .rr-badge { font-size: 24px; font-weight: 800; color: #0052d9; }
+.finish-rating-section .rating-info-line { font-size: 13px; color: var(--text-secondary); text-align: center; }
+.finish-rating-section .face-table { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 4px; }
+.finish-rating-section .face-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 8px; background: var(--hover-bg); border-radius: 6px; }
+.finish-rating-section .face-row .fr-name { font-weight: 600; }
+.finish-rating-section .face-row .fr-range { color: var(--text-secondary); }
+
+.finish-rating-section .rating-box.rolling { animation: diceShake 0.4s infinite; }
+.finish-rating-section .rating-box.rolling .rating-title { animation: glowPulse 0.9s infinite; }
+.finish-rating-section .rr-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 46px; height: 46px; border-radius: 12px;
+  font-size: 26px; font-weight: 900; color: #fff;
+  background: linear-gradient(135deg, #0052d9, #6a5acd);
+  box-shadow: 0 4px 14px rgba(0, 82, 217, 0.4);
+  animation: badgePop 0.6s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.finish-rating-section .rr-badge.r-S { background: linear-gradient(135deg, #f39c12, #e74c3c); }
+.finish-rating-section .rr-badge.r-A { background: linear-gradient(135deg, #2ba471, #4ecdc4); }
+.finish-rating-section .rr-badge.r-B { background: linear-gradient(135deg, #0052d9, #4a90e2); }
+.finish-rating-section .rr-badge.r-C { background: linear-gradient(135deg, #8a8f99, #b0b4bc); }
+.finish-rating-section .rr-badge.r-D { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+@keyframes diceShake { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+@keyframes glowPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes badgePop {
+  0% { transform: scale(0.3) rotate(-20deg); opacity: 0; }
+  60% { transform: scale(1.15) rotate(6deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); }
+}
+
+.finish-rating-section .dice-anim { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 6px 0; }
+.finish-rating-section .dice-face {
+  width: 92px; height: 92px; border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 46px; font-weight: 900; color: #fff;
+  background: linear-gradient(135deg, #0052d9, #6a5acd);
+  box-shadow: 0 8px 24px rgba(0, 82, 217, 0.45);
+  animation: diceRoll 0.28s linear infinite;
+}
+.finish-rating-section .dice-face.settle {
+  animation: diceLand 0.6s cubic-bezier(0.2, 1.5, 0.4, 1);
+  background: linear-gradient(135deg, #f39c12, #e74c3c);
+  box-shadow: 0 0 26px rgba(243, 156, 18, 0.6);
+}
+.finish-rating-section .dice-hint { font-size: 12px; color: var(--text-tertiary); }
+@keyframes diceRoll {
+  0% { transform: rotate(0) scale(1); }
+  25% { transform: rotate(-12deg) scale(1.05); }
+  50% { transform: rotate(10deg) scale(0.98); }
+  75% { transform: rotate(-6deg) scale(1.04); }
+  100% { transform: rotate(0) scale(1); }
+}
+@keyframes diceLand {
+  0% { transform: scale(1.4) rotate(20deg); opacity: 0.6; }
+  60% { transform: scale(0.92) rotate(-4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); }
+}
+
+.pool-locked { display: flex; align-items: center; gap: 12px; padding: 20px; border: 1px dashed var(--border-color); border-radius: 12px; background: var(--hover-bg); }
+.pool-locked .pl-icon { font-size: 28px; }
+.pool-locked .pl-title { font-size: 14px; font-weight: 700; }
+.pool-locked .pl-desc { font-size: 12px; color: var(--text-tertiary); }
 </style>

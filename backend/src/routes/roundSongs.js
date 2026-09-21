@@ -97,11 +97,10 @@ router.get('/:round', auth, async (req, res) => {
           type: song.type,
           style: song.style,
           difficulty: song.difficulty,
-          vocalWeight: song.vocalWeight,
-          danceWeight: song.danceWeight,
-          charmWeight: song.charmWeight,
-          baseScore: song.baseScore,
-          riskFactor: song.riskFactor
+          mainAttribute: song.mainAttribute,
+          baseVocal: song.baseVocal,
+          baseDance: song.baseDance,
+          risk: song.risk
         } : null
       })
     }

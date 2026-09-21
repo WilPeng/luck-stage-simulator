@@ -14,6 +14,8 @@ const COLLECTIONS = [
   'TeamSong',        // 队伍选择歌曲（替代 SongAssignment + SongSelection）
   'TrainingCard',    // 训练卡（永久）
   'TrainingRecord',  // 训练记录（每轮）
+  'TrainingCardPool', // 每轮抽卡卡池（有限、带序号、每张仅可被一人抽中）
+  'TrainingStatus',  // 选手本轮训练结束状态（确认后可投掷公演骰子）
   'TeamPerformance', // 队伍公演结果（每轮）
   'PlayerPerformance', // 选手个人公演结果（每轮）
   'AudienceVoteSession', // 大众评审投票场次
@@ -57,6 +59,7 @@ const COLLECTIONS = [
     'BBCustomGame',    // 自定义游戏
     'BBPowerChallenge', // Big Brother 实力大挑战题目池
     'BBMinigameReplay', // 小游戏对局回放/复盘
+    'BBJuryQA',         // 陪审团问答（冠军投票前）
   'PCPlayer',
   'PCSeason',
   'PCPowerChallenge', // 实力大挑战（独立游戏）题目池

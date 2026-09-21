@@ -55,16 +55,15 @@ router.get('/', auth, async (req, res) => {
 // ===== POST /api/songs - 新增歌曲 =====
 router.post('/', auth, requireAdmin, async (req, res) => {
   try {
-    const { name, style, difficulty, vocalWeight, danceWeight, charmWeight, baseScore, riskFactor, description, type, singerGender } = req.body
+    const { name, style, difficulty, description, type, singerGender, baseVocal, baseDance, risk, mainAttribute } = req.body
     if (!name) return res.status(400).json({ success: false, error: 'name 必填', code: 'INVALID_PARAMS' })
     const song = new Song({
       id: generateId(), name, style: style || '流行',
       difficulty: typeof difficulty === 'number' ? difficulty : 3,
-      vocalWeight: typeof vocalWeight === 'number' ? vocalWeight : 3,
-      danceWeight: typeof danceWeight === 'number' ? danceWeight : 3,
-      charmWeight: typeof charmWeight === 'number' ? charmWeight : 3,
-      baseScore: typeof baseScore === 'number' ? baseScore : 100,
-      riskFactor: typeof riskFactor === 'number' ? riskFactor : 0.2,
+      baseVocal: typeof baseVocal === 'number' ? baseVocal : 30,
+      baseDance: typeof baseDance === 'number' ? baseDance : 30,
+      risk: typeof risk === 'number' ? risk : 10,
+      mainAttribute: mainAttribute || 'vocal',
       description: description || '', type: type || 'team_show',
       singerGender: singerGender || '',
       enabled: true, createdAt: new Date().toISOString()
@@ -93,11 +92,10 @@ router.post('/batch', auth, requireAdmin, async (req, res) => {
         style: item.style || '流行',
         type: item.type || 'team_show',
         difficulty: typeof item.difficulty === 'number' ? item.difficulty : 3,
-        vocalWeight: typeof item.vocalWeight === 'number' ? item.vocalWeight : 3,
-        danceWeight: typeof item.danceWeight === 'number' ? item.danceWeight : 3,
-        charmWeight: typeof item.charmWeight === 'number' ? item.charmWeight : 3,
-        baseScore: typeof item.baseScore === 'number' ? item.baseScore : 100,
-        riskFactor: typeof item.riskFactor === 'number' ? item.riskFactor : 0.2,
+        baseVocal: typeof item.baseVocal === 'number' ? item.baseVocal : 30,
+        baseDance: typeof item.baseDance === 'number' ? item.baseDance : 30,
+        risk: typeof item.risk === 'number' ? item.risk : 10,
+        mainAttribute: item.mainAttribute || 'vocal',
         description: item.description || '',
         singerGender: item.singerGender || '',
         enabled: true,
@@ -119,7 +117,7 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
   try {
     const song = await Song.findOne({ id: req.params.id })
     if (!song) return res.status(404).json({ success: false, error: '歌曲不存在', code: 'NOT_FOUND' })
-    const fields = ['name', 'style', 'difficulty', 'vocalWeight', 'danceWeight', 'charmWeight', 'baseScore', 'riskFactor', 'description', 'type', 'enabled', 'singerGender']
+    const fields = ['name', 'style', 'difficulty', 'description', 'type', 'enabled', 'singerGender', 'baseVocal', 'baseDance', 'risk', 'mainAttribute']
     for (const f of fields) if (req.body[f] !== undefined) song[f] = req.body[f]
     song.updatedAt = new Date().toISOString()
     await song.save()

@@ -355,12 +355,20 @@ onUnmounted(() => {
 }
 .bb-sider {
   width: 240px;
-  min-height: calc(100vh - 56px);
+  height: calc(100vh - 56px);
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
   background: #0f0f2e;
   border-right: 1px solid #00ff8822;
   overflow-y: auto;
+  overscroll-behavior: contain;
   transition: transform 0.3s;
 }
+.bb-sider::-webkit-scrollbar { width: 8px; }
+.bb-sider::-webkit-scrollbar-track { background: #0a0a1a; }
+.bb-sider::-webkit-scrollbar-thumb { background: #00ff8844; border-radius: 4px; }
+.bb-sider::-webkit-scrollbar-thumb:hover { background: #00ff8877; }
 .sider-nav { padding: 12px 0; }
 .nav-section { margin-bottom: 8px; }
 .nav-section-title {

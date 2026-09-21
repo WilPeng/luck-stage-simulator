@@ -37,7 +37,7 @@
       </div>
     </div>
 
-    <!-- 歌曲列表 -->
+    <!-- 本轮公演曲目 -->
     <div class="section">
       <div class="section-head">
         <h2>本轮公演曲目</h2>
@@ -66,81 +66,69 @@
           </t-button>
         </div>
       </div>
+
+      <!-- 曲目概况 -->
+      <div class="song-summary">
+        <div class="sum-item">
+          <span class="sum-val">{{ roundSongs.length }}</span>
+          <span class="sum-lbl">本轮曲目</span>
+        </div>
+        <div class="sum-item is-assigned">
+          <span class="sum-val">{{ assignedSongsCount }}</span>
+          <span class="sum-lbl">已分配</span>
+        </div>
+        <div class="sum-item is-released">
+          <span class="sum-val">{{ releasedSongsCount }}</span>
+          <span class="sum-lbl">抢选中</span>
+        </div>
+        <div class="sum-item is-pending">
+          <span class="sum-val">{{ pendingSongsCount }}</span>
+          <span class="sum-lbl">未释放</span>
+        </div>
+      </div>
+
       <div class="songs-grid">
-        <div v-for="song in roundSongs" :key="song.id" class="song-card">
-          <div class="song-header">
-            <div class="song-title">{{ getSongName(song.songId) }}</div>
-            <div class="song-status">
-              <t-tag v-if="song.assignedTeamId" theme="success" variant="light">
-                已被 {{ getTeamName(song.assignedTeamId) }} 选走
-              </t-tag>
-              <t-tag v-else-if="song.released" theme="warning" variant="light">抢选中</t-tag>
-              <t-tag v-else theme="default" variant="light">未释放</t-tag>
+        <div
+          v-for="song in roundSongs"
+          :key="song.id"
+          class="song-card"
+          :class="{ 'is-assigned': song.assignedTeamId, 'is-released': song.released && !song.assignedTeamId }"
+        >
+          <div class="sc-band" />
+          <div class="sc-head">
+            <div class="sc-title-wrap">
+              <span class="sc-title">{{ getSongName(song.songId) }}</span>
+              <span class="sc-sub">{{ getSongStyle(song.songId) }} · {{ getSongTypeLabel(song.songType) }}</span>
+            </div>
+            <t-tag :theme="songStatusTheme(song)" variant="light" size="small">{{ songStatusText(song) }}</t-tag>
+          </div>
+
+          <div class="sc-stats">
+            <div class="sc-stat">
+              <span class="k">难度</span>
+              <span class="v">{{ getSongDifficulty(song.songId) }}</span>
+            </div>
+            <div class="sc-stat">
+              <span class="k">主属性</span>
+              <span class="v">{{ getSongMainAttr(song.songId) }}</span>
+            </div>
+            <div class="sc-stat">
+              <span class="k">基准V/D</span>
+              <span class="v">{{ getSongBase(song.songId) }}</span>
+            </div>
+            <div class="sc-stat">
+              <span class="k">风险值</span>
+              <span class="v">{{ getSongRisk(song.songId) }}</span>
             </div>
           </div>
-          <div class="song-info">
-            <div class="info-item">
-              <span class="label">风格:</span>
-              <span class="value">{{ getSongStyle(song.songId) }}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">难度:</span>
-              <span class="value">{{ getSongDifficulty(song.songId) }}</span>
-            </div>
-          </div>
-          <div class="song-weights">
-            <div class="weight-bar">
-              <div class="weight-label">Vocal</div>
-              <div class="weight-track">
-                <div class="weight-fill vocal" :style="{ width: getSongWeightPercent(song.songId, 'vocal') + '%' }"></div>
-              </div>
-              <span class="weight-value">{{ getSongWeight(song.songId, 'vocal') }}</span>
-            </div>
-            <div class="weight-bar">
-              <div class="weight-label">Dance</div>
-              <div class="weight-track">
-                <div class="weight-fill dance" :style="{ width: getSongWeightPercent(song.songId, 'dance') + '%' }"></div>
-              </div>
-              <span class="weight-value">{{ getSongWeight(song.songId, 'dance') }}</span>
-            </div>
-            <div class="weight-bar">
-              <div class="weight-label">Charm</div>
-              <div class="weight-track">
-                <div class="weight-fill charm" :style="{ width: getSongWeightPercent(song.songId, 'charm') + '%' }"></div>
-              </div>
-              <span class="weight-value">{{ getSongWeight(song.songId, 'charm') }}</span>
-            </div>
-          </div>
-          <div class="song-actions">
-            <div v-if="!song.assignedTeamId" class="action-row">
-              <t-button
-                v-if="!song.released"
-                theme="primary"
-                block
-                @click="releaseSong(song.id)"
-              >
-                释放
-              </t-button>
-              <t-button
-                v-else
-                theme="success"
-                block
-                @click="openAssignDialog(song)"
-              >
-                直接分配
-              </t-button>
-              <t-button
-                theme="danger"
-                variant="outline"
-                size="small"
-                @click="handleRemoveSong(song)"
-              >
-                移出本轮
-              </t-button>
-            </div>
-            <t-button v-else theme="default" block disabled>
-              已分配
-            </t-button>
+
+          <div class="sc-actions">
+            <template v-if="!song.assignedTeamId">
+              <t-button v-if="!song.released" theme="primary" size="small" @click="releaseSong(song.id)">释放抢选</t-button>
+              <t-button v-else theme="success" size="small" @click="openAssignDialog(song)">直接分配</t-button>
+              <t-button theme="danger" variant="outline" size="small" @click="handleRemoveSong(song)">移出</t-button>
+            </template>
+            <t-tag v-else theme="success" variant="light" size="small">已归 {{ getTeamName(song.assignedTeamId) }}</t-tag>
           </div>
         </div>
         <t-empty v-if="roundSongs.length === 0" description="本轮还没有曲目，点击右上角从歌曲库添加" />
@@ -335,21 +323,42 @@ function getSongDifficulty(songId: string): number {
   return song?.difficulty || 0
 }
 
-function getSongWeight(songId: string, type: 'vocal' | 'dance' | 'charm'): number {
+function getSongMainAttr(songId: string): string {
   const song = songStore.songs.find(s => s.id === songId)
-  if (!song) return 0
-  const map = { vocal: song.vocalWeight, dance: song.danceWeight, charm: song.charmWeight }
-  return map[type] || 0
+  const map: Record<string, string> = { vocal: '🎤 声乐', dance: '💃 舞蹈', charm: '✨ 魅力' }
+  return map[song?.mainAttribute || 'vocal'] || '🎤 声乐'
 }
 
-function getSongWeightPercent(songId: string, type: 'vocal' | 'dance' | 'charm'): number {
+function getSongBase(songId: string): string {
   const song = songStore.songs.find(s => s.id === songId)
-  if (!song) return 0
-  const total = song.vocalWeight + song.danceWeight + song.charmWeight
-  if (total === 0) return 0
-  const map = { vocal: song.vocalWeight, dance: song.danceWeight, charm: song.charmWeight }
-  return Math.round((map[type] / total) * 100)
+  return `${song?.baseVocal ?? 30} / ${song?.baseDance ?? 30}`
 }
+
+function getSongRisk(songId: string): number {
+  const song = songStore.songs.find(s => s.id === songId)
+  return song?.risk ?? 10
+}
+
+function getSongTypeLabel(type?: string): string {
+  const m: Record<string, string> = { team_show: '团秀', team_collab: '合作秀', captain_show: '队长秀', pk_show: 'PK秀' }
+  return m[type || 'team_show'] || '团秀'
+}
+
+function songStatusText(song: any): string {
+  if (song.assignedTeamId) return `已归 ${getTeamName(song.assignedTeamId)}`
+  if (song.released) return '抢选中'
+  return '未释放'
+}
+
+function songStatusTheme(song: any): string {
+  if (song.assignedTeamId) return 'success'
+  if (song.released) return 'warning'
+  return 'default'
+}
+
+const assignedSongsCount = computed(() => roundSongs.value.filter((s: any) => s.assignedTeamId).length)
+const releasedSongsCount = computed(() => roundSongs.value.filter((s: any) => s.released && !s.assignedTeamId).length)
+const pendingSongsCount = computed(() => roundSongs.value.filter((s: any) => !s.released && !s.assignedTeamId).length)
 
 async function releaseSong(roundSongId: string) {
   try {
@@ -711,68 +720,98 @@ onMounted(() => {
   }
 }
 
+.song-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+
+  @media (max-width: 600px) { grid-template-columns: repeat(2, 1fr); }
+}
+
+.song-summary .sum-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--hover-bg);
+  border: 1px solid var(--border-color);
+}
+
+.song-summary .sum-val { font-size: 22px; font-weight: 800; }
+.song-summary .sum-lbl { font-size: 12px; color: var(--text-secondary); }
+.song-summary .is-assigned .sum-val { color: #2ba471; }
+.song-summary .is-released .sum-val { color: #e6a23c; }
+.song-summary .is-pending .sum-val { color: var(--text-tertiary); }
+
 .songs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
 
 .song-card {
+  position: relative;
   background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s;
+  padding: 16px 16px 14px;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
 
   &:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
   }
+
+  &.is-assigned { border-color: rgba(43, 164, 113, 0.4); }
+  &.is-released { border-color: rgba(230, 162, 60, 0.4); }
 }
 
-.song-header {
+.song-card .sc-band {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: var(--border-color);
+}
+
+.song-card.is-assigned .sc-band { background: linear-gradient(90deg, #2ba471, #4ecdc4); }
+.song-card.is-released .sc-band { background: linear-gradient(90deg, #e6a23c, #f1c40f); }
+
+.sc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.sc-title-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sc-title { font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-sub { font-size: 12px; color: var(--text-tertiary); }
+
+.sc-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sc-stat {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 6px 10px;
+  background: var(--hover-bg);
+  border-radius: 8px;
 }
 
-.song-title {
-  font-size: 18px;
-  font-weight: 600;
-}
+.sc-stat .k { font-size: 12px; color: var(--text-secondary); }
+.sc-stat .v { font-size: 13px; font-weight: 700; }
 
-.song-info {
-  margin-bottom: 16px;
-
-  .info-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 0;
-
-    .label {
-      font-size: 14px;
-      color: var(--text-secondary);
-    }
-
-    .value {
-      font-size: 14px;
-      font-weight: 500;
-    }
-  }
-}
-
-.song-actions {
-  margin-top: 16px;
-}
-
-.song-weights {
-  padding: 12px 0;
-  border-top: 1px solid var(--border-color);
-  margin-top: 4px;
-}
+.sc-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .weight-bar {
   display: flex;

@@ -9,6 +9,9 @@
       </div>
     </div>
 
+    <!-- 陪审团问答（冠军投票前） -->
+    <JuryQA v-if="status && status.finalTwo && status.finalTwo.length === 2" />
+
     <div class="status-banner">
       <div class="status-item">
         <span class="label">当前轮次</span>
@@ -91,6 +94,8 @@
           <button v-if="roomWinner && !roomRoundRegistered" class="bb-btn bb-btn-primary"
             @click="registerRoomWinner">✅ 登记胜者 {{ roomWinner.playerName }}</button>
         </div>
+        <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
+          :gameTitle="activeRoom.minigameName" :summoning="summoning" @summon="summonPlayers" />
       </div>
 
       <!-- FHOH 选择 FTC -->
@@ -188,10 +193,12 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
 import {
   bbGetEndgameStatus, bbFinal3Round, bbFhohPick, bbChampionResult, bbChampionVote, bbResetEndgame,
-  bbCreateMinigameRoom, bbStartMinigame, bbGetMinigameRoom
+  bbCreateMinigameRoom, bbStartMinigame, bbGetMinigameRoom, bbSummonMinigamePlayers
 } from '../../../services/bbApi'
 import type { BBEndgameStatus } from '../../../types/bigbrother'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
+import MinigameReadyPanel from '../../../components/bigbrother/MinigameReadyPanel.vue'
+import JuryQA from '../../../components/bigbrother/JuryQA.vue'
 
 const seasonStore = useBbSeasonStore()
 const status = ref<BBEndgameStatus | null>(null)
@@ -202,6 +209,20 @@ const roomPickerRound = ref(1)
 const activeRoom = ref<any>(null)
 const roomWinner = ref<any>(null)
 const roomRoundRegistered = ref(false)
+const summoning = ref(false)
+
+async function summonPlayers() {
+  if (!activeRoom.value || summoning.value) return
+  summoning.value = true
+  try {
+    await bbSummonMinigamePlayers(activeRoom.value.roomId)
+    alert('已召集所有参赛选手，请等待他们点击准备。')
+  } catch (e: any) {
+    alert(e?.message || '召集失败')
+  } finally {
+    summoning.value = false
+  }
+}
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const statusText = computed(() => {

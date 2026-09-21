@@ -23,6 +23,10 @@
         按意向匹配分组
         <span v-if="preferenceCount > 0" class="match-count">{{ preferenceCount }} 人已提交意向</span>
       </t-button>
+      <t-button v-if="isAutoMode" theme="primary" block :loading="autoFormLoading" @click="handleAutoForm">
+        <template #icon><span>{{ modeIcon }}</span></template>
+        一键按「{{ modeName }}」分组
+      </t-button>
       <t-button theme="warning" block @click="handleAutoDistribute">
         <template #icon><RefreshIcon /></template>
         自动分配
@@ -435,7 +439,7 @@ import { SettingIcon, RefreshIcon } from 'tdesign-icons-vue-next'
 import { useTeamStore } from '../../stores/teamStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useSeasonStore } from '../../stores/seasonStore'
-import { getAvatarUrl, getCurrentCaptains, matchCaptainPreferences, getAllCaptainPreferences, getGroupingMode } from '../../services/api'
+import { getAvatarUrl, getCurrentCaptains, matchCaptainPreferences, getAllCaptainPreferences, getGroupingMode, autoFormTeams } from '../../services/api'
 import { getTeams as dsGetTeams } from '../../services/dataService'
 import type { RoundTeam, RoundTeamMember } from '../../types/round'
 import type { User } from '../../types/user'
@@ -475,7 +479,7 @@ const currentRoundId = computed(() => {
 const loading = computed(() => teamStore.loading)
 
 // 分组模式（意向队长匹配）
-const groupingMode = ref<'captain' | 'song' | 'captain_choice'>('captain')
+const groupingMode = ref<'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft'>('captain')
 const matchingPreferences = ref(false)
 const preferenceCount = ref(0)
 
@@ -718,6 +722,33 @@ async function handleAutoDistribute() {
     await fetchTeamManagementUsers()
   } catch (e: any) {
     MessagePlugin.error(e.message || '分配失败')
+  }
+}
+
+// ===== 一键按分组模式自动组队（随机 / 实力均衡 / 队长蛇形）=====
+const autoFormLoading = ref(false)
+const isAutoMode = computed(() => ['random', 'balanced', 'captain_draft'].includes(groupingMode.value))
+const modeName = computed(() => ({ random: '随机分组', balanced: '实力均衡', captain_draft: '队长蛇形选人' } as Record<string, string>)[groupingMode.value] || '')
+const modeIcon = computed(() => ({ random: '🎲', balanced: '⚖️', captain_draft: '🐍' } as Record<string, string>)[groupingMode.value] || '🎲')
+
+async function handleAutoForm() {
+  if (teamStore.teams.length === 0 && unassignedCount.value === 0) {
+    MessagePlugin.warning('请先配置队伍结构')
+    return
+  }
+  const actualRoundId = teamStore.teams.length > 0 && teamStore.teams[0].roundId
+    ? teamStore.teams[0].roundId
+    : currentRoundId.value
+  autoFormLoading.value = true
+  try {
+    await autoFormTeams(actualRoundId, groupingMode.value as any)
+    MessagePlugin.success(`已按「${modeName.value}」完成分组`)
+    await teamStore.fetchTeams(actualRoundId)
+    await fetchTeamManagementUsers()
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '分组失败')
+  } finally {
+    autoFormLoading.value = false
   }
 }
 

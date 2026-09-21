@@ -7,6 +7,7 @@ const { v4: uuidv4 } = require('uuid')
 const { getGame } = require('../games/bigbrother/minigames/loadAll')
 const { loadCustomGame, createCustomGameHandler, getCustomHandlerId } = require('../games/bigbrother/minigames/customGame')
 const { startSession, recordEvent, finalizeSession, listLiveSessions } = require('../games/bigbrother/minigameReplay')
+const { broadcastBBGame } = require('./bbGame')
 
 // 活跃游戏房间（内存管理）
 const activeRooms = new Map() // roomId -> GameRoom
@@ -31,6 +32,8 @@ class GameRoom {
     this.roundIndex = null
     this.roundId = ''
     this.replaySession = null     // 对局记录/复盘 session
+    this.summoned = false         // 是否已召集选手
+    this.ready = {}               // playerId -> 是否已准备
   }
 
   getParticipant(playerId) {
@@ -40,6 +43,14 @@ class GameRoom {
   setConnected(playerId, connected) {
     const p = this.getParticipant(playerId)
     if (p) p.connected = connected
+  }
+
+  setReady(playerId, ready) {
+    if (this.getParticipant(playerId)) this.ready[playerId] = !!ready
+  }
+
+  isAllReady() {
+    return this.participants.length > 0 && this.participants.every(p => this.ready[p.playerId])
   }
 
   allConnected() {
@@ -141,12 +152,25 @@ const initBBMinigameSocket = (io) => {
       minigameNs.to(roomId).emit('participant_joined', {
         playerId: userId,
         playerName: userName,
-        participants: room.participants.map(p => ({
-          playerId: p.playerId,
-          playerName: p.playerName,
-          connected: p.connected
-        }))
+        participants: publicParticipants(room)
       })
+    })
+
+    // 选手点击准备 / 取消准备
+    socket.on('player_ready', (data) => {
+      const roomId = data?.roomId || socket.roomId
+      if (!roomId) return
+      const room = activeRooms.get(roomId)
+      if (!room) return
+      if (!room.getParticipant(userId)) return
+      room.setReady(userId, data?.ready !== false)
+      minigameNs.to(roomId).emit('ready_update', {
+        playerId: userId,
+        ready: !!room.ready[userId],
+        allReady: room.isAllReady(),
+        participants: publicParticipants(room)
+      })
+      broadcastProgress(room, minigameNs)
     })
 
     // 离开房间
@@ -555,11 +579,35 @@ const initBBMinigameSocket = (io) => {
       targetScore: room.targetScore,
       roundIndex: room.roundIndex,
       roundId: room.roundId,
-      participants: room.participants.map(p => ({ playerId: p.playerId, playerName: p.playerName, connected: p.connected })),
+      participants: publicParticipants(room),
       winner: room.winner,
       eventCount: room.replaySession ? room.replaySession.events.length : 0,
       progress: buildProgress(room)
     }))
+  }
+
+  // 召集选手（切换到本比赛页面并进入准备环节）
+  minigameNs.summonPlayers = (roomId) => {
+    const room = activeRooms.get(roomId)
+    if (!room) return { success: false, error: '房间不存在' }
+    room.ready = {}
+    room.summoned = true
+    const slug = ({ hoh: 'hoh', veto: 'veto-competition', bbbb: 'bbbb', finale: 'finale' })[room.gameType] || 'hoh'
+    const path = room.gameType === 'finale'
+      ? '/games/bigbrother/player/finale'
+      : `/games/bigbrother/player/round/${room.roundIndex || 1}/${slug}`
+    const payload = {
+      roomId,
+      gameType: room.gameType,
+      minigameId: room.minigameId,
+      minigameName: room.minigameName || room.minigameId,
+      roundIndex: room.roundIndex,
+      path
+    }
+    minigameNs.to(roomId).emit('game_summoned', payload)
+    try { broadcastBBGame('bb:minigame-summon', payload) } catch (e) { /* ignore */ }
+    broadcastProgress(room, minigameNs)
+    return { success: true, data: payload }
   }
 
   // 当前进行中的对局记录（内存）
@@ -570,28 +618,45 @@ const initBBMinigameSocket = (io) => {
 function buildProgress(room) {
   // 优先使用房间缓存的 handler（自定义游戏），再查静态注册表
   const handler = room.handler || getGame(room.minigameId)
-  const allStates = handler && handler.getAllStates ? handler.getAllStates(room.gameState) : {}
+  let allStates = {}
+  try {
+    if (handler && handler.getAllStates && room.gameState) {
+      allStates = handler.getAllStates(room.gameState) || {}
+    }
+  } catch (e) {
+    allStates = {}
+  }
   return {
     roomId: room.roomId,
     gameType: room.gameType,
     minigameId: room.minigameId,
+    minigameName: room.minigameName || '',
     status: room.status,
     targetScore: room.targetScore,
     winner: room.winner,
     winners: room.winners || [],
-    participants: room.participants.map(p => ({
-      playerId: p.playerId,
-      playerName: p.playerName,
-      connected: p.connected
-    })),
+    summoned: !!room.summoned,
+    allReady: room.isAllReady ? room.isAllReady() : false,
+    participants: publicParticipants(room),
     states: allStates
   }
+}
+
+// 参与者公开信息（含准备状态）
+function publicParticipants(room) {
+  return room.participants.map(p => ({
+    playerId: p.playerId,
+    playerName: p.playerName,
+    avatar: p.avatar || null,
+    connected: p.connected,
+    ready: !!(room.ready && room.ready[p.playerId])
+  }))
 }
 
 // 广播实时进度到房间（管理员观察 + 供前端刷新）
 function broadcastProgress(room, minigameNs) {
   if (!room || room.status === 'finished') return
-  minigameNs.to(room.roomId).emit('game_progress', buildProgress(room))
+  try { minigameNs.to(room.roomId).emit('game_progress', buildProgress(room)) } catch (e) { /* ignore */ }
 }
 
 // ===== 对局复盘：事件记录与广播 =====

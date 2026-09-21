@@ -48,6 +48,11 @@
       <span>🚶 你正在前往 {{ movingTargetName }}……</span>
     </div>
 
+    <!-- 餐厅：照片墙（页面顶部整宽展示） -->
+    <div v-if="currentRoomId === 'dining_room'" class="photo-wall-top">
+      <PhotoWall :players="photoWallPlayers" />
+    </div>
+
     <div class="house-layout">
       <!-- 左侧：房屋地图 -->
       <div class="house-left">
@@ -181,10 +186,11 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
 import { useHouseSocket, type HouseMessage, type HousePlayer } from '../../../composables/useHouseSocket'
-import { bbGetMyLocation, bbGetReachableRooms, bbMoveToRoom, bbGetHouseRooms, bbGetRoomPlayers, bbGetMyState, bbSleep, bbSleepWake, bbSleepApprove } from '../../../services/bbHouseApi'
+import { bbGetMyLocation, bbGetReachableRooms, bbMoveToRoom, bbGetHouseRooms, bbGetRoomPlayers, bbGetMyState, bbSleep, bbSleepWake, bbSleepApprove, bbGetPhotoWall } from '../../../services/bbHouseApi'
 import { bbGetActiveHouseguests, bbGetCurrentHoh } from '../../../services/bbApi'
 import HouseMap from '../../../components/bigbrother/house/HouseMap.vue'
 import RoomChat from '../../../components/bigbrother/house/RoomChat.vue'
+import PhotoWall from '../../../components/bigbrother/PhotoWall.vue'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBHouseRoomWithCount, BBHohMonitorRoom } from '../../../types/bigbrother'
 
@@ -197,6 +203,15 @@ const rooms = ref<BBHouseRoomWithCount[]>([])
 const reachableRooms = ref<any[]>([])
 const houseLocked = ref(false)
 const houseLockReason = ref('')
+const photoWallPlayers = ref<any[]>([])
+
+async function loadPhotoWall() {
+  if (currentRoomId.value !== 'dining_room') { photoWallPlayers.value = []; return }
+  try {
+    const res = await bbGetPhotoWall()
+    photoWallPlayers.value = res?.players || []
+  } catch { photoWallPlayers.value = [] }
+}
 const messages = ref<HouseMessage[]>([])
 const presencePlayers = ref<HousePlayer[]>([])
 const hohMonitor = ref<BBHohMonitorRoom[]>([])
@@ -457,6 +472,9 @@ async function loadData() {
     } else {
       hohMonitor.value = []
     }
+
+    // 餐厅：加载照片墙
+    await loadPhotoWall()
   } catch (e) {
     console.error('[BBHouse] Load data error:', e)
   }
@@ -851,4 +869,5 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   .house-left { width: 100%; }
 }
 .locked-banner { background: #ffaa0015; border: 1px solid #ffaa0044; color: #ffaa00; border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; text-align: center; }
+.photo-wall-top { margin-bottom: 14px; }
 </style>

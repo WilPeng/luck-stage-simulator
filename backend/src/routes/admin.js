@@ -226,7 +226,7 @@ router.post('/round/:round/preparation', auth, requireAdmin, async (req, res) =>
     round.eliminationCount = eliminationCount !== undefined ? eliminationCount : 5
     round.dangerLineRatio = dangerLineRatio !== undefined ? dangerLineRatio : 0.2
     round.teamStructures = Array.isArray(teamStructures) ? teamStructures : []
-    round.groupingMode = ['captain', 'song', 'captain_choice'].includes(groupingMode) ? groupingMode : 'captain'
+    round.groupingMode = ['captain', 'song', 'captain_choice', 'random', 'balanced', 'captain_draft'].includes(groupingMode) ? groupingMode : 'captain'
     round.updatedAt = new Date().toISOString()
 
     await round.save()
@@ -663,20 +663,14 @@ async function calculatePerformance(round, frontRoundId) {
     let totalPerformance = 0
     for (const m of teamMembers) {
       const u = userMap[m.playerId]
-      const perfValue = randomInt(-10, 20)
+      const perfValue = randomInt(0, 100)
       totalPerformance += perfValue
       memberPerformances.push({ playerId: u.id, playerName: u.name, performanceValue: perfValue })
     }
     const performanceVotes = totalPerformance
 
+    // 3.7 取消不可见随机舞台事件抽取，默认无事件
     let eventVotes = 0, eventId = null, eventName = '', eventDescription = ''
-    if (stageEvents.length > 0) {
-      const drawn = stageEvents[Math.floor(Math.random() * stageEvents.length)]
-      eventVotes = drawn.voteEffect || 0
-      eventId = drawn.id
-      eventName = drawn.name
-      eventDescription = drawn.description || ''
-    }
 
     const finalVotes = Math.max(0, BASE_VOTES + attributeVotes + performanceVotes + compatibilityVotes + eventVotes)
 

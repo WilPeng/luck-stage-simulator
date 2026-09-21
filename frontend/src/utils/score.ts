@@ -18,9 +18,10 @@ export function calculateTeamAverage(team: Team, users: User[]): { vocal: number
 }
 
 export function calculateSongAttrScore(teamAverage: { vocal: number; dance: number; charm: number }, song: Song): number {
-  return teamAverage.vocal * song.vocalWeight + 
-         teamAverage.dance * song.danceWeight + 
-         teamAverage.charm * song.charmWeight
+  const s = song as any
+  return teamAverage.vocal * (s.vocalWeight ?? 3) +
+         teamAverage.dance * (s.danceWeight ?? 3) +
+         teamAverage.charm * (s.charmWeight ?? 3)
 }
 
 export function calculateTeamFinalScore(
@@ -37,8 +38,9 @@ export function calculatePlayerScore(
   randomScore: number, 
   teamBonus: number
 ): number {
-  const attrScore = user.attributes.vocal * song.vocalWeight +
-                    user.attributes.dance * song.danceWeight +
-                    user.attributes.charm * song.charmWeight
+  const s = song as any
+  const attrScore = user.attributes.vocal * (s.vocalWeight ?? 3) +
+                    user.attributes.dance * (s.danceWeight ?? 3) +
+                    user.attributes.charm * (s.charmWeight ?? 3)
   return Math.round(attrScore + randomScore + teamBonus)
 }

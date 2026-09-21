@@ -132,12 +132,12 @@ const initData = async () => {
   if (songCount === 0) {
     console.log('Initializing songs...')
     const songs = [
-      { id: 's001', name: '逆光飞翔', style: '流行', difficulty: 3, vocalWeight: 4, danceWeight: 3, charmWeight: 3, baseScore: 100, riskFactor: 0.2, gameId },
-      { id: 's002', name: '舞动奇迹', style: '舞曲', difficulty: 4, vocalWeight: 2, danceWeight: 5, charmWeight: 3, baseScore: 100, riskFactor: 0.3, gameId },
-      { id: 's003', name: '星光大道', style: '抒情', difficulty: 3, vocalWeight: 5, danceWeight: 2, charmWeight: 3, baseScore: 100, riskFactor: 0.15, gameId },
-      { id: 's004', name: '魅力四射', style: '动感', difficulty: 4, vocalWeight: 3, danceWeight: 3, charmWeight: 5, baseScore: 100, riskFactor: 0.25, gameId },
-      { id: 's005', name: '乘风破浪', style: '励志', difficulty: 5, vocalWeight: 4, danceWeight: 4, charmWeight: 4, baseScore: 100, riskFactor: 0.4, gameId },
-      { id: 's006', name: '梦想舞台', style: '流行', difficulty: 3, vocalWeight: 3, danceWeight: 4, charmWeight: 3, baseScore: 100, riskFactor: 0.2, gameId }
+      { id: 's001', name: '逆光飞翔', style: '流行', difficulty: 3, mainAttribute: 'vocal', baseVocal: 35, baseDance: 30, risk: 10, gameId },
+      { id: 's002', name: '舞动奇迹', style: '舞曲', difficulty: 4, mainAttribute: 'dance', baseVocal: 25, baseDance: 40, risk: 12, gameId },
+      { id: 's003', name: '星光大道', style: '抒情', difficulty: 3, mainAttribute: 'vocal', baseVocal: 40, baseDance: 25, risk: 8, gameId },
+      { id: 's004', name: '魅力四射', style: '动感', difficulty: 4, mainAttribute: 'charm', baseVocal: 30, baseDance: 30, risk: 11, gameId },
+      { id: 's005', name: '乘风破浪', style: '励志', difficulty: 5, mainAttribute: 'dance', baseVocal: 35, baseDance: 35, risk: 15, gameId },
+      { id: 's006', name: '梦想舞台', style: '流行', difficulty: 3, mainAttribute: 'vocal', baseVocal: 30, baseDance: 35, risk: 10, gameId }
     ]
     await Song.insertMany(songs.map(s => new Song(s)))
     console.log(`Created ${songs.length} songs`)
@@ -249,6 +249,23 @@ app.use('/api/:gameId', (req, res, next) => {
   next()
 })
 
+// ===== 通用游戏全局实时广播：任意 /api/:gameId 写操作成功后推送 sf:update =====
+app.use('/api/:gameId', (req, res, next) => {
+  if (req.method === 'GET' || req.method === 'OPTIONS') return next()
+  const gameId = req.params.gameId
+  if (gameId === 'bigbrother') return next() // BB 已有独立广播
+  const fullPath = req.originalUrl || req.path
+  res.on('finish', () => {
+    if (res.statusCode < 400) {
+      try {
+        const { broadcastSfGame } = require('./socket/sfGame')
+        broadcastSfGame(gameId, { gameId, path: fullPath, method: req.method })
+      } catch (e) { /* ignore */ }
+    }
+  })
+  next()
+})
+
 // ===== Big Brother 全局实时广播：任意 /api/bigbrother 写操作成功后推送 bb:update =====
 app.use('/api/bigbrother', (req, res, next) => {
   if (req.method === 'GET' || req.method === 'OPTIONS') return next()
@@ -274,6 +291,7 @@ app.use('/api/bigbrother/hoh', bbGameIdMiddleware, require('./games/bigbrother/r
 app.use('/api/bigbrother/nomination', bbGameIdMiddleware, require('./games/bigbrother/routes/bbNomination'))
 app.use('/api/bigbrother/veto', bbGameIdMiddleware, require('./games/bigbrother/routes/bbVeto'))
 app.use('/api/bigbrother/eviction', bbGameIdMiddleware, require('./games/bigbrother/routes/bbEviction'))
+app.use('/api/bigbrother/jury-qa', bbGameIdMiddleware, require('./games/bigbrother/routes/bbJuryQA'))
 app.use('/api/bigbrother/logs', bbGameIdMiddleware, require('./games/bigbrother/routes/bbLogs'))
 app.use('/api/bigbrother/minigame', bbGameIdMiddleware, require('./games/bigbrother/routes/bbMinigame'))
 app.use('/api/bigbrother/custom-game', bbGameIdMiddleware, require('./games/bigbrother/routes/bbCustomGame'))
@@ -599,6 +617,10 @@ initStore().then(() => {
         // 初始化 Big Brother 全局实时通信
         const { initBBGameSocket } = require('./socket/bbGame')
         initBBGameSocket(io)
+
+        // 初始化 通用游戏全局实时通信（乘风2026 等）
+        const { initSfGameSocket } = require('./socket/sfGame')
+        initSfGameSocket(io)
 
         server.listen(PORT, () => {
           console.log(`Server running on port ${PORT}`)

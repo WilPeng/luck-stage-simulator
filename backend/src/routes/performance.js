@@ -14,6 +14,7 @@ const PlayerPerformance = require('../models/PlayerPerformance')
 const StageEvent = require('../models/StageEvent')
 const { generateAudienceVoteForRound, clearAudienceVote, randomChineseName, randomGender, randomAge, randomOccupation } = require('../services/audienceVoteService')
 const PerformanceValue = require('../models/PerformanceValue')
+const TrainingStatus = require('../models/TrainingStatus')
 const PerformanceRoundState = require('../models/PerformanceRoundState')
 const AudienceVoteFinalRanking = require('../models/AudienceVoteFinalRanking')
 const AudienceMember = require('../models/AudienceMember')
@@ -116,14 +117,10 @@ async function resolveRoundFromQuery(req) {
   return null
 }
 
-// ===== 共用工具：发挥值文案映射（-10~20 范围）=====
+// ===== 共用工具：发挥成绩文案（各玩法成绩口径不同，统一记为成绩值）=====
 function getPerformanceText(value) {
-  if (value >= 30) return '超神发挥'
-  if (value >= 15) return '超常发挥'
-  if (value >= 5) return '优秀发挥'
-  if (value >= -2) return '正常发挥'
-  if (value >= -7) return '略有失误'
-  return '发挥失常'
+  if (value === null || value === undefined) return ''
+  return `成绩 ${value}`
 }
 
 // ===== 共用工具：生成并保存发挥值 =====
@@ -237,38 +234,105 @@ router.put('/config', auth, requireAdmin, async (req, res) => {
 
 /** 根据分数返回评级和描述 */
 function getStageRating(score) {
-  if (score >= 85) return { stageRating: 'S', stageRatingText: '完美舞台' }
-  if (score >= 65) return { stageRating: 'A', stageRatingText: '出色表现' }
-  if (score >= 45) return { stageRating: 'B', stageRatingText: '稳定发挥' }
-  if (score >= 25) return { stageRating: 'C', stageRatingText: '略有不足' }
-  return { stageRating: 'D', stageRatingText: '失误较多' }
+  if (score >= 85) return { stageRating: 'S', stageRatingText: '超级完美' }
+  if (score >= 65) return { stageRating: 'A', stageRatingText: '完美' }
+  if (score >= 45) return { stageRating: 'B', stageRatingText: '正常' }
+  if (score >= 25) return { stageRating: 'C', stageRatingText: '翻车' }
+  return { stageRating: 'D', stageRatingText: '超级翻车' }
+}
+
+const RATING_TEXTS = { S: '超级完美', A: '完美', B: '正常', C: '翻车', D: '超级翻车' }
+
+/**
+ * 3.3 个人评级骰面
+ * - 骰子面数 = 歌曲难度；点数越大评级越低（1..difficulty 对应 A/B/C/D）
+ * - 未达标差值：deficit = max(0,基准vocal-实际vocal) + max(0,基准dance-实际dance)（超额不算）
+ *   steps = ceil(deficit / 风险值)，x = steps / 难度
+ *   x<=1: C 概率 = x；x>1: C 概率 = max(1/难度, 2-x)，D 概率 = min(1-1/难度, x-1)
+ */
+function computeRatingFaces(player, song) {
+  const attrs = player.attributes || { vocal: 30, dance: 30, charm: 30 }
+  const mainAttr = (song.mainAttribute === 'dance' || song.mainAttribute === 'charm') ? song.mainAttribute : 'vocal'
+  const d = Math.max(2, Math.round(song.difficulty || 3))
+  const risk = Math.max(1, Number(song.risk) || 10)
+  const baseVocal = typeof song.baseVocal === 'number' ? song.baseVocal : 30
+  const baseDance = typeof song.baseDance === 'number' ? song.baseDance : 30
+  const baseMet = (attrs.vocal ?? 0) >= baseVocal && (attrs.dance ?? 0) >= baseDance
+  const mainBase = mainAttr === 'dance' ? baseDance : (mainAttr === 'charm' ? Math.round((baseVocal + baseDance) / 2) : baseVocal)
+  const excess = (attrs[mainAttr] ?? 0) - mainBase
+  const steps = Math.max(0, Math.floor(excess / risk))
+
+  // 未达标差值（只算缺少的部分，超额不计）
+  const deficit = Math.max(0, baseVocal - (attrs.vocal ?? 0)) + Math.max(0, baseDance - (attrs.dance ?? 0))
+  const deficitSteps = deficit > 0 ? Math.ceil(deficit / risk) : 0
+  let cPenalty = 0
+  let dPenalty = 0
+  if (deficitSteps > 0) {
+    const x = deficitSteps / d
+    const pC = x <= 1 ? x : Math.max(1 / d, 2 - x)
+    const pD = x <= 1 ? 0 : Math.min(1 - 1 / d, x - 1)
+    cPenalty = Math.round(pC * d)
+    dPenalty = Math.round(pD * d)
+    // 惩罚面数不超过骰面，且至少保留 1 面 C
+    if (cPenalty + dPenalty > d) {
+      dPenalty = Math.max(0, Math.min(dPenalty, d - 1))
+      cPenalty = d - dPenalty
+    }
+    if (dPenalty > 0 && cPenalty < 1) cPenalty = 1
+  }
+
+  // 常规（按主属性超出基准的倍数）
+  const normalA = Math.min(Math.max(steps - (d - 1), 0), Math.max(0, d - 2))
+  const normalAPlusB = Math.min(steps, d - 1)
+  const normalB = Math.max(0, normalAPlusB - normalA)
+  const normalC = d - normalAPlusB
+
+  // 惩罚面从最优面（A→B→C）扣除，保证总面数 = d
+  let a = normalA
+  let b = normalB
+  let c = normalC + cPenalty
+  let penalty = cPenalty + dPenalty
+  const takeA = Math.min(a, penalty); a -= takeA; penalty -= takeA
+  const takeB = Math.min(b, penalty); b -= takeB; penalty -= takeB
+  if (penalty > 0) { const t = Math.min(c, penalty); c -= t; penalty -= t }
+
+  return {
+    mainAttr, difficulty: d, risk, baseVocal, baseDance, mainBase, baseMet,
+    excess, steps, deficit, deficitSteps,
+    faces: { a, b, c, d: dPenalty, total: d },
+    attrs
+  }
+}
+
+/** 3.3 掷骰：点数越大评级越低 */
+function rollPlayerRating(player, song) {
+  const f = computeRatingFaces(player, song)
+  const face = Math.floor(Math.random() * f.difficulty) + 1
+  const { a, b, c } = f.faces
+  let rating = 'D'
+  if (face <= a) rating = 'A'
+  else if (face <= a + b) rating = 'B'
+  else if (face <= a + b + c) rating = 'C'
+  else rating = 'D'
+  if (rating === 'A' && face === 1 && f.deficitSteps === 0 && f.steps >= (2 * f.difficulty - 3)) rating = 'S'
+  return { rating, ratingText: RATING_TEXTS[rating], roll: face, ...f }
 }
 
 /** 计算机个人分和评级 (带控制台日志) */
-function calcPlayerScore(player, song, performanceValue) {
-  // 归一化歌曲权重
-  const totalWeight = song.vocalWeight + song.danceWeight + song.charmWeight
-  const normalizedVocalW = +(song.vocalWeight / totalWeight).toFixed(4)
-  const normalizedDanceW = +(song.danceWeight / totalWeight).toFixed(4)
-  const normalizedCharmW = +(song.charmWeight / totalWeight).toFixed(4)
-
+function calcPlayerScore(player, song, performanceValue, presetRating) {
   // ★ BUG 修复: 属性从 player.attributes 中读取，不是 player 顶层 ★
   const rawVocal = player.attributes?.vocal ?? 0
   const rawDance = player.attributes?.dance ?? 0
   const rawCharm = player.attributes?.charm ?? 0
 
-  // 属性分（加权属性值，不再限制 0~100）
-  const attributeScore = Math.round(
-    rawVocal * normalizedVocalW +
-    rawDance * normalizedDanceW +
-    rawCharm * normalizedCharmW
-  )
+  // 属性分（三项平均）
+  const attributeScore = Math.round((rawVocal + rawDance + rawCharm) / 3)
 
   // 难度系数 difficulty=1→1.0, difficulty=5→0.6
   const difficultyFactor = +(1 - (song.difficulty - 1) * 0.1).toFixed(2)
 
-  // 发挥加成 = 发挥值 × 2 （-20~80）
-  const performanceBonus = performanceValue * 2
+  // 发挥加成 = 成绩（各玩法口径不同，仅作展示，不计入最终票数）
+  const performanceBonus = performanceValue
 
   // 最终分数 0~120
   const rawScore = attributeScore * difficultyFactor + performanceBonus
@@ -276,24 +340,119 @@ function calcPlayerScore(player, song, performanceValue) {
   if (playerFinalScore < 0) playerFinalScore = 0
   if (playerFinalScore > 120) playerFinalScore = 120
 
-  const { stageRating, stageRatingText } = getStageRating(playerFinalScore)
+  let rating
+  if (presetRating && presetRating.rating) {
+    const f = computeRatingFaces(player, song)
+    rating = { rating: presetRating.rating, ratingText: RATING_TEXTS[presetRating.rating] || presetRating.rating, roll: presetRating.roll ?? null, ...f }
+  } else {
+    rating = rollPlayerRating(player, song)
+  }
+  const stageRating = rating.rating
+  const stageRatingText = rating.ratingText
 
-  // ===== 控制台详细计算日志 =====
+  // ===== 控制台详细日志（评级制） =====
   console.log('')
   console.log('╔══════════════════════════════════════════════╗')
-  console.log(`║  个人得分计算 · ${player.name || player.playerId || '未知选手'}`)
-  console.log(`║  歌曲: ${song.name} | 难度: ${song.difficulty}`)
-  console.log(`║  权重: 声乐=${song.vocalWeight} 舞蹈=${song.danceWeight} 魅力=${song.charmWeight}`)
-  console.log(`║  归一化: V=${normalizedVocalW} D=${normalizedDanceW} C=${normalizedCharmW}`)
+  console.log(`║  个人评级 · ${player.name || player.playerId || '未知选手'}`)
+  console.log(`║  歌曲: ${song.name} | 难度: ${song.difficulty} 面骰 | 风险值: ${rating.risk}`)
   console.log(`║  选手属性: 声乐=${rawVocal} 舞蹈=${rawDance} 魅力=${rawCharm}`)
-  console.log(`║  属性分 = ${rawVocal}×${normalizedVocalW} + ${rawDance}×${normalizedDanceW} + ${rawCharm}×${normalizedCharmW} = ${attributeScore}`)
-  console.log(`║  难度系数 = 1 - (${song.difficulty} - 1)×0.1 = ${difficultyFactor}`)
-  console.log(`║  发挥值 = ${performanceValue} → 发挥加成 = ${performanceValue}×2 = ${performanceBonus}`)
-  console.log(`║  原始分 = ${attributeScore}×${difficultyFactor} + ${performanceBonus} = ${rawScore.toFixed(2)}`)
-  console.log(`║  最终分 = ${playerFinalScore} → 评级: ${stageRating}(${stageRatingText})`)
+  console.log(`║  主属性: ${rating.mainAttr} | 基准: ${rating.mainBase} | 超出: ${rating.excess}（${rating.steps}×风险值）`)
+  console.log(`║  未达标差值: ${rating.deficit}（${rating.deficitSteps}×风险值）`)
+  console.log(`║  骰面: A=${rating.faces.a} B=${rating.faces.b} C=${rating.faces.c} D=${rating.faces.d}`)
+  console.log(`║  掷出 ${rating.roll} 点 → 评级: ${stageRating}(${stageRatingText})`)
   console.log('╚══════════════════════════════════════════════╝')
 
-  return { playerScore: playerFinalScore, stageRating, stageRatingText, attributeScore, difficultyFactor, performanceBonus }
+  return {
+    playerScore: playerFinalScore, stageRating, stageRatingText, attributeScore, difficultyFactor, performanceBonus,
+    ratingFaces: rating.faces, ratingRoll: rating.roll, ratingMainAttr: rating.mainAttr,
+    ratingBaseMet: rating.baseMet, ratingSteps: rating.steps, ratingExcess: rating.excess,
+    ratingDeficit: rating.deficit, ratingDeficitSteps: rating.deficitSteps,
+    ratingMainBase: rating.mainBase, ratingDifficulty: rating.difficulty, ratingRisk: rating.risk
+  }
+}
+
+// ===== 3.4 团队评级（按成员个人评级 + 可配置规则，顺序判定）=====
+const TEAM_RATING_TEXTS = { S: '超级完美', A: '完美', B: '正常', C: '翻车', D: '惨不忍睹' }
+
+// 默认规则：2人翻车→惨不忍睹 / 1人翻车→翻车 / 2人超级完美→超级完美 / 2人完美及以上→完美 / 其他→正常
+const DEFAULT_TEAM_RATING_RULES = [
+  { count: 2, ratings: ['C'], teamRating: 'D' },
+  { count: 1, ratings: ['C'], teamRating: 'C' },
+  { count: 2, ratings: ['S'], teamRating: 'S' },
+  { count: 2, ratings: ['S', 'A'], teamRating: 'A' },
+  { count: 0, ratings: [], teamRating: 'B' }
+]
+
+function getTeamRatingRules(config, teamSize) {
+  if (!config) return DEFAULT_TEAM_RATING_RULES
+  if (Array.isArray(config)) return config.length ? config : DEFAULT_TEAM_RATING_RULES
+  const bySize = config[String(teamSize)]
+  if (Array.isArray(bySize) && bySize.length) return bySize
+  if (Array.isArray(config.default) && config.default.length) return config.default
+  return DEFAULT_TEAM_RATING_RULES
+}
+
+// 新规则结构：{ combine: 'all'|'any', teamRating, conditions: [{ metric, ratings?, op, value }] }
+// 兼容旧结构：{ count, ratings, teamRating }
+function normalizeRule(rule) {
+  if (rule && Array.isArray(rule.conditions)) return rule
+  const cnt = Number(rule && rule.count) || 0
+  if (cnt <= 0) return { combine: 'all', teamRating: (rule && rule.teamRating) || 'B', conditions: [] }
+  return {
+    combine: 'all',
+    teamRating: (rule && rule.teamRating) || 'B',
+    conditions: [{ metric: 'countRating', ratings: (rule && rule.ratings) || [], op: '>=', value: cnt }]
+  }
+}
+
+function evalCondition(cond, ctx) {
+  const op = cond.op || '>='
+  const value = Number(cond.value) || 0
+  let actual = 0
+  switch (cond.metric) {
+    case 'countRating': actual = (ctx.memberRatings || []).filter(r => (cond.ratings || []).includes(r)).length; break
+    case 'teamScore': actual = ctx.teamScore ?? 0; break
+    case 'avgCharm': actual = ctx.avgCharm ?? 0; break
+    case 'avgPerformance': actual = ctx.avgPerformance ?? 0; break
+    case 'avgVocal': actual = ctx.avgVocal ?? 0; break
+    case 'avgDance': actual = ctx.avgDance ?? 0; break
+    default: actual = 0
+  }
+  switch (op) {
+    case '>=': return actual >= value
+    case '<=': return actual <= value
+    case '>': return actual > value
+    case '<': return actual < value
+    case '=': return actual === value
+    default: return false
+  }
+}
+
+function calcTeamRating(ctx, teamSize, config) {
+  const memberRatings = (ctx && ctx.memberRatings) || []
+  const rules = getTeamRatingRules(config, teamSize)
+  for (const raw of rules) {
+    const rule = normalizeRule(raw)
+    const conds = rule.conditions || []
+    if (conds.length === 0) {
+      return { teamRating: rule.teamRating || 'B', teamRatingText: TEAM_RATING_TEXTS[rule.teamRating || 'B'] }
+    }
+    const results = conds.map(c => evalCondition(c, ctx))
+    const matched = (rule.combine === 'any') ? results.some(Boolean) : results.every(Boolean)
+    if (matched) {
+      return { teamRating: rule.teamRating || 'B', teamRatingText: TEAM_RATING_TEXTS[rule.teamRating || 'B'] }
+    }
+  }
+  return { teamRating: 'B', teamRatingText: TEAM_RATING_TEXTS.B }
+}
+
+// 3.5/3.6 评级加权（S/A/B/C/D，默认 S=1 A=0.9 B=0.8 C=0.7 D=0.6，管理员可改）
+function ratingWeight(rating, seasonCfg, kind) {
+  const w = seasonCfg && seasonCfg.ratingWeights
+    ? (kind === 'personal' ? seasonCfg.ratingWeights.personal : seasonCfg.ratingWeights.team)
+    : null
+  const map = w || { S: 1, A: 0.9, B: 0.8, C: 0.7, D: 0.6 }
+  return map[rating] ?? 1
 }
 
 /** 计算团队分和团队评级（带控制台日志） */
@@ -316,7 +475,7 @@ function calcTeamScore(memberScores, teamName) {
 }
 
 /** 基于真实大众评审成员，模拟 1000 人对所有舞台的 yes/no 投票 */
-async function simulateAudienceVotesForTeams(roundId, teamsData, totalAudience = 1000, yesRateDenominator = 150) {
+async function simulateAudienceVotesForTeams(roundId, teamsData, totalAudience = 1000, globalMaxCharmPerf = 1) {
   // 1. 清空旧团队票和旧评审成员（重算时需要完全重建）
   await AudienceTeamVote.deleteMany({ roundId })
   await AudienceMember.deleteMany({ roundId })
@@ -341,9 +500,9 @@ async function simulateAudienceVotesForTeams(roundId, teamsData, totalAudience =
   // 3. 逐队逐人模拟 yes/no
   const results = []
   for (const team of teamsData) {
-    const appeal = team.teamScore + team.teamCharm * 0.5
-    const denom = Math.max(1, yesRateDenominator)
-    let yesRate = appeal / denom
+    // 3.5 团队得票概率 = (队内发挥后charm均值 + 队内发挥后最高charm) / (2×全体最高发挥后charm) × 团队评级权重
+    const denom = 2 * Math.max(1, globalMaxCharmPerf)
+    let yesRate = ((team.avgCharmPerf || 0) + (team.maxCharmPerf || 0)) / denom * (team.teamWeight ?? 1)
     yesRate = Math.max(0.05, Math.min(0.95, yesRate))
     // 舞台事件微调：事件票数按千分比转换
     yesRate += (team.eventVotes || 0) / totalAudience
@@ -383,6 +542,7 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
     // frontRoundId 用于查询 RoundTeam/RoundTeamMember/TeamSong（前端传入的 roundId 格式）
     const dbRoundId = round.id
     const frontRoundId = req.body.roundId || `round-${round.index}`
+    const seasonCfg = await getCurrentSeason()
 
     const filter = buildRoundFilter(round)
 
@@ -419,7 +579,11 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
     // 5. 已生成的发挥值
     const performanceValues = await PerformanceValue.find({ roundId: dbRoundId })
     const perfValueMap = {}
-    for (const pv of performanceValues) perfValueMap[pv.playerId] = pv.performanceValue
+    const ratingMap = {}
+    for (const pv of performanceValues) {
+      perfValueMap[pv.playerId] = pv.performanceValue
+      if (pv.rating) ratingMap[pv.playerId] = { rating: pv.rating, roll: pv.ratingRoll }
+    }
 
     // 6. 舞台事件池（保留用于 finalVotes 计算）
     const stageEvents = await StageEvent.find({ enabled: true })
@@ -457,10 +621,10 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
         // 获取发挥值，未生成则随机补一个
         let perfValue = perfValueMap[m.playerId]
         if (perfValue === undefined) {
-        perfValue = randomInt(-10, 20)
+        perfValue = randomInt(0, 100)
       }
-      const { playerScore, stageRating, stageRatingText, attributeScore, difficultyFactor, performanceBonus } =
-        calcPlayerScore(u, song, perfValue)
+      const { playerScore, stageRating, stageRatingText, attributeScore, difficultyFactor, performanceBonus, ratingFaces, ratingRoll, ratingMainAttr, ratingBaseMet, ratingSteps, ratingExcess, ratingDeficit, ratingDeficitSteps, ratingMainBase, ratingDifficulty, ratingRisk } =
+        calcPlayerScore(u, song, perfValue, ratingMap[m.playerId])
 
         memberResults.push({
           playerId: u.id,
@@ -473,29 +637,43 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
           stageRatingText,
           attributeScore,
           difficultyFactor,
-          performanceBonus
+          performanceBonus,
+          ratingFaces,
+          ratingRoll,
+          ratingMainAttr,
+          ratingBaseMet,
+          ratingSteps,
+          ratingExcess,
+          ratingDeficit,
+          ratingDeficitSteps,
+          ratingMainBase,
+          ratingDifficulty,
+          ratingRisk
         })
         memberScores.push(playerScore)
       }
 
-      // 计算团队分
-      const { teamScore, teamRating, teamRatingText } = calcTeamScore(memberScores, team.name)
+      // 计算团队分（平均分，用于展示）+ 团队评级（3.4 规则判定）
+      const teamScore = memberResults.length ? Math.round(memberScores.reduce((s, v) => s + v, 0) / memberScores.length) : 0
+      const memberRatings = memberResults.map(m => m.stageRating)
+      const ratingCtx = {
+        memberRatings,
+        teamScore,
+        avgCharm: Math.round(memberResults.reduce((s, m) => s + (userMap[m.playerId]?.attributes?.charm || 0), 0) / Math.max(1, memberResults.length)),
+        avgVocal: Math.round(memberResults.reduce((s, m) => s + (userMap[m.playerId]?.attributes?.vocal || 0), 0) / Math.max(1, memberResults.length)),
+        avgDance: Math.round(memberResults.reduce((s, m) => s + (userMap[m.playerId]?.attributes?.dance || 0), 0) / Math.max(1, memberResults.length)),
+        avgPerformance: Math.round(memberResults.reduce((s, m) => s + (m.performanceValue || 0), 0) / Math.max(1, memberResults.length))
+      }
+      const { teamRating, teamRatingText } = calcTeamRating(ratingCtx, teamMembers.length, seasonCfg && seasonCfg.teamRatingRules)
 
       // 团队平均魅力（用于最终票数加成）
       const teamCharm = Math.round(memberResults.reduce((s, m) => s + (userMap[m.playerId]?.attributes?.charm || 0), 0) / memberResults.length)
 
-      // 舞台事件（保留原有逻辑）
+      // 舞台事件：3.7 取消不可见随机抽取，默认无事件（如需请在管理端显式配置）
       let eventVotes = 0
       let eventId = null
       let eventName = ''
       let eventDescription = ''
-      if (stageEvents.length > 0) {
-        const drawn = stageEvents[Math.floor(Math.random() * stageEvents.length)]
-        eventVotes = drawn.voteEffect || 0
-        eventId = drawn.id
-        eventName = drawn.name
-        eventDescription = drawn.description || ''
-      }
 
       // 歌曲权重
       const vw = song.vocalWeight || 3
@@ -542,7 +720,21 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
           performanceValue: mr.performanceValue,
           playerScore: mr.playerScore,
           stageRating: mr.stageRating,
-          stageRatingText: mr.stageRatingText
+          stageRatingText: mr.stageRatingText,
+          attributeScore: mr.attributeScore,
+          difficultyFactor: mr.difficultyFactor,
+          performanceBonus: mr.performanceBonus,
+          ratingFaces: mr.ratingFaces || null,
+          ratingRoll: mr.ratingRoll ?? null,
+          ratingMainAttr: mr.ratingMainAttr || null,
+          ratingBaseMet: mr.ratingBaseMet ?? null,
+          ratingSteps: mr.ratingSteps ?? 0,
+          ratingExcess: mr.ratingExcess ?? 0,
+          ratingDeficit: mr.ratingDeficit ?? 0,
+          ratingDeficitSteps: mr.ratingDeficitSteps ?? 0,
+          ratingMainBase: mr.ratingMainBase ?? 0,
+          ratingDifficulty: mr.ratingDifficulty ?? 0,
+          ratingRisk: mr.ratingRisk ?? 0
         })),
         memberCount: teamMembers.length,
         eventId,
@@ -561,24 +753,61 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
     const perfState = await PerformanceRoundState.findOne({ roundId: dbRoundId })
     const yesRateDenominator = perfState && perfState.yesRateDenominator ? perfState.yesRateDenominator : 150
 
+    // 3.5 发挥成绩排名 → 本次公演 charm 加成（仅本次，不改属性）
+    // 反应力(ms)/用时类（秒）越小越好；其余成绩越大越好
+    const LOWER_BETTER_MODES = ['reflex', 'memory', 'bomb', 'spot_diff', 'math']
+    const lowerBetter = LOWER_BETTER_MODES.includes(perfState && perfState.generationMode)
+    const bonusCfg = (seasonCfg && seasonCfg.performanceBonus) || { p1: 0.2, p2: 0.1, p3: 0, p4: -0.1, p5: -0.2 }
+    const ranked = allPlayerResults
+      .map(r => ({ playerId: r.playerId, pv: r.performanceValue ?? 0 }))
+      .sort((a, b) => lowerBetter ? a.pv - b.pv : b.pv - a.pv)
+    const rankedTotal = ranked.length || 1
+    const charmAfterPerf = {}
+    ranked.forEach((r, i) => {
+      const pct = i / rankedTotal
+      let bonus = bonusCfg.p3 ?? 0
+      if (pct < 0.2) bonus = bonusCfg.p1 ?? 0.2
+      else if (pct < 0.4) bonus = bonusCfg.p2 ?? 0.1
+      else if (pct < 0.6) bonus = bonusCfg.p3 ?? 0
+      else if (pct < 0.8) bonus = bonusCfg.p4 ?? -0.1
+      else bonus = bonusCfg.p5 ?? -0.2
+      const charm = userMap[r.playerId]?.attributes?.charm || 0
+      charmAfterPerf[r.playerId] = Math.max(0, charm * (1 + bonus))
+    })
+    const globalMaxCharmPerf = Math.max(1, ...Object.values(charmAfterPerf).map(v => Number(v) || 0))
+
     // 生成 1000 位大众评审成员，并逐队逐人模拟 yes/no 投票
-    const teamsData = teamResults.map(tr => ({
-      teamId: tr.teamId,
-      teamName: tr.teamName,
-      teamScore: tr.teamScore,
-      teamCharm: tr.teamAttributes?.charm || 0,
-      eventVotes: tr.eventVotes || 0
-    }))
-    const audienceVoteResults = await simulateAudienceVotesForTeams(dbRoundId, teamsData, 1000, yesRateDenominator)
+    const teamsData = teamResults.map(tr => {
+      const memberIds = (tr.memberPerformances || []).map(mp => mp.playerId)
+      const vals = memberIds.map(id => charmAfterPerf[id] || 0)
+      const avg = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0
+      const max = vals.length ? Math.max(...vals) : 0
+      return {
+        teamId: tr.teamId,
+        teamName: tr.teamName,
+        avgCharmPerf: avg,
+        maxCharmPerf: max,
+        teamWeight: ratingWeight(tr.teamRating, seasonCfg, 'team'),
+        eventVotes: tr.eventVotes || 0
+      }
+    })
+    const audienceVoteResults = await simulateAudienceVotesForTeams(dbRoundId, teamsData, 1000, globalMaxCharmPerf)
     const resultMap = {}
     for (const r of audienceVoteResults) resultMap[r.teamId] = r
     for (const tr of teamResults) {
       const r = resultMap[tr.teamId]
+      const td = teamsData.find(t => t.teamId === tr.teamId)
       if (r) {
         tr.finalVotes = r.finalVotes
         tr.finalScore = r.finalVotes
         tr.attributeVotes = r.finalVotes
         tr.audienceYesRate = r.yesRate
+      }
+      if (td) {
+        tr.avgCharmPerf = td.avgCharmPerf
+        tr.maxCharmPerf = td.maxCharmPerf
+        tr.teamRatingWeight = td.teamWeight
+        tr.globalMaxCharmPerf = globalMaxCharmPerf
       }
     }
 
@@ -621,6 +850,10 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
         finalVotes: tr.finalVotes,
         finalScore: tr.finalVotes,
         audienceYesRate: tr.audienceYesRate,
+        avgCharmPerf: tr.avgCharmPerf,
+        maxCharmPerf: tr.maxCharmPerf,
+        teamRatingWeight: tr.teamRatingWeight,
+        globalMaxCharmPerf: tr.globalMaxCharmPerf,
         eventVotes: tr.eventVotes,
         songVocalWeight: tr.songVocalWeight,
         songDanceWeight: tr.songDanceWeight,
@@ -720,9 +953,17 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
         teamScore: o.teamScore || 0,
         teamRating: o.teamRating || '',
         teamRatingText: o.teamRatingText || '',
+        avgCharmPerf: o.avgCharmPerf ?? 0,
+        maxCharmPerf: o.maxCharmPerf ?? 0,
+        teamRatingWeight: o.teamRatingWeight ?? 1,
+        globalMaxCharmPerf: o.globalMaxCharmPerf ?? 0,
+        audienceYesRate: o.audienceYesRate ?? 0,
         songWeights: o.songWeights || { vocal: 0.34, dance: 0.33, charm: 0.33 },
         teamAttributes: o.teamAttributes || { vocal: 0, dance: 0, charm: 0 },
-        playerPerformances: (teamPlayerResults.length > 0 ? teamPlayerResults : (o.memberPerformances || [])).map(p => ({
+        playerPerformances: ((o.memberPerformances && o.memberPerformances.length)
+          ? [...o.memberPerformances].sort((a, b) => (b.playerScore || 0) - (a.playerScore || 0))
+          : teamPlayerResults
+        ).map((p, idx) => ({
           roundId: o.roundId,
           playerId: p.playerId,
           playerName: p.playerName,
@@ -733,10 +974,21 @@ router.post('/calculate', auth, requireAdmin, async (req, res) => {
           stageRating: p.stageRating || '',
           stageRatingText: p.stageRatingText || '',
           contribution: p.playerScore ? Math.round((p.playerScore / totalTeamScore) * 100) : 0,
-          rankInTeam: p.rankInTeam || 0,
+          rankInTeam: p.rankInTeam || (idx + 1),
           attributeScore: p.attributeScore || 0,
           difficultyFactor: p.difficultyFactor || 0,
-          performanceBonus: p.performanceBonus || 0
+          performanceBonus: p.performanceBonus ?? 0,
+          ratingFaces: p.ratingFaces || null,
+          ratingRoll: p.ratingRoll ?? null,
+          ratingMainAttr: p.ratingMainAttr || null,
+          ratingBaseMet: p.ratingBaseMet ?? null,
+          ratingSteps: p.ratingSteps ?? 0,
+          ratingExcess: p.ratingExcess ?? 0,
+          ratingDeficit: p.ratingDeficit ?? 0,
+          ratingDeficitSteps: p.ratingDeficitSteps ?? 0,
+          ratingMainBase: p.ratingMainBase ?? 0,
+          ratingDifficulty: p.ratingDifficulty ?? 0,
+          ratingRisk: p.ratingRisk ?? 0
         }))
       }
     })
@@ -787,13 +1039,74 @@ router.get('/result', auth, async (req, res) => {
     const userMap = {}
     for (const u of users) userMap[u.id] = u
 
+    const season = await getCurrentSeason()
+
+    // 兼容旧结算数据：若团队战绩缺少得票率分量，则即时补算
+    const needBackfill = teamPerf.some(tp => tp.avgCharmPerf == null || tp.teamRatingWeight == null)
+    let backfillGlobalMaxCharmPerf = 0
+    const charmPerfMap = {}
+    if (needBackfill) {
+      const [pvs, perfState] = await Promise.all([
+        PerformanceValue.find({ roundId: teamPerf[0].roundId }),
+        PerformanceRoundState.findOne({ roundId: teamPerf[0].roundId })
+      ])
+      const lower = ['reflex', 'memory', 'bomb', 'spot_diff', 'math'].includes(perfState && perfState.generationMode)
+      const list = pvs.filter(v => Number.isFinite(Number(v.performanceValue))).map(v => ({ playerId: v.playerId, pv: Number(v.performanceValue) }))
+      list.sort((a, b) => lower ? a.pv - b.pv : b.pv - a.pv)
+      const total = list.length || 1
+      const cfg = (season && season.performanceBonus) || { p1: 0.2, p2: 0.1, p3: 0, p4: -0.1, p5: -0.2 }
+      list.forEach((x, i) => {
+        const pct = i / total
+        let b = cfg.p3 ?? 0
+        if (pct < 0.2) b = cfg.p1 ?? 0.2
+        else if (pct < 0.4) b = cfg.p2 ?? 0.1
+        else if (pct < 0.6) b = cfg.p3 ?? 0
+        else if (pct < 0.8) b = cfg.p4 ?? -0.1
+        else b = cfg.p5 ?? -0.2
+        const charm = userMap[x.playerId]?.attributes?.charm || 0
+        charmPerfMap[x.playerId] = Math.max(0, charm * (1 + b))
+      })
+      backfillGlobalMaxCharmPerf = Math.max(1, ...Object.values(charmPerfMap).map(Number))
+    }
+
+    // 读时补算评级明细（兼容旧数据）：从歌曲 + 选手属性重算骰面构成
+    const songIds = [...new Set(teamPerf.map(t => t.songId).filter(Boolean))]
+    const songs = songIds.length ? await Song.find({ id: { $in: songIds } }) : []
+    const songMap = {}
+    for (const s of songs) songMap[s.id] = s
+
     // 队伍详细数据
     const teamsData = teamPerf.map(tp => {
       const o = tp.toObject()
       delete o._id
       const teamPlayers = playerPerf.filter(p => p.teamId === tp.teamId).sort((a, b) => (a.rankInTeam || 999) - (b.rankInTeam || 999))
+      const memberVals = (o.memberPerformances || []).map(m => charmPerfMap[m.playerId] || 0)
+      const song = songMap[o.songId] || null
+      const memberPerformances = (o.memberPerformances || []).map(m => {
+        const u = userMap[m.playerId]
+        if (!u || !song) return m
+        const f = computeRatingFaces(u, song)
+        return {
+          ...m,
+          ratingMainAttr: f.mainAttr,
+          ratingDifficulty: f.difficulty,
+          ratingRisk: f.risk,
+          ratingMainBase: f.mainBase,
+          ratingBaseMet: f.baseMet,
+          ratingSteps: f.steps,
+          ratingExcess: f.excess,
+          ratingDeficit: f.deficit,
+          ratingDeficitSteps: f.deficitSteps,
+          ratingFaces: f.faces
+        }
+      })
       return {
         ...o,
+        memberPerformances,
+        avgCharmPerf: o.avgCharmPerf != null ? o.avgCharmPerf : (memberVals.length ? memberVals.reduce((s, v) => s + v, 0) / memberVals.length : 0),
+        maxCharmPerf: o.maxCharmPerf != null ? o.maxCharmPerf : (memberVals.length ? Math.max(...memberVals) : 0),
+        globalMaxCharmPerf: o.globalMaxCharmPerf != null ? o.globalMaxCharmPerf : backfillGlobalMaxCharmPerf,
+        teamRatingWeight: o.teamRatingWeight != null ? o.teamRatingWeight : ratingWeight(o.teamRating, season, 'team'),
         players: teamPlayers.map(p => {
           const po = p.toObject()
           delete po._id
@@ -812,7 +1125,6 @@ router.get('/result', auth, async (req, res) => {
     teamsData.sort((a, b) => teamSeq(a.teamId) - teamSeq(b.teamId))
 
     // 安全/危险队伍（直接用 resolveRoundFromQuery 返回的 round，避免重新查询）
-    const season = await getCurrentSeason()
     const dangerRatio = round?.dangerLineRatio ?? 0.2
     const dangerCount = Math.max(0, Math.ceil(teamsData.length * dangerRatio))
     const safeTeams = teamsData.slice(0, teamsData.length - dangerCount).map(t => ({ teamId: t.teamId, teamName: t.teamName, rank: t.rank }))
@@ -1278,7 +1590,7 @@ router.post('/player-generate', auth, async (req, res) => {
     const member = await RoundTeamMember.findOne({ ...roundIdFilter, playerId })
     if (!member) return res.status(400).json({ success: false, error: '您未参加本轮组队', code: 'NOT_IN_TEAM' })
 
-    const value = randomInt(-10, 20)
+    const value = randomInt(0, 100)
     await createPerformanceValue({ roundId: rId, roundIndex: resolvedRound.index, playerId, teamId: member.teamId, value })
 
     res.json({
@@ -1301,13 +1613,8 @@ router.post('/admin-generate', auth, requireAdmin, async (req, res) => {
     if (!round) return res.status(400).json({ success: false, error: '轮次不存在', code: 'ROUND_NOT_FOUND' })
     const rId = round.id
 
-    // 删除旧值（管理员可覆盖）
-    await PerformanceValue.deleteMany({ roundId: rId, playerId })
-
-    // 生成发挥值：支持手动指定或随机
-    const value = typeof manualValue === 'number'
-      ? Math.max(-10, Math.min(20, manualValue))
-      : randomInt(-10, 20)
+    // 生成成绩：支持手动指定或随机（不做裁剪，口径因玩法而异）
+    const value = typeof manualValue === 'number' ? manualValue : randomInt(0, 100)
 
     // 查找选手所在队伍（兼容两种 roundId 格式）
     const frontRoundId = roundId
@@ -1315,7 +1622,21 @@ router.post('/admin-generate', auth, requireAdmin, async (req, res) => {
       ? { $or: [{ roundId: rId }, { roundId: frontRoundId }] }
       : { roundId: rId }
     const member = await RoundTeamMember.findOne({ ...roundIdFilter, playerId })
-    await createPerformanceValue({ roundId: rId, roundIndex: round.index, playerId, teamId: member ? member.teamId : null, value })
+
+    // 覆盖式保存（保留已有 rating，避免抽成绩清掉评级）
+    let pv = await PerformanceValue.findOne({ roundId: rId, playerId })
+    if (!pv) {
+      pv = new PerformanceValue({
+        id: generateId(), roundId: rId, roundIndex: round.index,
+        playerId, teamId: member ? member.teamId : null, performanceValue: value,
+        generatedAt: new Date().toISOString()
+      })
+    } else {
+      pv.performanceValue = value
+      if (member) pv.teamId = member.teamId
+      pv.generatedAt = new Date().toISOString()
+    }
+    await pv.save()
 
     const user = await User.findOne({ id: playerId })
     res.json({
@@ -1347,6 +1668,29 @@ router.post('/admin-generate-all', auth, requireAdmin, async (req, res) => {
     const existingValues = await PerformanceValue.find({ roundId: round.id })
     const existingPlayerIds = new Set(existingValues.map(v => v.playerId))
 
+    // 依据本轮玩法方向，把"未生成"的选手安排到已有成绩之后（垫底），且彼此名次随机
+    const state = await PerformanceRoundState.findOne({ roundId: round.id })
+    const genMode = state ? state.generationMode : 'random'
+    const LOWER_BETTER = ['reflex', 'memory', 'bomb', 'spot_diff', 'math']
+    const lowerBetter = LOWER_BETTER.includes(genMode)
+    const existingNums = existingValues
+      .map(v => Number(v.performanceValue))
+      .filter(n => Number.isFinite(n))
+
+    let range = { min: 0, max: 100 }
+    if (existingNums.length > 0) {
+      if (lowerBetter) {
+        // 越小越好 → 未生成的给更大的成绩（垫底）
+        const maxExisting = Math.floor(Math.max(...existingNums))
+        range = { min: maxExisting + 1, max: maxExisting + 30 }
+      } else {
+        // 越大越好 → 未生成的给更小的成绩（垫底），且不超过已有最低分
+        const minExisting = Math.floor(Math.min(...existingNums))
+        const hi = minExisting - 1
+        range = hi >= 0 ? { min: 0, max: hi } : { min: 0, max: 0 }
+      }
+    }
+
     const created = []
     const skipped = []
     for (const m of members) {
@@ -1354,12 +1698,12 @@ router.post('/admin-generate-all', auth, requireAdmin, async (req, res) => {
         skipped.push({ playerId: m.playerId, performanceValue: existingValues.find(v => v.playerId === m.playerId)?.performanceValue })
         continue
       }
-      const value = randomInt(-10, 20)
+      const value = range.max > range.min ? randomInt(range.min, range.max) : range.min
       await createPerformanceValue({ roundId: round.id, roundIndex: round.index, playerId: m.playerId, teamId: m.teamId, value })
       created.push({ playerId: m.playerId, performanceValue: value, performanceText: getPerformanceText(value) })
     }
 
-    res.json({ success: true, data: { generatedCount: created.length, skippedCount: skipped.length, players: [...created, ...skipped] } })
+    res.json({ success: true, data: { generatedCount: created.length, skippedCount: skipped.length, mode: genMode, range, players: [...created, ...skipped] } })
   } catch (e) {
     console.error('Admin generate all error:', e)
     res.status(500).json({ success: false, error: '批量生成失败', code: 'SERVER_ERROR' })
@@ -1406,7 +1750,11 @@ router.get('/player-status', auth, async (req, res) => {
     const values = await PerformanceValue.find({ roundId: round.id })
     const generatedSet = new Set(values.map(v => v.playerId))
     const valueMap = {}
-    for (const v of values) valueMap[v.playerId] = v.performanceValue
+    const ratingMap = {}
+    for (const v of values) {
+      valueMap[v.playerId] = v.performanceValue
+      ratingMap[v.playerId] = { rating: v.rating || null, roll: v.ratingRoll ?? null, faces: v.ratingFaces || null, mainAttr: v.ratingMainAttr || null }
+    }
 
     const players = allActiveUsers.map(u => {
       const teamId = teamIdByPlayer[u.id] || null
@@ -1416,7 +1764,11 @@ router.get('/player-status', auth, async (req, res) => {
         teamId,
         teamName: teamId && teamMap[teamId] ? teamMap[teamId].name : null,
         generated: generatedSet.has(u.id),
-        performanceValue: valueMap[u.id] != null ? valueMap[u.id] : null
+        performanceValue: valueMap[u.id] != null ? valueMap[u.id] : null,
+        rating: ratingMap[u.id] ? ratingMap[u.id].rating : null,
+        ratingRoll: ratingMap[u.id] ? ratingMap[u.id].roll : null,
+        ratingFaces: ratingMap[u.id] ? ratingMap[u.id].faces : null,
+        ratingMainAttr: ratingMap[u.id] ? ratingMap[u.id].mainAttr : null
       }
     })
 
@@ -1446,24 +1798,27 @@ router.post('/player-status/save', auth, async (req, res) => {
       // performanceValue 为 null 表示未生成，跳过
       if (p.performanceValue === null || p.performanceValue === undefined) continue
 
-      let perfVal = parseInt(p.performanceValue)
-      if (isNaN(perfVal)) continue
-      // 允许范围 -10 ~ 20
-      if (perfVal < -10) perfVal = -10
-      if (perfVal > 20) perfVal = 20
+      // 成绩口径因玩法而异（0~100 / 点击次数 / ms / 秒），不做裁剪
+      const perfVal = Number(p.performanceValue)
+      if (!Number.isFinite(perfVal)) continue
 
-      // 覆盖式保存：先删旧值，再写入新值
-      await PerformanceValue.deleteMany({ roundId: round.id, playerId: p.playerId })
-
-      const pv = new PerformanceValue({
-        id: generateId(),
-        roundId: round.id,
-        roundIndex: round.index,
-        playerId: p.playerId,
-        teamId: p.teamId || null,
-        performanceValue: perfVal,
-        generatedAt: new Date().toISOString()
-      })
+      // 覆盖式保存（保留已有 rating 等字段，避免抽成绩时清掉评级）
+      let pv = await PerformanceValue.findOne({ roundId: round.id, playerId: p.playerId })
+      if (!pv) {
+        pv = new PerformanceValue({
+          id: generateId(),
+          roundId: round.id,
+          roundIndex: round.index,
+          playerId: p.playerId,
+          teamId: p.teamId || null,
+          performanceValue: perfVal,
+          generatedAt: new Date().toISOString()
+        })
+      } else {
+        pv.performanceValue = perfVal
+        if (p.teamId) pv.teamId = p.teamId
+        pv.generatedAt = new Date().toISOString()
+      }
       await pv.save()
     }
 
@@ -1626,6 +1981,293 @@ router.post('/revealed-teams/save', auth, requireAdmin, async (req, res) => {
 })
 
 // ===== POST /api/performance/reveal-team - 揭晓某个队伍的结果（新评级体系）=====
+// ===== 3.3 选手点击掷骰，得到个人评级（并持久化，结算时复用）=====
+router.post('/roll-rating', auth, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const curRound = season.currentRound
+    let round = null
+    if (req.body?.roundId) round = await Round.findOne({ id: req.body.roundId })
+    if (!round) round = await Round.findOne({ seasonId: season.id, index: curRound })
+    const dbRoundId = round ? round.id : `round-${curRound}`
+    const frontRoundId = `round-${round ? round.index : curRound}`
+    const roundFilter = { $in: [dbRoundId, frontRoundId] }
+    const uid = req.user.userId
+    const user = await User.findOne({ id: uid })
+    if (!user) return res.status(404).json({ success: false, error: '用户不存在', code: 'NOT_FOUND' })
+
+    // 需要先在训练页确认训练结束，才能投掷公演骰子
+    const trStatus = await TrainingStatus.findOne({ roundId: { $in: [dbRoundId, frontRoundId] }, playerId: uid })
+    if (!trStatus || !trStatus.finished) {
+      return res.status(400).json({ success: false, error: '请先在训练页点击「确定训练结束」，之后才能投掷公演骰子', code: 'TRAINING_NOT_FINISHED' })
+    }
+
+    const tm = await RoundTeamMember.findOne({ playerId: uid, roundId: roundFilter })
+    if (!tm) return res.status(400).json({ success: false, error: '你本轮尚未分组，无法进行公演评级', code: 'NO_TEAM' })
+    const ts = await TeamSong.findOne({ teamId: tm.teamId, roundId: roundFilter })
+    if (!ts) return res.status(400).json({ success: false, error: '你的队伍尚未选择歌曲', code: 'NO_SONG' })
+    const song = await Song.findOne({ id: ts.songId })
+    if (!song) return res.status(400).json({ success: false, error: '歌曲不存在', code: 'SONG_NOT_FOUND' })
+
+    let pv = await PerformanceValue.findOne({ roundId: dbRoundId, playerId: uid })
+    if (pv && pv.rating) {
+      // 已经投掷过，直接返回结果（选手只能点一次）
+      return res.json({
+        success: true,
+        data: {
+          alreadyRolled: true,
+          rating: pv.rating,
+          ratingText: RATING_TEXTS[pv.rating] || pv.rating,
+          roll: pv.ratingRoll ?? null,
+          difficulty: (pv.ratingFaces && pv.ratingFaces.difficulty) || (song.difficulty || 3),
+          faces: pv.ratingFaces || null,
+          mainAttr: pv.ratingMainAttr || null,
+          songName: song.name
+        }
+      })
+    }
+
+    const result = rollPlayerRating(user, song)
+    if (!pv) {
+      pv = new PerformanceValue({
+        id: generateId(), roundId: dbRoundId, roundIndex: curRound,
+        playerId: uid, teamId: tm.teamId, performanceValue: null,
+        generatedAt: new Date().toISOString()
+      })
+    }
+    pv.rating = result.rating
+    pv.ratingRoll = result.roll
+    pv.ratingFaces = result.faces
+    pv.ratingMainAttr = result.mainAttr
+    pv.rolledAt = new Date().toISOString()
+    await pv.save()
+
+    res.json({
+      success: true,
+      data: {
+        rating: result.rating,
+        ratingText: result.ratingText,
+        roll: result.roll,
+        difficulty: result.difficulty,
+        faces: result.faces,
+        mainAttr: result.mainAttr,
+        baseMet: result.baseMet,
+        steps: result.steps,
+        songName: song.name
+      }
+    })
+  } catch (e) {
+    console.error('roll-rating error:', e)
+    res.status(500).json({ success: false, error: '掷骰失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== 3.3 选手端：获取本人公演骰子信息（训练结束后可投）=====
+router.get('/my-rating-info', auth, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const curRound = season.currentRound
+    const round = await Round.findOne({ seasonId: season.id, index: curRound })
+    const dbRoundId = round ? round.id : `round-${curRound}`
+    const frontRoundId = `round-${round ? round.index : curRound}`
+    const roundFilter = { $in: [dbRoundId, frontRoundId] }
+    const uid = req.user.userId
+
+    const st = await TrainingStatus.findOne({ roundId: { $in: [dbRoundId, frontRoundId] }, playerId: uid })
+    const user = await User.findOne({ id: uid })
+    const tm = await RoundTeamMember.findOne({ playerId: uid, roundId: roundFilter })
+    const ts = tm ? await TeamSong.findOne({ teamId: tm.teamId, roundId: roundFilter }) : null
+    const song = ts ? await Song.findOne({ id: ts.songId }) : null
+    const pv = await PerformanceValue.findOne({ roundId: dbRoundId, playerId: uid })
+
+    let faces = null
+    if (user && song) {
+      const f = computeRatingFaces(user, song)
+      faces = {
+        mainAttr: f.mainAttr, difficulty: f.difficulty, risk: f.risk,
+        baseVocal: f.baseVocal, baseDance: f.baseDance, mainBase: f.mainBase,
+        baseMet: f.baseMet, excess: f.excess, steps: f.steps, faces: f.faces
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        finished: !!(st && st.finished),
+        finishedAt: st ? st.finishedAt : null,
+        hasTeam: !!tm,
+        hasSong: !!ts,
+        song: song ? {
+          id: song.id, name: song.name, difficulty: song.difficulty || 3, risk: song.risk ?? 10,
+          mainAttribute: song.mainAttribute || 'vocal', baseVocal: song.baseVocal ?? 30, baseDance: song.baseDance ?? 30
+        } : null,
+        faces,
+        rating: pv ? (pv.rating || null) : null,
+        roll: pv ? (pv.ratingRoll ?? null) : null
+      }
+    })
+  } catch (e) {
+    console.error('my-rating-info error:', e)
+    res.status(500).json({ success: false, error: '获取公演骰子信息失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== 3.3 管理员查看所有选手掷骰情况 =====
+router.get('/ratings', auth, requireAdmin, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const curRound = season.currentRound
+    let round = null
+    if (req.query?.roundId) round = await Round.findOne({ id: req.query.roundId })
+    if (!round) round = await Round.findOne({ seasonId: season.id, index: curRound })
+    const dbRoundId = round ? round.id : `round-${curRound}`
+    const frontRoundId = `round-${round ? round.index : curRound}`
+    const roundFilter = { $in: [dbRoundId, frontRoundId] }
+
+    const players = (await User.find({ role: { $ne: 'admin' } })).filter(u => u.status !== 'eliminated')
+    const members = await RoundTeamMember.find({ roundId: roundFilter })
+    const memberMap = {}
+    for (const m of members) memberMap[m.playerId] = m
+    const teamIds = [...new Set(members.map(m => m.teamId))]
+    const teams = teamIds.length ? await RoundTeam.find({ id: { $in: teamIds } }) : []
+    const teamMap = {}
+    for (const t of teams) teamMap[t.id] = t
+    const teamSongs = await TeamSong.find({ roundId: roundFilter })
+    const teamSongMap = {}
+    for (const ts of teamSongs) teamSongMap[ts.teamId] = ts
+    const songIds = [...new Set(teamSongs.map(ts => ts.songId))]
+    const songs = songIds.length ? await Song.find({ id: { $in: songIds } }) : []
+    const songMap = {}
+    for (const s of songs) songMap[s.id] = s
+    const pvs = await PerformanceValue.find({ roundId: dbRoundId })
+    const pvMap = {}
+    for (const pv of pvs) pvMap[pv.playerId] = pv
+
+    const list = players.map(u => {
+      const tm = memberMap[u.id]
+      const ts = tm ? teamSongMap[tm.teamId] : null
+      const song = ts ? songMap[ts.songId] : null
+      const pv = pvMap[u.id]
+      let faces = null
+      if (song) {
+        const f = computeRatingFaces(u, song)
+        faces = {
+          mainAttr: f.mainAttr,
+          difficulty: f.difficulty,
+          risk: f.risk,
+          baseVocal: f.baseVocal,
+          baseDance: f.baseDance,
+          mainBase: f.mainBase,
+          baseMet: f.baseMet,
+          excess: f.excess,
+          steps: f.steps,
+          faces: f.faces
+        }
+      }
+      return {
+        playerId: u.id,
+        playerName: u.name,
+        teamId: tm ? tm.teamId : null,
+        teamName: (tm && teamMap[tm.teamId]) ? teamMap[tm.teamId].name : '',
+        songId: song ? song.id : null,
+        songName: song ? song.name : '',
+        difficulty: song ? (song.difficulty || 3) : null,
+        risk: song ? (song.risk ?? null) : null,
+        faces,
+        hasTeam: !!tm,
+        hasSong: !!ts,
+        rating: pv ? (pv.rating || null) : null,
+        ratingRoll: pv ? (pv.ratingRoll ?? null) : null,
+        rolledAt: pv ? (pv.rolledAt || null) : null
+      }
+    })
+    res.json({ success: true, data: { roundId: dbRoundId, list } })
+  } catch (e) {
+    console.error('ratings list error:', e)
+    res.status(500).json({ success: false, error: '获取掷骰情况失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== 3.3 管理员代理掷骰 =====
+router.post('/roll-rating-admin', auth, requireAdmin, async (req, res) => {
+  try {
+    const { playerId, roundId: reqRoundId } = req.body || {}
+    if (!playerId) return res.status(400).json({ success: false, error: '缺少 playerId', code: 'INVALID_PARAMS' })
+    const season = await getCurrentSeason()
+    const curRound = season.currentRound
+    let round = null
+    if (reqRoundId) round = await Round.findOne({ id: reqRoundId })
+    if (!round) round = await Round.findOne({ seasonId: season.id, index: curRound })
+    const dbRoundId = round ? round.id : `round-${curRound}`
+    const frontRoundId = `round-${round ? round.index : curRound}`
+    const roundFilter = { $in: [dbRoundId, frontRoundId] }
+
+    const user = await User.findOne({ id: playerId })
+    if (!user) return res.status(404).json({ success: false, error: '用户不存在', code: 'NOT_FOUND' })
+    const tm = await RoundTeamMember.findOne({ playerId, roundId: roundFilter })
+    if (!tm) return res.status(400).json({ success: false, error: '该选手本轮尚未分组', code: 'NO_TEAM' })
+    const ts = await TeamSong.findOne({ teamId: tm.teamId, roundId: roundFilter })
+    if (!ts) return res.status(400).json({ success: false, error: '该队伍尚未选择歌曲', code: 'NO_SONG' })
+    const song = await Song.findOne({ id: ts.songId })
+    if (!song) return res.status(400).json({ success: false, error: '歌曲不存在', code: 'SONG_NOT_FOUND' })
+
+    const result = rollPlayerRating(user, song)
+    let pv = await PerformanceValue.findOne({ roundId: dbRoundId, playerId })
+    if (!pv) {
+      pv = new PerformanceValue({
+        id: generateId(), roundId: dbRoundId, roundIndex: curRound,
+        playerId, teamId: tm.teamId, performanceValue: null, generatedAt: new Date().toISOString()
+      })
+    }
+    pv.rating = result.rating
+    pv.ratingRoll = result.roll
+    pv.ratingFaces = result.faces
+    pv.ratingMainAttr = result.mainAttr
+    pv.rolledAt = new Date().toISOString()
+    await pv.save()
+    res.json({
+      success: true,
+      data: {
+        playerId, playerName: user.name,
+        rating: result.rating, ratingText: result.ratingText,
+        roll: result.roll, songName: song.name
+      }
+    })
+  } catch (e) {
+    console.error('admin roll-rating error:', e)
+    res.status(500).json({ success: false, error: '代理掷骰失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== 3.4 团队评级规则配置（管理员）=====
+router.get('/team-rating-rules', auth, requireAdmin, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    res.json({
+      success: true,
+      data: { rules: (season && season.teamRatingRules) || DEFAULT_TEAM_RATING_RULES, defaults: DEFAULT_TEAM_RATING_RULES }
+    })
+  } catch (e) {
+    res.status(500).json({ success: false, error: '获取失败', code: 'SERVER_ERROR' })
+  }
+})
+
+router.put('/team-rating-rules', auth, requireAdmin, async (req, res) => {
+  try {
+    const { rules } = req.body || {}
+    if (!rules || typeof rules !== 'object') return res.status(400).json({ success: false, error: 'rules 必填', code: 'INVALID_PARAMS' })
+    const season = await getCurrentSeason()
+    if (!season) return res.status(500).json({ success: false, error: '赛季不存在', code: 'NO_SEASON' })
+    season.teamRatingRules = rules
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    res.json({ success: true, data: { rules } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '保存失败', code: 'SERVER_ERROR' })
+  }
+})
+
 router.post('/reveal-team', auth, requireAdmin, async (req, res) => {
   try {
     const { roundId, teamId } = req.body
@@ -1660,7 +2302,7 @@ router.post('/reveal-team', auth, requireAdmin, async (req, res) => {
     const membersWithPerf = members.map(m => {
       const u = userMap[m.playerId]
       if (!u) return null
-      const perfValue = valueMap[m.playerId] ?? randomInt(-10, 20) // 未生成则随机补一个
+      const perfValue = valueMap[m.playerId] ?? randomInt(0, 100) // 未生成则随机补一个
       const { playerScore, stageRating, stageRatingText } = calcPlayerScore(u, song, perfValue)
       return {
         playerId: m.playerId,
@@ -1674,7 +2316,10 @@ router.post('/reveal-team', auth, requireAdmin, async (req, res) => {
 
     // 计算团队分和团队评级
     const memberScores = membersWithPerf.map(m => m.playerScore)
-    const { teamScore, teamRating, teamRatingText } = calcTeamScore(memberScores, team.name)
+    const memberRatings = membersWithPerf.map(m => m.stageRating)
+    const seasonCfg2 = await getCurrentSeason()
+    const teamScore = memberScores.length ? Math.round(memberScores.reduce((s, v) => s + v, 0) / memberScores.length) : 0
+    const { teamRating, teamRatingText } = calcTeamRating({ memberRatings, teamScore }, membersWithPerf.length, seasonCfg2 && seasonCfg2.teamRatingRules)
 
     // 持久化揭晓状态：将本队加入 PerformanceRoundState.revealedTeamIds（选手端据此逐步展示）
     try {
@@ -1715,6 +2360,27 @@ router.post('/reveal-team', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error('Reveal team error:', e)
     res.status(500).json({ success: false, error: '揭晓队伍失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== POST /api/performance/reveal-vote-digit - 逐位揭晓队伍票数（百/十/个）=====
+router.post('/reveal-vote-digit', auth, requireAdmin, async (req, res) => {
+  try {
+    const { teamId, digit, revealed } = req.body || {}
+    const round = await resolveRound(req)
+    if (!round) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
+    const map = { hundreds: 'revealHundreds', tens: 'revealTens', units: 'revealUnits' }
+    const field = map[digit]
+    if (!field) return res.status(400).json({ success: false, error: 'digit 必须是 hundreds/tens/units', code: 'INVALID_DIGIT' })
+    const tp = await TeamPerformance.findOne({ roundId: round.id, teamId })
+    if (!tp) return res.status(404).json({ success: false, error: '队伍不存在', code: 'TEAM_NOT_FOUND' })
+    tp[field] = revealed !== false
+    tp.updatedAt = new Date().toISOString()
+    await tp.save()
+    res.json({ success: true, data: { teamId, digit, revealed: tp[field] } })
+  } catch (e) {
+    console.error('Reveal vote digit error:', e)
+    res.status(500).json({ success: false, error: '揭晓票数失败', code: 'SERVER_ERROR' })
   }
 })
 

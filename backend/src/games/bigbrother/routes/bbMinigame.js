@@ -308,6 +308,24 @@ router.get('/room-progress/:roomId', async (req, res) => {
   }
 })
 
+// POST /summon - 管理员召集选手进入准备环节
+router.post('/summon', async (req, res) => {
+  try {
+    const { roomId } = req.body
+    if (!roomId) return res.status(400).json({ success: false, error: '缺少房间ID' })
+    const minigameNs = req.app.get('io')?.of('/bigbrother-minigame')
+    if (!minigameNs || !minigameNs.summonPlayers) {
+      return res.status(500).json({ success: false, error: '小游戏服务未就绪' })
+    }
+    const result = minigameNs.summonPlayers(roomId)
+    if (!result.success) return res.status(400).json(result)
+    res.json({ success: true, data: result.data })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '召集选手失败' })
+  }
+})
+
 // POST /pause - 管理员暂停游戏
 router.post('/pause', async (req, res) => {
   try {

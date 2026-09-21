@@ -7,11 +7,10 @@ export const mockSongs: Song[] = [
     type: 'team_show',
     style: '流行',
     difficulty: 3,
-    vocalWeight: 4,
-    danceWeight: 3,
-    charmWeight: 3,
-    baseScore: 100,
-    riskFactor: 0.2,
+    mainAttribute: 'vocal',
+    baseVocal: 35,
+    baseDance: 30,
+    risk: 10,
     singerGender: 'male'
   },
   {
@@ -20,11 +19,10 @@ export const mockSongs: Song[] = [
     type: 'team_show',
     style: '舞曲',
     difficulty: 4,
-    vocalWeight: 2,
-    danceWeight: 5,
-    charmWeight: 3,
-    baseScore: 100,
-    riskFactor: 0.3,
+    mainAttribute: 'dance',
+    baseVocal: 25,
+    baseDance: 40,
+    risk: 12,
     singerGender: 'female'
   },
   {
@@ -33,11 +31,10 @@ export const mockSongs: Song[] = [
     type: 'team_show',
     style: '抒情',
     difficulty: 3,
-    vocalWeight: 5,
-    danceWeight: 2,
-    charmWeight: 3,
-    baseScore: 100,
-    riskFactor: 0.15,
+    mainAttribute: 'vocal',
+    baseVocal: 40,
+    baseDance: 25,
+    risk: 8,
     singerGender: 'male'
   },
   {
@@ -46,11 +43,10 @@ export const mockSongs: Song[] = [
     type: 'team_show',
     style: '动感',
     difficulty: 4,
-    vocalWeight: 3,
-    danceWeight: 3,
-    charmWeight: 5,
-    baseScore: 100,
-    riskFactor: 0.25,
+    mainAttribute: 'charm',
+    baseVocal: 30,
+    baseDance: 30,
+    risk: 11,
     singerGender: 'female'
   },
   {
@@ -59,11 +55,10 @@ export const mockSongs: Song[] = [
     type: 'team_show',
     style: '励志',
     difficulty: 5,
-    vocalWeight: 4,
-    danceWeight: 4,
-    charmWeight: 4,
-    baseScore: 100,
-    riskFactor: 0.4,
+    mainAttribute: 'dance',
+    baseVocal: 35,
+    baseDance: 35,
+    risk: 15,
     singerGender: 'female'
   },
   {
@@ -72,11 +67,10 @@ export const mockSongs: Song[] = [
     type: 'team_show',
     style: '流行',
     difficulty: 3,
-    vocalWeight: 3,
-    danceWeight: 4,
-    charmWeight: 3,
-    baseScore: 100,
-    riskFactor: 0.2,
+    mainAttribute: 'vocal',
+    baseVocal: 30,
+    baseDance: 35,
+    risk: 10,
     singerGender: 'male'
   }
 ]

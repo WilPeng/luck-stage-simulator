@@ -8,6 +8,7 @@ class BBEviction extends BaseModel {
     this.evictedId = data?.evictedId || null
     this.evictedName = data?.evictedName || ''
     this.voteCount = data?.voteCount || 0
+    this.otherVotes = data?.otherVotes ?? null   // 另一位被提名者的票数（用于显示 xx-xx）
     this.totalVotes = data?.totalVotes || 0
     this.voteResults = data?.voteResults || [] // [{ playerId, playerName, votes }]
     this.isJury = data?.isJury ?? false   // 该被淘汰者是否进入陪审团

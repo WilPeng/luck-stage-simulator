@@ -8,6 +8,7 @@ const PlayerPerformance = require('../models/PlayerPerformance')
 const TeamPerformance = require('../models/TeamPerformance')
 const RoundTeam = require('../models/RoundTeam')
 const User = require('../models/User')
+const Season = require('../models/Season')
 
 const AUDIENCE_COUNT = 1000
 const VOTES_PER_AUDIENCE = 3
@@ -124,12 +125,37 @@ async function generateAudienceVoteForRound(round, { reuseMembers = true } = {})
   // RoundTeam 的 roundId 是前端格式 "round-{N}"，需要构造
   const frontRoundId = `round-${round.index || 1}`
 
-  const [playerPerfs, teamPerfs, users, teams] = await Promise.all([
+  let [playerPerfs, teamPerfs, users, teams] = await Promise.all([
     PlayerPerformance.find({ roundId: round.id }),
     TeamPerformance.find({ roundId: round.id }),
     User.find({}),
     RoundTeam.find({ roundId: frontRoundId })
   ])
+
+  // 兜底：若个人公演结果缺失但已有队伍结果，则从队伍成员表现重建个人结果
+  if (playerPerfs.length === 0 && teamPerfs.length > 0) {
+    const rebuilt = []
+    for (const tp of teamPerfs) {
+      for (const mp of (tp.memberPerformances || [])) {
+        rebuilt.push(new PlayerPerformance({
+          id: generateId(),
+          roundId: round.id,
+          roundIndex: tp.roundIndex,
+          playerId: mp.playerId,
+          teamId: tp.teamId,
+          playerName: mp.playerName,
+          teamName: tp.teamName,
+          performanceValue: mp.performanceValue,
+          playerScore: mp.playerScore,
+          stageRating: mp.stageRating,
+          stageRatingText: mp.stageRatingText,
+          createdAt: new Date().toISOString()
+        }))
+      }
+    }
+    for (const r of rebuilt) await r.save()
+    playerPerfs = rebuilt
+  }
 
   if (playerPerfs.length === 0) {
     throw new Error('该轮尚未生成选手公演结果，无法生成大众评审投票')
@@ -144,6 +170,15 @@ async function generateAudienceVoteForRound(round, { reuseMembers = true } = {})
   const teamRankMap = {}
   for (const t of teamPerfs) teamRankMap[t.teamId] = t.rank
 
+  // 3.6 团队评级 + 评级加权配置
+  const teamRatingMap = {}
+  for (const t of teamPerfs) teamRatingMap[t.teamId] = t.teamRating
+  const seasonDoc = await Season.findOne({})
+  const ratingWeights = (seasonDoc && seasonDoc.ratingWeights) || {
+    personal: { S: 1, A: 0.9, B: 0.8, C: 0.7, D: 0.6 },
+    team: { S: 1, A: 0.9, B: 0.8, C: 0.7, D: 0.6 }
+  }
+
   // 总队伍数（用于等差递减排名加成）
   const totalTeams = teamPerfs.length
 
@@ -153,25 +188,21 @@ async function generateAudienceVoteForRound(round, { reuseMembers = true } = {})
   for (const pp of playerPerfs) {
     const u = userMap[pp.playerId]
     const attrs = u && u.attributes ? u.attributes : { vocal: 30, dance: 30, charm: 30 }
-    // ① 基础属性贡献 = 魅力 × 2
+    // 个人喜爱度权重 = 自身charm × 2 × 个人评级加权 × 团队评级加权 + 队伍排名加成 + 队内MVP加成
     const baseContribution = Math.round((attrs.charm || 0) * 2)
-    // ② 实时发挥贡献 = max(0, 发挥值 + random(-5, 5))
-    const performanceContribution = Math.max(0, (pp.performanceValue || 0) + randomInt(-5, 5))
-    // ③ 团队排名加成：第 1 名 +30，最后一名 +0，中间等差递减
+    const personalWeight = (ratingWeights.personal[pp.stageRating] ?? 1)
+    const teamWeight = (ratingWeights.team[teamRatingMap[pp.teamId]] ?? 1)
     const teamRank = teamRankMap[pp.teamId] || totalTeams
-    const teamRankBonus = getTeamRankBonus(teamRank, totalTeams)
-    // ④ 队内 MVP 加成
-    const mvpBonus = pp.rankInTeam === 1 ? randomInt(10, 20) : 0
-    // ⑤ 观众缘随机值
-    const audienceLuck = randomInt(0, 15)
-    const totalWeight = baseContribution + performanceContribution + teamRankBonus + mvpBonus + audienceLuck
+    const teamRankBonus = totalTeams > 1 ? Math.round(30 * (totalTeams - teamRank) / (totalTeams - 1)) : 0
+    const mvpBonus = (pp.rankInTeam === 1) ? 20 : 0
+    const totalWeight = Math.max(0, Math.round(baseContribution * personalWeight * teamWeight) + teamRankBonus + mvpBonus)
 
     const team = teamMap[pp.teamId]
 
     pp.popularityWeight = totalWeight
-    pp.audienceAffinity = audienceLuck
+    pp.audienceAffinity = 0
     pp.baseContribution = baseContribution
-    pp.performanceContribution = performanceContribution
+    pp.performanceContribution = 0
     pp.teamRankBonus = teamRankBonus
     pp.mvpBonus = mvpBonus
     await pp.save()
@@ -183,10 +214,12 @@ async function generateAudienceVoteForRound(round, { reuseMembers = true } = {})
       teamName: team?.name || null,
       weight: totalWeight,
       baseContribution,
-      performanceContribution,
+      personalWeight,
+      teamWeight,
+      performanceContribution: 0,
       teamRankBonus,
       mvpBonus,
-      audienceLuck
+      audienceLuck: 0
     })
 
     weightDetails.push({
@@ -195,10 +228,12 @@ async function generateAudienceVoteForRound(round, { reuseMembers = true } = {})
       teamId: pp.teamId || null,
       teamName: team?.name || null,
       baseContribution,
-      performanceContribution,
+      personalWeight,
+      teamWeight,
+      performanceContribution: 0,
       teamRankBonus,
       mvpBonus,
-      audienceLuck,
+      audienceLuck: 0,
       totalWeight
     })
   }

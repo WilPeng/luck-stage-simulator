@@ -105,6 +105,8 @@ const isHoh = computed(() => currentHoh.value?.winnerId === authStore.currentUse
 
 const isNominee = computed(() => {
   if (!nomination.value || !authStore.currentUser?.id) return false
+  // BBBB 胜者安全，可参与投票
+  if ((nomination.value as any).bbbbWinnerId === authStore.currentUser.id) return false
   const allIds = [...nomination.value.nomineeIds]
   if (nomination.value.replacementNomineeId) allIds.push(nomination.value.replacementNomineeId)
   return allIds.includes(authStore.currentUser.id)

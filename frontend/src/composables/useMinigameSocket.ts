@@ -29,6 +29,8 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
   const progress = ref<any>(null)
   const events = ref<any[]>([])
   const paused = ref(false)
+  const allReady = ref(false)
+  const summoned = ref(false)
 
   function connect() {
     if (socket.value) return
@@ -116,6 +118,17 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
       if (p) p.connected = false
     })
 
+    // 准备环节
+    s.on('ready_update', (data: any) => {
+      if (data && Array.isArray(data.participants)) participants.value = data.participants
+      allReady.value = !!(data && data.allReady)
+    })
+
+    // 管理员召集
+    s.on('game_summoned', () => {
+      summoned.value = true
+    })
+
     s.on('connect_error', (err: any) => {
       error.value = err.message || '连接失败'
     })
@@ -136,6 +149,12 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
     }
   }
 
+  function setReady(ready: boolean) {
+    if (socket.value && connected.value && roomId.value) {
+      socket.value.emit('player_ready', { roomId: roomId.value, ready })
+    }
+  }
+
   function disconnect() {
     if (socket.value) {
       socket.value.disconnect()
@@ -148,6 +167,8 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
     progress.value = null
     events.value = []
     paused.value = false
+    allReady.value = false
+    summoned.value = false
   }
 
   onUnmounted(() => {
@@ -156,7 +177,7 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
 
   return {
     socket, connected, gameState, countdown, participants,
-    winner, scores, error, finished, progress, events, paused,
-    connect, joinRoom, sendAction, disconnect
+    winner, scores, error, finished, progress, events, paused, allReady, summoned,
+    connect, joinRoom, sendAction, setReady, disconnect
   }
 }

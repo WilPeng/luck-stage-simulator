@@ -272,10 +272,14 @@ export interface PlayerPopularityWeight {
   teamId: string
   teamName: string
   baseContribution: number
-  performanceContribution: number
-  teamRankBonus: number
-  mvpBonus: number
-  audienceLuck: number
+  performanceContribution?: number
+  personalWeight?: number
+  teamWeight?: number
+  stageRating?: string
+  teamRating?: string
+  teamRankBonus?: number
+  mvpBonus?: number
+  audienceLuck?: number
   totalWeight: number
 }
 

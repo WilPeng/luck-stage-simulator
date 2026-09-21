@@ -46,6 +46,8 @@ class BBSeason extends BaseModel {
     this.evictionNight = data?.evictionNight || null
     // 是否已锁定淘汰投票（开始淘汰夜后锁定）
     this.votesLocked = data?.votesLocked ?? false
+    // 餐厅照片墙展示顺序（playerId 数组）
+    this.photoWallOrder = data?.photoWallOrder || []
     this.createdAt = data?.createdAt || new Date().toISOString()
     this.updatedAt = data?.updatedAt || new Date().toISOString()
   }

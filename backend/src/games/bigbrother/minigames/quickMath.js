@@ -76,8 +76,8 @@ registerGame({
           }
         }
       }
-      // 答错时不返回正确答案
-      return { updated: true, finished: false, result: correct ? { correct, correctAnswer: q.answer } : { correct } }
+      // 不返回正确答案
+      return { updated: true, finished: false, result: { correct } }
     }
 
     return { updated: false }

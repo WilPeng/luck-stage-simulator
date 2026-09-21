@@ -4,6 +4,8 @@ const { generateId, logAction, getCurrentSeason, randomInt, ACTION_TYPES } = req
 const { getCollection } = require('../config/db')
 const TrainingCard = require('../models/TrainingCard')
 const TrainingRecord = require('../models/TrainingRecord')
+const TrainingCardPool = require('../models/TrainingCardPool')
+const TrainingStatus = require('../models/TrainingStatus')
 const Round = require('../models/Round')
 const RoundTeamMember = require('../models/RoundTeamMember')
 const User = require('../models/User')
@@ -243,6 +245,67 @@ router.put('/config', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// ===== GET /api/training/finish-status-all - 管理员查看所有选手训练结束状态 =====
+router.get('/finish-status-all', auth, requireAdmin, async (req, res) => {
+  try {
+    const { roundId } = req.query
+    const round = await getRound(roundId)
+    const rId = round ? round.id : (roundId || 'default-round')
+    const list = await TrainingStatus.find({ roundId: rId })
+    res.json({ success: true, data: { roundId: rId, list: list.map((s) => ({ playerId: s.playerId, finished: !!s.finished, finishedAt: s.finishedAt || null })) } })
+  } catch (e) {
+    res.status(500).json({ success: false, error: '查询失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== POST /api/training/finish - 选手确认训练结束 =====
+router.post('/finish', auth, async (req, res) => {
+  try {
+    const { roundId, finished } = req.body || {}
+    const round = await getRound(roundId)
+    const rId = round ? round.id : (roundId || 'default-round')
+    const rIdx = round ? round.index : null
+    const pid = req.user.userId
+    const user = await User.findOne({ id: pid })
+    if (!user || user.status === 'eliminated') {
+      return res.status(403).json({ success: false, error: '该选手已被淘汰', code: 'ELIMINATED' })
+    }
+    const wantFinish = finished !== false
+    let st = await TrainingStatus.findOne({ roundId: rId, playerId: pid })
+    if (!st) {
+      st = new TrainingStatus({
+        id: generateId(), roundId: rId, roundIndex: rIdx, playerId: pid,
+        finished: wantFinish, finishedAt: wantFinish ? new Date().toISOString() : null,
+        createdAt: new Date().toISOString()
+      })
+    } else {
+      st.finished = wantFinish
+      st.finishedAt = wantFinish ? (st.finishedAt || new Date().toISOString()) : null
+      st.updatedAt = new Date().toISOString()
+    }
+    await st.save()
+    // 仅当本轮没有任何 TrainingStatus 时才允许取消（简化：允许本人切换）
+    res.json({ success: true, data: { roundId: rId, finished: st.finished, finishedAt: st.finishedAt } })
+  } catch (e) {
+    console.error('Training finish error:', e)
+    res.status(500).json({ success: false, error: '确认训练结束失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== GET /api/training/finish-status - 查询本人本轮训练结束状态 =====
+router.get('/finish-status', auth, async (req, res) => {
+  try {
+    const { roundId } = req.query
+    const round = await getRound(roundId)
+    const rId = round ? round.id : (roundId || 'default-round')
+    const pid = req.user.userId
+    const st = await TrainingStatus.findOne({ roundId: rId, playerId: pid })
+    res.json({ success: true, data: { roundId: rId, finished: !!(st && st.finished), finishedAt: st ? st.finishedAt : null } })
+  } catch (e) {
+    res.status(500).json({ success: false, error: '查询训练状态失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // ===== GET /api/training/cards - 训练卡列表 =====
 router.get('/cards', auth, async (req, res) => {
   try {
@@ -314,6 +377,206 @@ router.delete('/cards/:id', auth, requireAdmin, async (req, res) => {
 })
 
 // ===== POST /api/training/draw - 抽一张训练卡 =====
+// ===== 每轮有限卡池（管理员在每轮抽卡前设置；带序号，每张仅可被一人抽中） =====
+
+// 生成/重建卡池
+router.post('/pool/setup', auth, requireAdmin, async (req, res) => {
+  try {
+    const { roundId, roundIndex, perPersonDrawCount, totalCards, counts } = req.body || {}
+    const per = parseInt(perPersonDrawCount)
+    if (!(per >= 1)) return res.status(400).json({ success: false, error: '每人抽取数量必须 ≥ 1', code: 'INVALID_PER' })
+
+    const alive = await User.find({ role: { $ne: 'admin' }, status: 'active' })
+
+    const cards = (await TrainingCard.find({})).filter(c => c.enabled !== false)
+    if (!cards.length) return res.status(400).json({ success: false, error: '没有可用训练卡', code: 'NO_CARDS' })
+
+    // 分布：优先使用管理员手动配置的每种卡牌数量（counts），否则按权重随机生成总数
+    let distribution = []
+    if (Array.isArray(counts) && counts.length) {
+      const cardMap = {}
+      for (const c of cards) cardMap[c.id] = c
+      for (const item of counts) {
+        const cnt = parseInt(item && item.count)
+        if (!(cnt > 0)) continue
+        const card = cardMap[item.cardId]
+        if (!card) continue
+        distribution.push({ card, count: cnt })
+      }
+      if (!distribution.length) {
+        return res.status(400).json({ success: false, error: '请至少为一种卡牌设置数量', code: 'NO_COUNTS' })
+      }
+    } else {
+      const total = parseInt(totalCards)
+      if (!(total >= 1)) return res.status(400).json({ success: false, error: '卡牌总数必须 ≥ 1', code: 'INVALID_TOTAL' })
+      distribution = [{ card: null, count: total }]
+    }
+
+    const total = distribution.reduce((s, d) => s + d.count, 0)
+    if (per * alive.length > total) {
+      return res.status(400).json({
+        success: false,
+        error: `每人抽取数量 × 存活总人数 = ${per} × ${alive.length} = ${per * alive.length}，不能超过卡牌总数 ${total}`,
+        code: 'POOL_TOO_SMALL'
+      })
+    }
+
+    let round = await getRound(roundId)
+    let rIdx = roundIndex !== undefined ? parseInt(roundIndex) : null
+    if (!round && rIdx !== null) {
+      const season = await getCurrentSeason()
+      if (season) round = await Round.findOne({ seasonId: season.id, index: rIdx })
+    }
+    const rId = round ? round.id : (roundId || 'default-round')
+    if (round && round.index !== undefined) rIdx = round.index
+
+    // 展开为逐张卡牌后打乱
+    const flat = []
+    for (const d of distribution) {
+      for (let i = 0; i < d.count; i++) flat.push(d.card || weightedRandomCard(cards))
+    }
+    for (let i = flat.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[flat[i], flat[j]] = [flat[j], flat[i]]
+    }
+
+    await TrainingCardPool.deleteMany({ roundId: rId })
+    const pool = flat.map((c, idx) => ({
+      id: generateId(), roundId: rId, roundIndex: rIdx, index: idx + 1,
+      perPersonDrawCount: per, totalCards: total,
+      cardId: c.id, cardName: c.name, cardType: c.type, effect: c.effect || {},
+      drawnBy: null, gameId: req.gameId, createdAt: new Date().toISOString()
+    }))
+    await TrainingCardPool.insertMany(pool)
+    try {
+      await logAction(req.user.userId, req.user.name, req.user.role,
+        ACTION_TYPES.TRAINING_CARD_DRAW || 'TRAINING_POOL_SETUP', 'round', rId,
+        `生成卡池：共 ${total} 张，每人可抽 ${per} 张`)
+    } catch (le) { /* ignore */ }
+    res.json({ success: true, data: { roundId: rId, roundIndex: rIdx, totalCards: total, perPersonDrawCount: per } })
+  } catch (e) {
+    console.error('Pool setup error:', e)
+    res.status(500).json({ success: false, error: '生成卡池失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// 获取卡池（选手端：自己的展示详情，别人的只显示已抽走）
+router.get('/pool', auth, async (req, res) => {
+  try {
+    const { roundId } = req.query
+    let rId = roundId
+    const round = await getRound(roundId)
+    if (round) rId = round.id
+    const scope = [rId, roundId].filter(Boolean)
+    const cards = await TrainingCardPool.find({ roundId: { $in: scope } })
+    cards.sort((a, b) => (a.index || 0) - (b.index || 0))
+    const isAdmin = req.user?.role === 'admin'
+    const myId = req.user?.userId
+    const recByIndex = {}
+    if (myId) {
+      const myRecords = await TrainingRecord.find({ playerId: myId, roundId: { $in: scope } })
+      for (const r of myRecords) {
+        if (r.cardIndex !== undefined && r.cardIndex !== null) recByIndex[r.cardIndex] = r
+      }
+    }
+    const list = cards.map(c => {
+      const mine = !!(c.drawnBy && c.drawnBy === myId)
+      const rec = mine ? recByIndex[c.index] : null
+      return {
+        index: c.index,
+        drawn: !!c.drawnBy,
+        mine,
+        drawnByName: c.drawnBy ? c.drawnByName : '',
+        delta: rec ? (rec.attrDelta || null) : null,
+        card: (mine || isAdmin) ? { id: c.cardId, name: c.cardName, type: c.cardType, effect: c.effect } : null
+      }
+    })
+    res.json({
+      success: true,
+      data: {
+        roundId: rId,
+        totalCards: cards.length,
+        perPersonDrawCount: cards[0]?.perPersonDrawCount || 0,
+        cards: list
+      }
+    })
+  } catch (e) {
+    console.error('Pool get error:', e)
+    res.status(500).json({ success: false, error: '获取卡池失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// 从卡池抽取一张（按序号）
+router.post('/pool/draw', auth, async (req, res) => {
+  try {
+    const { roundId, slotIndex, playerId, userId } = req.body || {}
+    const pid = playerId || userId || req.user.userId
+    const actor = await User.findOne({ id: pid })
+    if (!actor || actor.status === 'eliminated') {
+      return res.status(403).json({ success: false, error: '该选手已被淘汰，无法参与排练抽卡', code: 'ELIMINATED' })
+    }
+    const idx = parseInt(slotIndex)
+    if (!(idx >= 1)) return res.status(400).json({ success: false, error: '缺少卡牌序号', code: 'INVALID_SLOT' })
+
+    let rId = roundId
+    const round = await getRound(roundId)
+    if (round) rId = round.id
+    const scope = [rId, roundId].filter(Boolean)
+
+    const card = await TrainingCardPool.findOne({ roundId: { $in: scope }, index: idx })
+    if (!card) return res.status(404).json({ success: false, error: '卡牌不存在', code: 'CARD_NOT_FOUND' })
+    if (card.drawnBy) return res.status(409).json({ success: false, error: `该卡牌已被 ${card.drawnByName || '其他选手'} 抽走`, code: 'CARD_TAKEN' })
+
+    const season = await getCurrentSeason()
+    const per = card.perPersonDrawCount || (season && season.trainingDrawsPerPlayer) || 3
+    const myDrawn = await TrainingCardPool.countDocuments({ roundId: { $in: scope }, drawnBy: pid })
+    if (myDrawn >= per) {
+      return res.status(409).json({ success: false, error: `已达本轮抽取上限（${per} 张）`, code: 'DRAW_LIMIT_REACHED' })
+    }
+
+    const effect = card.effect || {}
+    const isSelfSelect = !!(effect.selfSelect)
+    let attrDelta = { vocal: 0, dance: 0, charm: 0 }
+    if (!isSelfSelect) {
+      attrDelta = computeAttrDelta({ effect }, actor)
+      actor.attributes = actor.attributes || { vocal: 30, dance: 30, charm: 30 }
+      for (const k of Object.keys(attrDelta)) actor.attributes[k] = (actor.attributes[k] || 0) + attrDelta[k]
+      await actor.save()
+    }
+
+    card.drawnBy = pid
+    card.drawnByName = actor.name
+    card.drawnAt = new Date().toISOString()
+    await card.save()
+
+    const rec = new TrainingRecord({
+      id: generateId(), roundId: rId, roundIndex: card.roundIndex,
+      userId: pid, userName: actor.name, playerId: pid,
+      cardId: card.cardId, cardName: card.cardName, cardType: card.cardType,
+      effect, attrDelta, attributesAfter: { ...(actor.attributes || {}) },
+      cardIndex: card.index, createdAt: new Date().toISOString()
+    })
+    await rec.save()
+
+    res.json({
+      success: true,
+      data: {
+        recordId: rec.id,
+        cardIndex: card.index,
+        card: { id: card.cardId, name: card.cardName, type: card.cardType, effect },
+        isSelfSelect,
+        attrDelta,
+        attributesAfter: actor.attributes,
+        remainingDraws: Math.max(0, per - myDrawn - 1),
+        drawsTotal: per
+      }
+    })
+  } catch (e) {
+    console.error('Pool draw error:', e)
+    res.status(500).json({ success: false, error: '抽卡失败', code: 'SERVER_ERROR' })
+  }
+})
+
 router.post('/draw', auth, async (req, res) => {
   try {
     // 确保自主特训卡存在
@@ -321,6 +584,11 @@ router.post('/draw', auth, async (req, res) => {
 
     const { roundId, roundIndex, round: roundQuery, playerId, userId } = req.body
     const pid = playerId || userId || req.user.userId
+    // 已淘汰选手不得参与排练抽卡
+    const actor = await User.findOne({ id: pid })
+    if (!actor || actor.status === 'eliminated') {
+      return res.status(403).json({ success: false, error: '该选手已被淘汰，无法参与排练抽卡', code: 'ELIMINATED' })
+    }
     const rIdxInput = roundIndex !== undefined ? parseInt(roundIndex) : (roundQuery !== undefined ? parseInt(roundQuery) : null)
     let round = await getRound(roundId)
     if (!round && rIdxInput !== null) {
@@ -334,7 +602,10 @@ router.post('/draw', auth, async (req, res) => {
     const rIdx = round ? round.index : rIdxInput
 
     const season = await getCurrentSeason()
-    const drawsPerPlayer = (season && season.trainingDrawsPerPlayer) || 3
+    let drawsPerPlayer = (season && season.trainingDrawsPerPlayer) || 3
+    // 若本轮已配置卡池，以卡池的每人抽取数量为准
+    const poolMeta = await TrainingCardPool.findOne({ roundId: { $in: [rId, roundId].filter(Boolean) } })
+    if (poolMeta && poolMeta.perPersonDrawCount) drawsPerPlayer = poolMeta.perPersonDrawCount
 
     // 检查本轮抽卡次数（兼容 roundId UUID 和 round-1 两种格式）
     const countFilter = { playerId: pid }
@@ -348,11 +619,24 @@ router.post('/draw', auth, async (req, res) => {
       return res.status(409).json({ success: false, error: `已达训练上限`, code: 'DRAW_LIMIT_REACHED' })
     }
 
-    // 按权重抽卡
-    const cards = (await TrainingCard.find({})).filter(c => c.enabled !== false)
-    if (cards.length === 0) return res.status(400).json({ success: false, error: '没有可用训练卡', code: 'NO_CARDS' })
+    // 优先从卡池最后一张开始消耗（未被抽走的），无卡池时才按权重随机
+    const poolScope = [rId, roundId, round ? `round-${round.index}` : null].filter(Boolean)
+    const poolCards = await TrainingCardPool.find({ roundId: { $in: poolScope } })
+    const poolPick = poolCards.filter(c => !c.drawnBy).sort((a, b) => (b.index || 0) - (a.index || 0))[0] || null
+    if (poolPick) {
+      poolPick.drawnBy = pid
+      poolPick.drawnByName = actor.name
+      poolPick.drawnAt = new Date().toISOString()
+      await poolPick.save()
+    }
 
-    const drawn = weightedRandomCard(cards)
+    // 按权重抽卡（无卡池时）
+    const cards = (await TrainingCard.find({})).filter(c => c.enabled !== false)
+    if (!poolPick && cards.length === 0) return res.status(400).json({ success: false, error: '没有可用训练卡', code: 'NO_CARDS' })
+
+    const drawn = poolPick
+      ? { id: poolPick.cardId, name: poolPick.cardName, type: poolPick.cardType, effect: poolPick.effect || {} }
+      : weightedRandomCard(cards)
 
     // 更新用户属性
     const user = await User.findOne({ id: pid })
@@ -574,6 +858,13 @@ router.post('/auto-complete-all', auth, requireAdmin, async (req, res) => {
 
     const players = await User.find({ role: { $ne: 'admin' }, status: 'active' })
 
+    // 若已配置卡池：从卡池【最后一张】开始消耗（未抽走的），并采用卡池设定的人数上限
+    const poolScope = [rId, `round-${rIdx}`, roundDb ? roundDb.id : null].filter(Boolean)
+    const poolAll = await TrainingCardPool.find({ roundId: { $in: poolScope } })
+    const poolQueue = poolAll.filter(c => !c.drawnBy).sort((a, b) => (b.index || 0) - (a.index || 0))
+    let poolPtr = 0
+    const effectiveDraws = poolQueue.length > 0 ? (poolQueue[0].perPersonDrawCount || drawsPerPlayer) : drawsPerPlayer
+
     const results = []
     let totalDraws = 0
     let processedCount = 0
@@ -597,12 +888,26 @@ router.post('/auto-complete-all', auth, requireAdmin, async (req, res) => {
       }
 
       // 随机生成 1~N 次排练
-      const drawTimes = Math.floor(Math.random() * drawsPerPlayer) + 1
+      const drawTimes = Math.floor(Math.random() * effectiveDraws) + 1
 
       const drawsForPlayer = []
       for (let i = 0; i < drawTimes; i++) {
-        const drawn = weightedRandomCard(cards)
-        const attrDelta = computeAttrDelta(drawn, user)
+        // 优先从卡池取（从最后一张开始），否则退回按权重随机
+        let effectObj, cardMeta
+        const poolCard = poolPtr < poolQueue.length ? poolQueue[poolPtr++] : null
+        if (poolCard) {
+          effectObj = poolCard.effect || {}
+          cardMeta = { id: poolCard.cardId, name: poolCard.cardName, type: poolCard.cardType }
+          poolCard.drawnBy = user.id
+          poolCard.drawnByName = user.name
+          poolCard.drawnAt = new Date().toISOString()
+          await poolCard.save()
+        } else {
+          const drawn = weightedRandomCard(cards)
+          effectObj = drawn.effect || {}
+          cardMeta = { id: drawn.id, name: drawn.name, type: drawn.type }
+        }
+        const attrDelta = computeAttrDelta({ effect: effectObj }, user)
 
         user.attributes = user.attributes || { vocal: 30, dance: 30, charm: 30 }
         user.attributes.vocal = (user.attributes.vocal || 0) + attrDelta.vocal
@@ -613,16 +918,16 @@ router.post('/auto-complete-all', auth, requireAdmin, async (req, res) => {
         const record = new TrainingRecord({
           id: generateId(), roundId: rId, roundIndex: rIdx,
           userId: user.id, userName: user.name, playerId: user.id,
-          cardId: drawn.id, cardName: drawn.name, cardType: drawn.type,
-          effect: drawn.effect || {}, attrDelta, attributesAfter,
+          cardId: cardMeta.id, cardName: cardMeta.name, cardType: cardMeta.type,
+          effect: effectObj, attrDelta, attributesAfter,
           createdAt: new Date().toISOString()
         })
         await record.save()
 
         totalDraws++
         drawsForPlayer.push({
-          cardName: drawn.name,
-          effect: normalizeEffect(drawn.effect)
+          cardName: cardMeta.name,
+          effect: normalizeEffect(effectObj)
         })
       }
 

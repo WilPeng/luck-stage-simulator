@@ -16,23 +16,47 @@
         </t-space>
       </div>
 
+      <!-- 卡池设置（有限卡池，带序号，每张仅可被一人抽中） -->
+      <div class="pool-setup-section">
+        <div class="section-header">
+          <h2>🎴 本轮卡池设置</h2>
+          <t-tag v-if="poolInfo && poolInfo.totalCards" theme="success" variant="light">
+            当前卡池：{{ poolInfo.totalCards }} 张 · 已抽 {{ poolInfo.drawnCount }} 张 · 每人可抽 {{ poolInfo.perPersonDrawCount }} 张
+          </t-tag>
+        </div>
+        <t-space align="center" :size="12" style="flex-wrap: wrap;">
+          <span>每人抽取数量</span>
+          <t-input-number v-model="poolPer" :min="1" :max="9999" style="width: 120px;" />
+          <span>目标总数</span>
+          <t-input-number v-model="poolTargetTotal" :min="1" :max="99999" style="width: 140px;" />
+          <t-button theme="primary" variant="outline" @click="autoAllocatePool">🎲 一键按权重分配</t-button>
+          <t-button variant="outline" @click="clearPoolCounts">清空</t-button>
+        </t-space>
+        <div class="pool-card-list">
+          <div v-for="card in store.enabledCards" :key="card.id" class="pool-card-row">
+            <span class="pool-card-name">{{ card.name }}</span>
+            <span class="pool-card-weight">权重 {{ card.weight }}</span>
+            <t-input-number v-model="poolCounts[card.id]" :min="0" :max="99999" style="width: 120px;" />
+          </div>
+          <t-empty v-if="store.enabledCards.length === 0" description="暂无启用的训练卡" />
+        </div>
+        <t-space align="center" :size="12" style="flex-wrap: wrap; margin-top: 10px;">
+          <t-button theme="primary" :loading="poolSaving" @click="handleSetupPool">生成卡池</t-button>
+          <span class="pool-hint" :class="{ invalid: poolInvalid }">
+            已分配 {{ poolCountSum }} 张；存活 {{ aliveCount }} 人 × {{ poolPer }} = {{ poolPer * aliveCount }} 张，需 ≤ 已分配张数
+          </span>
+        </t-space>
+        <p class="pool-tip">为每种卡牌设定张数（可先「一键按权重分配」再手动微调）。生成后每位选手在训练页从卡池中按序号翻牌；每张卡只能被一名选手抽走，抽完或达到每人上限即止。</p>
+      </div>
+
       <!-- 训练情况查询 -->
       <div class="training-records-section">
         <div class="section-header">
           <h2>选手训练情况</h2>
           <t-space>
-            <span class="expected-count-label">期望训练次数</span>
-            <t-input-number v-model="expectedTrainingCount" :min="1" :max="200" size="small" />
-            <t-button
-              theme="primary"
-              variant="outline"
-              size="small"
-              :loading="store.saving"
-              @click="handleSaveExpectedCount"
-            >
-              保存
-            </t-button>
-            <t-tag theme="primary" variant="light">
+            <t-tag theme="primary" variant="light">每人抽取数量：{{ expectedTrainingCount }}（来自卡池）</t-tag>
+            <t-tag theme="success" variant="light">已确认训练结束：{{ finishedCount }} / {{ trainingUsers.length }}</t-tag>
+            <t-tag variant="light">
               {{ trainingUsers.length }} 位选手 / {{ trainingRecords.length }} 条记录
             </t-tag>
           </t-space>
@@ -106,6 +130,9 @@
                   size="small"
                 >
                   {{ user.recordCount }} / {{ expectedTrainingCount }}
+                </t-tag>
+                <t-tag :theme="user.finished ? 'success' : 'default'" variant="light" size="small">
+                  {{ user.finished ? '已确认训练结束' : '未确认训练结束' }}
                 </t-tag>
               </div>
               <div class="col-records">
@@ -631,12 +658,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useSfRefresh } from '../../composables/useSfRefresh'
 import { useRoute } from 'vue-router'
 import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
 import { useTrainingCardStore } from '../../stores/trainingCardStore'
 import { useSeasonStore } from '../../stores/seasonStore'
-import { getUsers, doRequest, getTrainingRecords, deleteTrainingRecord, batchDeleteTrainingRecords } from '../../services/api'
+import { getUsers, doRequest, getTrainingRecords, deleteTrainingRecord, batchDeleteTrainingRecords, setupTrainingPool, getTrainingPool, getAllTrainingFinishStatus } from '../../services/api'
 import type { TrainingCard, AutoCompleteResult, TrainingRecord, TrainingRecordListResponse } from '../../types/training'
 import type { User } from '../../types/user'
 
@@ -671,8 +699,89 @@ const logsFilterType = ref('')
 const logsSelectedIds = ref<string[]>([])
 const deletingLogIds = ref<string[]>([])
 
-// 期望训练次数（页面可临时调整，初始化时从配置读取）
+// 每人抽取数量（以卡池设置为准，唯一定义，不再单独设置"期望训练次数"）
 const expectedTrainingCount = ref(3)
+
+// 选手训练结束确认状态
+const finishMap = ref<Record<string, boolean>>({})
+const finishedCount = computed(() => Object.values(finishMap.value).filter(Boolean).length)
+async function loadFinishStatus() {
+  try {
+    const res: any = await getAllTrainingFinishStatus(`round-${currentRound.value}`)
+    const m: Record<string, boolean> = {}
+    for (const item of res?.list || []) m[item.playerId] = !!item.finished
+    finishMap.value = m
+  } catch { /* ignore */ }
+}
+
+// ===== 本轮卡池设置 =====
+const poolPer = ref(1)
+const poolTargetTotal = ref(100)
+const poolCounts = reactive<Record<string, number>>({})
+const poolSaving = ref(false)
+const poolInfo = ref<any>(null)
+const aliveCount = computed(() => players.value.filter(p => p.status !== 'eliminated').length)
+const poolCountSum = computed(() => store.enabledCards.reduce((s, c) => s + (poolCounts[c.id] || 0), 0))
+const poolInvalid = computed(() => poolPer.value > 0 && poolCountSum.value > 0 && poolPer.value * aliveCount.value > poolCountSum.value)
+
+function autoAllocatePool() {
+  const cards = store.enabledCards
+  const total = Math.max(1, Math.floor(poolTargetTotal.value) || 0)
+  const weightSum = cards.reduce((s, c) => s + (c.weight || 1), 0)
+  if (!cards.length || weightSum <= 0) return
+  const rows = cards.map(c => {
+    const exact = total * (c.weight || 1) / weightSum
+    return { id: c.id, count: Math.floor(exact), rem: exact - Math.floor(exact) }
+  })
+  let assigned = rows.reduce((s, r) => s + r.count, 0)
+  const sorted = [...rows].sort((a, b) => b.rem - a.rem)
+  let i = 0
+  while (assigned < total) { sorted[i % sorted.length].count++; assigned++; i++ }
+  for (const r of rows) poolCounts[r.id] = r.count
+}
+
+function clearPoolCounts() {
+  for (const c of store.enabledCards) poolCounts[c.id] = 0
+}
+
+async function loadPoolInfo() {
+  try {
+    const res: any = await getTrainingPool(`round-${currentRound.value}`)
+    if (res && res.totalCards > 0) {
+      const drawn = (res.cards || []).filter((c: any) => c.drawn).length
+      poolInfo.value = { ...res, drawnCount: drawn }
+      poolPer.value = res.perPersonDrawCount || 1
+      expectedTrainingCount.value = res.perPersonDrawCount || 1
+      poolTargetTotal.value = res.totalCards
+      const counts: Record<string, number> = {}
+      for (const c of res.cards || []) {
+        if (c.card && c.card.id) counts[c.card.id] = (counts[c.card.id] || 0) + 1
+      }
+      for (const k of Object.keys(counts)) poolCounts[k] = counts[k]
+    } else {
+      poolInfo.value = null
+    }
+  } catch { poolInfo.value = null }
+}
+
+async function handleSetupPool() {
+  if (!(poolPer.value >= 1)) { MessagePlugin.error('每人抽取数量必须 ≥ 1'); return }
+  const counts = store.enabledCards
+    .filter(c => (poolCounts[c.id] || 0) > 0)
+    .map(c => ({ cardId: c.id, count: poolCounts[c.id] }))
+  if (counts.length === 0) { MessagePlugin.error('请至少为一种卡牌设置数量'); return }
+  if (poolInvalid.value) { MessagePlugin.error('每人抽取数量 × 存活人数 不能超过已分配卡牌总数'); return }
+  poolSaving.value = true
+  try {
+    await setupTrainingPool({ roundId: `round-${currentRound.value}`, perPersonDrawCount: poolPer.value, counts })
+    MessagePlugin.success('卡池已生成')
+    await loadPoolInfo()
+  } catch (e: any) {
+    MessagePlugin.error(e.message || '生成失败')
+  } finally {
+    poolSaving.value = false
+  }
+}
 
 // 按用户分组的训练记录（包含所有选手，未训练者记录为空）
 const trainingUsers = computed(() => {
@@ -680,7 +789,7 @@ const trainingUsers = computed(() => {
   const playerMap = new Map<string, User>()
   players.value.forEach(player => playerMap.set(player.id, player))
 
-  const map = new Map<string, { userId: string; userName: string; records: TrainingRecord[]; recordCount: number; attributes: { vocal: number; dance: number; charm: number }; status?: string; eliminated: boolean }>()
+  const map = new Map<string, { userId: string; userName: string; records: TrainingRecord[]; recordCount: number; attributes: { vocal: number; dance: number; charm: number }; status?: string; eliminated: boolean; finished: boolean }>()
 
   // 先插入所有选手
   players.value.forEach(player => {
@@ -691,7 +800,8 @@ const trainingUsers = computed(() => {
       recordCount: 0,
       attributes: player.attributes || { vocal: 0, dance: 0, charm: 0 },
       status: player.status || 'active',
-      eliminated: player.status === 'eliminated'
+      eliminated: player.status === 'eliminated',
+      finished: !!finishMap.value[player.id]
     })
   })
 
@@ -705,7 +815,8 @@ const trainingUsers = computed(() => {
         records: [],
         recordCount: 0,
         status: 'active',
-        eliminated: false
+        eliminated: false,
+        finished: !!finishMap.value[userId]
       })
     }
     const user = map.get(userId)!
@@ -1227,15 +1338,6 @@ async function handleImportCards(e: Event): Promise<void> {
   target.value = ''
 }
 
-async function handleSaveExpectedCount(): Promise<void> {
-  try {
-    await store.saveConfig({ drawsPerPlayer: expectedTrainingCount.value })
-    MessagePlugin.success('期望训练次数已保存')
-  } catch (error: any) {
-    MessagePlugin.error(error.message || '保存失败')
-  }
-}
-
 async function handleAutoCompleteAll(): Promise<void> {
   const confirm = DialogPlugin.confirm({
     header: '确认操作',
@@ -1479,6 +1581,13 @@ function formatDateTime(isoString?: string): string {
   })
 }
 
+// websocket：选手抽卡/确认训练结束后，管理端训练情况表与卡池实时刷新
+useSfRefresh(() => {
+  fetchTrainingRecords()
+  loadFinishStatus()
+  loadPoolInfo()
+})
+
 onMounted(async () => {
   await store.initialize()
   await seasonStore.fetchRounds()
@@ -1489,10 +1598,10 @@ onMounted(async () => {
   await fetchTrainingLogs()
   await refreshLogsStats()
 
-  // 从配置初始化期望训练次数
-  if (store.config?.drawsPerPlayer) {
-    expectedTrainingCount.value = store.config.drawsPerPlayer
-  }
+  // 加载本轮卡池（每人抽取数量以卡池设置为准）
+  await loadPoolInfo()
+  // 加载训练结束确认状态
+  await loadFinishStatus()
 })
 </script>
 
@@ -2221,4 +2330,15 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
 }
+
+.pool-setup-section { background: var(--bg-container, #fff); border: 1px solid var(--component-border, #eee); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.pool-setup-section .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.pool-setup-section h2 { margin: 0; font-size: 16px; }
+.pool-hint { font-size: 13px; color: #00a870; }
+.pool-hint.invalid { color: #d54941; font-weight: 600; }
+.pool-tip { margin: 10px 0 0; font-size: 12px; color: #888; }
+.pool-card-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; margin-top: 12px; }
+.pool-card-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bg-secondary, #f7f8fa); border: 1px solid var(--component-border, #eee); border-radius: 8px; }
+.pool-card-row .pool-card-name { flex: 1; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pool-card-row .pool-card-weight { font-size: 12px; color: #888; white-space: nowrap; }
 </style>

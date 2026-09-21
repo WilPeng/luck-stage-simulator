@@ -79,6 +79,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useSfRefresh } from '../../composables/useSfRefresh'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { useTeamStore } from '../../stores/teamStore'
@@ -118,6 +119,15 @@ const isPerformanceReleased = computed(() => !!releaseStatus.value?.performanceR
 const groupingMode = ref<'captain' | 'song' | 'captain_choice'>('captain')
 let releaseTimer: number | undefined
 let progressTimer: number | undefined
+
+// websocket：并发行动开放/关闭、组队、选歌等实时刷新
+useSfRefresh(() => {
+  loadReleaseStatus()
+  loadGroupingMode()
+  teamStore.fetchTeams(String(currentRound.value))
+  songStore.fetchRoundSongs(String(currentRound.value))
+  checkPerfValueDrawn()
+})
 
 onMounted(() => {
   loadGroupingMode()

@@ -36,6 +36,37 @@ async function getAvatar(playerId) {
   return g?.avatar || null
 }
 
+// 由后端向指定房间发送一条聊天消息（用于仪式等系统发言），并实时广播
+async function postRoomMessage(roomId, { senderId, senderName, senderRole = 'houseguest', senderAvatar = null, content }) {
+  try {
+    const msg = new BBChatMessage({
+      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      senderId: senderId || 'system',
+      senderName: senderName || '系统',
+      senderRole,
+      senderAvatar: senderAvatar || (senderId ? await getAvatar(senderId) : null),
+      content: String(content || '').trim(),
+      chatType: 'room',
+      roomId,
+      gameId
+    })
+    await msg.save()
+    if (bbHouseNamespace) {
+      const roomSockets = await bbHouseNamespace.in(`room:${roomId}`).fetchSockets()
+      for (const s of roomSockets) {
+        const g = await BBHouseguest.findOne({ id: s.userId, gameId })
+        if (g?.isSleeping) continue
+        if (g?.isShowering && roomId !== 'bathroom') continue
+        s.emit('house:new-message', { roomId, message: msg.toObject() })
+      }
+    }
+    return msg.toObject()
+  } catch (e) {
+    console.error('[BBHouse] postRoomMessage error:', e)
+    return null
+  }
+}
+
 function initBBHouseSocket(io) {
   bbHouseNamespace = io.of('/bigbrother-house')
 
@@ -591,6 +622,7 @@ function broadcastHouse(event, payload) {
 module.exports = {
   initBBHouseSocket,
   getNamespace,
+  postRoomMessage,
   broadcastDoorUpdate,
   broadcastHouse,
   notifyForceMove,

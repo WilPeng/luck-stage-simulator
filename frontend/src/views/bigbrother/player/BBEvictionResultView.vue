@@ -7,14 +7,14 @@
       <span v-else-if="isFuture" class="future-tag">未开始</span>
     </div>
 
-    <!-- 淘汰夜宣布（实时） -->
+    <!-- 淘汰夜宣布（管理员逐句手动揭晓） -->
     <div v-if="night" class="announce-stage">
       <template v-if="night.phase === 'announce'">
         <div class="announce-title">📢 淘汰结果宣布</div>
-        <div class="ann-line shown" style="animation-delay: 0.2s">by a vote of {{ night.big }}-{{ night.small }},</div>
-        <template v-for="e in night.evicted" :key="e.id">
-          <div class="ann-line shown evicted-name" style="animation-delay: 1.2s">{{ e.name }}</div>
-          <div class="ann-line shown result out" style="animation-delay: 2.2s">你被淘汰了</div>
+        <template v-for="(s, i) in (night.segments || [])" :key="i">
+          <div v-if="i < (night.released || 0)" class="ann-line shown">
+            {{ s.text }}
+          </div>
         </template>
       </template>
       <template v-else>
@@ -26,18 +26,18 @@
       </template>
     </div>
 
-    <div v-else-if="evictionResult" class="result-section">
+    <div v-else-if="isHistory && evictionResult" class="result-section">
       <div class="result-card">
         <div class="result-icon">🚪</div>
         <div class="result-info">
           <div class="result-name">{{ evictionResult.evictedName }}</div>
-          <div class="result-votes">{{ evictionResult.voteCount }} / {{ evictionResult.totalVotes }} 票</div>
+          <div class="result-votes">{{ evictionResult.voteCount }}{{ evictionResult.otherVotes != null ? '-' + evictionResult.otherVotes : '' }}</div>
           <div v-if="isMe(evictionResult.evictedName)" class="me-evicted">你被淘汰了！</div>
         </div>
       </div>
     </div>
     <div v-else class="empty-card">
-      <p>淘汰结果尚未公布</p>
+      <p>管理员未开始淘汰结果环节</p>
     </div>
 
     <div v-if="nomination && isHistory" class="nomination-summary">
@@ -126,8 +126,6 @@ onMounted(() => {
 .announce-title { color: #ffaa00; font-size: 14px; margin-bottom: 18px; }
 .ann-line { min-height: 44px; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #e0e0e0; opacity: 0; transition: opacity 0.3s; }
 .ann-line.shown { opacity: 1; animation: fadeIn 0.6s ease both; }
-.ann-line.evicted-name { color: #ff4444; }
-.ann-line.result.out { color: #ff4444; }
 .door-stage { text-align: center; }
 .door-icon { font-size: 64px; margin-bottom: 12px; }
 .door-name { font-size: 30px; font-weight: 700; color: #ff4444; }

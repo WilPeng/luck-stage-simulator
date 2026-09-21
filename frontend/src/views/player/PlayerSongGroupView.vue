@@ -79,6 +79,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useSfRefresh } from '../../composables/useSfRefresh'
 import { useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useAuthStore } from '../../stores/authStore'
@@ -159,6 +160,13 @@ async function handleSelectSong(option: SongGroupOption) {
     selectingSongId.value = null
   }
 }
+
+// websocket：并发开放/关闭与歌曲选择实时刷新
+useSfRefresh(() => {
+  loadReleaseStatus()
+  loadSongOptions()
+  loadAll()
+})
 
 onMounted(async () => {
   await Promise.all([

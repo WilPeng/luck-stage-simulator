@@ -88,7 +88,7 @@
       <div class="overlay" v-if="mobileMenuOpen" @click="mobileMenuOpen = false"></div>
 
       <main class="player-main">
-        <router-view />
+        <router-view :key="'sf-stage-' + realtime.stageTick" />
       </main>
     </div>
 
@@ -156,10 +156,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { useSeasonStore } from '../stores/seasonStore'
+import { useSfRealtimeStore } from '../stores/sfRealtimeStore'
 import { STAGE_ORDER, STAGE_NAMES, CONCURRENT_ACTIONS } from '../types/season'
 import type { StageType } from '../types/season'
 import type { User } from '../types/user'
@@ -168,9 +169,33 @@ import { getAvatarUrl } from '../services/api'
 
 const authStore = useAuthStore()
 const seasonStore = useSeasonStore()
+const realtime = useSfRealtimeStore()
 const route = useRoute()
 const router = useRouter()
 const mobileMenuOpen = ref(false)
+
+// 管理员切换轮次/赛季配置后，选手端通过 websocket 实时跟进（刷新进度、菜单、分组模式）
+watch(() => realtime.seasonTick, async () => {
+  try {
+    await seasonStore.fetchProgress()
+    seasonStore.fetchMenu().catch(() => {})
+    for (let r = 1; r <= 10; r++) loadGroupingMode(r)
+  } catch { /* ignore */ }
+})
+
+// 任意写操作（并发开放/关闭、组队、选歌、训练、发挥值等）→ 轻量刷新左侧菜单与并发开放状态
+let sfRefreshTimer: number | undefined
+watch(() => realtime.tick, () => {
+  if (sfRefreshTimer) return
+  sfRefreshTimer = window.setTimeout(async () => {
+    sfRefreshTimer = undefined
+    try {
+      await seasonStore.fetchProgress()
+      seasonStore.fetchMenu().catch(() => {})
+      seasonStore.fetchAllConcurrentRelease().catch(() => {})
+    } catch { /* ignore */ }
+  }, 400)
+})
 
 import { GAMES, getGameById } from '../config/games'
 
@@ -281,7 +306,7 @@ const ACTION_TO_STAGE: Record<string, StageType> = {
 }
 
 // 各轮次的分组模式（按歌分组时组队入口指向选歌页，不显示独立选歌）
-const groupingModeCache = ref<Record<number, 'captain' | 'song' | 'captain_choice'>>({})
+const groupingModeCache = ref<Record<number, 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft'>>({})
 
 async function loadGroupingMode(round: number) {
   try {
@@ -292,7 +317,7 @@ async function loadGroupingMode(round: number) {
   }
 }
 
-function getGroupingMode(round: number): 'captain' | 'song' | 'captain_choice' {
+function getGroupingMode(round: number): 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft' {
   return groupingModeCache.value[round] || 'captain'
 }
 
@@ -442,6 +467,7 @@ async function handleLogout() {
 
 // 初始化：加载赛季进度和菜单
 onMounted(async () => {
+  realtime.connect()
   try {
     await Promise.all([
       seasonStore.fetchProgress(),

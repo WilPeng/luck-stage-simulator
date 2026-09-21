@@ -44,6 +44,94 @@
               </p>
             </div>
 
+            <!-- 3.4 团队评级规则 -->
+            <div class="settle-config-card">
+              <div class="config-title">🧩 团队评级规则（按顺序判定，首个满足即生效）</div>
+              <div class="rule-rows">
+                <div v-for="(r, i) in teamRules" :key="i" class="rule-block">
+                  <div class="rule-line1">
+                    <span class="rule-idx">规则 {{ i + 1 }}</span>
+                    <t-select v-model="r.combine" size="small" style="width: 150px">
+                      <t-option value="all" label="全部满足 (AND)" />
+                      <t-option value="any" label="满足任一 (OR)" />
+                    </t-select>
+                    <span>→ 团队评级</span>
+                    <t-select v-model="r.teamRating" size="small" style="width: 90px">
+                      <t-option v-for="rt in ['S','A','B','C','D']" :key="rt" :value="rt" :label="rt" />
+                    </t-select>
+                    <button class="bb-btn bb-btn-xs" @click="moveRule(i,-1)" :disabled="i===0">↑</button>
+                    <button class="bb-btn bb-btn-xs" @click="moveRule(i,1)" :disabled="i===teamRules.length-1">↓</button>
+                    <button class="bb-btn bb-btn-xs bb-btn-danger" @click="teamRules.splice(i,1)">删除规则</button>
+                  </div>
+                  <div class="rule-conds">
+                    <div v-for="(c, ci) in r.conditions" :key="ci" class="rule-cond">
+                      <t-select v-model="c.metric" size="small" style="width: 160px">
+                        <t-option value="countRating" label="某评级人数" />
+                        <t-option value="teamScore" label="团队总分" />
+                        <t-option value="avgCharm" label="队伍平均魅力" />
+                        <t-option value="avgPerformance" label="平均发挥成绩" />
+                        <t-option value="avgVocal" label="队伍平均声乐" />
+                        <t-option value="avgDance" label="队伍平均舞蹈" />
+                      </t-select>
+                      <t-select v-if="c.metric === 'countRating'" v-model="c.ratings" multiple size="small" style="width: 180px">
+                        <t-option v-for="rt in ['S','A','B','C','D']" :key="rt" :value="rt" :label="rt" />
+                      </t-select>
+                      <t-select v-model="c.op" size="small" style="width: 90px">
+                        <t-option value=">=" label="≥" />
+                        <t-option value="<=" label="≤" />
+                        <t-option value=">" label="＞" />
+                        <t-option value="<" label="＜" />
+                        <t-option value="=" label="＝" />
+                      </t-select>
+                      <input class="rule-count" type="number" v-model.number="c.value" />
+                      <button class="bb-btn bb-btn-xs bb-btn-danger" @click="r.conditions.splice(ci,1)">✕</button>
+                    </div>
+                    <button class="bb-btn bb-btn-xs" @click="addCondition(r)">+ 条件</button>
+                  </div>
+                </div>
+              </div>
+              <t-space>
+                <t-button size="small" variant="outline" @click="addRule">+ 新增规则</t-button>
+                <t-button size="small" theme="primary" :loading="savingRules" @click="saveRules">保存规则</t-button>
+              </t-space>
+              <p class="config-hint">每条规则由若干条件组成，选择「全部满足(AND)」或「满足任一(OR)」；条件为空表示兜底。规则按顺序判定，首个满足即生效。评级对应：S超级完美 / A完美 / B正常 / C翻车 / D惨不忍睹。</p>
+            </div>
+
+            <!-- 3.3 个人掷骰情况（管理员可代理掷骰） -->
+            <div class="settle-config-card">
+              <div class="config-title">🎲 个人评级掷骰情况</div>
+              <t-space style="margin-bottom: 10px">
+                <t-button size="small" variant="outline" :loading="ratingsLoading" @click="loadRatings">刷新</t-button>
+                <t-button size="small" theme="primary" variant="outline" :loading="rollingAll" @click="rollAllPending">为未投掷选手代理掷骰</t-button>
+                <span class="config-hint">已投掷 {{ ratingList.filter(r => r.rating).length }} / {{ ratingList.length }}</span>
+              </t-space>
+              <div class="rating-table">
+                <div class="rt-header">
+                  <span>选手</span><span>队伍</span><span>歌曲</span><span>难度</span><span>风险值</span><span>评级权重</span><span>状态</span><span>评级</span><span>点数</span><span>操作</span>
+                </div>
+                <div v-for="r in pagedRatingList" :key="r.playerId" class="rt-row">
+                  <span class="rt-name">{{ r.playerName }}</span>
+                  <span>{{ r.teamName || '-' }}</span>
+                  <span>{{ r.songName || '-' }}</span>
+                  <span>{{ r.difficulty ?? '-' }}</span>
+                  <span>{{ r.risk ?? '-' }}</span>
+                  <span class="rt-weights">{{ ratingWeightsText(r) }}</span>
+                  <span :class="r.rating ? 'done-text' : 'pending-text'">{{ r.rating ? '已投掷' : (r.hasTeam && r.hasSong ? '未投掷' : '未分组/未选歌') }}</span>
+                  <span>{{ r.rating || '-' }}</span>
+                  <span>{{ r.ratingRoll ?? '-' }}</span>
+                  <span>
+                    <t-button size="small" theme="primary" variant="outline" :disabled="!r.hasTeam || !r.hasSong" @click="proxyRoll(r)">
+                      {{ r.rating ? '重掷' : '代理掷骰' }}
+                    </t-button>
+                  </span>
+                </div>
+                <div v-if="ratingList.length === 0" class="rt-empty">暂无选手数据</div>
+              </div>
+              <div v-if="ratingTotalPages > 1" class="rt-pager">
+                <t-pagination v-model="ratingPage" :total="ratingList.length" :page-size="ratingPageSize" theme="simple" />
+              </div>
+            </div>
+
             <div class="action-section">
               <t-button
                 theme="danger"
@@ -92,86 +180,129 @@
               </div>
             </div>
 
-            <!-- 已揭晓队伍的详情（每次点击追加） -->
-            <div v-for="teamDetail in selectedTeamForReveal" :key="teamDetail.teamId" class="detail-section">
-              <h2>
-                {{ teamDetail.teamName }} — 结算详情
-                <span class="close-detail" @click="selectedTeamForReveal = selectedTeamForReveal.filter((t: any) => t.teamId !== teamDetail.teamId)">✕</span>
-              </h2>
-              <div class="team-detail">
-                <div class="detail-item">
-                  <span class="detail-label">歌曲</span>
-                  <span class="detail-value">{{ teamDetail.songName }}</span>
-                </div>
-                <div class="detail-item">
-                  <span class="detail-label">成员舞台评级 <span class="detail-hint">（点击展开得分公式）</span></span>
-                  <div class="member-ratings">
-                    <div v-for="p in getTeamPlayers(teamDetail)" :key="p.playerId" class="member-rating-item" @click="togglePlayerExpanded(p.playerId)">
-                      <div class="member-rating-header">
-                        <span class="member-name">{{ p.playerName }}</span>
-                        <span class="member-score">{{ p.playerScore }}分</span>
-                        <t-tag :theme="getRatingTheme(p.stageRating)" size="small" class="rating-tag">
-                          {{ p.stageRating }} · {{ p.stageRatingText }}
-                        </t-tag>
-                        <span class="expand-icon">{{ expandedPlayers.has(p.playerId) ? '▲' : '▼' }}</span>
-                      </div>
-                      <div v-if="expandedPlayers.has(p.playerId)" class="member-formula-detail">
-                        <div>属性分 = <strong>{{ p.attributeScore || '?' }}</strong></div>
-                        <div>难度系数 = 1 - (difficulty-1)×0.1 = <strong>{{ p.difficultyFactor || '?' }}</strong></div>
-                        <div>发挥加分 = {{ p.performanceValue >= 0 ? '+' : '' }}{{ p.performanceValue }} × 2 = <strong>{{ p.performanceBonus || (p.performanceValue || 0) * 2 }}</strong></div>
-                        <div class="formula-line">原始分 = {{ p.attributeScore || '?' }} × {{ p.difficultyFactor || '?' }} + {{ p.performanceBonus || (p.performanceValue || 0) * 2 }} = <strong>约{{ calcRawScore(p) }}</strong></div>
-                        <div class="result-line">截断 0~120 → <strong>{{ p.playerScore }}分</strong> | 评级 <strong>{{ p.stageRating }}</strong></div>
-                      </div>
-                    </div>
+            <!-- 团队得票揭晓（网格布局：每行多个团队，逐个揭晓百/十/个位） -->
+            <div class="teams-section vote-reveal-section">
+              <h2>团队得票揭晓</h2>
+              <div class="vote-teams-grid">
+                <div v-for="team in teamPerformanceResults" :key="'vr-' + team.teamId" class="vote-team-card">
+                  <span class="vt-name">{{ team.teamName }}<template v-if="team.songName">《{{ team.songName }}》</template></span>
+                  <VoteRevealDigits
+                    :votes="team.finalVotes || 0"
+                    :reveal="{ hundreds: !!team.revealHundreds, tens: !!team.revealTens, units: !!team.revealUnits }"
+                  />
+                  <div class="vt-btns">
+                    <t-button size="small" variant="outline" :disabled="!!team.revealHundreds" @click="handleRevealDigit(team, 'hundreds')">揭晓百位</t-button>
+                    <t-button size="small" variant="outline" :disabled="!!team.revealTens" @click="handleRevealDigit(team, 'tens')">揭晓十位</t-button>
+                    <t-button size="small" variant="outline" :disabled="!!team.revealUnits" @click="handleRevealDigit(team, 'units')">揭晓个位</t-button>
                   </div>
                 </div>
-                <div class="detail-item team-rating-block">
-                  <span class="detail-label">团队综合评级</span>
-                  <div class="team-rating-display">
-                    <t-tag :theme="getRatingTheme(teamDetail.teamRating)" size="large" class="team-rating-tag">
-                      {{ teamDetail.teamRating }} · {{ teamDetail.teamRatingText }}
-                    </t-tag>
-                    <span class="team-score">{{ teamDetail.teamScore }}分</span>
-                  </div>
-                </div>
-                <!-- 大众评审投票矩阵 -->
-                <div class="detail-item audience-matrix-block">
-                  <div class="matrix-header">
-                    <span class="detail-label">大众评审投票矩阵</span>
-                    <span class="matrix-stat">
-                      投 YES：{{ teamAudienceMatrices[teamDetail.teamId]?.filter(s => s.votedYes).length || 0 }} / {{ teamAudienceMatrices[teamDetail.teamId]?.length || 1000 }}
-                    </span>
-                  </div>
-                  <div v-if="loadingTeamMatrix[teamDetail.teamId]" class="matrix-loading">
-                    <t-loading size="small" text="加载评审矩阵中..." />
-                  </div>
-                  <div v-else-if="!teamAudienceMatrices[teamDetail.teamId]?.length" class="matrix-empty">
-                    暂无大众评审投票记录
-                  </div>
-                  <div v-else class="audience-matrix">
-                    <div
-                      v-for="seat in teamAudienceMatrices[teamDetail.teamId]"
-                      :key="`${teamDetail.teamId}-${seat.seatNumber}`"
-                      class="matrix-seat"
-                      :class="{ yes: seat.votedYes }"
-                    >
-                      <t-tooltip placement="top">
-                        <template #content>
-                          <div>{{ seat.seatNumber }}号 · {{ seat.name || '未知评审' }}</div>
-                          <div style="font-size:12px;opacity:0.8">{{ seat.gender }} · {{ seat.age }}岁 · {{ seat.occupation }}</div>
-                          <div style="font-size:12px;opacity:0.8">{{ seat.votedYes ? '投了 YES' : '未投 YES' }}</div>
-                        </template>
-                        <div class="seat-inner">
-                          <div class="seat-name">{{ seat.name || '未知' }}</div>
-                          <div class="seat-gender-age">{{ seat.gender }} {{ seat.age }}岁</div>
-                          <div class="seat-occupation">{{ seat.occupation }}</div>
-                        </div>
-                      </t-tooltip>
-                    </div>
-                  </div>
-                </div>
+                <div v-if="teamPerformanceResults.length === 0" class="info-card dim"><span>等待公演结算</span></div>
               </div>
             </div>
+
+    <!-- 已揭晓队伍详情（内联卡片，可点叉关闭；每次揭晓追加一张，最新在最前） -->
+    <div
+      v-for="revealDialogTeam in selectedTeamForReveal"
+      :key="revealDialogTeam.teamId"
+      class="detail-section reveal-inline-card"
+    >
+      <div class="reveal-card-head">
+        <h2>{{ revealDialogTeam.teamName }} — 结算详情</h2>
+        <span class="close-detail" @click="closeRevealCard(revealDialogTeam.teamId)">✕</span>
+      </div>
+      <div class="team-detail">
+          <div class="detail-item">
+            <span class="detail-label">歌曲</span>
+            <span class="detail-value">{{ revealDialogTeam.songName }}</span>
+          </div>
+          <div class="detail-item team-rating-block">
+            <span class="detail-label">团队综合评级</span>
+            <div class="team-rating-display">
+              <t-tag :theme="getRatingTheme(revealDialogTeam.teamRating)" size="large" class="team-rating-tag">
+                {{ revealDialogTeam.teamRating }} · {{ revealDialogTeam.teamRatingText }}
+              </t-tag>
+            </div>
+          </div>
+          <!-- 成员舞台评级与计算过程（合并） -->
+          <div class="detail-item calc-process-block">
+            <span class="detail-label">成员舞台评级与计算过程</span>
+            <div class="calc-process">
+              <div
+                v-for="p in getTeamPlayers(revealDialogTeam)"
+                :key="'calc-' + p.playerId"
+                class="calc-line member-calc"
+                @click="togglePlayerExpanded(p.playerId)"
+              >
+                <div class="mc-head">
+                  <strong>{{ p.playerName }}</strong>
+                  <t-tag :theme="getRatingTheme(p.stageRating)" size="small" class="rating-tag">{{ p.stageRating }} · {{ p.stageRatingText }}</t-tag>
+                  <span v-if="p.ratingRoll != null" class="roll-text">骰子 {{ p.ratingRoll }} 点</span>
+                  <span class="expand-icon">{{ expandedPlayers.has(p.playerId) ? '▲' : '▼' }}</span>
+                </div>
+                <div v-if="expandedPlayers.has(p.playerId)" class="mc-detail">
+                  主属性 {{ ratingAttrLabel(p.ratingMainAttr) }} · 难度 {{ p.ratingDifficulty || 0 }} 面骰 · 风险值 {{ p.ratingRisk || 0 }} · 主属性基准 {{ p.ratingMainBase || 0 }}
+                  ｜超出基准 {{ p.ratingExcess || 0 }}（{{ p.ratingSteps || 0 }}×风险值）→ A面 {{ p.ratingFaces?.a ?? 0 }} / B面 {{ p.ratingFaces?.b ?? 0 }} / C面 {{ p.ratingFaces?.c ?? 0 }}
+                  <template v-if="(p.ratingDeficit || 0) > 0">｜未达标差值 {{ p.ratingDeficit }}（{{ p.ratingDeficitSteps }}×风险值）→ D面 {{ p.ratingFaces?.d ?? 0 }}</template>
+                </div>
+              </div>
+              <div class="calc-line team">{{ teamRuleProcess(revealDialogTeam) }}</div>
+            </div>
+          </div>
+          <!-- 大众评审得票率计算过程 -->
+          <div class="detail-item calc-process-block">
+            <span class="detail-label">大众评审得票率计算过程</span>
+            <div class="calc-process">
+              <div class="calc-line">队内发挥后魅力均值 = {{ round2(revealDialogTeam.avgCharmPerf) }}</div>
+              <div class="calc-line">队内发挥后最高魅力 = {{ round2(revealDialogTeam.maxCharmPerf) }}</div>
+              <div class="calc-line">全体发挥后最高魅力 = {{ round2(revealDialogTeam.globalMaxCharmPerf) }}</div>
+              <div class="calc-line">团队评级权重（{{ revealDialogTeam.teamRating }}）= {{ revealDialogTeam.teamRatingWeight }}</div>
+              <div class="calc-line team">
+                得票率 = ({{ round2(revealDialogTeam.avgCharmPerf) }} + {{ round2(revealDialogTeam.maxCharmPerf) }})
+                ÷ (2 × {{ round2(revealDialogTeam.globalMaxCharmPerf) }})
+                × {{ revealDialogTeam.teamRatingWeight ?? 1 }}
+                = {{ yesRatePct(revealDialogTeam) }}%
+              </div>
+            </div>
+          </div>
+
+          <!-- 大众评审投票矩阵 -->
+          <div class="detail-item audience-matrix-block">
+            <div class="matrix-header">
+              <span class="detail-label">大众评审投票矩阵</span>
+              <span class="matrix-stat">
+                投 YES：{{ teamAudienceMatrices[revealDialogTeam.teamId]?.filter(s => s.votedYes).length || 0 }} / {{ teamAudienceMatrices[revealDialogTeam.teamId]?.length || 1000 }}
+              </span>
+            </div>
+            <div v-if="loadingTeamMatrix[revealDialogTeam.teamId]" class="matrix-loading">
+              <t-loading size="small" text="加载评审矩阵中..." />
+            </div>
+            <div v-else-if="!teamAudienceMatrices[revealDialogTeam.teamId]?.length" class="matrix-empty">
+              暂无大众评审投票记录
+            </div>
+            <div v-else class="audience-matrix">
+              <div
+                v-for="seat in teamAudienceMatrices[revealDialogTeam.teamId]"
+                :key="`${revealDialogTeam.teamId}-${seat.seatNumber}`"
+                class="matrix-seat"
+                :class="{ yes: seat.votedYes }"
+              >
+                <t-tooltip placement="top">
+                  <template #content>
+                    <div>{{ seat.seatNumber }}号 · {{ seat.name || '未知评审' }}</div>
+                    <div style="font-size:12px;opacity:0.8">{{ seat.gender }} · {{ seat.age }}岁 · {{ seat.occupation }}</div>
+                    <div style="font-size:12px;opacity:0.8">{{ seat.votedYes ? '投了 YES' : '未投 YES' }}</div>
+                  </template>
+                  <div class="seat-inner">
+                    <div class="seat-name">{{ seat.name || '未知' }}</div>
+                    <div class="seat-gender-age">{{ seat.gender }} {{ seat.age }}岁</div>
+                    <div class="seat-occupation">{{ seat.occupation }}</div>
+                  </div>
+                </t-tooltip>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
             <!-- 团队排名 -->
             <div v-if="allTeamsRevealed" class="ranking-section">
@@ -224,7 +355,8 @@ import { calculatePerformanceResults } from '../../utils/performanceCalculator'
 import { saveRevealedTeams, loadRevealedTeams } from '../../services/performanceService'
 import type { PlayerStatus } from '../../services/performanceService'
 import type { TeamAudienceMatrixSeat, PerformanceGenerationMode } from '../../types/performance'
-import { setPerformanceGenerationMode } from '../../services/api'
+import { setPerformanceGenerationMode, getTeamRatingRules, updateTeamRatingRules, getRatingOverview, adminRollRating, revealVoteDigit } from '../../services/api'
+import VoteRevealDigits from '../../components/common/VoteRevealDigits.vue'
 import AudienceVoteView from './AudienceVoteView.vue'
 
 const router = useRouter()
@@ -528,6 +660,21 @@ function handleGoToSettlement() {
 // ==================== 阶段二：公演结算 ====================
 const calculating = ref(false)
 const selectedTeamForReveal = ref<any[]>([])
+function closeRevealCard(teamId: string) {
+  selectedTeamForReveal.value = selectedTeamForReveal.value.filter((t: any) => t.teamId !== teamId)
+}
+
+// 逐位揭晓队伍票数（百/十/个）
+async function handleRevealDigit(team: any, digit: string) {
+  try {
+    await revealVoteDigit(currentRoundIdComputed.value, team.teamId, digit as any, true)
+    const key = digit === 'hundreds' ? 'revealHundreds' : digit === 'tens' ? 'revealTens' : 'revealUnits'
+    team[key] = true
+    performanceStore.teamPerformanceResults = [...performanceStore.teamPerformanceResults]
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '揭晓失败')
+  }
+}
 const allTeamsRevealed = ref(false)
 // 展开的选手公式详情（使用 Set 避免依赖动态属性）
 const expandedPlayers = reactive(new Set<string>())
@@ -550,6 +697,119 @@ const hasCalculated = computed(() => teamPerformanceResults.value.length > 0)
 // ===== 结算参数：队伍得票率除数 + 参考统计 =====
 const yesRateDenominator = ref<number>(150)
 const savingConfig = ref(false)
+
+// ===== 3.4 团队评级规则 =====
+const teamRules = ref<any[]>([])
+const savingRules = ref(false)
+
+// 归一化规则（兼容旧 {count,ratings} 结构）
+function normalizeFrontRule(raw: any): any {
+  if (Array.isArray(raw?.conditions)) {
+    return { combine: raw.combine || 'all', teamRating: raw.teamRating || 'B', conditions: raw.conditions.map((c: any) => ({ ...c })) }
+  }
+  const cnt = Number(raw?.count) || 0
+  return {
+    combine: 'all',
+    teamRating: raw?.teamRating || 'B',
+    conditions: cnt > 0 ? [{ metric: 'countRating', ratings: raw.ratings || [], op: '>=', value: cnt }] : []
+  }
+}
+
+async function loadRules() {
+  try {
+    const res: any = await getTeamRatingRules()
+    teamRules.value = (res?.rules || []).map(normalizeFrontRule)
+  } catch { /* ignore */ }
+}
+function addCondition(rule: any) {
+  if (!Array.isArray(rule.conditions)) rule.conditions = []
+  rule.conditions.push({ metric: 'countRating', ratings: ['C'], op: '>=', value: 1 })
+}
+function addRule() {
+  teamRules.value.push({ combine: 'all', teamRating: 'C', conditions: [{ metric: 'countRating', ratings: ['C'], op: '>=', value: 1 }] })
+}
+function moveRule(i: number, dir: -1 | 1) {
+  const t = i + dir
+  if (t < 0 || t >= teamRules.value.length) return
+  const a = [...teamRules.value]; [a[i], a[t]] = [a[t], a[i]]; teamRules.value = a
+}
+async function saveRules() {
+  savingRules.value = true
+  try {
+    const payload = teamRules.value.map(r => ({
+      combine: r.combine || 'all',
+      teamRating: r.teamRating || 'B',
+      conditions: (r.conditions || []).map((c: any) => ({
+        metric: c.metric,
+        ratings: c.metric === 'countRating' ? (c.ratings || []) : [],
+        op: c.op || '>=',
+        value: Number(c.value) || 0
+      }))
+    }))
+    await updateTeamRatingRules(payload)
+    MessagePlugin.success('团队评级规则已保存')
+  } catch (e: any) { MessagePlugin.error(e?.message || '保存失败') } finally { savingRules.value = false }
+}
+
+// ===== 3.3 个人掷骰情况（管理员代理投掷） =====
+const ratingList = ref<any[]>([])
+const ratingsLoading = ref(false)
+const rollingAll = ref(false)
+
+async function loadRatings() {
+  ratingsLoading.value = true
+  try {
+    const res: any = await getRatingOverview(currentRoundIdComputed.value)
+    ratingList.value = res?.list || []
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '加载掷骰情况失败')
+  } finally {
+    ratingsLoading.value = false
+  }
+}
+
+async function proxyRoll(r: any) {
+  try {
+    await adminRollRating(r.playerId, currentRoundIdComputed.value)
+    await loadRatings()
+    MessagePlugin.success(`${r.playerName} 已代理掷骰`)
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '代理掷骰失败')
+  }
+}
+
+async function rollAllPending() {
+  const pending = ratingList.value.filter(r => !r.rating && r.hasTeam && r.hasSong)
+  if (!pending.length) { MessagePlugin.info('没有可代理掷骰的选手'); return }
+  rollingAll.value = true
+  let ok = 0
+  for (const r of pending) {
+    try { await adminRollRating(r.playerId, currentRoundIdComputed.value); ok++ } catch { /* skip */ }
+  }
+  rollingAll.value = false
+  await loadRatings()
+  MessagePlugin.success(`已为 ${ok} 位选手代理掷骰`)
+}
+
+// ===== 个人掷骰表分页 =====
+const ratingPage = ref(1)
+const ratingPageSize = ref(20)
+const ratingTotalPages = computed(() => Math.max(1, Math.ceil(ratingList.value.length / ratingPageSize.value)))
+const pagedRatingList = computed(() => {
+  const start = (ratingPage.value - 1) * ratingPageSize.value
+  return ratingList.value.slice(start, start + ratingPageSize.value)
+})
+function ratingWeightsText(r: any): string {
+  const f = r?.faces
+  if (!f || !f.faces) return '-'
+  const total = f.faces.total || 1
+  const pct = (n: number) => Math.round((n / total) * 100)
+  const parts = [`A ${pct(f.faces.a)}%`, `B ${pct(f.faces.b)}%`, `C ${pct(f.faces.c)}%`]
+  if ((f.faces.d || 0) > 0) parts.push(`D ${pct(f.faces.d)}%`)
+  let text = parts.join(' / ')
+  if (f.deficit > 0) text += `（差值 ${f.deficit}）`
+  return text
+}
 
 // 当前所有选手的平均魅力（参考）
 const avgCharm = computed(() => {
@@ -650,9 +910,9 @@ async function loadTeamAudienceMatrix(teamId: string) {
 }
 
 async function handleRevealTeam(team: any) {
-  // 避免重复添加
+  // 追加一张可关闭的结算卡片（最新的在最前）
   if (!selectedTeamForReveal.value.find((t: any) => t.teamId === team.teamId)) {
-    selectedTeamForReveal.value.push(team)
+    selectedTeamForReveal.value.unshift(team)
   }
   team.status = 'confirmed'
   performanceStore.teamPerformanceResults = [...performanceStore.teamPerformanceResults]
@@ -686,6 +946,75 @@ function calcRawScore(p: any): number {
 function getRatingTheme(rating: string): string {
   const map: Record<string, string> = { S: 'success', A: 'primary', B: 'warning', C: 'default', D: 'danger' }
   return map[rating] || 'default'
+}
+
+// 按顺序判定并展示命中的团队评级规则（支持新结构：conditions + combine）
+function evalCond(cond: any, ctx: any): boolean {
+  const op = cond.op || '>='
+  const value = Number(cond.value) || 0
+  let actual = 0
+  switch (cond.metric) {
+    case 'countRating': actual = (ctx.memberRatings || []).filter((r: string) => (cond.ratings || []).includes(r)).length; break
+    case 'teamScore': actual = ctx.teamScore ?? 0; break
+    case 'avgCharm': actual = ctx.avgCharm ?? 0; break
+    case 'avgPerformance': actual = ctx.avgPerformance ?? 0; break
+    case 'avgVocal': actual = ctx.avgVocal ?? 0; break
+    case 'avgDance': actual = ctx.avgDance ?? 0; break
+    default: actual = 0
+  }
+  switch (op) {
+    case '>=': return actual >= value
+    case '<=': return actual <= value
+    case '>': return actual > value
+    case '<': return actual < value
+    case '=': return actual === value
+    default: return false
+  }
+}
+
+function teamRuleProcess(team: any): string {
+  const players = getTeamPlayers(team)
+  const ctx: any = {
+    memberRatings: players.map((p: any) => p.stageRating),
+    teamScore: team?.teamScore ?? 0,
+    avgPerformance: Math.round(players.reduce((s: number, p: any) => s + (p.performanceValue || 0), 0) / Math.max(1, players.length))
+  }
+  const rules = teamRules.value.length ? teamRules.value : [
+    { count: 2, ratings: ['C'], teamRating: 'D' },
+    { count: 1, ratings: ['C'], teamRating: 'C' },
+    { count: 2, ratings: ['S'], teamRating: 'S' },
+    { count: 2, ratings: ['S', 'A'], teamRating: 'A' },
+    { count: 0, ratings: [], teamRating: 'B' }
+  ]
+  for (let i = 0; i < rules.length; i++) {
+    const raw: any = rules[i]
+    const rule = Array.isArray(raw.conditions)
+      ? raw
+      : {
+          combine: 'all',
+          teamRating: raw.teamRating,
+          conditions: (Number(raw.count) > 0 ? [{ metric: 'countRating', ratings: raw.ratings || [], op: '>=', value: Number(raw.count) }] : [])
+        }
+    const conds = rule.conditions || []
+    if (conds.length === 0) return `团队评级：命中第 ${i + 1} 条（兜底）→ ${rule.teamRating}`
+    const results = conds.map((c: any) => evalCond(c, ctx))
+    const matched = rule.combine === 'any' ? results.some(Boolean) : results.every(Boolean)
+    if (matched) return `团队评级：命中第 ${i + 1} 条（${rule.combine === 'any' ? '满足任一' : '全部满足'}）→ ${rule.teamRating}`
+  }
+  return `团队评级：→ ${team.teamRating}`
+}
+
+function round2(v: any): number {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0
+}
+function ratingAttrLabel(a?: string): string {
+  const m: Record<string, string> = { vocal: '🎤 声乐', dance: '💃 舞蹈', charm: '✨ 魅力' }
+  return m[a || 'vocal'] || a || '—'
+}
+function yesRatePct(team: any): number {
+  const r = Number(team?.audienceYesRate)
+  return Number.isFinite(r) ? Math.round(r * 1000) / 10 : 0
 }
 
 function handleGoToAudienceVote() {
@@ -724,6 +1053,8 @@ onMounted(async () => {
   if (!seasonStore.season) {
     await seasonStore.fetchSeason()
   }
+  await loadRules()
+  await loadRatings()
 
   // 通知后端已进入公演管理页面
   try {
@@ -1245,4 +1576,57 @@ onMounted(async () => {
     .score { font-size:15px; font-weight:700; color:#0052d9; }
   }
 }
+
+.rule-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.rule-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.rule-count { width: 72px; padding: 5px 8px; border: 1px solid var(--border-color, #ddd); border-radius: 6px; background: var(--bg-secondary, #fff); color: var(--text-primary, #333); font-size: 13px; }
+.rule-count:focus { outline: none; border-color: #0052d9; }
+.rule-block { border: 1px solid var(--border-color, #eee); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; background: var(--hover-bg); }
+.rule-line1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-bottom: 6px; }
+.rule-line1 .rule-idx { font-weight: 700; color: #0052d9; }
+.rule-conds { display: flex; flex-direction: column; gap: 6px; padding-left: 12px; }
+.rule-cond { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bb-btn-xs { padding: 3px 10px; font-size: 12px; background: transparent; border: 1px solid #00ff8844; color: #00ff88; border-radius: 4px; cursor: pointer; }
+.bb-btn-danger { border-color: #ff444466; color: #ff4444; }
+
+.rating-table { border: 1px solid var(--border-color, #eee); border-radius: 8px; overflow: hidden; font-size: 13px; }
+.rating-table .rt-header,
+.rating-table .rt-row { display: grid; grid-template-columns: 1fr 0.9fr 1.1fr 0.5fr 0.6fr 1.6fr 0.9fr 0.5fr 0.5fr 1fr; align-items: center; gap: 8px; padding: 6px 10px; }
+.rating-table .rt-header { background: var(--table-header-bg, #f7f8fa); font-weight: 600; }
+.rating-table .rt-row { border-top: 1px solid var(--border-color, #f0f0f0); }
+.rating-table .rt-name { font-weight: 600; }
+.rating-table .rt-weights { font-size: 12px; color: #666; }
+.rating-table .done-text { color: #00a870; }
+.rating-table .pending-text { color: #e6a23c; }
+.rating-table .rt-empty { padding: 12px; text-align: center; color: #999; }
+.rt-pager { display: flex; justify-content: center; margin-top: 10px; }
+
+.reveal-inline-card { margin-top: 16px; animation: revealIn 0.3s ease; }
+.reveal-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.reveal-card-head h2 { font-size: 16px; margin: 0; }
+.calc-process { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.calc-process .calc-line { font-size: 13px; color: var(--text-secondary); padding: 4px 8px; background: var(--hover-bg); border-radius: 6px; }
+.calc-process .calc-line.team { font-weight: 700; color: var(--text-primary); }
+.roll-text { font-size: 12px; color: var(--text-tertiary); }
+.calc-process .member-calc { display: flex; flex-direction: column; gap: 3px; cursor: pointer; }
+.calc-process .mc-head { display: flex; align-items: center; gap: 8px; }
+.calc-process .mc-detail { font-size: 12px; color: var(--text-tertiary); }
+.vote-reveal-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
+.vote-reveal-row .reveal-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.row-vote-reveal { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.row-vote-reveal .row-reveal-btns { display: flex; gap: 4px; }
+.vote-reveal-section { margin: 16px 0; }
+.vote-teams-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.vote-team-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; border-radius: 10px; background: var(--card-bg, #fff); border: 1px solid var(--border-color, #eee); }
+.vote-team-card .vt-name { font-size: 14px; font-weight: 700; }
+.vote-team-card .vt-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+@keyframes revealIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+.rank-segments { display: flex; flex-direction: column; gap: 8px; }
+.rank-seg { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border-color, #eee); border-radius: 8px; }
+.rank-seg .seg-title { min-width: 130px; font-weight: 600; font-size: 13px; }
+.rank-seg .seg-bonus { font-weight: 400; color: #0052d9; font-size: 12px; }
+.rank-seg .seg-members { display: flex; flex-wrap: wrap; gap: 6px; }
+.rank-seg .seg-tag { padding: 2px 8px; background: var(--hover-bg, #f2f3f5); border-radius: 10px; font-size: 12px; }
+.rank-seg .seg-empty { color: #999; font-size: 12px; }
 </style>

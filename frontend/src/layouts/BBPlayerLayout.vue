@@ -26,6 +26,16 @@
       </div>
     </div>
 
+    <!-- 管理员召集：切换到比赛页面准备 -->
+    <div v-if="summonNotice" class="bb-broadcast-overlay" @click.self="summonNotice = null">
+      <div class="bb-broadcast-modal">
+        <div class="bb-broadcast-icon">📣</div>
+        <div class="bb-broadcast-title">比赛召集</div>
+        <div class="bb-broadcast-msg">管理员召集你参加「{{ summonNotice.minigameName || '小游戏' }}」，已切换到比赛页面，请点击「准备」。</div>
+        <button class="bb-btn" @click="summonNotice = null">前往准备</button>
+      </div>
+    </div>
+
     <header class="bb-player-header">      <div class="header-content">
         <div class="logo-section">
           <span class="logo-icon">📹</span>
@@ -129,6 +139,14 @@ watch(() => seasonStore.stageName, (s) => {
   applyGamePageMeta('bigbrother', seasonStore.currentRoundNumber ? `第${seasonStore.currentRoundNumber}周 · ${s}` : s)
 }, { immediate: true })
 const realtime = useBbRealtimeStore()
+
+// 管理员召集：切换到比赛页面并提示进入准备
+const summonNotice = ref<any>(null)
+watch(() => realtime.lastMinigameSummon, (s) => {
+  if (!s || !s.path) return
+  summonNotice.value = s
+  try { if (router.currentRoute.value.path !== s.path) router.push(s.path) } catch {}
+})
 
 const mobileMenuOpen = ref(false)
 const showSwitchModal = ref(false)
@@ -373,10 +391,15 @@ onUnmounted(() => {
 .menu-icon.open span:nth-child(3) { transform: rotate(-45deg) translate(4px, -4px); }
 .layout-body { display: flex; padding-top: 56px; }
 .bb-sidebar {
-  width: 240px; min-height: calc(100vh - 56px);
+  width: 240px; height: calc(100vh - 56px);
+  position: sticky; top: 56px; align-self: flex-start;
   background: #0f0f2e; border-right: 1px solid #00ff8822;
-  overflow-y: auto; transition: transform 0.3s;
+  overflow-y: auto; overscroll-behavior: contain; transition: transform 0.3s;
 }
+.bb-sidebar::-webkit-scrollbar { width: 8px; }
+.bb-sidebar::-webkit-scrollbar-track { background: #0a0a1a; }
+.bb-sidebar::-webkit-scrollbar-thumb { background: #00ff8844; border-radius: 4px; }
+.bb-sidebar::-webkit-scrollbar-thumb:hover { background: #00ff8877; }
 .sidebar-nav { padding: 12px 0; }
 .nav-section { margin-bottom: 8px; }
 .nav-section-header {

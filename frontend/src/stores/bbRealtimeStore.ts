@@ -21,6 +21,7 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
   const lastEvictionAnnounce = ref<{ round: number; segments: { type: string; text: string }[]; released: number } | null>(null)
   const lastVetoCard = ref<{ roundId: string; cardDraw: any } | null>(null)
   const lastEvictionNight = ref<any>(null)
+  const lastMinigameSummon = ref<any>(null)
 
   let socket: Socket | null = null
 
@@ -59,7 +60,9 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
       bump()
       // 阶段/赛程相关操作 → 触发选手端页面重新加载
       const p = data?.path || ''
-      if (/\/(season|hoh|nomination|veto|eviction|endgame)/.test(p)) {
+      // 投票等高频写操作不触发整页重载（否则选手端会不停刷新）
+      const isVoteWrite = /\/eviction\/(vote|my-vote)\b/.test(p)
+      if (!isVoteWrite && /\/(season|hoh|nomination|veto|eviction|endgame)/.test(p)) {
         stageTick.value++
       }
     })
@@ -79,6 +82,10 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
       lastEvictionNight.value = data
       bump()
     })
+    socket.on('bb:minigame-summon', (data: any) => {
+      lastMinigameSummon.value = data
+      bump()
+    })
   }
 
   function clearBroadcast() { lastBroadcast.value = null }
@@ -88,5 +95,5 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
     connected.value = false
   }
 
-  return { tick, stageTick, connected, lastBroadcast, lastEvictionAnnounce, lastVetoCard, lastEvictionNight, connect, disconnect, bump, clearBroadcast, vetoDeal, vetoDraw }
+  return { tick, stageTick, connected, lastBroadcast, lastEvictionAnnounce, lastVetoCard, lastEvictionNight, lastMinigameSummon, connect, disconnect, bump, clearBroadcast, vetoDeal, vetoDraw }
 })

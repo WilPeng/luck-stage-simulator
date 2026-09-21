@@ -13,6 +13,8 @@ class BBNomination extends BaseModel {
     this.replacementNomineeName = data?.replacementNomineeName || ''
     this.bbbbWinnerId = data?.bbbbWinnerId || null   // BBBB 胜者（安全，不进入淘汰投票）
     this.bbbbWinnerName = data?.bbbbWinnerName || ''
+    // 钥匙仪式：{ order:[{playerId,playerName}], drawnCount, nomineeCount, active }
+    this.keyCeremony = data?.keyCeremony || null
     this.vetoUsed = data?.vetoUsed || false
     this.gameId = data?.gameId || 'bigbrother'
     this.createdAt = data?.createdAt || new Date().toISOString()

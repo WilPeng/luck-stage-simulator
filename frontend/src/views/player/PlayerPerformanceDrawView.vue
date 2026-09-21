@@ -2,16 +2,16 @@
   <div class="player-draw">
     <div class="page-header">
       <h1>🎲 抽取发挥值</h1>
-      <p class="subtitle">第{{ currentRound }}公演 · 抽取你的公演发挥值（-10 ~ 20）</p>
+      <p class="subtitle">第{{ currentRound }}公演 · 抽取你的公演发挥成绩</p>
     </div>
 
     <!-- 已抽取结果（选手不可重新抽取，需管理员代改） -->
     <div v-if="myValue !== null" class="result-card">
       <div class="result-icon">✨</div>
-      <div class="result-title">你的发挥值</div>
-      <div class="result-value" :class="valueClass">{{ myValue }}</div>
+      <div class="result-title">你的成绩</div>
+      <div class="result-value" :class="valueClass">{{ myValue }}<span class="result-unit">{{ valueUnit }}</span></div>
       <div class="result-text">{{ resultText }}</div>
-      <p class="result-tip">本轮发挥值已生成，进入公演后将用于结算</p>
+      <p class="result-tip">本轮成绩已生成，进入公演后将用于结算与排名</p>
     </div>
 
     <!-- 未开放且未生成 -->
@@ -39,10 +39,10 @@
         >
           {{ drawing ? '抽取中...' : '开始抽取' }}
         </t-button>
-        <p class="hint">纯随机抽取，结果完全看运气</p>
+        <p class="hint">随机抽取 0 ~ 100 分，分数越高越好</p>
       </div>
 
-      <!-- 指针模式：完整数字刻度（-10~20）指针快速摆动 -->
+      <!-- 指针模式：0 ~ 100 指针，中间 100 两侧 0 -->
       <div v-else-if="mode === 'pointer'" class="pointer-mode">
         <div class="pointer-scale" @click="stopPointer">
           <!-- 刻度 -->
@@ -51,7 +51,7 @@
               v-for="v in pointerValues"
               :key="v"
               class="pointer-tick"
-              :class="{ major: v % 5 === 0, active: displayValue === v }"
+              :class="{ major: v % 10 === 0, active: displayValue === v }"
             >
               <span class="tick-line"></span>
               <span class="tick-label">{{ v }}</span>
@@ -80,7 +80,7 @@
         >
           🛑 停下
         </t-button>
-        <p class="hint">指针在 -10 ~ 20 之间快速摆动，在合适数字出现时立刻停下</p>
+        <p class="hint">指针在 0 ~ 100 之间摆动，停得越靠近中间（100）分数越高，两侧为 0</p>
       </div>
 
       <!-- 手速模式：限定时间内连击 -->
@@ -90,7 +90,7 @@
           <span class="speed-count">👆 {{ speedClicks }} 次</span>
         </div>
         <div class="speed-tip" v-if="!speedRunning">
-          限时 {{ SPEED_DURATION }} 秒疯狂点击，点击越多发挥值越高！
+          限时 {{ SPEED_DURATION }} 秒疯狂点击，成绩按点击次数排名（点击越多越好）
         </div>
         <div class="speed-tip active" v-else>快点击！时间还剩 {{ speedRemaining.toFixed(1) }} 秒</div>
         <t-button
@@ -247,15 +247,15 @@
         </t-button>
       </div>
 
-      <!-- 找不同模式：两个 10x10 彩色矩阵，找 10 处不同 -->
+      <!-- 找不同模式：两个矩阵，找 3 处不同，一起提交 -->
       <div v-else-if="mode === 'spot_diff'" class="spot-mode">
         <div class="spot-status">
           <span>⏱️ {{ spotTimeText }}</span>
-          <span>已找 {{ spotFound }} / {{ SPOT_DIFF_COUNT }}</span>
-          <span>找错 {{ spotWrong }} 次</span>
+          <span>已选 {{ spotSelected.length }} / {{ SPOT_DIFF_COUNT }}</span>
+          <span>提交错误 {{ spotWrong }} 次</span>
         </div>
         <div class="spot-tip" v-if="!spotStarted">
-          🔍 两个 10×10 彩色矩阵中有 {{ SPOT_DIFF_COUNT }} 处颜色不同（红橙黄绿青蓝紫），限时 {{ SPOT_DURATION }} 秒。点击下方矩阵中不同的格子！
+          🔍 两个矩阵中有 {{ SPOT_DIFF_COUNT }} 处颜色不同，选中这 {{ SPOT_DIFF_COUNT }} 个格子后点击「提交」。全部正确即锁定成绩；不正确需等 {{ SPOT_SUBMIT_COOLDOWN }} 秒后再提交。
         </div>
         <div class="spot-boards">
           <!-- 上矩阵（展示，不点击） -->
@@ -270,16 +270,17 @@
               ></div>
             </div>
           </div>
-          <!-- 下矩阵（点击找不同） -->
+          <!-- 下矩阵（点击选择） -->
           <div class="spot-board">
-            <div class="board-label">点击下方矩阵中不同的格子</div>
+            <div class="board-label">点击选择下方矩阵中 {{ SPOT_DIFF_COUNT }} 处不同</div>
             <div class="spot-grid">
               <div
                 v-for="(cell, i) in spotBottom"
                 :key="`b${i}`"
                 class="spot-cell"
                 :class="{
-                  marked: spotMarked[i],
+                  selected: spotSelected.includes(i),
+                  correct: spotCorrectMarked.includes(i),
                   wrong: spotWrongSet.has(i)
                 }"
                 :style="{ background: cell }"
@@ -297,7 +298,16 @@
           🔍 开始找不同
         </t-button>
         <t-button
-          v-else-if="spotEnded"
+          v-else-if="!spotEnded"
+          theme="primary"
+          size="large"
+          :disabled="spotCooldown > 0 || spotSelected.length !== SPOT_DIFF_COUNT"
+          @click="submitSpotDiff"
+        >
+          {{ spotCooldown > 0 ? `不正确，${spotCooldown}s 后可再次提交` : '提交所选' }}
+        </t-button>
+        <t-button
+          v-else
           theme="success"
           size="large"
           disabled
@@ -351,13 +361,14 @@
         </t-button>
       </div>
 
-      <p class="hint">发挥值将用于公演结算，范围 -10 ~ 20</p>
+      <p class="hint">成绩将用于公演结算排名</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useSfRefresh } from '../../composables/useSfRefresh'
 import { useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useAuthStore } from '../../stores/authStore'
@@ -375,7 +386,7 @@ const isReleased = ref(false)
 // 是否已完成一次抽取（防重复提交，避免不点结果按钮反复重试）
 const finished = ref(false)
 
-const slotValues = [-10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
+const slotValues = Array.from({ length: 101 }, (_, i) => i)
 let slotTimer: number | undefined
 let pointerFrame = 0
 const pointerRunning = ref(false)
@@ -383,14 +394,13 @@ let pointerPos = 50             // 指针位置（0-100%，0=最左，100=最右
 let pointerDir = 1              // 指针移动方向（1=向右，-1=向左）
 let lastFrameTime = 0
 
-// 指针刻度：-10 ~ 20 完整数字，均匀分布
-const pointerValues = Array.from({ length: 31 }, (_, i) => i - 10)
+// 指针刻度：0 ~ 100 完整数字，均匀分布
+const pointerValues = Array.from({ length: 101 }, (_, i) => i)
 
-// 指针位置（0-100%）→ 发挥值：线性映射，最左 -10，最右 20
+// 指针位置（0-100%）→ 成绩：两侧 0，正中间 100（三角分布）
 function posToValue(pos: number): number {
-  const ratio = Math.max(0, Math.min(100, pos)) / 100   // 0 ~ 1
-  const value = -10 + ratio * 30
-  return Math.max(-10, Math.min(20, Math.round(value)))
+  const p = Math.max(0, Math.min(100, pos))
+  return Math.round(100 - Math.abs(p - 50) * 2)
 }
 
 // ===== 手速模式 =====
@@ -402,9 +412,9 @@ let speedTimer: number | undefined
 
 // ===== 策略模式 =====
 const strategyTiers = [
-  { key: 'safe', icon: '🛡️', name: '稳健', rangeText: '-5 ~ +8', risk: 'low', riskText: '低风险' },
-  { key: 'balanced', icon: '⚖️', name: '均衡', rangeText: '-8 ~ +12', risk: 'mid', riskText: '中风险' },
-  { key: 'gamble', icon: '🎰', name: '豪赌', rangeText: '-10 ~ +20', risk: 'high', riskText: '高风险高回报' }
+  { key: 'safe', icon: '🛡️', name: '稳健', rangeText: '30 ~ 50', risk: 'low', riskText: '低风险' },
+  { key: 'balanced', icon: '⚖️', name: '均衡', rangeText: '20 ~ 70', risk: 'mid', riskText: '中风险' },
+  { key: 'gamble', icon: '🎰', name: '豪赌', rangeText: '0 ~ 100', risk: 'high', riskText: '高风险高回报' }
 ]
 const selectedTier = ref<string | null>(null)
 
@@ -444,20 +454,34 @@ const reflexText = computed(() => {
   return map[reflexStage.value]
 })
 
+// 越小越好的模式（反应时间 / 完成用时）
+const LOWER_BETTER_MODES = ['reflex', 'memory', 'bomb', 'spot_diff', 'math']
+const isLowerBetter = computed(() => LOWER_BETTER_MODES.includes(mode.value))
+
+const valueUnit = computed(() => {
+  if (mode.value === 'reflex') return 'ms'
+  if (LOWER_BETTER_MODES.includes(mode.value)) return '秒'
+  if (mode.value === 'speed') return '次'
+  return '分'
+})
+
 const resultText = computed(() => {
   if (myValue.value === null) return ''
+  if (isLowerBetter.value) {
+    return mode.value === 'reflex' ? '反应时间已记录（越小越好）' : '完成用时已记录（越小越好）'
+  }
   const v = myValue.value
-  if (v >= 15) return '超常发挥！'
-  if (v >= 5) return '发挥出色'
-  if (v >= -2) return '发挥正常'
-  if (v >= -7) return '略有失误'
-  return '发挥失常'
+  if (v >= 80) return '非常出色！'
+  if (v >= 50) return '表现不错'
+  if (v >= 20) return '发挥一般'
+  return '发挥欠佳'
 })
 
 const valueClass = computed(() => {
   const v = myValue.value ?? 0
-  if (v >= 10) return 'high'
-  if (v >= 0) return 'good'
+  if (isLowerBetter.value) return 'good'
+  if (v >= 70) return 'high'
+  if (v >= 40) return 'good'
   return 'low'
 })
 
@@ -539,10 +563,8 @@ function addSpeedClick() {
 }
 
 function finishSpeed() {
-  // 点击次数 → 发挥值：每 3 次 +1，最高 +20，加少量随机抖动
-  const base = Math.min(Math.floor(speedClicks.value / 3), 20)
-  const value = Math.max(-10, Math.min(20, base + Math.floor(Math.random() * 3) - 1))
-  finishDraw(value)
+  // 成绩即点击次数，不再映射到 -10~20；排名时按次数排序
+  finishDraw(speedClicks.value)
 }
 
 // ===== 策略模式：选择档位后在该范围随机 =====
@@ -572,23 +594,18 @@ function startReflex() {
 
 function handleReflexClick() {
   if (reflexStage.value === 'waiting') {
-    // 提前点击 = 抢跑，惩罚
+    // 抢跑：记一个很大的反应时间，排名靠后
     if (reflexTimer) window.clearTimeout(reflexTimer)
     reflexStage.value = 'done'
-    const value = Math.max(-10, Math.floor(Math.random() * 11) - 10)  // -10 ~ 0
-    finishDraw(value)
+    reflexResultMs = 9999
+    finishDraw(9999)
     return
   }
   if (reflexStage.value === 'ready') {
     reflexResultMs = Math.round(performance.now() - reflexStartTime)
     reflexStage.value = 'done'
-    // 反应越快区间越高：<300ms → 10~20；<600ms → 0~15；<1000ms → -5~10；否则 -10~5
-    let min = -10, max = 5
-    if (reflexResultMs < 300) { min = 10; max = 20 }
-    else if (reflexResultMs < 600) { min = 0; max = 15 }
-    else if (reflexResultMs < 1000) { min = -5; max = 10 }
-    const value = Math.floor(Math.random() * (max - min + 1)) + min
-    finishDraw(value)
+    // 成绩即反应时间（毫秒），越小越好
+    finishDraw(reflexResultMs)
   }
 }
 
@@ -683,30 +700,8 @@ function flipMemoryCard(idx: number) {
 }
 
 function finishMemory() {
-  // 综合 翻牌次数 与 用时 决定发挥值：
-  // 翻牌越少、用时越短，发挥值越高
-  const ratio = memoryFlips.value / (MEMORY_PAIRS * 2)   // 下限 1（全部一次配中）
-  const elapsed = Math.max(1, memoryElapsed.value)       // 秒
-  // 用时标准：6对牌，约 20 秒内配对完为快
-  const timeRatio = elapsed / 20
-
-  let min = -10, max = 5
-  // 先按翻牌次数定基准
-  if (ratio <= 1.5) { min = 10; max = 20 }
-  else if (ratio <= 2) { min = 0; max = 15 }
-  else if (ratio <= 2.5) { min = -5; max = 10 }
-
-  // 用时调整：快（<=15s）向高档区间靠，慢（>=40s）降档
-  if (timeRatio <= 0.75) {
-    min = Math.min(20, min + 5)
-    max = Math.min(20, max + 5)
-  } else if (timeRatio >= 2) {
-    min = Math.max(-10, min - 8)
-    max = Math.max(-10, max - 8)
-  }
-
-  const value = Math.floor(Math.random() * (max - min + 1)) + min
-  finishDraw(value)
+  // 成绩即完成用时（秒），越小越好
+  finishDraw(Math.round(Math.max(0, memoryElapsed.value)))
 }
 
 // ===== 数字炸弹模式：猜数字缩小范围，逼近越多发挥值越高 =====
@@ -719,6 +714,9 @@ const bombHigh = ref(20)
 const bombAttempts = ref(BOMB_ATTEMPTS)
 const bombGuess = ref<number | null>(null)
 const bombGuesses = ref<number[]>([])
+const bombElapsed = ref(0)
+let bombTimer: number | undefined
+let bombStartTime = 0
 
 function startBomb() {
   bombStarted.value = true
@@ -729,6 +727,12 @@ function startBomb() {
   bombAttempts.value = BOMB_ATTEMPTS
   bombGuess.value = null
   bombGuesses.value = []
+  bombElapsed.value = 0
+  bombStartTime = Date.now()
+  if (bombTimer) window.clearInterval(bombTimer)
+  bombTimer = window.setInterval(() => {
+    bombElapsed.value = (Date.now() - bombStartTime) / 1000
+  }, 100)
 }
 
 function submitBombGuess() {
@@ -752,9 +756,11 @@ function submitBombGuess() {
   }
 }
 
-// 结束炸弹并自动保存发挥值（不依赖"查看结果"按钮）
+// 结束炸弹并自动保存成绩（不依赖"查看结果"按钮）
 function endBomb() {
   bombEnded.value = true
+  if (bombTimer) { window.clearInterval(bombTimer); bombTimer = undefined }
+  bombElapsed.value = (Date.now() - bombStartTime) / 1000
   if (!finished.value) {
     setTimeout(() => {
       if (!finished.value) finishBomb()
@@ -763,30 +769,29 @@ function endBomb() {
 }
 
 function finishBomb() {
-  const narrowed = (20 - (-10)) - (bombHigh.value - bombLow.value)   // 初始31 → 当前范围差值，越大说明逼近越多
-  let min = -10, max = 5
-  if (narrowed >= 25) { min = 10; max = 20 }
-  else if (narrowed >= 18) { min = 0; max = 15 }
-  else if (narrowed >= 10) { min = -5; max = 10 }
-  const value = Math.floor(Math.random() * (max - min + 1)) + min
-  finishDraw(value)
+  // 成绩即完成用时（秒），越小越好
+  finishDraw(Math.round(Math.max(0, bombElapsed.value)))
 }
 
-// ===== 找不同模式：两个 10x10 彩色矩阵找 10 处不同 =====
-const SPOT_DIFF_COUNT = 10
-const SPOT_DURATION = 30
+// ===== 找不同模式：两个矩阵找 3 处不同，一起提交 =====
+const SPOT_DIFF_COUNT = 3
+const SPOT_DURATION = 90
+const SPOT_SUBMIT_COOLDOWN = 5
 const SPOT_COLORS = ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#f39c12']
 const spotStarted = ref(false)
 const spotEnded = ref(false)
 const spotTop = ref<string[]>([])
 const spotBottom = ref<string[]>([])
 const spotDiffIndexes = ref<number[]>([])
-const spotMarked = ref<Record<number, boolean>>({})
+const spotSelected = ref<number[]>([])
+const spotCorrectMarked = ref<number[]>([])
 const spotWrongSet = ref<Set<number>>(new Set())
 const spotFound = ref(0)
 const spotWrong = ref(0)
 const spotElapsed = ref(0)
+const spotCooldown = ref(0)
 let spotTimer: number | undefined
+let spotCooldownTimer: number | undefined
 let spotStartTime = 0
 
 const spotTimeText = computed(() => {
@@ -799,11 +804,8 @@ function generateSpotBoards() {
   const size = 100
   const base = Array.from({ length: size }, () => SPOT_COLORS[Math.floor(Math.random() * SPOT_COLORS.length)])
   const bottom = [...base]
-  // 随机选 10 个不同位置，改为不同颜色
   const idxs = new Set<number>()
-  while (idxs.size < SPOT_DIFF_COUNT) {
-    idxs.add(Math.floor(Math.random() * size))
-  }
+  while (idxs.size < SPOT_DIFF_COUNT) idxs.add(Math.floor(Math.random() * size))
   const diffIdx = Array.from(idxs)
   for (const i of diffIdx) {
     let newColor = SPOT_COLORS[Math.floor(Math.random() * SPOT_COLORS.length)]
@@ -817,10 +819,12 @@ function generateSpotBoards() {
   spotTop.value = base
   spotBottom.value = bottom
   spotDiffIndexes.value = diffIdx
-  spotMarked.value = {}
+  spotSelected.value = []
+  spotCorrectMarked.value = []
   spotWrongSet.value = new Set()
   spotFound.value = 0
   spotWrong.value = 0
+  spotCooldown.value = 0
 }
 
 function startSpotDiff() {
@@ -840,7 +844,7 @@ function startSpotDiff() {
   }, 100)
 }
 
-// 结束找不同并自动保存发挥值（不依赖"查看结果"按钮）
+// 结束找不同并自动保存成绩
 function endSpotDiff() {
   spotEnded.value = true
   if (!finished.value) {
@@ -850,53 +854,52 @@ function endSpotDiff() {
   }
 }
 
+// 点击选择/取消（最多 SPOT_DIFF_COUNT 个）
 function handleSpotClick(i: number) {
-  if (!spotStarted.value || spotEnded.value) return
-  if (spotMarked.value[i] || spotWrongSet.value.has(i)) return
-  if (spotDiffIndexes.value.includes(i)) {
-    // 找对了
-    spotMarked.value[i] = true
-    spotFound.value++
-    if (spotFound.value >= SPOT_DIFF_COUNT) {
-      // 找齐：立即结束，记录时间
-      if (spotTimer) window.clearInterval(spotTimer)
-      spotTimer = undefined
-      spotElapsed.value = (Date.now() - spotStartTime) / 1000
-      endSpotDiff()
-    }
+  if (!spotStarted.value || spotEnded.value || spotCooldown.value > 0) return
+  if (spotCorrectMarked.value.includes(i)) return
+  const pos = spotSelected.value.indexOf(i)
+  if (pos >= 0) spotSelected.value.splice(pos, 1)
+  else if (spotSelected.value.length < SPOT_DIFF_COUNT) spotSelected.value.push(i)
+}
+
+// 提交：全部正确则锁定成绩；否则提示并冷却 5 秒
+function submitSpotDiff() {
+  if (!spotStarted.value || spotEnded.value || spotCooldown.value > 0) return
+  if (spotSelected.value.length !== SPOT_DIFF_COUNT) {
+    MessagePlugin.warning(`请选择 ${SPOT_DIFF_COUNT} 处不同`)
+    return
+  }
+  const selected = [...spotSelected.value]
+  const allCorrect = selected.every(i => spotDiffIndexes.value.includes(i))
+  if (allCorrect) {
+    spotCorrectMarked.value = [...selected]
+    spotFound.value = SPOT_DIFF_COUNT
+    if (spotTimer) window.clearInterval(spotTimer)
+    spotTimer = undefined
+    spotElapsed.value = (Date.now() - spotStartTime) / 1000
+    endSpotDiff()
   } else {
-    // 找错
-    spotWrongSet.value.add(i)
     spotWrong.value++
+    spotWrongSet.value = new Set(selected.filter(i => !spotDiffIndexes.value.includes(i)))
+    spotSelected.value = []
+    spotCooldown.value = SPOT_SUBMIT_COOLDOWN
+    if (spotCooldownTimer) window.clearInterval(spotCooldownTimer)
+    spotCooldownTimer = window.setInterval(() => {
+      spotCooldown.value--
+      if (spotCooldown.value <= 0) {
+        if (spotCooldownTimer) window.clearInterval(spotCooldownTimer)
+        spotCooldownTimer = undefined
+        spotWrongSet.value = new Set()
+      }
+    }, 1000)
+    MessagePlugin.error('所选不正确，请稍后重试')
   }
 }
 
 function finishSpotDiff() {
-  const found = spotFound.value
-  const wrong = spotWrong.value
-  const elapsed = Math.max(1, spotElapsed.value)
-  const allFound = found >= SPOT_DIFF_COUNT
-  let min = -10, max = 5
-
-  if (allFound) {
-    // 找齐：时间越短越高
-    if (elapsed <= 10) { min = 12; max = 20 }
-    else if (elapsed <= 20) { min = 5; max = 17 }
-    else if (elapsed <= 30) { min = 0; max = 12 }
-    else { min = -3; max = 8 }
-  } else {
-    // 未找齐：按找到的数量
-    if (found >= 8) { min = 0; max = 10 }
-    else if (found >= 5) { min = -5; max = 6 }
-    else if (found >= 3) { min = -8; max = 2 }
-    else { min = -10; max = -2 }
-  }
-  // 找错扣分：每错一次降档
-  if (wrong >= 5) { min = Math.max(-10, min - 6); max = Math.max(-10, max - 6) }
-  else if (wrong >= 3) { min = Math.max(-10, min - 3); max = Math.max(-10, max - 3) }
-
-  const value = Math.floor(Math.random() * (max - min + 1)) + min
-  finishDraw(value)
+  // 成绩即完成用时（秒），越小越好
+  finishDraw(Math.round(Math.max(0, spotElapsed.value)))
 }
 
 // ===== 算术题模式：限时30秒，答对跳下一题，答错结束 =====
@@ -1017,14 +1020,8 @@ function evalAnswer(expr: string): number {
 }
 
 function finishMath() {
-  const correct = mathCorrect.value
-  let min = -10, max = 5
-  if (correct >= 10) { min = 10; max = 20 }
-  else if (correct >= 6) { min = 2; max = 15 }
-  else if (correct >= 3) { min = -5; max = 8 }
-  else { min = -10; max = 0 }
-  const value = Math.floor(Math.random() * (max - min + 1)) + min
-  finishDraw(value)
+  // 成绩即完成用时（秒），越小越好
+  finishDraw(Math.round(Math.max(0, mathElapsed.value)))
 }
 
 async function finishDraw(value: number) {
@@ -1057,9 +1054,10 @@ onBeforeUnmount(() => {
   if (memoryTimer) window.clearInterval(memoryTimer)
   if (spotTimer) window.clearInterval(spotTimer)
   if (mathTimer) window.clearInterval(mathTimer)
+  if (bombTimer) window.clearInterval(bombTimer)
 })
 
-onMounted(async () => {
+async function loadData() {
   try {
     const roundId = `round-${currentRound.value}`
     // 1. 先请求本轮是否已生成发挥值
@@ -1084,7 +1082,12 @@ onMounted(async () => {
   } catch {
     // ignore
   }
-})
+}
+
+// websocket：管理员开放/关闭发挥值抽取、切换玩法时实时刷新
+useSfRefresh(() => { loadData() })
+
+onMounted(loadData)
 </script>
 
 <style lang="scss" scoped>
@@ -1669,8 +1672,12 @@ onMounted(async () => {
       box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
     }
 
-    &.marked {
-      box-shadow: inset 0 0 0 3px #fff, 0 0 0 2px #0052d9;
+    &.selected {
+      box-shadow: inset 0 0 0 3px #ffd700, 0 0 0 2px #ffd700;
+    }
+
+    &.correct {
+      box-shadow: inset 0 0 0 3px #fff, 0 0 0 2px #2ba471;
     }
 
     &.wrong {
@@ -1798,6 +1805,12 @@ onMounted(async () => {
   .result-value {
     font-size: 64px;
     font-weight: 800;
+
+    .result-unit {
+      font-size: 22px;
+      font-weight: 600;
+      margin-left: 4px;
+    }
 
     &.high {
       color: #2ba471;

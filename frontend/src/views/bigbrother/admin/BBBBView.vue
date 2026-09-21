@@ -43,6 +43,8 @@
           <button class="bb-btn bb-btn-xs" @click="setSafeById(row.playerId, row.playerName)">设为安全</button>
         </div>
       </div>
+      <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
+        :gameTitle="activeRoom.minigameName" :summoning="summoning" @summon="summonPlayers" />
     </div>
 
     <MinigameSelectModal v-model:open="showPicker" title="选择 BBBB 小游戏" @select="onSelectMinigame" />
@@ -54,10 +56,11 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   bbGetCurrentNomination, bbSetBbbbWinner, bbCreateMinigameRoom, bbStartMinigame,
-  bbGetActiveMinigameRoom, bbGetMinigameRoomProgress, bbStopMinigame
+  bbGetActiveMinigameRoom, bbGetMinigameRoomProgress, bbStopMinigame, bbSummonMinigamePlayers
 } from '../../../services/bbApi'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
+import MinigameReadyPanel from '../../../components/bigbrother/MinigameReadyPanel.vue'
 
 const route = useRoute()
 const roundNum = computed(() => Number(route.params.round) || 1)
@@ -68,6 +71,20 @@ const bbbbWinnerName = ref('')
 const activeRoom = ref<any>(null)
 const progress = ref<any>(null)
 const showPicker = ref(false)
+const summoning = ref(false)
+
+async function summonPlayers() {
+  if (!activeRoom.value || summoning.value) return
+  summoning.value = true
+  try {
+    await bbSummonMinigamePlayers(activeRoom.value.roomId)
+    alert('已召集所有参赛选手，请等待他们点击准备。')
+  } catch (e: any) {
+    alert(e?.message || '召集失败')
+  } finally {
+    summoning.value = false
+  }
+}
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const statusText = computed(() => {

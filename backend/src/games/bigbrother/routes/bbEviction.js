@@ -54,7 +54,7 @@ router.post('/vote', async (req, res) => {
     if (season.currentStage !== 'eviction_vote') {
       return res.status(400).json({ success: false, error: '当前不是淘汰投票阶段，无法操作', code: 'WRONG_STAGE' })
     }
-    if (season.votesLocked) {
+    if (season.votesLocked && season.evictionNight && season.evictionNight.round === season.currentRound) {
       return res.status(400).json({ success: false, error: '投票已锁定（淘汰夜已开始）', code: 'VOTES_LOCKED' })
     }
     const roundId = `round-${season.currentRound}`
@@ -71,10 +71,11 @@ router.post('/vote', async (req, res) => {
     const actualVoterName = specVoterName || admin.name
     const isAdminVote = admin.role === 'admin' && !!specVoterId
 
-    // 检查投票人是否为被提名人（被提名人不能投票）
+    // 检查投票人是否为被提名人（被提名人不能投票；BBBB 胜者除外，其安全可投票）
     const allNomineeIds = [...(nominationDoc?.nomineeIds || [])]
     if (nominationDoc?.replacementNomineeId) allNomineeIds.push(nominationDoc.replacementNomineeId)
-    if (allNomineeIds.includes(actualVoterId)) {
+    const bbbbWinnerId = nominationDoc?.bbbbWinnerId || null
+    if (allNomineeIds.includes(actualVoterId) && actualVoterId !== bbbbWinnerId) {
       return res.status(400).json({ success: false, error: '被提名者不能参与淘汰投票', code: 'NOMINEE_CANNOT_VOTE' })
     }
 
@@ -207,6 +208,9 @@ async function computeEvictionResult(season) {
   }
 
   await BBEviction.deleteMany({ gameId: 'bigbrother', roundId })
+  const evictedIdSet = new Set(evictedTargets.map(t => t.id))
+  const otherEntry = counts.find(c => !evictedIdSet.has(c.id))
+  const otherVotes = otherEntry ? otherEntry.count : null
   for (let i = 0; i < evictedTargets.length; i++) {
     const target = evictedTargets[i]
     const result = new BBEviction({
@@ -216,6 +220,7 @@ async function computeEvictionResult(season) {
       evictedId: target.id,
       evictedName: target.name,
       voteCount: target.count,
+      otherVotes,
       totalVotes: votes.length,
       isJury: evictedResults[i]?.status === 'jury',
       gameId: 'bigbrother',
@@ -279,10 +284,36 @@ router.post('/night/start', auth, requireAdmin, async (req, res) => {
     const counts = data.counts || []
     const big = counts.length ? counts[0].count : 0
     const small = counts.length > 1 ? counts[counts.length - 1].count : 0
+    const evicted = data.evicted || []
+    const first = evicted[0] || null
+    const voteLine = `by a vote of ${big}-${small},`
+    const sentenceMode = Number(req.body?.sentenceMode) === 5 ? 5 : 3
+    let segments = []
+    if (sentenceMode === 5 && first && counts.length > 1) {
+      // 5 句：先宣布安全者，再宣布淘汰者
+      const safeEntry = counts.find(c => c.id !== first.id)
+      segments = [
+        { type: 'vote', text: voteLine },
+        { type: 'safe', text: safeEntry ? safeEntry.name : '' },
+        { type: 'safe_result', text: '你安全了' },
+        { type: 'evicted', text: first.name },
+        { type: 'result', text: '你被淘汰了' }
+      ]
+    } else {
+      // 3 句：直接宣布淘汰者
+      segments = [
+        { type: 'vote', text: voteLine },
+        { type: 'evicted', text: first ? first.name : '' },
+        { type: 'result', text: '你被淘汰了' }
+      ]
+    }
     season.evictionNight = {
       phase: 'announce',
       round: season.currentRound,
-      evicted: data.evicted || [],
+      released: 0,
+      sentenceMode,
+      segments,
+      evicted,
       counts,
       totalVotes: data.totalVotes || 0,
       big,
@@ -314,6 +345,24 @@ router.post('/night/confirm', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '确认失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /night/next - 管理员逐句揭晓（点击一次展示一句话）
+router.post('/night/next', auth, requireAdmin, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const n = season.evictionNight
+    if (!n) return res.status(400).json({ success: false, error: '尚未开始淘汰夜' })
+    n.released = Math.min((n.released || 0) + 1, (n.segments || []).length)
+    season.evictionNight = n
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    broadcastBBGame('bb:eviction-night', n)
+    res.json({ success: true, data: n })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '揭晓失败', code: 'SERVER_ERROR' })
   }
 })
 

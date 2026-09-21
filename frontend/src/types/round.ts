@@ -65,11 +65,10 @@ export interface Song {
   type: 'team_show' | 'team_collab' | 'captain_show' | 'pk_show'
   style: string
   difficulty: number
-  vocalWeight: number
-  danceWeight: number
-  charmWeight: number
-  baseScore: number
-  riskFactor: number
+  mainAttribute?: 'vocal' | 'dance' | 'charm'
+  baseVocal?: number
+  baseDance?: number
+  risk?: number
   availableRounds?: number[]
   enabled?: boolean
   description?: string

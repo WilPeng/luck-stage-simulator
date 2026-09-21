@@ -144,6 +144,39 @@ router.post('/', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// ===== POST /api/users/randomize-attributes - 一键随机全部（非管理员）选手属性 =====
+router.post('/randomize-attributes', auth, requireAdmin, async (req, res) => {
+  try {
+    let { min, max, playerIds } = req.body || {}
+    min = parseInt(min)
+    max = parseInt(max)
+    if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) {
+      return res.status(400).json({ success: false, error: '范围不合法（需 最小值 ≤ 最大值）', code: 'INVALID_RANGE' })
+    }
+    const query = { role: { $ne: 'admin' } }
+    if (Array.isArray(playerIds) && playerIds.length) query.id = { $in: playerIds }
+    const users = await User.find(query)
+    const rand = () => Math.floor(Math.random() * (max - min + 1)) + min
+    let count = 0
+    for (const u of users) {
+      u.attributes = u.attributes || { vocal: 30, dance: 30, charm: 30 }
+      u.attributes.vocal = rand()
+      u.attributes.dance = rand()
+      u.attributes.charm = rand()
+      await u.save()
+      count++
+    }
+    try {
+      await logAction(req.user.userId, req.user.name || 'admin', 'admin', 'USER_RANDOMIZE_ATTR', 'user', 'all',
+        `一键随机属性：范围 ${min}~${max}，共 ${count} 位选手`)
+    } catch (le) { /* ignore */ }
+    res.json({ success: true, data: { count, min, max } })
+  } catch (e) {
+    console.error('Randomize attributes error:', e)
+    res.status(500).json({ success: false, error: '随机属性失败', code: 'SERVER_ERROR' })
+  }
+})
+
 router.post('/batch', auth, requireAdmin, async (req, res) => {
   try {
     const { users } = req.body

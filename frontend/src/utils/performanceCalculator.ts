@@ -118,9 +118,9 @@ export function calculatePerformanceResults(
     const songDifficulty = song?.difficulty || 3
     const songName = song?.name || '未分配歌曲'
     const songWeights = song ? {
-      vocal: song.vocalWeight || 0.33,
-      dance: song.danceWeight || 0.34,
-      charm: song.charmWeight || 0.33
+      vocal: (song as any).vocalWeight || 0.33,
+      dance: (song as any).danceWeight || 0.34,
+      charm: (song as any).charmWeight || 0.33
     } : { vocal: 0.33, dance: 0.34, charm: 0.33 }
 
     // 计算每个成员的个人得分

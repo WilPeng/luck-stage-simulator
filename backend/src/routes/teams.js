@@ -13,6 +13,24 @@ const RoundSong = require('../models/RoundSong')
 
 const router = express.Router()
 
+// ===== 工具: 已淘汰选手不得参与组队/选歌等环节 =====
+async function assertActivePlayer(req, res) {
+  const u = await User.findOne({ id: req.user?.userId })
+  if (!u || u.status === 'eliminated') {
+    res.status(403).json({ success: false, error: '你已被淘汰，无法参与该环节', code: 'ELIMINATED' })
+    return false
+  }
+  return true
+}
+async function assertPlayerNotEliminated(playerId, res) {
+  const u = await User.findOne({ id: playerId })
+  if (u && u.status === 'eliminated') {
+    res.status(400).json({ success: false, error: '该选手已被淘汰，无法参与该环节', code: 'USER_ELIMINATED' })
+    return false
+  }
+  return true
+}
+
 // ===== 工具: 获取指定 roundId 对应的 Round（兼容 round-1 / round_1 / 纯数字 / roundIndex 字段错误） =====
 async function getRound(roundId) {
   if (roundId) {
@@ -160,10 +178,12 @@ async function setupTeams(req, res) {
     const rIdx = round ? round.index : null
 
     // 保存分组模式到 Round（如传入）
-    if (round && ['captain', 'song', 'captain_choice'].includes(groupingMode)) {
+    if (round && ['captain', 'song', 'captain_choice', 'random', 'balanced', 'captain_draft'].includes(groupingMode)) {
       round.groupingMode = groupingMode
       round.updatedAt = new Date().toISOString()
-      await round.save()
+      if (typeof round.save === 'function') {
+        await round.save()
+      }
     }
 
     // 兼容两种 roundId 格式：UUID 或前端格式（如 "round-1"）
@@ -384,6 +404,119 @@ router.post('/admin/random-assign', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '自动分配失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== POST /api/teams/auto-form - 一键按分组模式自动组队 =====
+// mode: random(随机分组) | balanced(实力均衡) | captain_draft(队长蛇形选人)
+router.post('/auto-form', auth, requireAdmin, async (req, res) => {
+  try {
+    const { roundId, mode, captainIds } = req.body || {}
+    const allowed = ['random', 'balanced', 'captain_draft']
+    const formMode = allowed.includes(mode) ? mode : 'random'
+
+    const round = await getRound(roundId)
+    const rId = round ? round.id : (roundId || null)
+    if (!rId) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
+
+    let teams = await RoundTeam.find({ roundId: rId })
+    if (teams.length === 0 && rId !== roundId) teams = await RoundTeam.find({ roundId })
+    if (teams.length === 0) return res.status(400).json({ success: false, error: '请先配置队伍结构', code: 'NO_TEAMS' })
+    const actualRoundId = teams[0].roundId
+    teams.sort((a, b) => (a.index || 0) - (b.index || 0))
+
+    // 记录分组模式
+    if (round && typeof round.save === 'function') {
+      round.groupingMode = formMode
+      round.updatedAt = new Date().toISOString()
+      await round.save()
+    }
+
+    await RoundTeamMember.deleteMany({ roundId: { $in: [actualRoundId, rId, roundId].filter(Boolean) } })
+
+    const users = await User.find({})
+    const players = users.filter(u => u.role !== 'admin' && u.status !== 'eliminated')
+    const userMap = {}
+    for (const u of users) userMap[u.id] = u
+    const power = (p) => (p.attributes?.vocal || 0) + (p.attributes?.dance || 0) + (p.attributes?.charm || 0)
+
+    const assignment = {}
+    for (const t of teams) assignment[t.id] = []
+
+    // 队长
+    let captains = []
+    if (formMode === 'captain_draft') {
+      const explicit = Array.isArray(captainIds) ? captainIds.filter(id => userMap[id]) : []
+      captains = explicit.length
+        ? explicit.slice(0, teams.length)
+        : [...players].sort((a, b) => power(b) - power(a)).slice(0, teams.length).map(p => p.id)
+      captains.forEach((cid, i) => { if (teams[i]) assignment[teams[i].id].push(cid) })
+    }
+    const captainSet = new Set(captains)
+
+    if (formMode === 'random') {
+      const pool = players.filter(p => !captainSet.has(p.id))
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[pool[i], pool[j]] = [pool[j], pool[i]]
+      }
+      let ti = 0
+      for (const p of pool) {
+        let placed = false
+        for (let attempt = 0; attempt < teams.length; attempt++) {
+          const t = teams[ti]
+          ti = (ti + 1) % teams.length
+          if (assignment[t.id].length < (t.maxMembers || 5)) { assignment[t.id].push(p.id); placed = true; break }
+        }
+        if (!placed) break
+      }
+    } else {
+      // balanced / captain_draft：剩余选手按实力降序，蛇形分配
+      const pool = players.filter(p => !captainSet.has(p.id)).sort((a, b) => power(b) - power(a))
+      let s = 0
+      for (const p of pool) {
+        let placed = false
+        for (let attempt = 0; attempt < teams.length; attempt++) {
+          const roundNo = Math.floor(s / teams.length)
+          const pos = s % teams.length
+          const tIdx = roundNo % 2 === 0 ? pos : (teams.length - 1 - pos)
+          const t = teams[tIdx]
+          s++
+          if (assignment[t.id].length < (t.maxMembers || 5)) { assignment[t.id].push(p.id); placed = true; break }
+        }
+        if (!placed) break
+      }
+    }
+
+    // 写入成员 + 更新队长
+    let assignedCount = 0
+    for (const t of teams) {
+      const capId = assignment[t.id].find(pid => captainSet.has(pid)) || null
+      if (capId) { t.captainId = capId; await t.save() }
+      for (const pid of assignment[t.id]) {
+        const m = new RoundTeamMember({
+          id: generateId(), roundId: actualRoundId, roundIndex: round ? round.index : null,
+          teamId: t.id, playerId: pid, createdAt: new Date().toISOString()
+        })
+        await m.save()
+        assignedCount++
+      }
+    }
+
+    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TEAM_RANDOM_ASSIGN, 'round', actualRoundId, `按「${formMode}」自动组队 ${assignedCount} 人`)
+
+    const result = teams.map(t => ({
+      id: t.id, roundId: t.roundId, roundIndex: t.roundIndex,
+      name: t.name, index: t.index, maxMembers: t.maxMembers, captainId: t.captainId,
+      memberIds: assignment[t.id],
+      members: assignment[t.id].map(pid => formatMember(userMap[pid])),
+      memberCount: assignment[t.id].length
+    }))
+
+    res.json({ success: true, data: { mode: formMode, teams: result, assigned: assignedCount } })
+  } catch (e) {
+    console.error('auto-form error:', e)
+    res.status(500).json({ success: false, error: '自动组队失败', code: 'SERVER_ERROR' })
   }
 })
 
@@ -635,6 +768,7 @@ async function assertIsCaptain(team, userId) {
 // ===== 1. POST /api/teams/:teamId/invite - 队长邀请选手入队 =====
 router.post('/:teamId/invite', auth, async (req, res) => {
   try {
+    if (!(await assertActivePlayer(req, res))) return
     const { playerId, roundId } = req.body
     if (!playerId) return res.status(400).json({ success: false, error: 'playerId 必填', code: 'INVALID_PARAMS' })
 
@@ -678,6 +812,7 @@ router.post('/:teamId/invite', auth, async (req, res) => {
 // ===== 2. POST /api/teams/:teamId/apply - 选手申请入队 =====
 router.post('/:teamId/apply', auth, async (req, res) => {
   try {
+    if (!(await assertActivePlayer(req, res))) return
     const { playerId, roundId } = req.body
     const pid = playerId || req.user.userId
     if (pid !== req.user.userId) return res.status(403).json({ success: false, error: '只能为自己申请', code: 'FORBIDDEN' })
@@ -730,6 +865,7 @@ router.post('/:teamId/applications/:playerId/accept', auth, async (req, res) => 
     const playerId = req.params.playerId
     const app = await TeamApplication.findOne({ teamId: team.id, playerId, status: 'pending' })
     if (!app) return res.status(404).json({ success: false, error: '未找到待处理的申请', code: 'APPLICATION_NOT_FOUND' })
+    if (!(await assertPlayerNotEliminated(playerId, res))) return
 
     // 加入队伍
     await addMemberToTeam(team, playerId)
@@ -773,6 +909,7 @@ router.post('/:teamId/applications/:playerId/reject', auth, async (req, res) => 
 // ===== 5. POST /api/teams/invites/:inviteId/accept - 选手接受邀请 =====
 router.post('/invites/:inviteId/accept', auth, async (req, res) => {
   try {
+    if (!(await assertActivePlayer(req, res))) return
     const invite = await TeamInvite.findOne({ id: req.params.inviteId })
     if (!invite) return res.status(404).json({ success: false, error: '邀请不存在', code: 'INVITE_NOT_FOUND' })
     if (invite.targetPlayerId !== req.user.userId) return res.status(403).json({ success: false, error: '非本人邀请', code: 'FORBIDDEN' })
@@ -982,6 +1119,7 @@ router.get('/song-options', auth, async (req, res) => {
 // ===== POST /api/teams/select-song - 选手选歌（按歌分组模式），选同一首歌自动成组 =====
 router.post('/select-song', auth, async (req, res) => {
   try {
+    if (!(await assertActivePlayer(req, res))) return
     const { roundId, songId } = req.body
     if (!roundId || !songId) return res.status(400).json({ success: false, error: 'roundId 和 songId 必填', code: 'INVALID_PARAMS' })
 
@@ -1060,6 +1198,7 @@ router.post('/select-song', auth, async (req, res) => {
 // ===== POST /api/teams/preference - 选手提交意向队长 =====
 router.post('/preference', auth, async (req, res) => {
   try {
+    if (!(await assertActivePlayer(req, res))) return
     const { roundId, preferredCaptainId } = req.body
     if (!roundId || !preferredCaptainId) return res.status(400).json({ success: false, error: 'roundId 和 preferredCaptainId 必填', code: 'INVALID_PARAMS' })
 

@@ -28,6 +28,15 @@ class Season extends BaseModel {
     this.teamRankBonusMultiplier = data?.teamRankBonusMultiplier ?? 1
     this.teamRandomMin = data?.teamRandomMin ?? -5
     this.teamRandomMax = data?.teamRandomMax ?? 15
+    // 3.4 团队评级规则（按人数或默认）：[{count, ratings, teamRating}] 或 { '2': [...], default: [...] }
+    this.teamRatingRules = data?.teamRatingRules ?? null
+    // 3.5/3.6 评级加权（S/A/B/C/D）
+    this.ratingWeights = data?.ratingWeights ?? {
+      personal: { S: 1, A: 0.9, B: 0.8, C: 0.7, D: 0.6 },
+      team: { S: 1, A: 0.9, B: 0.8, C: 0.7, D: 0.6 }
+    }
+    // 3.5 发挥值排名加成（前20%..末20%）
+    this.performanceBonus = data?.performanceBonus ?? { p1: 0.2, p2: 0.1, p3: 0, p4: -0.1, p5: -0.2 }
     // 聊天配置
     this.chatEnabled = data?.chatEnabled ?? true
     this.createdAt = data?.createdAt || new Date().toISOString()

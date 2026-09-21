@@ -240,6 +240,13 @@ export async function bbDeleteHouseguest(id: string): Promise<void> {
   return doRequest<void>(`/houseguests/${id}`, { method: 'DELETE' })
 }
 
+export async function bbBatchDeleteHouseguests(ids: string[]): Promise<{ deleted: number; skipped: number }> {
+  return doRequest<{ deleted: number; skipped: number }>('/houseguests/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids })
+  })
+}
+
 // ===== 头像 =====
 
 /** 将存储路径转为可访问的完整 URL */
@@ -455,11 +462,14 @@ export async function bbGetEvictionNight(): Promise<{ night: any; votesLocked: b
   const res = await doRequest<any>('/eviction/night')
   return { night: (res as any)?.data ?? res ?? null, votesLocked: !!(res as any)?.votesLocked }
 }
-export async function bbStartEvictionNight(): Promise<any> {
-  return doRequest<any>('/eviction/night/start', { method: 'POST', body: JSON.stringify({}) })
+export async function bbStartEvictionNight(sentenceMode: 3 | 5 = 3): Promise<any> {
+  return doRequest<any>('/eviction/night/start', { method: 'POST', body: JSON.stringify({ sentenceMode }) })
 }
 export async function bbConfirmEvictionNight(): Promise<any> {
   return doRequest<any>('/eviction/night/confirm', { method: 'POST', body: JSON.stringify({}) })
+}
+export async function bbNextEvictionNight(): Promise<any> {
+  return doRequest<any>('/eviction/night/next', { method: 'POST', body: JSON.stringify({}) })
 }
 export async function bbResetEvictionNight(): Promise<any> {
   return doRequest<any>('/eviction/night/reset', { method: 'POST', body: JSON.stringify({}) })
@@ -588,6 +598,14 @@ export async function bbStopMinigame(roomId: string): Promise<void> {
   })
 }
 
+// 管理员召集选手进入准备环节
+export async function bbSummonMinigamePlayers(roomId: string): Promise<any> {
+  return doRequest<any>('/minigame/summon', {
+    method: 'POST',
+    body: JSON.stringify({ roomId })
+  })
+}
+
 // ===== 小游戏实时观战 & 复盘 =====
 export async function bbGetActiveMinigameRooms(): Promise<any[]> {
   return doRequest<any[]>('/minigame/active-rooms')
@@ -608,6 +626,34 @@ export async function bbGetMinigameReplay(id: string): Promise<any> {
 
 export async function bbDeleteMinigameReplay(id: string): Promise<void> {
   return doRequest<void>(`/minigame/replay/${id}`, { method: 'DELETE' })
+}
+
+// ===== 钥匙仪式（提名） =====
+export async function bbKeySetup(nominees: string[], order: string[]): Promise<any> {
+  return doRequest<any>('/nomination/key-setup', { method: 'POST', body: JSON.stringify({ nominees, order }) })
+}
+export async function bbKeyDraw(): Promise<any> {
+  return doRequest<any>('/nomination/key-draw', { method: 'POST', body: JSON.stringify({}) })
+}
+export async function bbKeyAnnounce(text: string): Promise<any> {
+  return doRequest<any>('/nomination/key-announce', { method: 'POST', body: JSON.stringify({ text }) })
+}
+export async function bbKeySpeech(payload: { phase: 'opening' | 'closing'; text?: string; reason?: string; nomineeOrder?: string[] }): Promise<any> {
+  return doRequest<any>('/nomination/key-speech', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+// ===== 陪审团问答（冠军投票前） =====
+export async function bbGetJuryQA(): Promise<any[]> {
+  return doRequest<any[]>('/jury-qa')
+}
+export async function bbAskJuryQuestion(question: string): Promise<any> {
+  return doRequest<any>('/jury-qa/ask', { method: 'POST', body: JSON.stringify({ question }) })
+}
+export async function bbAnswerJuryQuestion(questionId: string, answer: string): Promise<any> {
+  return doRequest<any>('/jury-qa/answer', { method: 'POST', body: JSON.stringify({ questionId, answer }) })
+}
+export async function bbDeleteJuryQuestion(id: string): Promise<void> {
+  return doRequest<void>(`/jury-qa/${id}`, { method: 'DELETE' })
 }
 
 // ===== 自定义游戏 API =====

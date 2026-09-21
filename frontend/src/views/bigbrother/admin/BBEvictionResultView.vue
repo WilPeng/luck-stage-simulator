@@ -10,7 +10,7 @@
       <div class="result-info">
         <div class="result-label">最新淘汰结果</div>
         <div class="result-name">{{ lastEviction.evictedName }}</div>
-        <div class="result-votes">{{ lastEviction.voteCount }} / {{ lastEviction.totalVotes }} 票</div>
+        <div class="result-votes">{{ lastEviction.voteCount }}{{ lastEviction.otherVotes != null ? '-' + lastEviction.otherVotes : '' }}</div>
       </div>
     </div>
 
@@ -22,12 +22,24 @@
     <div class="action-section">
       <h3>操作 - 淘汰夜</h3>
       <div class="action-buttons">
-        <button v-if="!night" class="bb-btn bb-btn-danger" @click="startNight" :disabled="(voteData.votes?.length || 0) === 0 || starting">
-          🌙 {{ starting ? '处理中...' : '开始淘汰夜（锁票）' }}
-        </button>
-        <button v-else-if="night.phase === 'announce'" class="bb-btn bb-btn-primary" @click="confirmNight" :disabled="confirming">
-          ✅ {{ confirming ? '处理中...' : '确定（开门）' }}
-        </button>
+        <template v-if="!night">
+          <div class="mode-select">
+            <span class="ms-label">宣布句数：</span>
+            <label><input type="radio" :value="3" v-model.number="sentenceMode" /> 3 句（直接宣布淘汰者）</label>
+            <label><input type="radio" :value="5" v-model.number="sentenceMode" /> 5 句（先宣布安全者，再宣布淘汰者）</label>
+          </div>
+          <button class="bb-btn bb-btn-danger" @click="startNight" :disabled="(voteData.votes?.length || 0) === 0 || starting">
+            🌙 {{ starting ? '处理中...' : '开始淘汰夜（锁票）' }}
+          </button>
+        </template>
+        <template v-else-if="night.phase === 'announce'">
+          <button class="bb-btn bb-btn-primary" @click="nextSentence" :disabled="nexting || (night.released || 0) >= (night.segments || []).length">
+            📢 下一句（{{ night.released || 0 }}/{{ (night.segments || []).length }}）
+          </button>
+          <button class="bb-btn bb-btn-primary" @click="confirmNight" :disabled="confirming">
+            ✅ {{ confirming ? '处理中...' : '确定（开门）' }}
+          </button>
+        </template>
         <button v-else class="bb-btn" disabled>🚪 已开门</button>
         <button v-if="night" class="bb-btn" @click="resetNight">清除淘汰夜</button>
       </div>
@@ -35,8 +47,10 @@
       <div v-if="night" class="night-preview">
         <div class="night-phase">{{ night.phase === 'announce' ? '📢 淘汰结果宣布' : '🚪 开门结果' }}</div>
         <template v-if="night.phase === 'announce'">
-          <div class="night-line">by a vote of {{ night.big }}-{{ night.small }},</div>
-          <div v-for="e in night.evicted" :key="e.id" class="night-line evicted">{{ e.name }}</div>
+          <div v-for="(s, i) in (night.segments || [])" :key="i" class="night-line"
+            :class="{ dim: (night.released || 0) <= i, result: s.type === 'result', evicted: s.type === 'evicted' }">
+            {{ s.text }}
+          </div>
         </template>
         <template v-else>
           <div v-for="e in night.evicted" :key="e.id" class="night-line door">🚪 {{ e.name }} · {{ night.big }}-{{ night.small }}</div>
@@ -76,7 +90,7 @@
             <tr v-for="e in evictionHistory" :key="e.id">
               <td>{{ formatTime(e.createdAt) }}</td>
               <td class="highlight">{{ e.evictedName }}</td>
-              <td>{{ e.voteCount }} / {{ e.totalVotes }}</td>
+              <td>{{ e.voteCount }}{{ e.otherVotes != null ? '-' + e.otherVotes : '' }}</td>
               <td class="time">{{ formatTime(e.updatedAt) }}</td>
             </tr>
             <tr v-if="evictionHistory.length === 0"><td colspan="4" class="empty-cell">暂无淘汰记录</td></tr>
@@ -93,7 +107,7 @@ import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
 import {
   bbGetVotes, bbGetEvictionHistory, bbGetEvictionNight, bbGetCurrentNomination,
-  bbStartEvictionNight, bbConfirmEvictionNight, bbResetEvictionNight
+  bbStartEvictionNight, bbConfirmEvictionNight, bbNextEvictionNight, bbResetEvictionNight
 } from '../../../services/bbApi'
 import type { BBEviction } from '../../../types/bigbrother'
 
@@ -107,6 +121,8 @@ const twistInfo = ref<any>(null)
 const night = ref<any>(null)
 const starting = ref(false)
 const confirming = ref(false)
+const nexting = ref(false)
+const sentenceMode = ref<3 | 5>(3)
 const nominees = ref<{ id: string; name: string }[]>([])
 
 async function fetchData() {
@@ -125,7 +141,7 @@ async function startNight() {
   if (!confirm('确定开始淘汰夜？将锁定投票并显示淘汰结果宣布框架。')) return
   starting.value = true
   try {
-    night.value = await bbStartEvictionNight()
+    night.value = await bbStartEvictionNight(sentenceMode.value)
     await fetchData()
   } catch (e: any) { alert(e?.message || '开始失败') } finally { starting.value = false }
 }
@@ -134,6 +150,12 @@ async function confirmNight() {
   if (confirming.value) return
   confirming.value = true
   try { night.value = await bbConfirmEvictionNight() } catch (e: any) { alert(e?.message || '确认失败') } finally { confirming.value = false }
+}
+
+async function nextSentence() {
+  if (nexting.value) return
+  nexting.value = true
+  try { night.value = await bbNextEvictionNight() } catch (e: any) { alert(e?.message || '揭晓失败') } finally { nexting.value = false }
 }
 
 async function resetNight() {
@@ -193,6 +215,11 @@ onMounted(fetchData)
 .night-phase { color: #ffaa00; font-size: 13px; margin-bottom: 12px; }
 .night-line { font-size: 20px; font-weight: 700; color: #e0e0e0; padding: 4px 0; }
 .night-line.evicted { color: #ff4444; }
+.night-line.result { color: #ff4444; }
+.night-line.dim { opacity: 0.2; }
+.mode-select { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; width: 100%; margin-bottom: 10px; font-size: 13px; color: #aaa; }
+.mode-select .ms-label { color: #888; }
+.mode-select label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
 .night-line.door { color: #ffaa00; }
 .nominee-preview { margin-top: 14px; background: #0a0a1a; border: 1px solid #ffaa0033; border-radius: 10px; padding: 14px; }
 .np-title { font-size: 13px; color: #ffaa00; margin-bottom: 10px; }

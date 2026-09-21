@@ -909,6 +909,42 @@ router.post('/admin/season', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// GET /photo-wall - 餐厅照片墙（所有房客，按管理员设定顺序）
+router.get('/photo-wall', auth, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const guests = await BBHouseguest.find({ gameId: 'bigbrother', role: 'houseguest' })
+    const byId = {}
+    guests.forEach(g => { byId[g.id] = g })
+    const ordered = []
+    for (const id of (season?.photoWallOrder || [])) {
+      if (byId[id]) { ordered.push(byId[id]); delete byId[id] }
+    }
+    const rest = guests.filter(g => byId[g.id]).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    const players = [...ordered, ...rest].map(g => ({ id: g.id, name: g.name, avatar: g.avatar || null, status: g.status }))
+    res.json({ success: true, data: { players, order: players.map(p => p.id) } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取照片墙失败' })
+  }
+})
+
+// POST /admin/photo-wall-order - 管理员调整照片墙展示顺序
+router.post('/admin/photo-wall-order', auth, requireAdmin, async (req, res) => {
+  try {
+    const { order } = req.body
+    if (!Array.isArray(order)) return res.status(400).json({ success: false, error: 'order 必须为数组' })
+    const season = await getCurrentSeason()
+    season.photoWallOrder = order
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    res.json({ success: true, data: { order } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '保存照片墙顺序失败' })
+  }
+})
+
 // GET /admin/chat-logs - 管理员查看所有房间聊天记录，并计算每条消息被哪些房客看到
 router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
   try {
@@ -918,8 +954,8 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
     if (roomId) filter.roomId = roomId
 
     const messages = await BBChatMessage.find(filter)
-    messages.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    const limited = messages.slice(0, 200)
+    messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    const limited = messages.slice(-300)
 
     const rooms = await BBHouseRoom.find({ gameId })
     const guests = await BBHouseguest.find({ gameId })
@@ -961,14 +997,16 @@ router.get('/admin/guest-states', auth, requireAdmin, async (req, res) => {
     const guests = await BBHouseguest.find({ gameId: 'bigbrother' })
     res.json({
       success: true,
-      data: guests.map(g => ({
-        id: g.id, name: g.name, avatar: g.avatar, role: g.role, status: g.status,
-        currentRoomId: g.currentRoomId,
-        isSleeping: g.isSleeping, wakeAt: g.wakeAt, lastSleepDate: g.lastSleepDate,
-        isShowering: g.isShowering, showerStartedAt: g.showerStartedAt, lastShowerDate: g.lastShowerDate,
-        hohSleepApproved: g.hohSleepApproved
-      })),
-      today: todayStr()
+      data: {
+        guests: guests.map(g => ({
+          id: g.id, name: g.name, avatar: g.avatar, role: g.role, status: g.status,
+          currentRoomId: g.currentRoomId,
+          isSleeping: g.isSleeping, wakeAt: g.wakeAt, lastSleepDate: g.lastSleepDate,
+          isShowering: g.isShowering, showerStartedAt: g.showerStartedAt, lastShowerDate: g.lastShowerDate,
+          hohSleepApproved: g.hohSleepApproved
+        })),
+        today: todayStr()
+      }
     })
   } catch (e) {
     console.error(e)
@@ -1012,6 +1050,64 @@ router.post('/admin/set-shower', auth, requireAdmin, async (req, res) => {
       g.showerStartedAt = null
     } else {
       g.lastShowerDate = null
+    }
+    await g.save()
+    res.json({ success: true })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '设置失败' })
+  }
+})
+
+// POST /admin/sleep-action - action: start(立即开始睡) | end(立即结束) | mark(标记今天已睡) | clear(清除记录)
+router.post('/admin/sleep-action', auth, requireAdmin, async (req, res) => {
+  try {
+    const { playerId, action } = req.body || {}
+    const g = await BBHouseguest.findOne({ id: playerId, gameId: 'bigbrother' })
+    if (!g) return res.status(404).json({ success: false, error: '房客不存在' })
+    if (action === 'start') {
+      g.isSleeping = true
+      g.sleepStartedAt = new Date().toISOString()
+      g.wakeAt = new Date(Date.now() + 6 * 3600 * 1000).toISOString()
+      g.lastSleepDate = todayStr()
+    } else if (action === 'end') {
+      g.isSleeping = false
+      g.sleepStartedAt = null
+      g.wakeAt = null
+    } else if (action === 'mark') {
+      g.lastSleepDate = todayStr()
+    } else if (action === 'clear') {
+      g.lastSleepDate = null
+    } else {
+      return res.status(400).json({ success: false, error: '未知操作' })
+    }
+    await g.save()
+    res.json({ success: true })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '设置失败' })
+  }
+})
+
+// POST /admin/shower-action - action: start(立即开始洗) | end(立即结束) | mark(标记今天已洗) | clear(清除记录)
+router.post('/admin/shower-action', auth, requireAdmin, async (req, res) => {
+  try {
+    const { playerId, action } = req.body || {}
+    const g = await BBHouseguest.findOne({ id: playerId, gameId: 'bigbrother' })
+    if (!g) return res.status(404).json({ success: false, error: '房客不存在' })
+    if (action === 'start') {
+      g.isShowering = true
+      g.showerStartedAt = new Date().toISOString()
+      g.lastShowerDate = todayStr()
+    } else if (action === 'end') {
+      g.isShowering = false
+      g.showerStartedAt = null
+    } else if (action === 'mark') {
+      g.lastShowerDate = todayStr()
+    } else if (action === 'clear') {
+      g.lastShowerDate = null
+    } else {
+      return res.status(400).json({ success: false, error: '未知操作' })
     }
     await g.save()
     res.json({ success: true })

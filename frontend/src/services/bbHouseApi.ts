@@ -138,3 +138,20 @@ export async function bbAdminSetSleep(playerId: string, sleeping: boolean) {
 export async function bbAdminSetShower(playerId: string, showered: boolean) {
   return doRequest<any>('/house/admin/set-shower', { method: 'POST', body: JSON.stringify({ playerId, showered }) })
 }
+
+// 管理员：睡眠/洗澡 立即开始/结束/标记/清除
+export async function bbAdminSleepAction(playerId: string, action: 'start' | 'end' | 'mark' | 'clear') {
+  return doRequest<any>('/house/admin/sleep-action', { method: 'POST', body: JSON.stringify({ playerId, action }) })
+}
+export async function bbAdminShowerAction(playerId: string, action: 'start' | 'end' | 'mark' | 'clear') {
+  return doRequest<any>('/house/admin/shower-action', { method: 'POST', body: JSON.stringify({ playerId, action }) })
+}
+
+// 餐厅照片墙
+export async function bbGetPhotoWall(): Promise<{ players: any[]; order: string[] }> {
+  return doRequest<any>('/house/photo-wall')
+}
+
+export async function bbAdminSetPhotoWallOrder(order: string[]) {
+  return doRequest<any>('/house/admin/photo-wall-order', { method: 'POST', body: JSON.stringify({ order }) })
+}

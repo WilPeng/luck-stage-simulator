@@ -35,6 +35,24 @@
       </div>
     </div>
 
+    <!-- 发挥成绩排名与分段（颜色表示奖励/惩罚） -->
+    <t-card title="🏆 发挥成绩排名" :bordered="false" class="rank-card">
+      <div class="rank-head">
+        {{ genModeZh }} · 共 {{ perfRanked.length }} 人有成绩（{{ isLowerBetter ? '越小越好' : '越大越好' }}）
+      </div>
+      <div class="rank-segments">
+        <div v-for="seg in performanceSegments" :key="seg.key" class="rank-seg" :style="{ borderColor: seg.color, background: seg.bg }">
+          <div class="seg-title" :style="{ color: seg.color }">{{ seg.label }} <span class="seg-bonus">{{ seg.bonusText }}</span></div>
+          <div class="seg-members">
+            <span v-for="(m, i) in seg.members" :key="m.playerId" class="seg-tag" :style="{ background: seg.bg, color: seg.color }">
+              {{ seg.startRank + i }}. {{ m.playerName }}（{{ m.value }}）
+            </span>
+            <span v-if="seg.members.length === 0" class="seg-empty">无</span>
+          </div>
+        </div>
+      </div>
+    </t-card>
+
     <!-- 开放开关 + 抽取方式 -->
     <div class="config-grid">
       <t-card title="抽取开放" :bordered="false" class="config-card">
@@ -193,6 +211,7 @@ import { MessagePlugin } from 'tdesign-vue-next'
 import { useSeasonStore } from '../../stores/seasonStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { usePlayerStore } from '../../stores/playerStore'
+import { useSfRefresh } from '../../composables/useSfRefresh'
 import type { PerformanceGenerationMode } from '../../types/performance'
 import {
   setPerformanceGenerationMode,
@@ -258,16 +277,53 @@ const pagedPlayers = computed(() => {
   return playerStatuses.value.slice(start, start + 10)
 })
 
+// ===== 发挥成绩排名与分段（奖励/惩罚用颜色区分）=====
+const LOWER_BETTER_MODES = ['reflex', 'memory', 'bomb', 'spot_diff', 'math']
+const isLowerBetter = computed(() => LOWER_BETTER_MODES.includes(generationMode.value))
+const MODE_NAMES: Record<string, string> = {
+  random: '随机分数', pointer: '摆动指针', speed: '手速挑战', strategy: '策略抉择',
+  reflex: '反应力(ms)', memory: '记忆配对(秒)', bomb: '数字炸弹(秒)', spot_diff: '找不同(秒)', math: '算术(秒)'
+}
+const genModeZh = computed(() => MODE_NAMES[generationMode.value] || generationMode.value)
+const perfRanked = computed(() => {
+  const list = playerStatuses.value.filter((p: any) => p.generated && p.performanceValue !== null && p.performanceValue !== undefined)
+  const lower = isLowerBetter.value
+  return [...list].sort((a: any, b: any) => lower
+    ? Number(a.performanceValue) - Number(b.performanceValue)
+    : Number(b.performanceValue) - Number(a.performanceValue))
+})
+const performanceSegments = computed(() => {
+  const ranked = perfRanked.value
+  const total = ranked.length || 1
+  const colors = ['#2ba471', '#5ecf8a', '#8a8f99', '#e6a23c', '#e74c3c']
+  const bgs = ['rgba(43,164,113,.12)', 'rgba(94,207,138,.12)', 'rgba(138,143,153,.12)', 'rgba(230,162,60,.12)', 'rgba(231,76,60,.12)']
+  const defs = [
+    { key: 'p1', label: '前 20%', bonusText: '魅力 +20%' },
+    { key: 'p2', label: '20% ~ 40%', bonusText: '魅力 +10%' },
+    { key: 'p3', label: '40% ~ 60%', bonusText: '魅力 0%' },
+    { key: 'p4', label: '60% ~ 80%', bonusText: '魅力 -10%' },
+    { key: 'p5', label: '后 20%', bonusText: '魅力 -20%' }
+  ]
+  return defs.map((d, i) => {
+    const start = Math.floor(i * total / 5)
+    const end = Math.floor((i + 1) * total / 5)
+    return {
+      ...d, color: colors[i], bg: bgs[i], startRank: start + 1,
+      members: ranked.slice(start, end).map((p: any) => ({ playerId: p.playerId, playerName: p.playerName, value: p.performanceValue }))
+    }
+  })
+})
+
 const MODE_HINTS: Record<string, string> = {
-  random: '选手端点击后系统随机给出发挥值',
-  pointer: '选手端通过点击停下指针获取发挥值',
-  speed: '限时快速点击，次数映射发挥值',
-  strategy: '选择风险档位，档位内随机',
-  reflex: '变绿后点击，反应越快区间越高',
-  memory: '翻牌配对，翻牌越少发挥值越高',
-  bomb: '猜数字缩小范围，逼近越多发挥值越高',
-  spot_diff: '两个10×10矩阵找10处不同，限时30秒',
-  math: '限时30秒算术题，答对越多发挥值越高'
+  random: '选手端点击后随机给出 0~100 分',
+  pointer: '指针 0~100 摆动，越靠中间分数越高',
+  speed: '限时快速点击，成绩为点击次数',
+  strategy: '选择风险档位（30~50 / 20~70 / 0~100）',
+  reflex: '变绿后点击，成绩为反应时间（毫秒，越小越好）',
+  memory: '翻牌配对，成绩为完成用时（秒，越小越好）',
+  bomb: '猜数字缩小范围，成绩为完成用时（秒，越小越好）',
+  spot_diff: '两个10×10矩阵找10处不同，成绩为用时（秒）',
+  math: '限时30秒算术题，成绩为用时（秒）'
 }
 const modeHint = computed(() => MODE_HINTS[generationMode.value] || '')
 
@@ -322,13 +378,28 @@ async function handleGenerationModeChange(value: string | number | boolean) {
 
 // ==================== 生成 ====================
 function generateRandomValue(): number {
-  return Math.floor(Math.random() * 31) - 10 // -10 ~ 20
+  return Math.floor(Math.random() * 101) // 0 ~ 100
+}
+
+// 为"未生成"的选手生成垫底成绩：不超过已有最低分（越大越好），或不低于已有最高分（越小越好）
+function generateBottomValue(): number {
+  const existing = playerStatuses.value
+    .filter((p: any) => p.generated && p.performanceValue !== null && Number.isFinite(Number(p.performanceValue)))
+    .map((p: any) => Number(p.performanceValue))
+  if (existing.length === 0) return generateRandomValue()
+  if (LOWER_BETTER_MODES.includes(generationMode.value)) {
+    const maxExisting = Math.floor(Math.max(...existing))
+    return maxExisting + 1 + Math.floor(Math.random() * 30)
+  }
+  const minExisting = Math.floor(Math.min(...existing))
+  const hi = minExisting - 1
+  return hi >= 0 ? Math.floor(Math.random() * (hi + 1)) : 0
 }
 
 async function handleGeneratePlayer(player: any) {
   generatingPlayerId.value = player.playerId
   try {
-    const value = generateRandomValue()
+    const value = generateBottomValue()
     await savePerformancePlayerStatus(currentRoundId.value, [{ playerId: player.playerId, performanceValue: value }])
     const idx = playerStatuses.value.findIndex((p: any) => p.playerId === player.playerId)
     if (idx !== -1) {
@@ -352,7 +423,7 @@ async function handleGenerateAll() {
       MessagePlugin.info('所有选手都已生成发挥值，无需生成')
       return
     }
-    const players = toGenerate.map((p: any) => ({ playerId: p.playerId, performanceValue: generateRandomValue() }))
+    const players = toGenerate.map((p: any) => ({ playerId: p.playerId, performanceValue: generateBottomValue() }))
     await savePerformancePlayerStatus(currentRoundId.value, players)
     const valueMap = new Map(players.map(p => [p.playerId, p.performanceValue]))
     for (const p of playerStatuses.value) {
@@ -361,7 +432,7 @@ async function handleGenerateAll() {
         p.performanceValue = valueMap.get(p.playerId)
       }
     }
-    MessagePlugin.success(`已为 ${players.length} 位选手生成发挥值（已有发挥值的未覆盖）`)
+    MessagePlugin.success(`已为 ${players.length} 位选手生成发挥值（未生成者排名垫底，已有发挥值未覆盖）`)
   } catch (e: any) {
     MessagePlugin.error(e.message || '一键生成失败')
   } finally {
@@ -493,6 +564,9 @@ async function loadData() {
     loading.value = false
   }
 }
+
+// websocket：选手端生成/抽取发挥值后，管理端「选手实时发挥」表格与排名实时刷新
+useSfRefresh(() => { initPlayerStatuses() })
 
 onMounted(loadData)
 </script>
@@ -698,4 +772,14 @@ onMounted(loadData)
     grid-template-columns: 1fr;
   }
 }
+
+.rank-card { margin-bottom: 16px; }
+.rank-head { font-size: 13px; color: var(--text-tertiary, #888); margin-bottom: 10px; }
+.rank-segments { display: flex; flex-direction: column; gap: 8px; }
+.rank-seg { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid; border-radius: 8px; }
+.rank-seg .seg-title { min-width: 130px; font-weight: 700; font-size: 13px; }
+.rank-seg .seg-bonus { font-weight: 400; font-size: 12px; opacity: 0.85; }
+.rank-seg .seg-members { display: flex; flex-wrap: wrap; gap: 6px; }
+.rank-seg .seg-tag { padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+.rank-seg .seg-empty { color: #999; font-size: 12px; }
 </style>
