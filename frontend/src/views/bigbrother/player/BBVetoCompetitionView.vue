@@ -357,7 +357,7 @@ onMounted(async () => {
 
   await checkRoom()
   if (!veto.value?.winnerId) {
-    pollTimer = setInterval(checkRoom, 2000)
+    pollTimer = setInterval(checkRoom, 4000)
   }
 
   // 如果需要自选，轮询 veto 记录以获取最新状态

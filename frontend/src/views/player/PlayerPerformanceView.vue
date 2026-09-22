@@ -786,7 +786,7 @@ onMounted(async () => {
   // 3.3 加载本人公演骰子信息（歌曲/难度/各点数评级，补全展示）
   await loadMyRating()
   // 轮询刷新：管理员揭晓新队伍后选手端自动更新
-  revealedTimer = window.setInterval(loadRevealedTeamsData, 8000)
+  revealedTimer = window.setInterval(() => { if (!document.hidden) loadRevealedTeamsData() }, 8000)
 })
 
 onBeforeUnmount(() => {

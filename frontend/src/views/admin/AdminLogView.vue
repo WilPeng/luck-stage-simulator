@@ -25,14 +25,13 @@
 
     <t-card :bordered="false">
       <t-table
-        :data="filteredLogs"
+        :data="logs"
         :columns="columns"
         row-key="id"
         :bordered="true"
         hover
         stripe
-        :pagination="{ defaultPageSize: 10 }"
-        @page-change="onPageChange"
+        :loading="loading"
       >
         <template #time="{ row }">
           <span class="log-time">{{ row.createdAt }}</span>
@@ -58,18 +57,32 @@
         </template>
       </t-table>
 
-      <t-empty v-if="filteredLogs.length === 0" description="暂无操作日志" />
+      <t-empty v-if="logs.length === 0 && !loading" description="暂无操作日志" />
+      <div class="logs-pager">
+        <t-pagination
+          v-model="pagination.page"
+          :total="pagination.total"
+          :page-size="pagination.pageSize"
+          :page-size-options="[10, 20, 50, 100]"
+          show-jumper
+          @change="loadLogs"
+          @page-size-change="onPageSizeChange"
+        />
+      </div>
     </t-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useLogStore } from '../../stores/logStore'
-
-const logStore = useLogStore()
+import { ref, reactive, onMounted } from 'vue'
+import { MessagePlugin } from 'tdesign-vue-next'
+import { getLogsPaged } from '../../services/api'
+import type { OperationLog } from '../../types/log'
 
 const searchKeyword = ref('')
+const logs = ref<OperationLog[]>([])
+const loading = ref(false)
+const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
 
 const columns = [
   { colKey: 'time', title: '时间', width: '160' },
@@ -79,15 +92,6 @@ const columns = [
   { colKey: 'target', title: '操作对象', width: '120' },
   { colKey: 'detail', title: '操作详情' }
 ]
-
-const filteredLogs = computed(() => {
-  if (!searchKeyword.value) return logStore.logs
-  return logStore.logs.filter(log =>
-    log.userName.includes(searchKeyword.value) ||
-    log.detail.includes(searchKeyword.value) ||
-    log.actionType.includes(searchKeyword.value)
-  )
-})
 
 function getRoleText(role: string): string {
   const texts: Record<string, string> = {
@@ -126,15 +130,31 @@ function getActionText(action: string): string {
   return texts[action] || action
 }
 
+async function loadLogs() {
+  loading.value = true
+  try {
+    const res = await getLogsPaged({ page: pagination.page, pageSize: pagination.pageSize, keyword: searchKeyword.value || undefined })
+    logs.value = res.list
+    pagination.total = res.total
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '加载日志失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 function onSearch() {
+  pagination.page = 1
+  loadLogs()
 }
 
-function onPageChange(_pageInfo: { current: number; pageSize: number }) {
+function onPageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.page = 1
+  loadLogs()
 }
 
-onMounted(async () => {
-  await logStore.fetchLogs()
-})
+onMounted(loadLogs)
 </script>
 
 <style lang="scss" scoped>
@@ -188,6 +208,12 @@ onMounted(async () => {
 
 .log-detail {
   color: var(--text-primary);
+}
+
+.logs-pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
 }
 
 @media (max-width: 768px) {

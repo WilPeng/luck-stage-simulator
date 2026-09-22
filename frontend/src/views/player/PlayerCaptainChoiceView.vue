@@ -214,7 +214,7 @@ onMounted(async () => {
     loadReleaseStatus()
   ])
   await loadAll()
-  releaseTimer = window.setInterval(loadReleaseStatus, 8000)
+  releaseTimer = window.setInterval(() => { if (!document.hidden) loadReleaseStatus() }, 8000)
 })
 
 onBeforeUnmount(() => {

@@ -2404,6 +2404,16 @@ export async function getLogs(): Promise<OperationLog[]> {
   )
 }
 
+// 操作日志服务端分页（只返回当前页）
+export async function getLogsPaged(params: { page: number; pageSize: number; keyword?: string }): Promise<{ list: OperationLog[]; total: number }> {
+  const query = new URLSearchParams()
+  query.set('page', String(params.page))
+  query.set('pageSize', String(params.pageSize))
+  if (params.keyword) query.set('keyword', params.keyword)
+  const res = await doRequest<any>(`/logs?${query.toString()}`)
+  return { list: res?.list || [], total: res?.total || 0 }
+}
+
 export async function addLogAPI(log: Omit<OperationLog, 'id' | 'createdAt'>): Promise<void> {
   return safeCall(
     async () => {

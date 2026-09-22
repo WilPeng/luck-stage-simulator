@@ -135,9 +135,9 @@ onMounted(() => {
   songStore.fetchRoundSongs(String(currentRound.value))
   checkPerfValueDrawn()
   loadReleaseStatus()
-  releaseTimer = window.setInterval(loadReleaseStatus, 8000)
+  releaseTimer = window.setInterval(() => { if (!document.hidden) loadReleaseStatus() }, 8000)
   // 轮询刷新发挥值状态：抽取后回到本页能自动更新
-  progressTimer = window.setInterval(checkPerfValueDrawn, 8000)
+  progressTimer = window.setInterval(() => { if (!document.hidden) checkPerfValueDrawn() }, 8000)
 })
 
 onBeforeUnmount(() => {

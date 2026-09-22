@@ -25,10 +25,12 @@ export const usePlayerStore = defineStore('player', () => {
   const pageSize = ref(20)
   const loading = ref(false)
   const stats = ref<UserStats | null>(null)
+  let lastAllFetchAt = 0
 
   const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 
   async function fetchUsers(params?: UserQueryParams): Promise<void> {
+    lastAllFetchAt = 0
     loading.value = true
     try {
       const data = await apiGetUsers(params)
@@ -42,12 +44,15 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  async function fetchAllUsers(): Promise<void> {
+  async function fetchAllUsers(force = false): Promise<void> {
+    // 15s 内且已有数据则跳过，减少多页面重复拉取全量用户
+    if (!force && users.value.length > 0 && Date.now() - lastAllFetchAt < 15000) return
     loading.value = true
     try {
       const data = await apiGetUsers({ pageSize: 1000 })
       users.value = data.list
       total.value = data.total
+      lastAllFetchAt = Date.now()
     } catch (e) {
       users.value = []
       total.value = 0
@@ -57,6 +62,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function fetchUsersWithPagination(params?: UserQueryParams): Promise<UserListResponse> {
+    lastAllFetchAt = 0
     loading.value = true
     try {
       const result = await getUserList({

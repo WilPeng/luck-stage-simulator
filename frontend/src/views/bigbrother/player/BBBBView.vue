@@ -125,7 +125,7 @@ async function onMinigameFinished(winner: { playerId: string; playerName: string
 
 onMounted(() => {
   fetchData()
-  pollTimer = setInterval(fetchData, 2500)
+  pollTimer = setInterval(fetchData, 5000)
 })
 onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
 </script>

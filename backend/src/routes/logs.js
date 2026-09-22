@@ -6,13 +6,33 @@ const { generateId } = require('../utils/helpers')
 
 router.get('/', auth, requireAdmin, async (req, res) => {
   try {
-    const { userId, limit = 20 } = req.query
-    const filter = { limit: parseInt(limit) }
+    const { userId, keyword } = req.query
+    const page = Math.max(1, parseInt(req.query.page) || 1)
+    const pageSize = parseInt(req.query.pageSize) || 0
+    const filter = { limit: 100000 }
     if (userId) {
       filter.userId = userId
     }
-    const logs = await OperationLog.find(filter)
-    const logsData = logs.map(l => {
+    let logs = await OperationLog.find(filter)
+    if (keyword) {
+      const k = String(keyword).toLowerCase()
+      logs = logs.filter(l =>
+        (l.userName || '').toLowerCase().includes(k) ||
+        (l.detail || '').toLowerCase().includes(k) ||
+        (l.actionType || '').toLowerCase().includes(k)
+      )
+    }
+    logs.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    const total = logs.length
+    if (pageSize > 0) {
+      const list = logs.slice((page - 1) * pageSize, page * pageSize).map(l => {
+        const obj = l.toObject()
+        delete obj._id
+        return obj
+      })
+      return res.json({ success: true, data: { list, total, page, pageSize } })
+    }
+    const logsData = logs.slice(0, 200).map(l => {
       const obj = l.toObject()
       delete obj._id
       return obj

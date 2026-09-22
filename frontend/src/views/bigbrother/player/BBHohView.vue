@@ -220,7 +220,7 @@ onMounted(async () => {
   await checkRoom()
 
   if (!currentHoh.value && (!activeRoom.value || activeRoom.value.status !== 'finished')) {
-    pollTimer = setInterval(checkRoom, 2000)
+    pollTimer = setInterval(checkRoom, 4000)
   }
 
   loading.value = false

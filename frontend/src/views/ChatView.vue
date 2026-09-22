@@ -110,6 +110,7 @@ import { useSfRefresh } from '../composables/useSfRefresh'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
+import { getAvatarUrl } from '../services/api'
 import type { ChatMessage } from '../types/chat'
 
 const chatStore = useChatStore()
@@ -126,16 +127,7 @@ const reversedMessages = computed(() => {
   return [...chatStore.messages].reverse()
 })
 
-// 获取头像URL
-function getAvatarUrl(avatar?: string): string {
-  if (!avatar) return ''
-  // 如果是完整URL直接返回
-  if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
-    return avatar
-  }
-  // 否则拼接服务器地址
-  return `https://luck-stage-simulator.onrender.com${avatar}`
-}
+// 头像 URL 由 services/api 的 getAvatarUrl 统一处理（跟随当前后端地址）
 
 // 格式化时间
 function formatTime(dateString: string): string {

@@ -395,7 +395,7 @@ onMounted(async () => {
     'teamSongs:', songStore.teamSongs.length,
     'teams:', teamStore.teams.length)
   // 轮询释放状态：管理员开放后选手端自动解锁
-  releaseTimer = window.setInterval(loadReleaseStatus, 8000)
+  releaseTimer = window.setInterval(() => { if (!document.hidden) loadReleaseStatus() }, 8000)
 })
 
 onBeforeUnmount(() => {

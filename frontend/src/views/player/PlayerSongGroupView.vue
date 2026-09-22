@@ -175,6 +175,7 @@ onMounted(async () => {
   ])
   await loadAll()
   releaseTimer = window.setInterval(() => {
+    if (document.hidden) return
     loadReleaseStatus()
     loadSongOptions()
   }, 8000)

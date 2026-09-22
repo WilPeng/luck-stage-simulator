@@ -695,7 +695,7 @@ onBeforeUnmount(() => {
 
 // 轮询释放状态：管理员开放后选手端自动解锁
 async function startReleasePolling() {
-  releaseTimer = window.setInterval(loadReleaseStatus, 8000)
+  releaseTimer = window.setInterval(() => { if (!document.hidden) loadReleaseStatus() }, 8000)
 }
 </script>
 
