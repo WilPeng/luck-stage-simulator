@@ -62,6 +62,7 @@
             <span>⚠ {{ claimedSong.song?.risk ?? 10 }}</span>
             <span>⭐ {{ claimedSong.song?.difficulty || 3 }}难度</span>
           </div>
+          <SongRatingDetail :song="claimedSong.song" :attributes="myAttrs" />
         </div>
       </div>
 
@@ -99,13 +100,6 @@
                   <span class="weight">💃 {{ rs.song?.baseDance ?? 30 }}</span>
                   <span class="weight">⚠ {{ rs.song?.risk ?? 10 }}</span>
                 </div>
-
-                <div class="rating-toggle-row">
-                  <t-button variant="outline" size="small" @click="toggleRating(rs.id)">
-                    {{ expandedRatingId === rs.id ? '收起评级概率' : '评级概率详情' }}
-                  </t-button>
-                </div>
-                <SongRatingDetail v-if="expandedRatingId === rs.id" :song="rs.song" :attributes="myAttrs" />
 
                 <div class="card-action">
                   <!-- 已被其他队抢走 -->
@@ -165,6 +159,7 @@
             <span>⚠ {{ claimedSong.song?.risk ?? 10 }}</span>
             <span>⭐ {{ claimedSong.song?.difficulty || 3 }}难度</span>
           </div>
+          <SongRatingDetail :song="claimedSong.song" :attributes="myAttrs" />
         </div>
       </div>
       <!-- 等待中 / 按歌分组未选歌 -->
@@ -198,9 +193,13 @@
               </div>
             </div>
             <div class="result-stats">
-              <span class="result-stat">难度：{{ rs.song?.difficulty || 3 }}</span>
+              <span class="result-stat">难度：{{ rs.song?.difficulty || 3 }} 面骰</span>
               <span class="result-stat">主属性：{{ mainAttrLabel(rs.song?.mainAttribute) }}</span>
+              <span class="result-stat">基准V：{{ rs.song?.baseVocal ?? 30 }}</span>
+              <span class="result-stat">基准D：{{ rs.song?.baseDance ?? 30 }}</span>
+              <span class="result-stat">风险值：{{ rs.song?.risk ?? 10 }}</span>
             </div>
+            <SongRatingDetail :song="rs.song" :attributes="myAttrs" />
           </div>
         </div>
 
@@ -241,10 +240,6 @@ const myAttrs = computed(() => {
   const a = (authStore.currentUser as any)?.attributes || {}
   return { vocal: a.vocal ?? 0, dance: a.dance ?? 0, charm: a.charm ?? 0 }
 })
-const expandedRatingId = ref<string | null>(null)
-function toggleRating(id: string) {
-  expandedRatingId.value = expandedRatingId.value === id ? null : id
-}
 
 // 并发阶段释放状态
 const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
@@ -691,12 +686,6 @@ color: var(--text-primary);
       font-size: 13px;
       color: var(--text-tertiary);
     }
-  }
-
-  .rating-toggle-row {
-    margin-top: 10px;
-    display: flex;
-    justify-content: flex-end;
   }
 
   .card-action {
