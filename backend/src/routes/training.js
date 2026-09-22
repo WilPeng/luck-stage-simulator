@@ -1171,6 +1171,7 @@ router.get('/records', auth, async (req, res) => {
       cardId: r.cardId,
       cardName: r.cardName,
       cardType: r.cardType,
+      cardIndex: r.cardIndex ?? null,
       effect: normalizeEffect(r.attrDelta || r.effect),
       attributesAfter: normalizeAttributesAfter(r.attributesAfter),
       round: r.roundIndex,

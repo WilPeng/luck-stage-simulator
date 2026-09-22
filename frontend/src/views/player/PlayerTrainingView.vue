@@ -107,7 +107,7 @@
           </t-select>
         </div>
       </div>
-      <div class="pool-grid">
+      <div class="pool-grid" :class="{ 'grid-settling': settlingSlotIndex !== null }">
         <div
           v-for="c in pagedPoolCards"
           :key="c.index"
@@ -116,7 +116,8 @@
             mine: c.mine,
             taken: c.drawn && !c.mine,
             disabled: isTrainingLocked || c.drawn,
-            settling: settlingSlotIndex === c.index
+            settling: settlingSlotIndex === c.index,
+            revealed: revealedSlotIndex === c.index
           }"
           @click="handlePoolDraw(c)"
         >
@@ -330,6 +331,11 @@ const changeLog = reactive<{ cardName: string; cardIndex?: number | null; vocal:
 const pool = ref<any>(null)
 const poolDrawing = ref(false)
 const settlingSlotIndex = ref<number | null>(null)
+const revealedSlotIndex = ref<number | null>(null)
+function flashReveal(index: number) {
+  revealedSlotIndex.value = index
+  window.setTimeout(() => { if (revealedSlotIndex.value === index) revealedSlotIndex.value = null }, 700)
+}
 const poolFilter = ref<'all' | 'unopened'>('all')
 const poolPage = ref(1)
 const poolPageSize = ref(20)
@@ -433,6 +439,7 @@ async function handlePoolDraw(c: any) {
   if (poolDrawing.value) return
   poolDrawing.value = true
   settlingSlotIndex.value = c.index
+  const startedAt = Date.now()
   try {
     const res: any = await drawFromPool({ roundId: `round-${currentRound.value}`, slotIndex: c.index, playerId: currentUser.value.id })
     if (res?.attributesAfter) {
@@ -444,15 +451,21 @@ async function handlePoolDraw(c: any) {
     changeLog.unshift({ cardName: res?.card?.name || '', cardIndex: res?.cardIndex ?? null, vocal: delta.vocal || 0, dance: delta.dance || 0, charm: delta.charm || 0, desc: formatEffect(res?.card?.effect) })
     trainingCount.value += 1
     if (typeof res?.remainingDraws === 'number') remainingDraws.value = res.remainingDraws
+    // 先刷新卡池（此时仍保持 loading，揭示动画在结算完成后播放）
+    await loadPool()
     if (res?.isSelfSelect) {
       // 自选卡：结算未完成（需选择属性），保持 loading 直到选择完成
       showSelectDialogForPool(res.card?.effect?.selfSelect || 5, res.card?.name || '', res.recordId, () => {
         settlingSlotIndex.value = null
+        flashReveal(c.index)
       })
     } else {
+      // 保证 loading 至少可见 1.1s，制造"结算中"过程感，再揭示结果
+      const elapsed = Date.now() - startedAt
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, 1100 - elapsed)))
       settlingSlotIndex.value = null
+      flashReveal(c.index)
     }
-    await loadPool()
   } catch (e: any) {
     settlingSlotIndex.value = null
     MessagePlugin.error(e.message || '抽卡失败')
@@ -710,6 +723,7 @@ onMounted(async () => {
       const card = trainingStore.cards.find(c => c.id === r.cardId)
       changeLog.push({
         cardName: r.cardName,
+        cardIndex: (r as any).cardIndex ?? null,
         desc: card?.description || '',
         vocal: r.effect.vocal || 0,
         dance: r.effect.dance || 0,
@@ -1015,10 +1029,17 @@ color: var(--text-primary);
 .pool-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }.pool-controls { display: flex; align-items: center; gap: 10px; }
 .pool-pager { display: flex; justify-content: center; margin-top: 14px; }
 .pool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.pool-grid.grid-settling .pool-slot:not(.settling) { opacity: .45; filter: grayscale(0.4); pointer-events: none; }
 .pool-slot { aspect-ratio: 3/4; border-radius: 10px; border: 1px solid var(--border-color, #333); background: rgba(255,255,255,0.03); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; text-align: center; padding: 6px; transition: all .15s; position: relative; }
-.pool-slot.settling { border-color: #00d6a4; box-shadow: 0 0 14px rgba(0,214,164,0.5); pointer-events: none; }
-.pool-slot .slot-settling { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border-radius: 10px; background: rgba(0,0,0,0.45); color: #00d6a4; font-size: 12px; font-weight: 600; animation: slotPulse 1s ease-in-out infinite; }
+.pool-slot.settling { border-color: #00d6a4; box-shadow: 0 0 14px rgba(0,214,164,0.5); pointer-events: none; z-index: 2; }
+.pool-slot .slot-settling { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border-radius: 10px; background: rgba(0,0,0,0.5); color: #00d6a4; font-size: 12px; font-weight: 600; animation: slotPulse 1s ease-in-out infinite; z-index: 3; }
 @keyframes slotPulse { 0%,100% { opacity: .85; } 50% { opacity: 1; } }
+.pool-slot.revealed { animation: cardReveal .6s cubic-bezier(0.2, 1.2, 0.4, 1); }
+@keyframes cardReveal {
+  0% { transform: rotateY(90deg) scale(0.85); opacity: 0; }
+  55% { transform: rotateY(-12deg) scale(1.06); opacity: 1; }
+  100% { transform: rotateY(0) scale(1); opacity: 1; }
+}
 .pool-slot:hover:not(.disabled) { border-color: #00d6a4; transform: translateY(-2px); }
 .pool-slot.disabled { cursor: not-allowed; opacity: .85; }
 .pool-slot.mine { border-color: #00d6a4; background: rgba(0,214,164,0.12); cursor: default; }
