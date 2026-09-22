@@ -523,14 +523,29 @@ router.post('/pool/draw', auth, async (req, res) => {
     if (round) rId = round.id
     const scope = [rId, roundId].filter(Boolean)
 
-    const card = await TrainingCardPool.findOne({ roundId: { $in: scope }, index: idx })
-    if (!card) return res.status(404).json({ success: false, error: '卡牌不存在', code: 'CARD_NOT_FOUND' })
-    if (card.drawnBy) return res.status(409).json({ success: false, error: `该卡牌已被 ${card.drawnByName || '其他选手'} 抽走`, code: 'CARD_TAKEN' })
-
     const season = await getCurrentSeason()
+    const collection = getCollection('TrainingCardPool')
+    const now = new Date().toISOString()
+
+    // 原子占用卡牌：仅当 drawnBy 为空时才能占用，杜绝并发/连点重复抽同一张
+    const claimRaw = await collection.findOneAndUpdate(
+      { roundId: { $in: scope }, index: idx, drawnBy: null },
+      { $set: { drawnBy: pid, drawnByName: actor.name, drawnAt: now } },
+      { returnDocument: 'after' }
+    )
+    const claimed = claimRaw && claimRaw.value !== undefined ? claimRaw.value : claimRaw
+    if (!claimed) {
+      const existing = await TrainingCardPool.findOne({ roundId: { $in: scope }, index: idx })
+      if (!existing) return res.status(404).json({ success: false, error: '卡牌不存在', code: 'CARD_NOT_FOUND' })
+      return res.status(409).json({ success: false, error: `该卡牌已被 ${existing.drawnByName || '其他选手'} 抽走`, code: 'CARD_TAKEN' })
+    }
+    const card = claimed
+
     const per = card.perPersonDrawCount || (season && season.trainingDrawsPerPlayer) || 3
+    // 占用后统计（已含本次），超过上限则回滚占用
     const myDrawn = await TrainingCardPool.countDocuments({ roundId: { $in: scope }, drawnBy: pid })
-    if (myDrawn >= per) {
+    if (myDrawn > per) {
+      await collection.updateOne({ _id: card._id }, { $set: { drawnBy: null, drawnByName: null, drawnAt: null } })
       return res.status(409).json({ success: false, error: `已达本轮抽取上限（${per} 张）`, code: 'DRAW_LIMIT_REACHED' })
     }
 
@@ -543,11 +558,6 @@ router.post('/pool/draw', auth, async (req, res) => {
       for (const k of Object.keys(attrDelta)) actor.attributes[k] = (actor.attributes[k] || 0) + attrDelta[k]
       await actor.save()
     }
-
-    card.drawnBy = pid
-    card.drawnByName = actor.name
-    card.drawnAt = new Date().toISOString()
-    await card.save()
 
     const rec = new TrainingRecord({
       id: generateId(), roundId: rId, roundIndex: card.roundIndex,

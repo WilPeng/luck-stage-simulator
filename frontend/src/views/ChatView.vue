@@ -106,6 +106,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useSfRefresh } from '../composables/useSfRefresh'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
@@ -253,6 +254,12 @@ function stopPolling() {
     pollTimer = null
   }
 }
+
+// websocket：任意写操作（发送消息等）后立即刷新消息列表
+useSfRefresh(async () => {
+  await chatStore.fetchMessages(1, 50, searchKeyword.value)
+  scrollToBottom()
+})
 
 onMounted(async () => {
   await chatStore.fetchMessages(1, 50, searchKeyword.value)

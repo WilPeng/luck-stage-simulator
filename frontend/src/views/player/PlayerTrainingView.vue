@@ -317,6 +317,7 @@ const changeLog = reactive<{ cardName: string; vocal: number; dance: number; cha
 
 // ===== 有限卡池 =====
 const pool = ref<{ totalCards: number; perPersonDrawCount: number; cards: any[] } | null>(null)
+const poolDrawing = ref(false)
 const poolFilter = ref<'all' | 'unopened'>('all')
 const poolPage = ref(1)
 const poolPageSize = ref(20)
@@ -386,6 +387,8 @@ useSfRefresh(async () => {
 
 async function handlePoolDraw(c: any) {
   if (!pool.value || c.drawn || isTrainingLocked.value || !currentUser.value) return
+  if (poolDrawing.value) return
+  poolDrawing.value = true
   try {
     const res: any = await drawFromPool({ roundId: `round-${currentRound.value}`, slotIndex: c.index, playerId: currentUser.value.id })
     if (res?.attributesAfter) {
@@ -403,6 +406,8 @@ async function handlePoolDraw(c: any) {
     await loadPool()
   } catch (e: any) {
     MessagePlugin.error(e.message || '抽卡失败')
+  } finally {
+    poolDrawing.value = false
   }
 }
 
