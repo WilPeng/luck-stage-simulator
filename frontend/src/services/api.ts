@@ -1389,6 +1389,19 @@ export async function getSongs(params?: { round?: number; type?: string; style?:
   )
 }
 
+// 歌曲库服务端分页（只返回当前页）
+export async function getSongsPaged(params: { page: number; pageSize: number; type?: string; style?: string; keyword?: string; singerGender?: string }): Promise<{ list: Song[]; total: number }> {
+  const query = new URLSearchParams()
+  query.set('page', String(params.page))
+  query.set('pageSize', String(params.pageSize))
+  if (params.type) query.append('type', params.type)
+  if (params.style) query.append('style', params.style)
+  if (params.keyword) query.append('keyword', params.keyword)
+  if (params.singerGender) query.append('singerGender', params.singerGender)
+  const res = await doRequest<any>(`/songs?${query.toString()}`)
+  return { list: res?.list || [], total: res?.total || 0 }
+}
+
 export async function getSongById(id: string): Promise<Song> {
   return safeCall(
     () => doRequest<Song>(`/songs/${id}`),

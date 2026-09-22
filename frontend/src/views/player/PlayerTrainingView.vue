@@ -642,7 +642,6 @@ onMounted(async () => {
       attributes.dance = userData.attributes.dance
       attributes.charm = userData.attributes.charm
     }
-    attrsLoaded.value = true
 
     // 2. 加载训练配置与释放状态
     await Promise.all([trainingStore.fetchConfig(), loadReleaseStatus()])
@@ -676,10 +675,14 @@ onMounted(async () => {
     // 5.1 加载训练结束状态与公演骰子信息
     await loadRatingInfo()
 
+    // 全部关键数据就绪后再展示属性面板（避免先显示占位数值）
+    attrsLoaded.value = true
+
     // 6. 启动释放状态轮询
     startReleasePolling()
   } catch (e) {
     console.warn('[Training] 加载失败:', e)
+    attrsLoaded.value = true
   }
 })
 

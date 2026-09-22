@@ -32,10 +32,12 @@ async function getRound(roundId) {
   return await Round.findOne({ seasonId: season.id, index: season.currentRound })
 }
 
-// ===== GET /api/songs - 歌曲库 =====
+// ===== GET /api/songs - 歌曲库（支持服务端分页：传 page/pageSize 时只返回当前页）=====
 router.get('/', auth, async (req, res) => {
   try {
     const { type, style, keyword, singerGender } = req.query
+    const page = parseInt(req.query.page) || 0
+    const pageSize = parseInt(req.query.pageSize) || 0
     const filter = {}
     if (type) filter.type = type
     if (style) filter.style = style
@@ -46,6 +48,11 @@ router.get('/', auth, async (req, res) => {
       songs = songs.filter(s => (s.name || '').toLowerCase().includes(k) || (s.style || '').toLowerCase().includes(k))
     }
     songs.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0))
+    if (page > 0 && pageSize > 0) {
+      const total = songs.length
+      const list = songs.slice((page - 1) * pageSize, page * pageSize)
+      return res.json({ success: true, data: { list, total, page, pageSize } })
+    }
     res.json({ success: true, data: songs, total: songs.length })
   } catch (e) {
     res.status(500).json({ success: false, error: '获取歌曲失败', code: 'SERVER_ERROR' })

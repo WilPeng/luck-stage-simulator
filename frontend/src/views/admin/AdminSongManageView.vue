@@ -47,10 +47,10 @@
     <t-card :bordered="false" class="filter-card">
       <t-form layout="inline">
         <t-form-item label="歌名">
-          <t-input v-model="filters.keyword" placeholder="搜索歌名" clearable @enter="loadSongs" />
+          <t-input v-model="filters.keyword" placeholder="搜索歌名" clearable @enter="resetPageAndLoad" />
         </t-form-item>
         <t-form-item label="类型">
-          <t-select v-model="filters.type" placeholder="全部" clearable style="width: 120px" @change="loadSongs">
+          <t-select v-model="filters.type" placeholder="全部" clearable style="width: 120px" @change="resetPageAndLoad">
             <t-option value="solo" label="独唱" />
             <t-option value="duet" label="合唱" />
             <t-option value="group" label="团秀" />
@@ -58,7 +58,7 @@
           </t-select>
         </t-form-item>
         <t-form-item label="风格">
-          <t-select v-model="filters.style" placeholder="全部" clearable style="width: 120px" @change="loadSongs">
+          <t-select v-model="filters.style" placeholder="全部" clearable style="width: 120px" @change="resetPageAndLoad">
             <t-option value="流行" label="流行" />
             <t-option value="摇滚" label="摇滚" />
             <t-option value="民谣" label="民谣" />
@@ -67,7 +67,7 @@
           </t-select>
         </t-form-item>
         <t-form-item label="歌手性别">
-          <t-select v-model="filters.singerGender" placeholder="全部" clearable style="width: 120px" @change="loadSongs">
+          <t-select v-model="filters.singerGender" placeholder="全部" clearable style="width: 120px" @change="resetPageAndLoad">
             <t-option value="male" label="男歌手" />
             <t-option value="female" label="女歌手" />
           </t-select>
@@ -84,9 +84,7 @@
         :data="songs"
         :columns="columns"
         row-key="id"
-        :pagination="pagination"
         :loading="loading"
-        @page-change="onPageChange"
         size="medium"
       >
         <template #difficulty="{ row }">
@@ -118,6 +116,17 @@
           </t-space>
         </template>
       </t-table>
+      <div class="songs-pager">
+        <t-pagination
+          v-model="pagination.page"
+          :total="pagination.total"
+          :page-size="pagination.pageSize"
+          :page-size-options="[10, 20, 50, 100]"
+          show-jumper
+          @change="resetPageAndLoad"
+          @page-size-change="onPageSizeChange"
+        />
+      </div>
     </t-card>
 
     <!-- 新增/编辑弹窗 -->
@@ -286,7 +295,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { AddIcon, FileIcon, RocketIcon } from 'tdesign-icons-vue-next'
-import { getSongs, createSong, updateSong, deleteSong, deleteAllSongs, batchCreateSongs, randomSong } from '../../services/api'
+import { getSongs, getSongsPaged, createSong, updateSong, deleteSong, deleteAllSongs, batchCreateSongs, randomSong } from '../../services/api'
 import type { Song } from '../../types/song'
 
 // 筛选条件
@@ -316,9 +325,21 @@ const batchSaving = ref(false)
 const csvImportInput = ref<HTMLInputElement | null>(null)
 const csvImporting = ref(false)
 
-// CSV 导出：把当前歌曲列表导出为表格（UTF-8 BOM，兼容 Excel 中文）
-function exportSongsCsv() {
-  if (songs.value.length === 0) {
+// CSV 导出：导出全部（按当前筛选）歌曲（UTF-8 BOM，兼容 Excel 中文）
+async function exportSongsCsv() {
+  let all: Song[] = []
+  try {
+    all = await getSongs({
+      type: filters.type || undefined,
+      style: filters.style || undefined,
+      keyword: filters.keyword || undefined,
+      singerGender: filters.singerGender || undefined
+    } as any)
+  } catch (e: any) {
+    MessagePlugin.error('导出失败: ' + (e?.message || ''))
+    return
+  }
+  if (!all.length) {
     MessagePlugin.warning('没有可导出的歌曲')
     return
   }
@@ -548,14 +569,16 @@ function genderLabel(gender?: string) {
 async function loadSongs() {
   loading.value = true
   try {
-    const data = await getSongs({
+    const res = await getSongsPaged({
+      page: pagination.page,
+      pageSize: pagination.pageSize,
       type: filters.type || undefined,
       style: filters.style || undefined,
       keyword: filters.keyword || undefined,
       singerGender: filters.singerGender || undefined
-    } as any)
-    songs.value = data
-    pagination.total = data.length
+    })
+    songs.value = res.list
+    pagination.total = res.total
   } catch (e: any) {
     MessagePlugin.error('加载歌曲列表失败: ' + e.message)
   } finally {
@@ -568,12 +591,19 @@ function resetFilters() {
   filters.type = ''
   filters.style = ''
   filters.singerGender = ''
+  pagination.page = 1
   loadSongs()
 }
 
-function onPageChange(pageInfo: any) {
-  pagination.page = pageInfo.current
-  pagination.pageSize = pageInfo.pageSize
+function onPageSizeChange(size: number) {
+  pagination.pageSize = size
+  pagination.page = 1
+  loadSongs()
+}
+
+function resetPageAndLoad() {
+  pagination.page = 1
+  loadSongs()
 }
 
 function editSong(song: Song) {
