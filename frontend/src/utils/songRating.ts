@@ -56,38 +56,31 @@ export function computeRatingFaces(attrs: Attrs, song: SongLike): RatingInfo {
 
   const deficit = Math.max(0, baseVocal - (attrs.vocal ?? 0)) + Math.max(0, baseDance - (attrs.dance ?? 0))
   const deficitSteps = deficit > 0 ? Math.ceil(deficit / risk) : 0
-  let cPenalty = 0
-  let dPenalty = 0
-  if (deficitSteps > 0) {
-    const x = deficitSteps / d
-    const pC = x <= 1 ? x : Math.max(1 / d, 2 - x)
-    const pD = x <= 1 ? 0 : Math.min(1 - 1 / d, x - 1)
-    cPenalty = Math.round(pC * d)
-    dPenalty = Math.round(pD * d)
-    if (cPenalty + dPenalty > d) {
-      dPenalty = Math.max(0, Math.min(dPenalty, d - 1))
-      cPenalty = d - dPenalty
-    }
-    if (dPenalty > 0 && cPenalty < 1) cPenalty = 1
-  }
 
   const normalA = Math.min(Math.max(steps - (d - 1), 0), Math.max(0, d - 2))
   const normalAPlusB = Math.min(steps, d - 1)
   const normalB = Math.max(0, normalAPlusB - normalA)
   const normalC = d - normalAPlusB
 
+  // 未达标惩罚：每缺「1 倍风险值」先把最优面降为 C（直至 100% C），
+  // 多余的部分再从 C 转为 D（至少保留 1 面 C）。
   let a = normalA
   let b = normalB
-  let c = normalC + cPenalty
-  let penalty = cPenalty + dPenalty
-  const takeA = Math.min(a, penalty); a -= takeA; penalty -= takeA
-  const takeB = Math.min(b, penalty); b -= takeB; penalty -= takeB
-  if (penalty > 0) { const t = Math.min(c, penalty); c -= t; penalty -= t }
+  let c = normalC
+  let dFace = 0
+  let rem = deficitSteps
+  const demoteA = Math.min(a, rem); a -= demoteA; c += demoteA; rem -= demoteA
+  const demoteB = Math.min(b, rem); b -= demoteB; c += demoteB; rem -= demoteB
+  if (rem > 0 && c > 1) {
+    const conv = Math.min(rem, c - 1)
+    c -= conv
+    dFace += conv
+  }
 
   return {
     mainAttr, difficulty: d, risk, baseVocal, baseDance, mainBase,
     excess, steps, deficit, deficitSteps,
-    faces: { a, b, c, d: dPenalty, total: d }
+    faces: { a, b, c, d: dFace, total: d }
   }
 }
 
