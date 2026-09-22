@@ -10,14 +10,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ========================================
+      # 1. Checkout
+      # ========================================
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ========================================
+      # 2. Setup pnpm
+      # ========================================
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10
 
+      # ========================================
+      # 3. Setup Node.js
+      # ========================================
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -25,17 +34,31 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
+      # ========================================
+      # 4. Install frontend dependencies
+      # ========================================
       - name: Install frontend dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
+      # ========================================
+      # 5. Build frontend
+      # ========================================
       - name: Build frontend
         working-directory: frontend
         run: pnpm build
 
+      # ========================================
+      # 6. Pack frontend
+      # ========================================
       - name: Pack frontend
-        run: tar -czf frontend-dist.tar.gz -C frontend/dist .
+        run: |
+          tar -czf frontend-dist.tar.gz \
+            -C frontend/dist .
 
+      # ========================================
+      # 7. Pack backend
+      # ========================================
       - name: Pack backend
         run: |
           tar -czf backend.tar.gz \
@@ -45,6 +68,9 @@ jobs:
             --exclude='backend/*.log' \
             backend
 
+      # ========================================
+      # 8. Upload frontend package
+      # ========================================
       - name: Upload frontend package
         uses: appleboy/scp-action@v1
         with:
@@ -54,6 +80,9 @@ jobs:
           source: "frontend-dist.tar.gz"
           target: "/tmp"
 
+      # ========================================
+      # 9. Upload backend package
+      # ========================================
       - name: Upload backend package
         uses: appleboy/scp-action@v1
         with:
@@ -63,6 +92,9 @@ jobs:
           source: "backend.tar.gz"
           target: "/tmp"
 
+      # ========================================
+      # 10. Deploy application
+      # ========================================
       - name: Deploy application
         uses: appleboy/ssh-action@v1
         with:
@@ -81,6 +113,8 @@ jobs:
 
             tar -xzf /tmp/frontend-dist.tar.gz \
               -C /tmp/luck-stage-frontend
+
+            echo "Replacing frontend files..."
 
             rm -rf /var/www/luck-stage-simulator/*
             cp -r /tmp/luck-stage-frontend/* \
@@ -126,17 +160,35 @@ jobs:
               npm install --omit=dev
             fi
 
-            echo "Restarting backend..."
+            echo "Backend dependencies installed."
 
-            pm2 restart luck-stage-backend --update-env
+            echo "================================"
+            echo "Restart Backend"
+            echo "================================"
 
-            echo "Checking backend..."
+            echo "Restarting luck-stage-backend with admin PM2..."
+
+            sudo -u admin \
+              PM2_HOME=/home/admin/.pm2 \
+              pm2 restart luck-stage-backend --update-env
+
+            echo "PM2 status:"
+
+            sudo -u admin \
+              PM2_HOME=/home/admin/.pm2 \
+              pm2 status luck-stage-backend
+
+            echo "Backend process restarted."
+
+            echo "================================"
+            echo "Check Backend"
+            echo "================================"
 
             sleep 2
 
             curl -f http://127.0.0.1:3000/ || exit 1
 
-            echo "Backend deployed."
+            echo "Backend health check passed."
 
             echo "================================"
             echo "Reload Nginx"
@@ -145,14 +197,19 @@ jobs:
             nginx -t
             systemctl reload nginx
 
+            echo "Nginx reloaded."
+
             echo "================================"
             echo "Cleanup"
             echo "================================"
 
             rm -rf /tmp/luck-stage-frontend
             rm -rf /tmp/luck-stage-backend
+
             rm -f /tmp/frontend-dist.tar.gz
             rm -f /tmp/backend.tar.gz
+
+            echo "Temporary files cleaned."
 
             echo "================================"
             echo "DEPLOY SUCCESS"
