@@ -56,18 +56,11 @@
               <div class="song-option-info">
                 <span class="song-option-name">{{ opt.songName }}</span>
                 <span class="song-option-style">{{ opt.style }}</span>
-                <div class="song-option-meta">
-                  <span>🎲 {{ opt.difficulty ?? '-' }} 面骰</span>
-                  <span>⚠️ 风险 {{ opt.risk ?? '-' }}</span>
-                  <span>🎤 基准V {{ opt.baseVocal ?? '-' }}</span>
-                  <span>💃 基准D {{ opt.baseDance ?? '-' }}</span>
-                  <span class="meta-main">★ {{ mainAttrLabel(opt.mainAttribute) }}</span>
-                </div>
                 <span class="song-option-count">{{ opt.memberCount }}/{{ opt.maxMembers }} 人</span>
               </div>
               <div class="song-option-actions">
                 <t-button variant="outline" size="small" @click="toggleDetail(opt.songId)">
-                  {{ expandedSongId === opt.songId ? '收起' : '概率详情' }}
+                  {{ expandedSongId === opt.songId ? '收起' : '详情 / 概率' }}
                 </t-button>
                 <t-button
                   v-if="songReleased && !(myTeam && songOptions.find(o => o.teamId === myTeam.id)?.songId === opt.songId)"
@@ -82,6 +75,13 @@
                 <t-tag v-else-if="myTeam && songOptions.find(o => o.teamId === myTeam.id)?.songId === opt.songId" theme="success" variant="light">已选</t-tag>
                 <t-tag v-else theme="default" variant="light">满员</t-tag>
               </div>
+            </div>
+            <div v-if="expandedSongId === opt.songId" class="song-option-meta">
+              <span>🎲 {{ opt.difficulty ?? '-' }} 面骰</span>
+              <span>⚠️ 风险 {{ opt.risk ?? '-' }}</span>
+              <span>🎤 基准V {{ opt.baseVocal ?? '-' }}</span>
+              <span>💃 基准D {{ opt.baseDance ?? '-' }}</span>
+              <span class="meta-main">★ {{ mainAttrLabel(opt.mainAttribute) }}</span>
             </div>
             <SongRatingDetail v-if="expandedSongId === opt.songId" :song="opt" :attributes="myAttrs" />
           </div>
@@ -336,6 +336,7 @@ onBeforeUnmount(() => {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+    margin-top: 8px;
 
     span {
       font-size: 11px;

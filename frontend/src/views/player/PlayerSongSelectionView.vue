@@ -62,7 +62,12 @@
             <span>⚠ {{ claimedSong.song?.risk ?? 10 }}</span>
             <span>⭐ {{ claimedSong.song?.difficulty || 3 }}难度</span>
           </div>
-          <SongRatingDetail :song="claimedSong.song" :attributes="myAttrs" />
+          <div class="detail-toggle-row">
+            <t-button variant="outline" size="small" @click="toggleDetail('claimed')">
+              {{ isDetailOpen('claimed') ? '收起评级详情' : '查看评级详情' }}
+            </t-button>
+          </div>
+          <SongRatingDetail v-if="isDetailOpen('claimed')" :song="claimedSong.song" :attributes="myAttrs" />
         </div>
       </div>
 
@@ -159,7 +164,12 @@
             <span>⚠ {{ claimedSong.song?.risk ?? 10 }}</span>
             <span>⭐ {{ claimedSong.song?.difficulty || 3 }}难度</span>
           </div>
-          <SongRatingDetail :song="claimedSong.song" :attributes="myAttrs" />
+          <div class="detail-toggle-row">
+            <t-button variant="outline" size="small" @click="toggleDetail('claimed')">
+              {{ isDetailOpen('claimed') ? '收起评级详情' : '查看评级详情' }}
+            </t-button>
+          </div>
+          <SongRatingDetail v-if="isDetailOpen('claimed')" :song="claimedSong.song" :attributes="myAttrs" />
         </div>
       </div>
       <!-- 等待中 / 按歌分组未选歌 -->
@@ -199,7 +209,12 @@
               <span class="result-stat">基准D：{{ rs.song?.baseDance ?? 30 }}</span>
               <span class="result-stat">风险值：{{ rs.song?.risk ?? 10 }}</span>
             </div>
-            <SongRatingDetail :song="rs.song" :attributes="myAttrs" />
+            <div class="detail-toggle-row">
+              <t-button variant="outline" size="small" @click="toggleDetail(rs.id)">
+                {{ isDetailOpen(rs.id) ? '收起评级概率' : '查看评级概率' }}
+              </t-button>
+            </div>
+            <SongRatingDetail v-if="isDetailOpen(rs.id)" :song="rs.song" :attributes="myAttrs" />
           </div>
         </div>
 
@@ -240,6 +255,17 @@ const myAttrs = computed(() => {
   const a = (authStore.currentUser as any)?.attributes || {}
   return { vocal: a.vocal ?? 0, dance: a.dance ?? 0, charm: a.charm ?? 0 }
 })
+
+// 评级概率详情：仅在展开时才挂载/计算，加快首屏
+const expandedDetailKeys = ref<string[]>([])
+function isDetailOpen(key: string): boolean {
+  return expandedDetailKeys.value.includes(key)
+}
+function toggleDetail(key: string) {
+  expandedDetailKeys.value = isDetailOpen(key)
+    ? expandedDetailKeys.value.filter(k => k !== key)
+    : [...expandedDetailKeys.value, key]
+}
 
 // 并发阶段释放状态
 const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
@@ -974,5 +1000,11 @@ color: var(--text-primary);
       font-size: 14px;
     }
   }
+}
+
+.detail-toggle-row {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>
