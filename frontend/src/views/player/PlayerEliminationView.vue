@@ -95,7 +95,11 @@
         >
           <span class="pk-player-name">{{ p.playerName }}</span>
           <span class="pk-player-team">{{ p.teamName || '未组队' }}</span>
-          <span v-if="p.votes !== null && p.votes > 0" class="pk-player-votes">{{ p.votes }}票</span>
+          <VoteRevealDigits
+            v-if="p.votes !== null && p.votes !== undefined && p.votes > 0"
+            :votes="p.votes || 0"
+            :reveal="(pendingPk as any).voteReveal?.[p.playerId] || {}"
+          />
           <span v-else class="pk-player-waiting">
             {{ pendingPk.status === 'proposed' ? '等待管理员发起' : '大众评审投票中...' }}
           </span>
@@ -188,6 +192,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import VoteRevealDigits from '../../components/common/VoteRevealDigits.vue'
+import { useSfRefresh } from '../../composables/useSfRefresh'
 import { useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useAuthStore } from '../../stores/authStore'
@@ -350,6 +356,9 @@ async function loadAll() {
     console.warn('[PlayerElimination] 加载失败:', e)
   }
 }
+
+// websocket：管理员揭晓 PK 票数时选手端实时刷新
+useSfRefresh(() => { loadAll() })
 
 onMounted(async () => {
   await Promise.all([

@@ -243,6 +243,18 @@ router.get('/pk/history', auth, async (req, res) => {
   }
 })
 
+// POST /api/elimination/pk/reveal-digit - 逐位揭晓 PK 得票（百/十/个）
+router.post('/pk/reveal-digit', auth, requireAdmin, async (req, res) => {
+  try {
+    const { pkId, playerId, digit, revealed } = req.body || {}
+    const data = await eliminationService.revealPkVoteDigit(pkId, playerId, digit, revealed)
+    res.json({ success: true, data })
+  } catch (e) {
+    console.error('Reveal PK digit error:', e)
+    res.status(400).json({ success: false, error: e.message || '揭晓失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // POST /api/elimination/pk/:pkId/vote - 生成 PK 投票（1000 评审三选一）
 router.post('/pk/:pkId/vote', auth, requireAdmin, async (req, res) => {
   try {

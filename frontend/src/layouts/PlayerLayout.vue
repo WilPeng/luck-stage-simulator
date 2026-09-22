@@ -306,7 +306,7 @@ const ACTION_TO_STAGE: Record<string, StageType> = {
 }
 
 // 各轮次的分组模式（按歌分组时组队入口指向选歌页，不显示独立选歌）
-const groupingModeCache = ref<Record<number, 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft'>>({})
+const groupingModeCache = ref<Record<number, 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft' | 'free'>>({})
 
 async function loadGroupingMode(round: number) {
   try {
@@ -317,7 +317,7 @@ async function loadGroupingMode(round: number) {
   }
 }
 
-function getGroupingMode(round: number): 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft' {
+function getGroupingMode(round: number): 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft' | 'free' {
   return groupingModeCache.value[round] || 'captain'
 }
 
@@ -389,7 +389,9 @@ function getStagePath(round: number, stage: StageType): string {
       ? `${prefix}/player/round/${round}/song-group`
       : groupingMode === 'captain_choice'
         ? `${prefix}/player/round/${round}/captain-choice`
-        : `${prefix}/player/round/${round}/team`,
+        : groupingMode === 'free'
+          ? `${prefix}/player/round/${round}/free-team`
+          : `${prefix}/player/round/${round}/team`,
     song_select: `${prefix}/player/round/${round}/song-selection`,
     captain_choice: `${prefix}/player/round/${round}/captain-choice`,
     training: `${prefix}/player/round/${round}/training`,

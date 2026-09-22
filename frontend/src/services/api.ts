@@ -1060,7 +1060,7 @@ export async function getMyCaptainPreference(roundId: string): Promise<{ preferr
 }
 
 // 获取本轮分组模式（选手/管理员均可读）
-export const GROUPING_MODES = ['captain', 'song', 'captain_choice', 'random', 'balanced', 'captain_draft'] as const
+export const GROUPING_MODES = ['captain', 'song', 'captain_choice', 'random', 'balanced', 'captain_draft', 'free'] as const
 export type GroupingMode = typeof GROUPING_MODES[number]
 export async function getGroupingMode(roundId: string): Promise<GroupingMode> {  return safeCall(
     () => doRequest<{ groupingMode: string }>(`/teams/grouping-mode?roundId=${roundId}`),
@@ -1078,6 +1078,17 @@ export async function autoFormTeams(roundId: string, mode: GroupingMode, captain
     method: 'POST',
     body: JSON.stringify({ roundId, mode, captainIds })
   })
+}
+
+// 自由组建：队伍列表 / 加入 / 退出
+export async function getFreeTeams(roundId: string | number): Promise<any> {
+  return doRequest<any>(`/teams/free/list?roundId=${encodeURIComponent(String(roundId))}`)
+}
+export async function joinFreeTeam(roundId: string | number, teamId: string): Promise<any> {
+  return doRequest<any>('/teams/free/join', { method: 'POST', body: JSON.stringify({ roundId, teamId }) })
+}
+export async function leaveFreeTeam(roundId: string | number): Promise<any> {
+  return doRequest<any>('/teams/free/leave', { method: 'POST', body: JSON.stringify({ roundId }) })
 }
 
 export async function getAllCaptainPreferences(roundId: string): Promise<{ preferences: { playerId: string; playerName: string; preferredCaptainId: string; preferredCaptainName: string; teamId: string }[]; count: number }> {
@@ -2317,8 +2328,15 @@ export async function generatePkVotes(pkId: string): Promise<EliminationPk> {
   )
 }
 
-export async function getPkDetail(pkId: string): Promise<EliminationPk> {
-  return safeCall(
+// 逐位揭晓 PK 得票（百/十/个）
+export async function revealPkVoteDigit(pkId: string, playerId: string, digit: 'hundreds' | 'tens' | 'units', revealed = true): Promise<any> {
+  return doRequest<any>('/elimination/pk/reveal-digit', {
+    method: 'POST',
+    body: JSON.stringify({ pkId, playerId, digit, revealed })
+  })
+}
+
+export async function getPkDetail(pkId: string): Promise<EliminationPk> {  return safeCall(
     () => doRequest<EliminationPk>(`/elimination/pk/${pkId}`),
     async () => { throw new Error('PK 详情仅在连接后端时可用') },
     'getPkDetail'

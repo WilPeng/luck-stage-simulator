@@ -178,7 +178,7 @@ async function setupTeams(req, res) {
     const rIdx = round ? round.index : null
 
     // 保存分组模式到 Round（如传入）
-    if (round && ['captain', 'song', 'captain_choice', 'random', 'balanced', 'captain_draft'].includes(groupingMode)) {
+    if (round && ['captain', 'song', 'captain_choice', 'random', 'balanced', 'captain_draft', 'free'].includes(groupingMode)) {
       round.groupingMode = groupingMode
       round.updatedAt = new Date().toISOString()
       if (typeof round.save === 'function') {
@@ -517,6 +517,94 @@ router.post('/auto-form', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error('auto-form error:', e)
     res.status(500).json({ success: false, error: '自动组队失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== 自由组建（free）：选手自行加入队伍 =====
+// GET /api/teams/free/list
+router.get('/free/list', auth, async (req, res) => {
+  try {
+    const round = await getRound(req.query.roundId)
+    const rId = round ? round.id : (req.query.roundId || null)
+    if (!rId) return res.status(400).json({ success: false, error: '未找到轮次', code: 'NO_ROUND' })
+    const [teams, members, users] = await Promise.all([
+      RoundTeam.find({ roundId: rId }),
+      RoundTeamMember.find({ roundId: rId }),
+      User.find({})
+    ])
+    const userMap = {}
+    for (const u of users) userMap[u.id] = u
+    const myId = req.user.userId
+    let myTeamId = null
+    const byTeam = {}
+    for (const m of members) {
+      if (m.playerId === myId) myTeamId = m.teamId
+      if (!byTeam[m.teamId]) byTeam[m.teamId] = []
+      byTeam[m.teamId].push(m)
+    }
+    const list = teams.sort((a, b) => (a.index || 0) - (b.index || 0)).map(t => ({
+      id: t.id, name: t.name, index: t.index, maxMembers: t.maxMembers, captainId: t.captainId,
+      memberCount: (byTeam[t.id] || []).length,
+      members: (byTeam[t.id] || []).map(m => formatMember(userMap[m.playerId]))
+    }))
+    res.json({ success: true, data: { roundId: rId, myTeamId, teams: list } })
+  } catch (e) {
+    console.error('free list error:', e)
+    res.status(500).json({ success: false, error: '获取队伍失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /api/teams/free/join  { roundId, teamId }
+router.post('/free/join', auth, async (req, res) => {
+  try {
+    const { roundId, teamId } = req.body || {}
+    const pid = req.user.userId
+    const actor = await User.findOne({ id: pid })
+    if (!actor || actor.status === 'eliminated') {
+      return res.status(403).json({ success: false, error: '该选手已被淘汰，无法组队', code: 'ELIMINATED' })
+    }
+    const round = await getRound(roundId)
+    const rId = round ? round.id : (roundId || null)
+    const team = await RoundTeam.findOne({ id: teamId })
+    if (!team) return res.status(404).json({ success: false, error: '队伍不存在', code: 'TEAM_NOT_FOUND' })
+    const existing = await RoundTeamMember.findOne({ roundId: rId, playerId: pid })
+    if (existing) return res.status(409).json({ success: false, error: '你已加入队伍', code: 'ALREADY_IN_TEAM' })
+    const cnt = await RoundTeamMember.countDocuments({ roundId: rId, teamId: team.id })
+    if (cnt >= (team.maxMembers || 5)) {
+      return res.status(409).json({ success: false, error: '该队已满员', code: 'TEAM_FULL' })
+    }
+    const m = new RoundTeamMember({
+      id: generateId(), roundId: rId, roundIndex: round ? round.index : null,
+      teamId: team.id, playerId: pid, createdAt: new Date().toISOString()
+    })
+    await m.save()
+    if (!team.captainId) { team.captainId = pid; await team.save() }
+    logAction(pid, actor.name, req.user.role, ACTION_TYPES.TEAM_CHANGE || 'TEAM_CHANGE', 'team', team.id, `加入队伍 ${team.name}`)
+    res.json({ success: true, data: { teamId: team.id } })
+  } catch (e) {
+    console.error('free join error:', e)
+    res.status(500).json({ success: false, error: '加入队伍失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /api/teams/free/leave  { roundId }
+router.post('/free/leave', auth, async (req, res) => {
+  try {
+    const { roundId } = req.body || {}
+    const pid = req.user.userId
+    const round = await getRound(roundId)
+    const rId = round ? round.id : (roundId || null)
+    const teams = await RoundTeam.find({ roundId: rId, captainId: pid })
+    await RoundTeamMember.deleteMany({ roundId: rId, playerId: pid })
+    for (const team of teams) {
+      const others = await RoundTeamMember.find({ roundId: rId, teamId: team.id })
+      team.captainId = others.length ? others[0].playerId : null
+      await team.save()
+    }
+    res.json({ success: true })
+  } catch (e) {
+    console.error('free leave error:', e)
+    res.status(500).json({ success: false, error: '退出队伍失败', code: 'SERVER_ERROR' })
   }
 })
 

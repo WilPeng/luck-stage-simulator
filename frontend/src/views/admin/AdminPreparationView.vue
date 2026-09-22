@@ -151,7 +151,7 @@ const saving = ref(false)
 const config = reactive({
   teamCount: 5,
   teamSizes: [6, 6, 6, 6, 6] as number[],
-  groupingMode: 'captain' as 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft'
+  groupingMode: 'captain' as 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft' | 'free'
 })
 
 // 组队模式
@@ -160,7 +160,8 @@ const groupingModes = [
   { value: 'captain_choice', icon: '🤝', name: '意向队长分组', desc: '先选队长，选手选意向队长，按匹配分组' },
   { value: 'random', icon: '🎲', name: '随机分组', desc: '管理员一键将全部存活选手随机分入各队' },
   { value: 'balanced', icon: '⚖️', name: '实力均衡分组', desc: '按属性综合分蛇形分配，各队实力尽量均衡' },
-  { value: 'captain_draft', icon: '🐍', name: '队长蛇形选人', desc: '队长由系统按实力选出（或管理员指定），蛇形轮流选人' }
+  { value: 'captain_draft', icon: '🐍', name: '队长蛇形选人', desc: '队长由系统按实力选出（或管理员指定），蛇形轮流选人' },
+  { value: 'free', icon: '🙋', name: '自由组建', desc: '选手自行加入队伍，满员锁定；首位加入者自动成为队长（选手自主决策）' }
 ]
 
 // 可用选手数量（排除管理员和已淘汰的选手）
@@ -248,7 +249,7 @@ async function loadSavedConfig() {
   try {
     const prep = await doRequest<any>(`/admin/round/${currentRound.value}/preparation`, { method: 'GET' })
     if (prep?.groupingMode) {
-        config.groupingMode = ['captain', 'song', 'captain_choice', 'random', 'balanced', 'captain_draft'].includes(prep.groupingMode) ? prep.groupingMode : 'captain'
+        config.groupingMode = ['captain', 'song', 'captain_choice', 'random', 'balanced', 'captain_draft', 'free'].includes(prep.groupingMode) ? prep.groupingMode : 'captain'
     }
   } catch (e) {
     console.warn('[Preparation] 加载分组模式失败:', e)

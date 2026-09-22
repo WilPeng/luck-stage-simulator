@@ -254,7 +254,7 @@ const STAGE_TO_ACTION: Record<string, 'team' | 'song' | 'training' | 'performanc
 }
 
 // 各轮次的分组模式缓存（按歌分组时组队入口指向选歌分组页，不显示独立选歌）
-const groupingModeCache = ref<Record<number, 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft'>>({})
+const groupingModeCache = ref<Record<number, 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft' | 'free'>>({})
 
 async function loadGroupingMode(round: number) {
   try {
@@ -265,7 +265,7 @@ async function loadGroupingMode(round: number) {
   }
 }
 
-function getGroupingMode(round: number): 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft' {
+function getGroupingMode(round: number): 'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft' | 'free' {
   return groupingModeCache.value[round] || 'captain'
 }
 

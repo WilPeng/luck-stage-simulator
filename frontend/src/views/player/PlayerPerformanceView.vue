@@ -1319,9 +1319,15 @@ onBeforeUnmount(() => {
 }
 .team-vote-item {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 10px 8px; border-radius: 10px;
-  background: var(--card-bg); border: 1px solid var(--border-color);
+  padding: 12px 8px; border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(0, 82, 217, 0.06), rgba(0, 0, 0, 0) 70%),
+    var(--card-bg);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
+.team-vote-item:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12); }
 .team-vote-item .tv-name { font-size: 13px; font-weight: 700; }
 .team-vote-item.is-my-team {
   border: 2px solid #ffd700;

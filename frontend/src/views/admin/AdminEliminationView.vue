@@ -205,7 +205,17 @@
                   {{ currentPk.attribute === 'vocal' ? '🎤' : currentPk.attribute === 'dance' ? '💃' : '✨' }}
                   {{ p.weight }}
                 </span>
-                <span v-if="p.votes > 0" class="pk-player-votes">{{ p.votes }}票</span>
+                <div v-if="hasPkVotes" class="pk-player-votes-reveal">
+                  <VoteRevealDigits
+                    :votes="p.votes || 0"
+                    :reveal="(currentPk as any).voteReveal?.[p.playerId] || {}"
+                  />
+                  <div class="pk-reveal-btns">
+                    <t-button size="small" variant="outline" :disabled="(currentPk as any).voteReveal?.[p.playerId]?.hundreds" @click="handleRevealPkDigit(p, 'hundreds')">百</t-button>
+                    <t-button size="small" variant="outline" :disabled="(currentPk as any).voteReveal?.[p.playerId]?.tens" @click="handleRevealPkDigit(p, 'tens')">十</t-button>
+                    <t-button size="small" variant="outline" :disabled="(currentPk as any).voteReveal?.[p.playerId]?.units" @click="handleRevealPkDigit(p, 'units')">个</t-button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -490,6 +500,8 @@ import { useSeasonStore } from '../../stores/seasonStore'
 import { usePerformanceStore } from '../../stores/performanceStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { useAuthStore } from '../../stores/authStore'
+import VoteRevealDigits from '../../components/common/VoteRevealDigits.vue'
+import { revealPkVoteDigit } from '../../services/api'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -790,6 +802,21 @@ const dangerConfirmed = computed(() => !!store.dangerStatus?.confirmed)
 const pkQueue = computed(() => store.pkQueue)
 const pkHistory = computed(() => store.pkHistory)
 const currentPk = ref(store.currentPk)
+
+// 逐位揭晓 PK 得票（百/十/个）
+async function handleRevealPkDigit(p: any, digit: string) {
+  if (!currentPk.value) return
+  try {
+    await revealPkVoteDigit(currentPk.value.id, p.playerId, digit as any, true)
+    const pk: any = currentPk.value
+    pk.voteReveal = pk.voteReveal || {}
+    pk.voteReveal[p.playerId] = pk.voteReveal[p.playerId] || {}
+    pk.voteReveal[p.playerId][digit] = true
+    currentPk.value = { ...pk }
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '揭晓失败')
+  }
+}
 const opponentId1 = ref<string>('')
 const opponentId2 = ref<string>('')
 const pkAttribute = ref<'vocal' | 'dance' | 'charm'>('vocal')
@@ -1467,6 +1494,8 @@ onMounted(async () => {
       font-weight: 700;
       color: #e74c3c;
     }
+    .pk-player-votes-reveal { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .pk-player-votes-reveal .pk-reveal-btns { display: flex; gap: 4px; }
   }
 }
 

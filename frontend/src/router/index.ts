@@ -30,6 +30,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'round/:round/concurrent', name: 'PlayerConcurrent', component: () => import('../views/player/PlayerConcurrentView.vue') },
       { path: 'round/:round/performance-draw', name: 'PlayerPerformanceDraw', component: () => import('../views/player/PlayerPerformanceDrawView.vue') },
       { path: 'round/:round/team', name: 'PlayerTeam', component: () => import('../views/player/PlayerTeamView.vue') },
+      { path: 'round/:round/free-team', name: 'PlayerFreeTeam', component: () => import('../views/player/PlayerFreeTeamView.vue') },
       { path: 'round/:round/song-group', name: 'PlayerSongGroup', component: () => import('../views/player/PlayerSongGroupView.vue') },
       { path: 'round/:round/captain-choice', name: 'PlayerCaptainChoice', component: () => import('../views/player/PlayerCaptainChoiceView.vue') },
       { path: 'round/:round/song-selection', name: 'PlayerSongSelection', component: () => import('../views/player/PlayerSongSelectionView.vue') },

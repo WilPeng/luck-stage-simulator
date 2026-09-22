@@ -1616,9 +1616,20 @@ onMounted(async () => {
 .row-vote-reveal { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .row-vote-reveal .row-reveal-btns { display: flex; gap: 4px; }
 .vote-reveal-section { margin: 16px 0; }
-.vote-teams-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
-.vote-team-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; border-radius: 10px; background: var(--card-bg, #fff); border: 1px solid var(--border-color, #eee); }
-.vote-team-card .vt-name { font-size: 14px; font-weight: 700; }
+.vote-teams-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.vote-team-card {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 18px 14px; border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 215, 0, 0.1), rgba(0, 0, 0, 0) 70%),
+    linear-gradient(160deg, rgba(255, 215, 0, 0.05), rgba(0, 0, 0, 0.03)),
+    var(--card-bg, #fff);
+  border: 1px solid rgba(255, 215, 0, 0.28);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.vote-team-card:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16); }
+.vote-team-card .vt-name { font-size: 15px; font-weight: 800; letter-spacing: 0.5px; }
 .vote-team-card .vt-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 @keyframes revealIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 

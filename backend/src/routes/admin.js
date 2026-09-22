@@ -226,7 +226,7 @@ router.post('/round/:round/preparation', auth, requireAdmin, async (req, res) =>
     round.eliminationCount = eliminationCount !== undefined ? eliminationCount : 5
     round.dangerLineRatio = dangerLineRatio !== undefined ? dangerLineRatio : 0.2
     round.teamStructures = Array.isArray(teamStructures) ? teamStructures : []
-    round.groupingMode = ['captain', 'song', 'captain_choice', 'random', 'balanced', 'captain_draft'].includes(groupingMode) ? groupingMode : 'captain'
+    round.groupingMode = ['captain', 'song', 'captain_choice', 'random', 'balanced', 'captain_draft', 'free'].includes(groupingMode) ? groupingMode : 'captain'
     round.updatedAt = new Date().toISOString()
 
     await round.save()

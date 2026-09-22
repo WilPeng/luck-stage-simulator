@@ -1307,6 +1307,19 @@ function weightedPick(candidates, totalWeight) {
   return candidates[candidates.length - 1].playerId
 }
 
+/** 逐位揭晓 PK 得票（百/十/个） */
+async function revealPkVoteDigit(pkId, playerId, digit, revealed = true) {
+  const pk = await EliminationPk.findOne({ id: pkId })
+  if (!pk) throw new Error('PK 记录不存在')
+  if (!['hundreds', 'tens', 'units'].includes(digit)) throw new Error('digit 非法')
+  pk.voteReveal = pk.voteReveal || {}
+  pk.voteReveal[playerId] = pk.voteReveal[playerId] || {}
+  pk.voteReveal[playerId][digit] = revealed !== false
+  pk.updatedAt = new Date().toISOString()
+  await pk.save()
+  return { pkId, playerId, digit, revealed: pk.voteReveal[playerId][digit] }
+}
+
 module.exports = {
   parseRoundIndex,
   resolveRoundDetail,
@@ -1328,5 +1341,6 @@ module.exports = {
   getPkDetail,
   getPkHistory,
   resolvePk,
-  stopElimination
+  stopElimination,
+  revealPkVoteDigit
 }
