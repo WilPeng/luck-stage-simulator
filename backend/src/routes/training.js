@@ -732,6 +732,11 @@ router.post('/apply-self-select', auth, async (req, res) => {
       return res.status(400).json({ success: false, error: 'selectedAttr 必须是 vocal/dance/charm', code: 'INVALID_PARAM' })
     }
 
+    const actor = await User.findOne({ id: req.user.userId })
+    if (actor && actor.status === 'eliminated') {
+      return res.status(403).json({ success: false, error: '你已被淘汰，无法进行该操作', code: 'ELIMINATED' })
+    }
+
     const record = await TrainingRecord.findOne({ id: recordId })
     if (!record) {
       return res.status(404).json({ success: false, error: '训练记录不存在', code: 'RECORD_NOT_FOUND' })

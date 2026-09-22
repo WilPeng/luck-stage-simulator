@@ -1085,7 +1085,7 @@ async function loadData() {
 }
 
 // websocket：管理员开放/关闭发挥值抽取、切换玩法时实时刷新
-useSfRefresh(() => { loadData() }, '/performance|/concurrent')
+useSfRefresh(() => { loadData() }, /\/(?:performance|concurrent)\//)
 
 onMounted(loadData)
 </script>

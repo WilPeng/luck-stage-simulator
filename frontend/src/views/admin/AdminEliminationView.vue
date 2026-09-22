@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1>PK 淘汰管理</h1>
-        <p>危险队列队首发起 PK，3 人角逐，1000 名评审按属性权重三选一投票</p>
+        <p>危险队列队首发起 PK，{{ pkSize }} 人角逐，1000 名评审按属性权重投票</p>
       </div>
       <t-space>
         <t-button variant="outline" :loading="loading" @click="loadAll">刷新数据</t-button>
@@ -33,6 +33,19 @@
             <span>🔴 危险队列（按喜爱度从低到高）</span>
             <span class="queue-count">{{ pkQueue.length }}人</span>
           </div>
+          <div class="pk-size-control">
+            <span class="field-label">每场 PK 人数</span>
+            <t-input-number
+              :value="pkSize"
+              :min="2"
+              :max="10"
+              :disabled="!!currentPk || pkSizeSaving"
+              theme="column"
+              style="width: 100px"
+              @change="(v: number) => handleSetPkSize(Number(v))"
+            />
+            <span class="pk-size-hint">挑战者 + {{ opponentCount }} 名对手</span>
+          </div>
           <div class="pk-queue-list">
             <div
               v-for="(entry, idx) in pkQueue"
@@ -44,6 +57,10 @@
               <span class="queue-name">{{ entry.playerName }}</span>
               <span class="queue-team">{{ entry.teamName || '未组队' }}</span>
               <span class="queue-votes">{{ entry.popularityVotes }}票</span>
+              <span class="queue-move">
+                <t-button size="small" variant="text" :disabled="idx === 0" @click="moveDanger(idx, -1)">↑</t-button>
+                <t-button size="small" variant="text" :disabled="idx === pkQueue.length - 1" @click="moveDanger(idx, 1)">↓</t-button>
+              </span>
             </div>
             <t-empty v-if="pkQueue.length === 0" description="危险队列已清空" />
           </div>
@@ -59,10 +76,13 @@
                   <span class="pk-index">第 {{ pk.pkIndex }} 场</span>
                   <span class="pk-attribute">{{ attributeName(pk.attribute) }}</span>
                   <span class="pk-status" :class="pk.status">{{ pk.status === 'resolved' ? '已裁定' : '进行中' }}</span>
+                  <t-popconfirm content="确定撤回该场 PK？将删除该记录并恢复队列。" @confirm="handleRevokePk(pk)">
+                    <t-button size="small" theme="danger" variant="text">撤回</t-button>
+                  </t-popconfirm>
                 </div>
                 <div class="pk-history-players">
                   <div v-for="p in pk.players" :key="p.playerId" class="pk-history-player">
-                    <span class="pk-history-name">{{ p.playerName }}</span>
+                    <span class="pk-history-name" :style="{ background: pkPlayerColor(p.playerId) }">{{ p.playerName }}</span>
                     <span v-if="p.votes > 0" class="pk-history-votes">{{ p.votes }}票</span>
                     <span v-if="p.decision" class="pk-history-decision" :class="p.decision">{{ decisionText(p.decision) }}</span>
                   </div>
@@ -145,20 +165,16 @@
               <t-empty v-else description="队列为空" :size="'small'" />
             </div>
 
-            <!-- 选择对手（两个下拉框互斥去重） -->
+            <!-- 选择对手（动态数量，互斥去重） -->
             <div class="pk-field">
-              <span class="field-label">选择 2 名对手（从危险队列中选择）</span>
+              <span class="field-label">选择 {{ opponentCount }} 名对手（从危险队列中选择）</span>
               <div class="opponent-select">
                 <t-select
-                  v-model="opponentId1"
-                  :options="opponentOptions1"
-                  placeholder="选择第一名对手"
-                  clearable
-                />
-                <t-select
-                  v-model="opponentId2"
-                  :options="opponentOptions2"
-                  placeholder="选择第二名对手"
+                  v-for="i in opponentSlots"
+                  :key="i"
+                  v-model="opponentIds[i]"
+                  :options="opponentOptionsFor(i)"
+                  :placeholder="`选择第 ${i + 1} 名对手`"
                   clearable
                 />
               </div>
@@ -492,16 +508,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useEliminationStore } from '../../stores/eliminationStore'
 import { useSeasonStore } from '../../stores/seasonStore'
 import { usePerformanceStore } from '../../stores/performanceStore'
 import { useTeamStore } from '../../stores/teamStore'
+import { useSfRefresh } from '../../composables/useSfRefresh'
 import { useAuthStore } from '../../stores/authStore'
 import VoteRevealDigits from '../../components/common/VoteRevealDigits.vue'
-import { revealPkVoteDigit } from '../../services/api'
+import { revealPkVoteDigit, revokePk, reorderDangerList, setPkSize } from '../../services/api'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -817,34 +834,90 @@ async function handleRevealPkDigit(p: any, digit: string) {
     MessagePlugin.error(e?.message || '揭晓失败')
   }
 }
-const opponentId1 = ref<string>('')
-const opponentId2 = ref<string>('')
+
+// 撤回（删除）一场 PK
+async function handleRevokePk(pk: any) {
+  try {
+    await revokePk(pk.id)
+    MessagePlugin.success('已撤回该场 PK')
+    await Promise.all([
+      store.fetchPkQueue(currentRound.value),
+      store.fetchPkHistory(currentRound.value)
+    ])
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '撤回失败')
+  }
+}
+
+// 手动调整危险名单顺序
+async function moveDanger(idx: number, dir: -1 | 1) {
+  const list = store.pkQueue || []
+  const t = idx + dir
+  if (t < 0 || t >= list.length) return
+  const ids = list.map((e: any) => e.playerId)
+  ;[ids[idx], ids[t]] = [ids[t], ids[idx]]
+  try {
+    await reorderDangerList(currentRound.value, ids)
+    await store.fetchPkQueue(currentRound.value)
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '调整顺序失败')
+  }
+}
+const opponentIds = ref<string[]>([])
 const pkAttribute = ref<'vocal' | 'dance' | 'charm'>('vocal')
 const decisions = ref<Record<string, 'safe' | 'pending' | 'eliminated'>>({})
 const pkStarting = ref(false)
 const voting = ref(false)
 const resolving = ref(false)
 const stopping = ref(false)
+const pkSizeSaving = ref(false)
 
-const opponentOptions1 = computed(() => {
-  const excluded = new Set([opponentId2.value])
+// 每场 PK 人数（挑战者 + pkSize-1 名对手），由管理员可调
+const pkSize = computed(() => Math.max(store.dangerStatus?.pkSize || 3, 2))
+const opponentCount = computed(() => Math.max(pkSize.value - 1, 0))
+const opponentSlots = computed(() => Array.from({ length: opponentCount.value }, (_, i) => i))
+
+watch(opponentCount, (n) => {
+  const arr = opponentIds.value.slice(0, n)
+  while (arr.length < n) arr.push('')
+  opponentIds.value = arr
+}, { immediate: true })
+
+function opponentOptionsFor(index: number) {
+  const chosenElsewhere = new Set(
+    opponentIds.value.filter((id, i) => i !== index && id)
+  )
   return pkQueue.value
     .filter(e => e.playerId !== pkQueue.value[0]?.playerId)
-    .filter(e => !excluded.has(e.playerId))
+    .filter(e => !chosenElsewhere.has(e.playerId))
     .map(e => ({ label: e.playerName, value: e.playerId }))
-})
-
-const opponentOptions2 = computed(() => {
-  const excluded = new Set([opponentId1.value])
-  return pkQueue.value
-    .filter(e => e.playerId !== pkQueue.value[0]?.playerId)
-    .filter(e => !excluded.has(e.playerId))
-    .map(e => ({ label: e.playerName, value: e.playerId }))
-})
+}
 
 const canStartPk = computed(() => {
-  return pkQueue.value.length >= 3 && !!opponentId1.value && !!opponentId2.value && opponentId1.value !== opponentId2.value
+  if (opponentCount.value <= 0) return false
+  if (pkQueue.value.length < pkSize.value) return false
+  if (opponentIds.value.length !== opponentCount.value) return false
+  if (!opponentIds.value.every(Boolean)) return false
+  return new Set(opponentIds.value).size === opponentIds.value.length
 })
+
+// 调整 PK 人数
+async function handleSetPkSize(val: number) {
+  if (!val || val === pkSize.value) return
+  pkSizeSaving.value = true
+  try {
+    const status: any = await setPkSize(currentRound.value, val)
+    store.dangerStatus = status
+    if (status?.queue) store.pkQueue = status.queue
+    opponentIds.value = []
+    MessagePlugin.success(`已设置为 ${status?.pkSize ?? val} 人 PK`)
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '调整 PK 人数失败')
+    await store.fetchDangerStatus(currentRound.value)
+  } finally {
+    pkSizeSaving.value = false
+  }
+}
 
 const hasPkVotes = computed(() => {
   return !!currentPk.value && currentPk.value.players.some(p => p.votes && p.votes > 0)
@@ -866,9 +939,7 @@ function decisionText(d: string): string {
 }
 
 function segmentColor(playerId: string): string {
-  const colors = ['#e74c3c', '#f39c12', '#27ae60']
-  const idx = currentPk.value?.players.findIndex(p => p.playerId === playerId) ?? 0
-  return colors[Math.max(idx, 0) % colors.length]
+  return pkPlayerColor(playerId)
 }
 
 // 需求3：颜色从后端读取（固定不变，全员一致），兜底按队列顺序
@@ -936,7 +1007,7 @@ async function handleLaunchFromProposal() {
 
 async function handleStartPk() {
   if (!canStartPk.value) {
-    MessagePlugin.warning('请选择 2 名不同的对手')
+    MessagePlugin.warning(`请选择 ${opponentCount.value} 名不同的对手`)
     return
   }
   pkStarting.value = true
@@ -944,7 +1015,7 @@ async function handleStartPk() {
     await store.doStartPk({
       round: currentRound.value,
       challengerId: pkQueue.value[0].playerId,
-      opponentIds: [opponentId1.value, opponentId2.value],
+      opponentIds: opponentIds.value.filter(Boolean),
       attribute: pkAttribute.value
     })
     currentPk.value = store.currentPk
@@ -953,8 +1024,7 @@ async function handleStartPk() {
     if (currentPk.value) {
       currentPk.value.players.forEach(p => { decisions.value[p.playerId] = 'safe' })
     }
-    opponentId1.value = ''
-    opponentId2.value = ''
+    opponentIds.value = []
     MessagePlugin.success('PK 已发起')
     await store.fetchPkHistory(currentRound.value)
   } catch (e: any) {
@@ -1019,6 +1089,9 @@ onMounted(async () => {
   await seasonStore.fetchSeason()
   await loadAll()
 })
+
+// 实时同步：危险名单顺序调整 / PK 申请 / 票数揭晓等写入后自动刷新
+useSfRefresh(() => { loadAll() }, '/elimination')
 </script>
 
 <style lang="scss" scoped>
@@ -1343,12 +1416,32 @@ onMounted(async () => {
   font-weight: 700;
   margin-bottom: 14px;
 
-  .queue-count {
+    .queue-count {
+      font-size: 12px;
+      color: #e74c3c;
+      background: rgba(231, 76, 60, 0.1);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+}
+
+.pk-size-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: #f7f8fa;
+  border-radius: 8px;
+
+  .field-label {
+    font-size: 13px;
+    color: #555;
+  }
+
+  .pk-size-hint {
     font-size: 12px;
-    color: #e74c3c;
-    background: rgba(231, 76, 60, 0.1);
-    padding: 2px 8px;
-    border-radius: 10px;
+    color: #999;
   }
 }
 
@@ -1403,6 +1496,7 @@ onMounted(async () => {
     font-weight: 600;
     color: #e74c3c;
   }
+  .queue-move { margin-left: auto; display: inline-flex; gap: 0; }
 }
 
 .panel-title {
@@ -1615,7 +1709,11 @@ onMounted(async () => {
 
       .pk-history-name {
         font-size: 12px;
-        font-weight: 600;
+        font-weight: 700;
+        color: #fff;
+        padding: 2px 10px;
+        border-radius: 10px;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
       }
 
       .pk-history-votes {

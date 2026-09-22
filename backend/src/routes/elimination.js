@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const { auth, requireAdmin } = require('../middleware/auth')
-const { logAction, ACTION_TYPES } = require('../utils/helpers')
+const { logAction, ACTION_TYPES, getCurrentSeason } = require('../utils/helpers')
 const eliminationService = require('../services/eliminationService')
 
 // ====================== 接口 1: GET /api/elimination/stats - 获取淘汰统计 ======================
@@ -167,6 +167,46 @@ router.get('/danger', auth, async (req, res) => {
   }
 })
 
+// POST /api/elimination/danger/reorder - 手动调整危险名单顺序
+router.post('/danger/reorder', auth, requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {}
+    let roundIndex = body.round !== undefined ? parseInt(body.round) : (body.roundIndex !== undefined ? parseInt(body.roundIndex) : undefined)
+    if (roundIndex === undefined || Number.isNaN(roundIndex)) {
+      const season = await getCurrentSeason()
+      roundIndex = season ? season.currentRound : undefined
+    }
+    const ordered = Array.isArray(body.orderedPlayerIds) ? body.orderedPlayerIds : []
+    const status = await eliminationService.reorderDangerList(roundIndex, ordered)
+    res.json({ success: true, data: status })
+  } catch (e) {
+    console.error('Reorder danger error:', e)
+    res.status(400).json({ success: false, error: e.message || '调整顺序失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /api/elimination/danger/pk-size - 调整每场 PK 人数（2~10）
+router.post('/danger/pk-size', auth, requireAdmin, async (req, res) => {
+  try {
+    const body = req.body || {}
+    let roundIndex = body.round !== undefined ? parseInt(body.round) : (body.roundIndex !== undefined ? parseInt(body.roundIndex) : undefined)
+    if (roundIndex === undefined || Number.isNaN(roundIndex)) {
+      const season = await getCurrentSeason()
+      roundIndex = season ? season.currentRound : undefined
+    }
+    const status = await eliminationService.setPkSize(roundIndex, body.pkSize)
+    try {
+      await logAction(req.user.userId, req.user.name, req.user.role,
+        ACTION_TYPES.ELIMINATION || 'ELIMINATION', 'elimination', `round-${roundIndex}`,
+        `调整 PK 人数为 ${status.pkSize} 人`)
+    } catch (logErr) { console.warn(logErr) }
+    res.json({ success: true, data: status })
+  } catch (e) {
+    console.error('Set PK size error:', e)
+    res.status(400).json({ success: false, error: e.message || '调整 PK 人数失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // GET /api/elimination/pk/queue?round= - 获取 PK 队列
 router.get('/pk/queue', auth, async (req, res) => {
   try {
@@ -290,6 +330,21 @@ router.post('/pk/:pkId/resolve', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error('Resolve PK error:', e)
     res.status(400).json({ success: false, error: e.message || '裁定 PK 失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /api/elimination/pk/:pkId/revoke - 撤回（删除）一场 PK
+router.post('/pk/:pkId/revoke', auth, requireAdmin, async (req, res) => {
+  try {
+    const result = await eliminationService.revokePk(req.params.pkId)
+    try {
+      await logAction(req.user.userId, req.user.name, req.user.role,
+        ACTION_TYPES.ELIMINATION || 'ELIMINATION', 'elimination', req.params.pkId, `撤回 PK 记录`)
+    } catch (logErr) { console.warn(logErr) }
+    res.json({ success: true, data: result })
+  } catch (e) {
+    console.error('Revoke PK error:', e)
+    res.status(400).json({ success: false, error: e.message || '撤回 PK 失败', code: 'SERVER_ERROR' })
   }
 })
 

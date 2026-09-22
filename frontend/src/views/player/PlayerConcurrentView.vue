@@ -8,13 +8,13 @@
     <div class="actions-grid">
       <!-- 组队 / 按歌分组 / 意向队长入口（按分组模式跳转） -->
       <router-link
-        :to="`${gamePrefix}/player/round/${currentRound}/${groupingMode === 'song' ? 'song-group' : groupingMode === 'captain_choice' ? 'captain-choice' : 'team'}`"
+        :to="groupingTeamPath"
         class="action-card"
       >
-        <span class="action-icon">{{ groupingMode === 'song' ? '🎵' : groupingMode === 'captain_choice' ? '🤝' : '👥' }}</span>
-        <span class="action-title">{{ groupingMode === 'song' ? '按歌分组' : groupingMode === 'captain_choice' ? '选择意向队长' : '组队' }}</span>
+        <span class="action-icon">{{ groupingIcon }}</span>
+        <span class="action-title">{{ groupingTitle }}</span>
         <span class="action-desc">
-          {{ groupingMode === 'song' ? '选手直接选歌，同歌自动成组' : groupingMode === 'captain_choice' ? '选择你的意向队长' : '申请入队或管理队伍' }}
+          {{ groupingDesc }}
         </span>
         <span class="action-arrow">→</span>
       </router-link>
@@ -85,6 +85,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useTeamStore } from '../../stores/teamStore'
 import { useSongStore } from '../../stores/songStore'
 import { getPlayerPerformanceStatus, getConcurrentReleaseStatus, getGroupingMode } from '../../services/api'
+import type { GroupingMode } from '../../services/api'
 import type { ConcurrentReleaseStatusResponse } from '../../types/season'
 
 const route = useRoute()
@@ -116,7 +117,20 @@ const trainingCompleted = computed(() => {
 const perfValueDrawn = ref(false)
 const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
 const isPerformanceReleased = computed(() => !!releaseStatus.value?.performanceReleased)
-const groupingMode = ref<'captain' | 'song' | 'captain_choice'>('captain')
+const groupingMode = ref<GroupingMode>('captain')
+const groupingTeamPath = computed(() => {
+  const base = `${gamePrefix.value}/player/round/${currentRound.value}`
+  switch (groupingMode.value) {
+    case 'song': return `${base}/song-group`
+    case 'captain_choice': return `${base}/captain-choice`
+    case 'free': return `${base}/free-team`
+    case 'captain_draft': return `${base}/captain-draft`
+    default: return `${base}/team`
+  }
+})
+const groupingIcon = computed(() => ({ song: '🎵', captain_choice: '🤝', free: '🙋', captain_draft: '🐍' } as Record<string, string>)[groupingMode.value] || '👥')
+const groupingTitle = computed(() => ({ song: '按歌分组', captain_choice: '选择意向队长', free: '自由组建', captain_draft: '队长蛇形选人' } as Record<string, string>)[groupingMode.value] || '组队')
+const groupingDesc = computed(() => ({ song: '选手直接选歌，同歌自动成组', captain_choice: '选择你的意向队长', free: '按歌曲自由加入队伍', captain_draft: '队长轮流选人' } as Record<string, string>)[groupingMode.value] || '申请入队或管理队伍')
 let releaseTimer: number | undefined
 let progressTimer: number | undefined
 
@@ -127,7 +141,7 @@ useSfRefresh(() => {
   teamStore.fetchTeams(String(currentRound.value))
   songStore.fetchRoundSongs(String(currentRound.value))
   checkPerfValueDrawn()
-}, '/concurrent|/teams|/songs|/training|/performance')
+}, /\/(?:concurrent|teams|songs|training|performance)\//)
 
 onMounted(() => {
   loadGroupingMode()

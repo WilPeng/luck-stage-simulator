@@ -33,6 +33,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'round/:round/free-team', name: 'PlayerFreeTeam', component: () => import('../views/player/PlayerFreeTeamView.vue') },
       { path: 'round/:round/song-group', name: 'PlayerSongGroup', component: () => import('../views/player/PlayerSongGroupView.vue') },
       { path: 'round/:round/captain-choice', name: 'PlayerCaptainChoice', component: () => import('../views/player/PlayerCaptainChoiceView.vue') },
+      { path: 'round/:round/captain-draft', name: 'PlayerCaptainDraft', component: () => import('../views/player/PlayerCaptainDraftView.vue') },
       { path: 'round/:round/song-selection', name: 'PlayerSongSelection', component: () => import('../views/player/PlayerSongSelectionView.vue') },
       { path: 'round/:round/training', name: 'PlayerTraining', component: () => import('../views/player/PlayerTrainingView.vue') },
       { path: 'round/:round/performance', name: 'PlayerPerformance', component: () => import('../views/player/PlayerPerformanceView.vue') },

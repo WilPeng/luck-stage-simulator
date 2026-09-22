@@ -40,6 +40,12 @@ router.post('/vote', auth, async (req, res) => {
     const { roundId, voteForPlayerIds } = req.body
     const voterId = req.user.userId
 
+    // 已淘汰选手不得参与队长投票
+    const voter = await User.findOne({ id: voterId })
+    if (voter && voter.status === 'eliminated') {
+      return res.status(403).json({ success: false, error: '你已被淘汰，无法参与队长投票', code: 'ELIMINATED' })
+    }
+
     // 参数校验
     if (!Array.isArray(voteForPlayerIds) || voteForPlayerIds.length < 1 || voteForPlayerIds.length > 2) {
       return res.status(400).json({ success: false, error: 'voteForPlayerIds 数组长度须为 1-2', code: 'INVALID_PARAMS' })
@@ -196,7 +202,23 @@ router.post('/admin/assign', auth, requireAdmin, async (req, res) => {
 
     // 更新 RoundTeam.captainId
     const team = await RoundTeam.findOne({ id: teamId })
-    if (team) { team.captainId = pid; await team.save() }
+    if (team) {
+      team.captainId = pid
+      // 需求3：设置队长后同步把队伍名改为「XX团」
+      const capUser = await User.findOne({ id: pid })
+      if (capUser && capUser.name) team.name = `${capUser.name}团`
+      await team.save()
+
+      // 同步更新进行中的选秀队长映射
+      const RoundDraft = require('../models/RoundDraft')
+      const roundIds = [...new Set([team.roundId, team.roundIndex != null ? `round-${team.roundIndex}` : null].filter(Boolean))]
+      const draft = await RoundDraft.findOne({ roundId: { $in: roundIds } })
+      if (draft) {
+        draft.captains = { ...(draft.captains || {}), [team.id]: pid }
+        draft.updatedAt = new Date().toISOString()
+        await draft.save()
+      }
+    }
 
     // 更新用户角色
     const user = await User.findOne({ id: pid })

@@ -9,6 +9,7 @@ const COLLECTIONS = [
   'RoundTeamMember', // 轮次内的成员关系（核心 Player × Round）
   'CaptainVote',     // 队长投票
   'RoundCaptain',    // 管理员指定队长
+  'RoundDraft',      // 队长蛇形选人（互动选秀状态）
   'Song',            // 歌曲库（永久）
   'RoundSong',       // 轮次选歌曲（本轮歌曲清单）
   'TeamSong',        // 队伍选择歌曲（替代 SongAssignment + SongSelection）

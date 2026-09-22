@@ -1554,6 +1554,11 @@ router.post('/player-generate', auth, async (req, res) => {
     const playerId = req.user.userId
     if (!roundId) return res.status(400).json({ success: false, error: 'roundId 必填', code: 'MISSING_ROUND_ID' })
 
+    const actorUser = await User.findOne({ id: playerId })
+    if (actorUser && actorUser.status === 'eliminated') {
+      return res.status(403).json({ success: false, error: '你已被淘汰，无法抽取发挥值', code: 'ELIMINATED' })
+    }
+
     const round = await Round.findOne({ id: roundId })
     let rId = round ? round.id : null
     if (!rId) {
@@ -1756,6 +1761,30 @@ router.get('/player-status', auth, async (req, res) => {
       ratingMap[v.playerId] = { rating: v.rating || null, roll: v.ratingRoll ?? null, faces: v.ratingFaces || null, mainAttr: v.ratingMainAttr || null }
     }
 
+    // 发挥值分位区间与本次公演 charm 加成（与结算口径一致，供选手端展示）
+    const season = await getCurrentSeason()
+    const bonusCfg = (season && season.performanceBonus) || { p1: 0.2, p2: 0.1, p3: 0, p4: -0.1, p5: -0.2 }
+    const lowerBetter = ['reflex', 'memory', 'bomb', 'spot_diff', 'math'].includes(generationMode)
+    const rankedVals = values
+      .filter(v => Number.isFinite(Number(v.performanceValue)))
+      .map(v => ({ playerId: v.playerId, pv: Number(v.performanceValue) }))
+      .sort((a, b) => lowerBetter ? a.pv - b.pv : b.pv - a.pv)
+    const rankedTotal = rankedVals.length || 1
+    const bonusMap = {}
+    const bucketMap = {}
+    rankedVals.forEach((r, i) => {
+      const pct = i / rankedTotal
+      let bonus = bonusCfg.p3 ?? 0
+      let bucket = 3
+      if (pct < 0.2) { bonus = bonusCfg.p1 ?? 0.2; bucket = 1 }
+      else if (pct < 0.4) { bonus = bonusCfg.p2 ?? 0.1; bucket = 2 }
+      else if (pct < 0.6) { bonus = bonusCfg.p3 ?? 0; bucket = 3 }
+      else if (pct < 0.8) { bonus = bonusCfg.p4 ?? -0.1; bucket = 4 }
+      else { bonus = bonusCfg.p5 ?? -0.2; bucket = 5 }
+      bonusMap[r.playerId] = bonus
+      bucketMap[r.playerId] = bucket
+    })
+
     const players = allActiveUsers.map(u => {
       const teamId = teamIdByPlayer[u.id] || null
       return {
@@ -1765,6 +1794,8 @@ router.get('/player-status', auth, async (req, res) => {
         teamName: teamId && teamMap[teamId] ? teamMap[teamId].name : null,
         generated: generatedSet.has(u.id),
         performanceValue: valueMap[u.id] != null ? valueMap[u.id] : null,
+        perfBonus: bonusMap[u.id] != null ? bonusMap[u.id] : null,
+        perfBucket: bucketMap[u.id] != null ? bucketMap[u.id] : null,
         rating: ratingMap[u.id] ? ratingMap[u.id].rating : null,
         ratingRoll: ratingMap[u.id] ? ratingMap[u.id].roll : null,
         ratingFaces: ratingMap[u.id] ? ratingMap[u.id].faces : null,
@@ -1995,6 +2026,9 @@ router.post('/roll-rating', auth, async (req, res) => {
     const uid = req.user.userId
     const user = await User.findOne({ id: uid })
     if (!user) return res.status(404).json({ success: false, error: '用户不存在', code: 'NOT_FOUND' })
+    if (user.status === 'eliminated') {
+      return res.status(403).json({ success: false, error: '你已被淘汰，无法投掷公演评级', code: 'ELIMINATED' })
+    }
 
     // 需要先在训练页确认训练结束，才能投掷公演骰子
     const trStatus = await TrainingStatus.findOne({ roundId: { $in: [dbRoundId, frontRoundId] }, playerId: uid })

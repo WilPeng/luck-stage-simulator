@@ -31,7 +31,7 @@
               <div class="team-captain">队长：<span class="captain-name-highlight">{{ team.captainId ? getCaptainName(team) : '未指定' }}</span></div>
               <div class="team-members-list">
                 <div v-for="member in team.members" :key="member.playerId" class="team-member-item" :class="{ 'is-captain': member.playerId === team.captainId }">
-                  <div class="mini-avatar">{{ getAvatarIcon(member.player?.name) }}</div>
+                  <div class="mini-avatar"><UserAvatar :name="member.player?.name" :avatar="member.player?.avatar" /></div>
                   <span class="team-member-name">{{ member.player?.name || '未知' }}</span>
                   <span v-if="member.playerId === team.captainId" class="captain-mini-badge">队长</span>
                 </div>
@@ -60,7 +60,7 @@
               </div>
               <div class="member-chips">
                 <div v-for="member in myTeam.members" :key="member.playerId" class="member-chip" :class="{ 'chip-captain': member.playerId === myTeam.captainId }">
-                  <div class="chip-avatar">{{ getAvatarIcon(member.player?.name) }}</div>
+                  <div class="chip-avatar"><UserAvatar :name="member.player?.name" :avatar="member.player?.avatar" /></div>
                   <span class="chip-name">{{ member.player?.name || '未知' }}</span>
                   <span v-if="member.playerId === myTeam.captainId" class="chip-badge">👑</span>
                 </div>
@@ -159,7 +159,7 @@
               </div>
               <div class="member-chips">
                 <div v-for="member in myTeam.members" :key="member.playerId" class="member-chip" :class="{ 'chip-captain': member.playerId === myTeam.captainId }">
-                  <div class="chip-avatar">{{ getAvatarIcon(member.player?.name) }}</div>
+                  <div class="chip-avatar"><UserAvatar :name="member.player?.name" :avatar="member.player?.avatar" /></div>
                   <span class="chip-name">{{ member.player?.name || '未知' }}</span>
                   <span v-if="member.playerId === myTeam.captainId" class="chip-badge">👑</span>
                 </div>
@@ -223,7 +223,7 @@
               </div>
               <div class="member-chips">
                 <div v-for="member in myTeam.members" :key="member.playerId" class="member-chip" :class="{ 'chip-captain': member.playerId === myTeam.captainId }">
-                  <div class="chip-avatar">{{ getAvatarIcon(member.player?.name) }}</div>
+                  <div class="chip-avatar"><UserAvatar :name="member.player?.name" :avatar="member.player?.avatar" /></div>
                   <span class="chip-name">{{ member.player?.name || '未知' }}</span>
                   <span v-if="member.playerId === myTeam.captainId" class="chip-badge">👑</span>
                 </div>
@@ -313,6 +313,7 @@ import {
 import type { ConcurrentReleaseStatusResponse } from '../../types/season'
 import type { SongGroupOption } from '../../services/api'
 import StageStatusView from '../../components/StageStatusView.vue'
+import UserAvatar from '../../components/common/UserAvatar.vue'
 
 const route = useRoute()
 const seasonStore = useSeasonStore()

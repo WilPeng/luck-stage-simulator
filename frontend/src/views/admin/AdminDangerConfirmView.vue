@@ -20,7 +20,7 @@
       <div class="confirmed-info">
         <t-alert theme="success" style="margin-bottom: 16px">
           <template #message>
-            危险名单共 {{ dangerStatus.playerIds.length }} 人，已按个人喜爱度从低到高排序。进入淘汰环节后，将从队首开始进行 3 人 PK。
+            危险名单共 {{ dangerStatus.playerIds.length }} 人，已按个人喜爱度从低到高排序。进入淘汰环节后，将从队首开始进行 {{ dangerStatus.pkSize || 3 }} 人 PK。
           </template>
         </t-alert>
         <div class="queue-list">

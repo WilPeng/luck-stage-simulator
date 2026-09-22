@@ -624,6 +624,9 @@ async function getSafeTeams(roundIndex) {
 
 const PK_ATTRIBUTES = ['vocal', 'dance', 'charm']
 const AUDIENCE_COUNT = 1000
+const PK_SIZE_DEFAULT = 3
+const PK_SIZE_MIN = 2
+const PK_SIZE_MAX = 10
 // 危险区选手固定色板（按队列顺序分配，持久化到后端，全员一致展示）
 const DANGER_COLOR_PALETTE = ['#e74c3c', '#f39c12', '#27ae60', '#2980b9', '#8e44ad', '#16a085', '#c0392b', '#d35400', '#2c3e50', '#7f8c8d']
 
@@ -652,17 +655,18 @@ async function getRoundPopularityMap(round) {
 
 /**
  * 组装队列条目：补充选手姓名/队伍/喜爱度信息
+ * @param {boolean} keepOrder - true 时保持传入 playerIds 的顺序（用于管理员手动排序）
  */
-async function buildQueueEntries(round, frontRoundId, playerIds) {
+async function buildQueueEntries(round, frontRoundId, playerIds, keepOrder = false) {
   const users = await User.find({})
   const userMap = {}
   for (const u of users) userMap[u.id] = u
 
-  const members = await RoundTeamMember.find({ roundId: frontRoundId })
+  const members = await RoundTeamMember.find({ roundId: { $in: [round.id, frontRoundId].filter(Boolean) } })
   const playerToTeam = new Map()
   for (const m of members) playerToTeam.set(m.playerId, m.teamId)
 
-  const teams = await RoundTeam.find({ roundId: frontRoundId })
+  const teams = await RoundTeam.find({ roundId: { $in: [round.id, frontRoundId].filter(Boolean) } })
   const teamMap = {}
   for (const t of teams) teamMap[t.id] = t
 
@@ -683,8 +687,10 @@ async function buildQueueEntries(round, frontRoundId, playerIds) {
     }
   })
 
-  // 按个人喜爱度从低到高排序（票数少的排前面）
-  entries.sort((a, b) => a.popularityVotes - b.popularityVotes || a.popularityRank - b.popularityRank)
+  if (!keepOrder) {
+    // 按个人喜爱度从低到高排序（票数少的排前面）
+    entries.sort((a, b) => a.popularityVotes - b.popularityVotes || a.popularityRank - b.popularityRank)
+  }
   return entries
 }
 
@@ -712,7 +718,9 @@ async function confirmDangerList(roundIndex, playerIds) {
   })
   if (validIds.length === 0) throw new Error('没有有效的危险选手')
 
-  // 清除旧的名单与 PK 记录
+  // 清除旧的名单与 PK 记录（保留管理员已设置的 PK 人数）
+  const prevConfirm = await DangerConfirm.findOne({ roundId: round.id })
+  const prevPkSize = normalizePkSize(prevConfirm?.pkSize)
   await DangerConfirm.deleteMany({ roundId: round.id })
   await EliminationPk.deleteMany({ roundId: round.id })
 
@@ -731,6 +739,8 @@ async function confirmDangerList(roundIndex, playerIds) {
     roundIndex,
     playerIds: queue.map(q => q.playerId),
     colors,
+    queueOrder: queue.map(q => q.playerId),
+    pkSize: prevPkSize,
     confirmed: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -757,33 +767,12 @@ async function getDangerStatus(roundIndex, isAdmin = false) {
 
   const confirm = await DangerConfirm.findOne({ roundId: round.id })
   if (!confirm) {
-    return { roundIndex, confirmed: false, playerIds: [], queue: [], colors: {} }
+    return { roundIndex, confirmed: false, playerIds: [], queue: [], colors: {}, pkSize: PK_SIZE_DEFAULT }
   }
 
   // 已处理的选手（被 PK 裁定为安全或淘汰）
   const pks = await EliminationPk.find({ roundId: round.id, status: 'resolved' })
 
-  // 优先使用最近一场 resolved PK 的 queueAfter 快照（保持"待定留在原位置"的语义）
-  let queueSnapshot = null
-  if (pks.length > 0) {
-    const latest = pks[pks.length - 1]
-    if (Array.isArray(latest.queueAfter) && latest.queueAfter.length > 0) {
-      queueSnapshot = latest.queueAfter
-    }
-  }
-
-  if (queueSnapshot) {
-    return {
-      roundIndex,
-      confirmed: true,
-      playerIds: confirm.playerIds,
-      colors: confirm.colors || {},
-      queue: queueSnapshot,
-      pendingPk: sanitizePendingPk(await getPendingPk(round), isAdmin)
-    }
-  }
-
-  // 无历史 PK：按初始确认名单过滤后按喜爱度从低到高排序
   const users = await User.find({})
   const userMap = {}
   for (const u of users) userMap[u.id] = u
@@ -794,25 +783,50 @@ async function getDangerStatus(roundIndex, isAdmin = false) {
       if (p.decision === 'safe' || p.decision === 'eliminated') processedIds.add(p.playerId)
     }
   }
-
-  const remainingIds = confirm.playerIds.filter(pid => {
+  const isActivePending = (pid) => {
     const u = userMap[pid]
     if (!u) return false
     if (u.status === 'eliminated') return false
     if (processedIds.has(pid)) return false
     return true
-  })
+  }
 
-  const queue = await buildQueueEntries(round, frontRoundId, remainingIds)
+  // 队列顺序来源：管理员手动调整的 queueOrder > 最近一场 queueAfter 快照 > 初始名单
+  let baseOrder = null
+  if (Array.isArray(confirm.queueOrder) && confirm.queueOrder.length > 0) {
+    baseOrder = confirm.queueOrder
+  } else if (pks.length > 0) {
+    const latest = pks[pks.length - 1]
+    if (Array.isArray(latest.queueAfter) && latest.queueAfter.length > 0) {
+      baseOrder = latest.queueAfter.map(q => q.playerId)
+    }
+  }
+  if (!baseOrder) baseOrder = confirm.playerIds
+
+  const orderedIds = baseOrder.filter(isActivePending)
+  // 兜底：把名单中遗漏的选手补到队尾
+  for (const pid of (confirm.playerIds || [])) {
+    if (!orderedIds.includes(pid) && isActivePending(pid)) orderedIds.push(pid)
+  }
+
+  const queue = await buildQueueEntries(round, frontRoundId, orderedIds, true)
 
   return {
     roundIndex,
     confirmed: true,
     playerIds: confirm.playerIds,
     colors: confirm.colors || {},
+    pkSize: normalizePkSize(confirm.pkSize),
     queue,
     pendingPk: sanitizePendingPk(await getPendingPk(round), isAdmin)
   }
+}
+
+/** 规范化 PK 人数（2~10，默认 3） */
+function normalizePkSize(size) {
+  const n = parseInt(size)
+  if (!Number.isFinite(n)) return PK_SIZE_DEFAULT
+  return Math.min(Math.max(n, PK_SIZE_MIN), PK_SIZE_MAX)
 }
 
 /**
@@ -878,9 +892,12 @@ async function proposePk(roundIndex, { challengerId, opponentIds, proposerId }) 
   const confirm = await DangerConfirm.findOne({ roundId: round.id })
   if (!confirm || !confirm.confirmed) throw new Error('尚未确认危险名单')
 
+  const pkSize = normalizePkSize(confirm.pkSize)
+  const opponentCount = pkSize - 1
+
   if (!challengerId) throw new Error('缺少挑战者')
-  if (!Array.isArray(opponentIds) || opponentIds.length !== 2) {
-    throw new Error('请选择 2 名对手')
+  if (!Array.isArray(opponentIds) || opponentIds.length !== opponentCount) {
+    throw new Error(`请选择 ${opponentCount} 名对手`)
   }
 
   // 队首必须是挑战者
@@ -898,7 +915,7 @@ async function proposePk(roundIndex, { challengerId, opponentIds, proposerId }) 
   // 对手校验：不能是挑战者、不能重复、必须在危险队列中
   const opponentSet = new Set(opponentIds)
   if (opponentSet.has(challengerId)) throw new Error('对手不能包含挑战者')
-  if (opponentSet.size !== 2) throw new Error('对手不能重复')
+  if (opponentSet.size !== opponentCount) throw new Error('对手不能重复')
   for (const oid of opponentIds) {
     if (!queue.some(q => q.playerId === oid)) {
       throw new Error('对手必须在危险队列中')
@@ -966,6 +983,9 @@ async function startPk(roundIndex, { pkId, challengerId, opponentIds, attribute,
   const confirm = await DangerConfirm.findOne({ roundId: round.id })
   if (!confirm || !confirm.confirmed) throw new Error('尚未确认危险名单')
 
+  const pkSize = normalizePkSize(confirm.pkSize)
+  const opponentCount = pkSize - 1
+
   if (!PK_ATTRIBUTES.includes(attribute)) {
     throw new Error('PK 属性必须为 vocal/dance/charm 之一')
   }
@@ -1001,8 +1021,8 @@ async function startPk(roundIndex, { pkId, challengerId, opponentIds, attribute,
 
   // 场景二：直接发起（管理员）
   if (!challengerId) throw new Error('缺少挑战者')
-  if (!Array.isArray(opponentIds) || opponentIds.length !== 2) {
-    throw new Error('请选择 2 名对手')
+  if (!Array.isArray(opponentIds) || opponentIds.length !== opponentCount) {
+    throw new Error(`请选择 ${opponentCount} 名对手`)
   }
 
   // 队首必须是挑战者
@@ -1020,7 +1040,7 @@ async function startPk(roundIndex, { pkId, challengerId, opponentIds, attribute,
   // 对手必须来自队列中（不能是挑战者自己，不能重复）
   const opponentSet = new Set(opponentIds)
   if (opponentSet.has(challengerId)) throw new Error('对手不能包含挑战者')
-  if (opponentSet.size !== 2) throw new Error('对手不能重复')
+  if (opponentSet.size !== opponentCount) throw new Error('对手不能重复')
   for (const oid of opponentIds) {
     if (!queue.some(q => q.playerId === oid)) {
       throw new Error('对手必须在危险队列中')
@@ -1104,8 +1124,9 @@ async function generatePkVotes(pkId) {
     members = await AudienceMember.insertMany(newMembers)
   }
 
-  // 每位评审按权重三选一
-  const votes = { [pk.players[0].playerId]: 0, [pk.players[1].playerId]: 0, [pk.players[2].playerId]: 0 }
+  // 每位评审按权重在 N 名选手中进行选择
+  const votes = {}
+  for (const p of pk.players) votes[p.playerId] = 0
   const voteDetails = []
   for (let i = 0; i < members.length; i++) {
     let rand = Math.random() * totalWeight
@@ -1160,13 +1181,13 @@ async function getPkHistory(roundIndex, isAdmin = false) {
   return pks.map(pk => {
     const obj = pk.toObject ? pk.toObject() : { ...pk }
     const isResolved = obj.status === 'resolved'
-    // 脱敏：不向选手暴露属性权重，只保留票数与裁定（投票中不展示票数）
+    // 脱敏：不向选手暴露属性权重；票数以「逐位揭晓」方式呈现（未揭晓的位持续滚动）
     obj.players = obj.players.map(p => ({
       playerId: p.playerId,
       playerName: p.playerName,
       teamId: p.teamId || null,
       teamName: p.teamName || null,
-      votes: isAdmin || isResolved ? (p.votes || 0) : null,
+      votes: p.votes || 0,
       decision: p.decision || null
     }))
     // 查票区（每位评审投给谁）；投票中仅管理员可见明细，选手端裁定后可见
@@ -1269,6 +1290,14 @@ async function resolvePk(pkId, decisions) {
 
   await pk.save()
 
+  // 同步危险名单当前队列顺序（供管理员手动排序/双端展示）
+  const confirm = await DangerConfirm.findOne({ roundId: pk.roundId })
+  if (confirm) {
+    confirm.queueOrder = newQueue.map(q => q.playerId)
+    confirm.updatedAt = new Date().toISOString()
+    await confirm.save()
+  }
+
   return {
     pk: pk.toObject(),
     queue: newQueue,
@@ -1320,6 +1349,48 @@ async function revealPkVoteDigit(pkId, playerId, digit, revealed = true) {
   return { pkId, playerId, digit, revealed: pk.voteReveal[playerId][digit] }
 }
 
+/** 撤回一场 PK（删除记录，队列按未裁定重新计算） */
+async function revokePk(pkId) {
+  const pk = await EliminationPk.findOne({ id: pkId })
+  if (!pk) throw new Error('PK 记录不存在')
+  await EliminationPk.deleteMany({ id: pkId })
+  return { id: pkId, revoked: true }
+}
+
+/** 手动调整危险名单顺序 */
+async function reorderDangerList(roundIndex, orderedPlayerIds) {
+  const roundDetail = await resolveRoundDetail(roundIndex)
+  if (!roundDetail) throw new Error('无效的轮次参数')
+  const confirm = await DangerConfirm.findOne({ roundId: roundDetail.round.id })
+  if (!confirm) throw new Error('尚未确认危险名单')
+  const existing = new Set(confirm.playerIds || [])
+  const ordered = (orderedPlayerIds || []).filter(id => existing.has(id))
+  for (const id of (confirm.playerIds || [])) if (!ordered.includes(id)) ordered.push(id)
+  confirm.playerIds = ordered
+  confirm.queueOrder = ordered
+  confirm.updatedAt = new Date().toISOString()
+  await confirm.save()
+  return getDangerStatus(roundIndex, true)
+}
+
+/** 调整每场 PK 人数（挑战者 + N-1 名对手，2~10） */
+async function setPkSize(roundIndex, size) {
+  const roundDetail = await resolveRoundDetail(roundIndex)
+  if (!roundDetail) throw new Error('无效的轮次参数')
+  const confirm = await DangerConfirm.findOne({ roundId: roundDetail.round.id })
+  if (!confirm) throw new Error('尚未确认危险名单')
+  const n = parseInt(size)
+  if (!Number.isFinite(n) || n < PK_SIZE_MIN || n > PK_SIZE_MAX) {
+    throw new Error(`PK 人数需在 ${PK_SIZE_MIN}~${PK_SIZE_MAX} 之间`)
+  }
+  const pending = await EliminationPk.findOne({ roundId: roundDetail.round.id, status: { $in: ['proposed', 'voting'] } })
+  if (pending) throw new Error('有进行中的 PK，请先处理后再调整人数')
+  confirm.pkSize = n
+  confirm.updatedAt = new Date().toISOString()
+  await confirm.save()
+  return getDangerStatus(roundIndex, true)
+}
+
 module.exports = {
   parseRoundIndex,
   resolveRoundDetail,
@@ -1342,5 +1413,8 @@ module.exports = {
   getPkHistory,
   resolvePk,
   stopElimination,
-  revealPkVoteDigit
+  revealPkVoteDigit,
+  revokePk,
+  reorderDangerList,
+  setPkSize
 }

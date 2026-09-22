@@ -46,6 +46,11 @@
         <span class="perf-label">你的发挥值</span>
         <span class="perf-value" :class="resultLevel">{{ drawValue }}</span>
         <span class="perf-text" :class="resultLevel">{{ resultText }}</span>
+        <div v-if="hasDrawn && perfBucketInfo" class="perf-bucket" :class="perfBucketInfo.cls">
+          <span class="pb-range">本轮发挥值 {{ perfBucketInfo.range }}</span>
+          <span class="pb-sep">·</span>
+          <span class="pb-bonus">{{ perfBucketInfo.bonusText }}</span>
+        </div>
       </div>
 
       <!-- 3.3 个人评级掷骰 -->
@@ -74,11 +79,20 @@
             class="team-vote-item"
             :class="{ 'is-my-team': t.teamId === myTeamId }"
           >
-            <span class="tv-name">{{ t.teamName }}<template v-if="t.songName">《{{ t.songName }}》</template></span>
+            <span class="tv-name" @click="toggleVoteTeam(t.teamId)">
+              {{ t.teamName }}<template v-if="t.songName">《{{ t.songName }}》</template>
+              <span class="tv-caret">{{ expandedVoteTeams.has(t.teamId) ? '▲' : '▼' }}</span>
+            </span>
             <VoteRevealDigits
               :votes="t.finalVotes || 0"
               :reveal="{ hundreds: !!t.revealHundreds, tens: !!t.revealTens, units: !!t.revealUnits }"
             />
+            <div v-if="expandedVoteTeams.has(t.teamId)" class="tv-members">
+              <span v-for="m in teamMembersSorted(t.teamId)" :key="m.playerId" class="tv-member">
+                <UserAvatar class="tv-av" :name="m.player?.name" :avatar="m.player?.avatar" />
+                {{ m.player?.name || '未知' }}<em v-if="m.playerId === teamCaptainId(t.teamId)">队长</em>
+              </span>
+            </div>
           </div>
           <div v-if="performanceStore.teamPerformanceResults.length === 0" class="info-card dim"><span>等待公演结算</span></div>
         </div>
@@ -345,6 +359,7 @@ import {
 } from '../../services/api'
 import { useSfRefresh } from '../../composables/useSfRefresh'
 import VoteRevealDigits from '../../components/common/VoteRevealDigits.vue'
+import UserAvatar from '../../components/common/UserAvatar.vue'
 import { savePlayerStatuses, loadPlayerStatuses } from '../../services/performanceService'
 import { rollPerformanceRating } from '../../services/api'
 import type { AudienceSeat, PerformanceGenerationMode } from '../../types/performance'
@@ -397,6 +412,27 @@ const showSeats = computed(() => phase.value >= 4 && seatsLoaded.value)
 // ===== 抽取状态 =====
 const hasDrawn = ref(false)
 const drawValue = ref(0)
+const perfBucket = ref<number | null>(null)
+const perfBonus = ref<number | null>(null)
+
+const PERF_BUCKETS: Record<number, { range: string; cls: string }> = {
+  1: { range: '排名前 20%', cls: 'b1' },
+  2: { range: '排名 20%~40%', cls: 'b2' },
+  3: { range: '排名 40%~60%', cls: 'b3' },
+  4: { range: '排名 60%~80%', cls: 'b4' },
+  5: { range: '排名后 20%', cls: 'b5' }
+}
+const perfBucketInfo = computed(() => {
+  if (perfBucket.value == null) return null
+  const meta = PERF_BUCKETS[perfBucket.value]
+  if (!meta) return null
+  const bonus = perfBonus.value ?? 0
+  const pct = Math.round(Math.abs(bonus) * 100)
+  let bonusText = '本次公演魅力不变'
+  if (bonus > 0) bonusText = `本次公演魅力 +${pct}%`
+  else if (bonus < 0) bonusText = `本次公演魅力 -${pct}%`
+  return { ...meta, bonus, pct, bonusText }
+})
 
 const resultLevel = computed(() => {
   const v = drawValue.value
@@ -428,6 +464,28 @@ const myTeamId = computed(() => {
 const teamResult = computed(() =>
   performanceStore.teamPerformanceResults.find(t => t.teamId === currentTeam.value?.id)
 )
+
+// 团队得票卡片展开：显示成员名单（队长在前，其余按姓名排序，不显示得分）
+const expandedVoteTeams = ref<Set<string>>(new Set())
+function toggleVoteTeam(teamId: string) {
+  const s = new Set(expandedVoteTeams.value)
+  if (s.has(teamId)) s.delete(teamId)
+  else s.add(teamId)
+  expandedVoteTeams.value = s
+}
+function teamCaptainId(teamId: string): string {
+  return (teamStore.teams || []).find((t: any) => t.id === teamId)?.captainId || ''
+}
+function teamMembersSorted(teamId: string): any[] {
+  const team: any = (teamStore.teams || []).find((t: any) => t.id === teamId)
+  const members = [...(team?.members || [])]
+  const cap = team?.captainId
+  return members.sort((a: any, b: any) => {
+    if (a.playerId === cap) return -1
+    if (b.playerId === cap) return 1
+    return String(a.player?.name || '').localeCompare(String(b.player?.name || ''), 'zh')
+  })
+}
 
 // 当前选手的个人演出数据
 const myPerformance = computed(() => {
@@ -740,10 +798,14 @@ onMounted(async () => {
     if (myStatus?.generated && myStatus?.performanceValue !== null) {
       hasDrawn.value = true
       drawValue.value = myStatus.performanceValue
+      perfBucket.value = myStatus.perfBucket ?? null
+      perfBonus.value = myStatus.perfBonus ?? null
     } else {
       // ★ 后端显示未生成 → 覆盖 localStorage 的旧数据 ★
       hasDrawn.value = false
       drawValue.value = 0
+      perfBucket.value = null
+      perfBonus.value = null
       // 清理 localStorage 中该选手的旧数据
       const statuses = loadPlayerStatuses(roundId.value)
       const filtered = statuses.filter((s: any) => s.playerId !== uid)
@@ -895,6 +957,24 @@ onBeforeUnmount(() => {
   }
   .perf-text { font-size: 16px; font-weight: 600;
     &.legendary { color: #ffd700; } &.epic { color: #9b59b6; } &.rare { color: #3498db; } &.normal { color: #2ecc71; } &.poor { color: #e67e22; } &.disaster { color: #8b0000; }
+  }
+  .perf-bucket {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid transparent;
+
+    .pb-sep { opacity: 0.5; }
+
+    &.b1 { background: rgba(39, 174, 96, 0.15); color: #27ae60; border-color: rgba(39, 174, 96, 0.4); }
+    &.b2 { background: rgba(46, 204, 113, 0.13); color: #1eae6a; border-color: rgba(46, 204, 113, 0.35); }
+    &.b3 { background: rgba(127, 140, 141, 0.15); color: #7f8c8d; border-color: rgba(127, 140, 141, 0.35); }
+    &.b4 { background: rgba(243, 156, 18, 0.15); color: #f39c12; border-color: rgba(243, 156, 18, 0.4); }
+    &.b5 { background: rgba(231, 76, 60, 0.15); color: #e74c3c; border-color: rgba(231, 76, 60, 0.4); }
   }
 }
 .info-card { padding: 12px 18px; background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 12px; display: flex; justify-content: space-between; align-items: center;
@@ -1328,7 +1408,12 @@ onBeforeUnmount(() => {
   transition: transform 0.2s, box-shadow 0.2s;
 }
 .team-vote-item:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12); }
-.team-vote-item .tv-name { font-size: 13px; font-weight: 700; }
+.team-vote-item .tv-name { font-size: 13px; font-weight: 700; cursor: pointer; user-select: none; }
+.team-vote-item .tv-caret { font-size: 10px; margin-left: 4px; opacity: 0.7; }
+.tv-members { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 6px; border-top: 1px dashed var(--border-color); padding-top: 6px; width: 100%; }
+.tv-members .tv-member { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 2px 6px; border-radius: 10px; background: var(--hover-bg); }
+.tv-members .tv-member em { color: #ffb300; font-style: normal; font-size: 10px; }
+.tv-members .tv-av { width: 16px; height: 16px; border-radius: 50%; overflow: hidden; display: inline-flex; flex-shrink: 0; }
 .team-vote-item.is-my-team {
   border: 2px solid #ffd700;
   background: linear-gradient(135deg, rgba(255, 215, 0, 0.18), rgba(255, 215, 0, 0.06));

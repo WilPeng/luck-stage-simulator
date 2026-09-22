@@ -109,6 +109,7 @@ export interface DangerStatus {
   playerIds: string[]
   queue: DangerQueueEntry[]
   colors?: Record<string, string>
+  pkSize?: number
   pendingPk?: EliminationPk | null
 }
 

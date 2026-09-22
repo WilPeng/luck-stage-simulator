@@ -1091,6 +1091,25 @@ export async function leaveFreeTeam(roundId: string | number): Promise<any> {
   return doRequest<any>('/teams/free/leave', { method: 'POST', body: JSON.stringify({ roundId }) })
 }
 
+// 自由组建：管理员预分配「每首歌 → 第几个团」
+export async function assignFreeTeamSongs(roundId: string | number, assignments: Array<{ songId: string; teamId: string }>): Promise<any> {
+  return doRequest<any>('/teams/free/assign-songs', { method: 'POST', body: JSON.stringify({ roundId, assignments }) })
+}
+
+// 队长蛇形选人（互动选秀）
+export async function getCaptainDraft(roundId: string | number): Promise<any> {
+  return doRequest<any>(`/teams/draft?roundId=${encodeURIComponent(String(roundId))}`)
+}
+export async function startCaptainDraft(roundId: string | number, captainIds?: string[]): Promise<any> {
+  return doRequest<any>('/teams/draft/start', { method: 'POST', body: JSON.stringify({ roundId, captainIds }) })
+}
+export async function pickCaptainDraft(roundId: string | number, playerId: string): Promise<any> {
+  return doRequest<any>('/teams/draft/pick', { method: 'POST', body: JSON.stringify({ roundId, playerId }) })
+}
+export async function resetCaptainDraft(roundId: string | number): Promise<any> {
+  return doRequest<any>('/teams/draft/reset', { method: 'POST', body: JSON.stringify({ roundId }) })
+}
+
 export async function getAllCaptainPreferences(roundId: string): Promise<{ preferences: { playerId: string; playerName: string; preferredCaptainId: string; preferredCaptainName: string; teamId: string }[]; count: number }> {
   return safeCall(
     () => doRequest<{ preferences: { playerId: string; playerName: string; preferredCaptainId: string; preferredCaptainName: string; teamId: string }[]; count: number }>(`/teams/preferences?roundId=${roundId}`),
@@ -2352,6 +2371,21 @@ export async function revealPkVoteDigit(pkId: string, playerId: string, digit: '
     method: 'POST',
     body: JSON.stringify({ pkId, playerId, digit, revealed })
   })
+}
+
+// 撤回（删除）一场 PK
+export async function revokePk(pkId: string): Promise<any> {
+  return doRequest<any>(`/elimination/pk/${pkId}/revoke`, { method: 'POST' })
+}
+
+// 手动调整危险名单顺序
+export async function reorderDangerList(round: number, orderedPlayerIds: string[]): Promise<any> {
+  return doRequest<any>('/elimination/danger/reorder', { method: 'POST', body: JSON.stringify({ round, orderedPlayerIds }) })
+}
+
+// 调整每场 PK 人数（2~10）
+export async function setPkSize(round: number, pkSize: number): Promise<DangerStatus> {
+  return doRequest<DangerStatus>('/elimination/danger/pk-size', { method: 'POST', body: JSON.stringify({ round, pkSize }) })
 }
 
 export async function getPkDetail(pkId: string): Promise<EliminationPk> {  return safeCall(

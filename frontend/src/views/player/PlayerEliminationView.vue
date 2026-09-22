@@ -64,10 +64,16 @@
       </div>
       <div class="pk-start-panel">
         <div class="pk-field">
-          <span class="field-label">选择 2 名对手（属性由管理员选择）</span>
+          <span class="field-label">选择 {{ opponentCount }} 名对手（属性由管理员选择）</span>
           <div class="opponent-select">
-            <t-select v-model="opponentId1" :options="opponentOptions1" placeholder="选择第一名对手" clearable />
-            <t-select v-model="opponentId2" :options="opponentOptions2" placeholder="选择第二名对手" clearable />
+            <t-select
+              v-for="i in opponentSlots"
+              :key="i"
+              v-model="opponentIds[i]"
+              :options="opponentOptionsFor(i)"
+              :placeholder="`选择第 ${i + 1} 名对手`"
+              clearable
+            />
           </div>
         </div>
         <t-button theme="primary" block :disabled="!canStartPk" :loading="pkStarting" @click="handleProposePk">
@@ -77,60 +83,14 @@
       </div>
     </div>
 
-    <!-- PK 进行中（等待投票/裁定） -->
-    <div v-if="pendingPk" class="pk-active-section">
-      <div class="section-header">
-        <span class="section-badge">🗳️</span>
-        <h2>
-          {{ pendingPk.status === 'proposed' ? 'PK 申请已提交' : `第 ${pendingPk.pkIndex} 场 PK` }}
-        </h2>
-        <span v-if="pendingPk.attribute" class="section-count">{{ attributeName(pendingPk.attribute) }}</span>
-      </div>
-      <div class="pk-players">
-        <div
-          v-for="p in pendingPk.players"
-          :key="p.playerId"
-          class="pk-player"
-          :style="{ borderColor: playerColor(p.playerId) }"
-        >
-          <span class="pk-player-name">{{ p.playerName }}</span>
-          <span class="pk-player-team">{{ p.teamName || '未组队' }}</span>
-          <VoteRevealDigits
-            v-if="p.votes !== null && p.votes !== undefined && p.votes > 0"
-            :votes="p.votes || 0"
-            :reveal="(pendingPk as any).voteReveal?.[p.playerId] || {}"
-          />
-          <span v-else class="pk-player-waiting">
-            {{ pendingPk.status === 'proposed' ? '等待管理员发起' : '大众评审投票中...' }}
-          </span>
-        </div>
-      </div>
-      <!-- 进行中的 PK：管理员已产生票数后展示查票区（不显示具体票数） -->
-      <div v-if="pendingPk.voteDetails?.length" class="pk-check-votes">
-        <span class="check-title">评审投票查票（{{ pendingPk.voteDetails.length }} 人）</span>
-        <div class="check-seats">
-          <span
-            v-for="seat in pendingPk.voteDetails"
-            :key="seat.seatNumber"
-            class="check-seat"
-            :style="{ background: playerColor(seat.playerId) }"
-            :title="audienceTooltip(seat)"
-          >
-            {{ seat.seatNumber }}
-          </span>
-        </div>
-      </div>
-      <p class="pk-tip">投票结果公布后由管理员裁定安全 / 待定 / 淘汰</p>
-    </div>
-
-    <!-- PK 记录（谁 vs 谁，票数，查票区） -->
+    <!-- PK 记录（含进行中的 PK，票数逐位揭晓） -->
     <div v-if="pkHistory.length > 0" class="pk-history-section">
       <div class="section-header">
         <span class="section-badge">📋</span>
         <h2>PK 记录</h2>
       </div>
       <div class="pk-history-list">
-        <div v-for="pk in pkHistory" :key="pk.id" class="pk-history-item">
+        <div v-for="pk in pkHistory" :key="pk.id" class="pk-history-item" :class="{ live: pk.id === pendingPk?.id }">
           <div class="pk-history-head">
             <span class="pk-index">第 {{ pk.pkIndex }} 场</span>
             <span v-if="pk.attribute" class="pk-attribute">{{ attributeName(pk.attribute) }}</span>
@@ -138,14 +98,21 @@
           </div>
           <div class="pk-history-players">
             <div v-for="p in pk.players" :key="p.playerId" class="pk-history-player">
-              <span class="pk-history-name">{{ p.playerName }}</span>
-              <span v-if="p.votes !== null && p.votes > 0" class="pk-history-votes">{{ p.votes }}票</span>
+              <span class="pk-history-name" :style="{ background: playerColor(p.playerId) }">{{ p.playerName }}</span>
+              <VoteRevealDigits
+                v-if="p.votes !== null && p.votes !== undefined && p.votes > 0"
+                :votes="p.votes || 0"
+                :reveal="(pk as any).voteReveal?.[p.playerId] || {}"
+              />
+              <span v-else class="pk-history-wait">
+                {{ pk.status === 'proposed' ? '待管理员发起' : '投票中…' }}
+              </span>
               <span v-if="p.decision" class="pk-history-decision" :class="p.decision">
                 {{ decisionText(p.decision) }}
               </span>
             </div>
           </div>
-          <!-- 查票区（管理员产生票数后即对选手开放，展示评审投票投给谁，不展示具体票数） -->
+          <!-- 查票区（评委投给谁） -->
           <div v-if="pk.voteDetails?.length" class="pk-check-votes">
             <span class="check-title">评审投票查票（{{ pk.voteDetails.length }} 人）</span>
             <div class="check-seats">
@@ -191,7 +158,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import VoteRevealDigits from '../../components/common/VoteRevealDigits.vue'
 import { useSfRefresh } from '../../composables/useSfRefresh'
 import { useRoute } from 'vue-router'
@@ -210,8 +177,7 @@ const store = useEliminationStore()
 const currentRound = computed(() => Number(route.params.round) || 1)
 const currentUserId = computed(() => authStore.currentUser?.id || '')
 
-const opponentId1 = ref('')
-const opponentId2 = ref('')
+const opponentIds = ref<string[]>([])
 const pkStarting = ref(false)
 
 const isEliminated = computed(() => {
@@ -249,25 +215,33 @@ const isMeChallenger = computed(() => {
   return dangerQueue.value[0]?.playerId === currentUserId.value
 })
 
-// 需求5：两个下拉框去重——第一个选了A后，第二个不显示A；反之亦然
-const opponentOptions1 = computed(() => {
-  const excluded = new Set([opponentId2.value])
-  return dangerQueue.value
-    .filter(e => e.playerId !== dangerQueue.value[0]?.playerId)
-    .filter(e => !excluded.has(e.playerId))
-    .map(e => ({ label: e.playerName, value: e.playerId }))
-})
+// 每场 PK 人数（由管理员配置），选手需选 pkSize-1 名对手
+const pkSize = computed(() => Math.max(store.dangerStatus?.pkSize || 3, 2))
+const opponentCount = computed(() => Math.max(pkSize.value - 1, 0))
+const opponentSlots = computed(() => Array.from({ length: opponentCount.value }, (_, i) => i))
 
-const opponentOptions2 = computed(() => {
-  const excluded = new Set([opponentId1.value])
+watch(opponentCount, (n) => {
+  const arr = opponentIds.value.slice(0, n)
+  while (arr.length < n) arr.push('')
+  opponentIds.value = arr
+}, { immediate: true })
+
+function opponentOptionsFor(index: number) {
+  const chosenElsewhere = new Set(
+    opponentIds.value.filter((id, i) => i !== index && id)
+  )
   return dangerQueue.value
     .filter(e => e.playerId !== dangerQueue.value[0]?.playerId)
-    .filter(e => !excluded.has(e.playerId))
+    .filter(e => !chosenElsewhere.has(e.playerId))
     .map(e => ({ label: e.playerName, value: e.playerId }))
-})
+}
 
 const canStartPk = computed(() => {
-  return dangerQueue.value.length >= 3 && !!opponentId1.value && !!opponentId2.value && opponentId1.value !== opponentId2.value
+  if (opponentCount.value <= 0) return false
+  if (dangerQueue.value.length < pkSize.value) return false
+  if (opponentIds.value.length !== opponentCount.value) return false
+  if (!opponentIds.value.every(Boolean)) return false
+  return new Set(opponentIds.value).size === opponentIds.value.length
 })
 
 function getAvatar(name?: string): string {
@@ -323,7 +297,7 @@ function audienceTooltip(seat: { seatNumber: number; audienceName: string; gende
 // 需求1：选手端只提交 PK 申请（不选属性），由管理员发起
 async function handleProposePk() {
   if (!canStartPk.value) {
-    MessagePlugin.warning('请选择 2 名不同的对手')
+    MessagePlugin.warning(`请选择 ${opponentCount.value} 名不同的对手`)
     return
   }
   pkStarting.value = true
@@ -331,10 +305,9 @@ async function handleProposePk() {
     await store.doProposePk({
       round: currentRound.value,
       challengerId: dangerQueue.value[0].playerId,
-      opponentIds: [opponentId1.value, opponentId2.value]
+      opponentIds: opponentIds.value.filter(Boolean)
     })
-    opponentId1.value = ''
-    opponentId2.value = ''
+    opponentIds.value = []
     MessagePlugin.success('PK 申请已提交，等待管理员发起')
     await loadAll()
   } catch (e: any) {
@@ -358,7 +331,7 @@ async function loadAll() {
 }
 
 // websocket：管理员揭晓 PK 票数时选手端实时刷新
-useSfRefresh(() => { loadAll() }, '/elimination|/performance')
+useSfRefresh(() => { loadAll() }, /\/(?:elimination|performance)\//)
 
 onMounted(async () => {
   await Promise.all([
@@ -671,6 +644,11 @@ onMounted(async () => {
   border-radius: 12px;
   padding: 14px;
 
+  &.live {
+    border-color: #f39c12;
+    box-shadow: 0 0 12px rgba(243, 156, 18, 0.28);
+  }
+
   .pk-history-head {
     display: flex;
     align-items: center;
@@ -699,23 +677,36 @@ onMounted(async () => {
 
   .pk-history-players {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-bottom: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
   }
 
   .pk-history-player {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
-    padding: 10px;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 10px;
     background: var(--table-hover-bg);
-    border-radius: 8px;
+    border-radius: 10px;
 
     .pk-history-name {
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 700;
+      color: #fff;
+      padding: 3px 14px;
+      border-radius: 10px;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+      white-space: nowrap;
+      line-height: 1.4;
+    }
+
+    .pk-history-wait {
+      font-size: 12px;
+      color: var(--text-muted);
+      padding: 4px 0;
     }
 
     .pk-history-votes {
@@ -726,12 +717,17 @@ onMounted(async () => {
 
     .pk-history-decision {
       font-size: 11px;
-      padding: 1px 8px;
+      padding: 2px 10px;
       border-radius: 8px;
+      line-height: 1.4;
 
       &.safe { background: rgba(39, 174, 96, 0.15); color: #27ae60; }
       &.pending { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
       &.eliminated { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
+    }
+
+    .vote-reveal-digits {
+      margin: 2px 0 0;
     }
   }
 

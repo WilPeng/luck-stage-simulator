@@ -7,7 +7,7 @@
           <span class="logo-text">{{ gameName }}</span>
         </div>
         <div class="header-info">
-          <span class="stage-tag" :class="stageClass">{{ stageName }}</span>
+          <span class="stage-tag" :class="stageClass">{{ stageName }}环节</span>
           <button class="theme-toggle-btn" @click="authStore.toggleTheme()" :title="authStore.theme === 'dark' ? '切换浅色模式' : '切换深色模式'">
             {{ authStore.theme === 'dark' ? '☀️' : '🌙' }}
           </button>
@@ -24,6 +24,10 @@
         </div>
       </div>
     </header>
+
+    <div v-if="isEliminated" class="eliminated-banner">
+      💔 你已被淘汰，无法参与组队 / 选歌 / 训练 / 抽取发挥值等环节
+    </div>
 
     <div class="layout-body">
       <aside class="player-sidebar" :class="{ open: mobileMenuOpen }">
@@ -165,7 +169,7 @@ import { STAGE_ORDER, STAGE_NAMES, CONCURRENT_ACTIONS } from '../types/season'
 import type { StageType } from '../types/season'
 import type { User } from '../types/user'
 import { MessagePlugin } from 'tdesign-vue-next'
-import { getAvatarUrl } from '../services/api'
+import { getAvatarUrl, getCurrentUser } from '../services/api'
 
 const authStore = useAuthStore()
 const seasonStore = useSeasonStore()
@@ -258,6 +262,10 @@ const currentUser = computed(() => authStore.currentUser)
 const stageName = computed(() => seasonStore.stageName)
 const currentRoundNumber = computed(() => seasonStore.currentRoundNumber)
 const totalRounds = computed(() => seasonStore.totalRounds)
+
+// 已淘汰选手不得参与组队/选歌/训练/抽取发挥值/队长投票等环节
+const isEliminated = computed(() => authStore.currentUser?.status === 'eliminated')
+const PARTICIPATION_STAGES: StageType[] = ['captain_vote', 'concurrent', 'teaming', 'song_select', 'training', 'performance_draw']
 
 const stageClass = computed(() => {
   const stage = seasonStore.currentStage
@@ -391,7 +399,9 @@ function getStagePath(round: number, stage: StageType): string {
         ? `${prefix}/player/round/${round}/captain-choice`
         : groupingMode === 'free'
           ? `${prefix}/player/round/${round}/free-team`
-          : `${prefix}/player/round/${round}/team`,
+          : groupingMode === 'captain_draft'
+            ? `${prefix}/player/round/${round}/captain-draft`
+            : `${prefix}/player/round/${round}/team`,
     song_select: `${prefix}/player/round/${round}/song-selection`,
     captain_choice: `${prefix}/player/round/${round}/captain-choice`,
     training: `${prefix}/player/round/${round}/training`,
@@ -423,6 +433,7 @@ function getRoundStatusText(round: number): string {
 
 // 检查阶段是否可访问
 function isStageAccessible(round: number, stage: StageType): boolean {
+  if (isEliminated.value && PARTICIPATION_STAGES.includes(stage)) return false
   return seasonStore.isStageAccessible(round, stage)
 }
 
@@ -445,7 +456,9 @@ function isActive(path: string): boolean {
 function handleStageClick(event: Event, round: number, stage: StageType) {
   if (!isStageAccessible(round, stage)) {
     event.preventDefault()
-    MessagePlugin.warning('该阶段尚未开放')
+    MessagePlugin.warning(isEliminated.value && PARTICIPATION_STAGES.includes(stage)
+      ? '你已被淘汰，无法参与该环节'
+      : '该阶段尚未开放')
     return
   }
   mobileMenuOpen.value = false
@@ -468,8 +481,27 @@ async function handleLogout() {
 }
 
 // 初始化：加载赛季进度和菜单
+// 参与类环节路径（已淘汰选手不可进入）
+const PARTICIPATION_PATHS = ['/team', '/free-team', '/song-group', '/song-selection', '/training', '/performance-draw', '/captain-choice', '/captain-draft', '/concurrent', '/captain']
+function isParticipationPath(p: string): boolean {
+  return PARTICIPATION_PATHS.some(seg => p.includes(seg))
+}
+function redirectIfEliminated() {
+  if (isEliminated.value && isParticipationPath(route.path)) {
+    router.push(`${gamePrefix.value}/player/home`)
+    MessagePlugin.warning('你已被淘汰，无法参与该环节')
+  }
+}
+async function refreshCurrentUser() {
+  try {
+    const u = await getCurrentUser()
+    if (u && (u as any).id) authStore.setUser(u as User)
+  } catch { /* ignore */ }
+}
+
 onMounted(async () => {
   realtime.connect()
+  await refreshCurrentUser()
   try {
     await Promise.all([
       seasonStore.fetchProgress(),
@@ -487,7 +519,11 @@ onMounted(async () => {
   }
   // 初始化主题
   authStore.initTheme()
+  redirectIfEliminated()
 })
+
+watch(() => route.path, () => redirectIfEliminated())
+watch(isEliminated, () => redirectIfEliminated())
 </script>
 
 <style lang="scss" scoped>
@@ -546,6 +582,17 @@ onMounted(async () => {
   height: 100vh;
   overflow: hidden;
   background: var(--bg-primary);
+}
+
+.eliminated-banner {
+  flex-shrink: 0;
+  background: rgba(231, 76, 60, 0.12);
+  color: #e74c3c;
+  border-bottom: 1px solid rgba(231, 76, 60, 0.35);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
 }
 
 .player-header {

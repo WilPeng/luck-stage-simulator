@@ -42,6 +42,80 @@
       </t-button>
     </div>
 
+    <!-- 自由组建：歌曲 → 队伍 预分配 -->
+    <div v-if="groupingMode === 'free'" class="free-song-assign section-card">
+      <div class="section-header">
+        <span class="section-title">🎵 歌曲 → 队伍分配（自由组建）</span>
+        <span class="section-count">{{ freeSongOptions.length }} 首</span>
+      </div>
+      <p class="assign-hint">为每首歌指定它属于第几个团，选手进入自由组建后将按歌曲加入对应队伍；首位加入者自动成为队长。</p>
+      <div v-if="freeSongOptions.length === 0" class="empty-state">
+        <span class="empty-text">本轮尚未配置歌曲，请先在「歌曲管理」添加本轮曲目</span>
+      </div>
+      <div v-else class="assign-list">
+        <div v-for="opt in freeSongOptions" :key="opt.songId" class="assign-row">
+          <span class="assign-index">{{ opt.index + 1 }}</span>
+          <span class="assign-song">{{ opt.songName }}</span>
+          <span class="assign-style">{{ opt.style }}</span>
+          <span class="assign-arrow">→</span>
+          <t-select
+            v-model="freeAssignMap[opt.songId]"
+            :options="teamOptions"
+            placeholder="选择队伍"
+            size="small"
+            style="width: 180px"
+            :disabled="assigningSong"
+            @change="() => handleAssignSong(opt.songId)"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- 队长蛇形选人：互动选秀控制 -->
+    <div v-if="groupingMode === 'captain_draft'" class="draft-panel section-card">
+      <div class="section-header">
+        <span class="section-title">🐍 互动选秀（队长轮流选人）</span>
+        <span class="section-count">
+          {{ draft && draft.exists ? (draft.status === 'completed' ? '已结束' : `进行中 ${draft.step}/${draft.sequence?.length || 0}`) : '未开始' }}
+        </span>
+      </div>
+      <div class="draft-actions">
+        <t-button theme="primary" :loading="draftLoading" @click="handleStartDraft">开始互动选秀</t-button>
+        <t-button variant="outline" :loading="draftLoading" @click="handleResetDraft">重置选秀</t-button>
+      </div>
+      <div v-if="draft && draft.exists" class="draft-current">
+        <span v-if="draft.status === 'completed'">✅ 选秀已结束</span>
+        <span v-else>
+          当前轮到：<strong>{{ draftCurrentTeamName }}</strong>
+          <template v-if="draftCurrentCaptainName">（队长：{{ draftCurrentCaptainName }}）</template>
+          （第 {{ draft.step + 1 }} / {{ draft.sequence?.length || 0 }} 顺位）
+        </span>
+      </div>
+
+      <!-- 管理员代理选人 -->
+      <div v-if="draft && draft.exists && draft.status === 'active'" class="draft-pick-area">
+        <div class="draft-pick-title">管理员代理选人（当前顺位可选）</div>
+        <div class="player-chips">
+          <div
+            v-for="p in (draft.available || [])"
+            :key="p.id"
+            class="player-chip draft-pick-chip"
+            :class="{ disabled: draftLoading }"
+            @click="handleDraftPick(p)"
+          >
+            <span class="chip-avatar">
+              <img v-if="p.avatar" :src="getAvatarUrl(p.avatar)" :alt="p.name" />
+              <span v-else>{{ getAvatar(p.name) }}</span>
+            </span>
+            <span class="chip-name">{{ p.name }}</span>
+          </div>
+          <div v-if="(draft.available || []).length === 0" class="draft-empty">暂无可选选手</div>
+        </div>
+      </div>
+
+      <p class="assign-hint">开始后队长在各队页面轮流选人，实时同步；管理员也可在上方代理当前顺位选人。也可使用「一键按队长蛇形选人分组」快速自动完成。</p>
+    </div>
+
     <!-- 未分配选手区 -->
     <div class="unassigned-section" v-if="unassignedPlayers.length > 0">
       <div class="section-header">
@@ -439,7 +513,9 @@ import { SettingIcon, RefreshIcon } from 'tdesign-icons-vue-next'
 import { useTeamStore } from '../../stores/teamStore'
 import { usePlayerStore } from '../../stores/playerStore'
 import { useSeasonStore } from '../../stores/seasonStore'
-import { getAvatarUrl, getCurrentCaptains, matchCaptainPreferences, getAllCaptainPreferences, getGroupingMode, autoFormTeams } from '../../services/api'
+import { getAvatarUrl, getCurrentCaptains, matchCaptainPreferences, getAllCaptainPreferences, getGroupingMode, autoFormTeams, getSongGroupOptions, assignFreeTeamSongs, getCaptainDraft, startCaptainDraft, resetCaptainDraft, pickCaptainDraft } from '../../services/api'
+import type { SongGroupOption } from '../../services/api'
+import { useSfRefresh } from '../../composables/useSfRefresh'
 import { getTeams as dsGetTeams } from '../../services/dataService'
 import type { RoundTeam, RoundTeamMember } from '../../types/round'
 import type { User } from '../../types/user'
@@ -479,9 +555,126 @@ const currentRoundId = computed(() => {
 const loading = computed(() => teamStore.loading)
 
 // 分组模式（意向队长匹配）
-const groupingMode = ref<'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft'>('captain')
+const groupingMode = ref<'captain' | 'song' | 'captain_choice' | 'random' | 'balanced' | 'captain_draft' | 'free'>('captain')
 const matchingPreferences = ref(false)
 const preferenceCount = ref(0)
+
+// 自由组建：歌曲 → 队伍 预分配
+const freeSongOptions = ref<SongGroupOption[]>([])
+const freeAssignMap = reactive<Record<string, string>>({})
+const assigningSong = ref(false)
+const teamOptions = computed(() => teamStore.teams.map(t => ({ label: t.name, value: t.id })))
+
+async function loadFreeSongs() {
+  const rid = currentRoundId.value
+  if (groupingMode.value !== 'free' || !rid) return
+  try {
+    const res = await getSongGroupOptions(rid)
+    freeSongOptions.value = res?.options || []
+    for (const opt of freeSongOptions.value) {
+      freeAssignMap[opt.songId] = opt.teamId || ''
+    }
+  } catch (e) {
+    freeSongOptions.value = []
+  }
+}
+
+async function handleAssignSong(songId: string) {
+  const rid = currentRoundId.value
+  const teamId = freeAssignMap[songId]
+  if (!teamId || !rid) return
+  assigningSong.value = true
+  try {
+    const assignments = freeSongOptions.value
+      .map(o => ({ songId: o.songId, teamId: o.songId === songId ? teamId : freeAssignMap[o.songId] }))
+      .filter(a => a.teamId)
+    await assignFreeTeamSongs(rid, assignments)
+    MessagePlugin.success('歌曲分配已保存')
+    await loadFreeSongs()
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '分配失败')
+  } finally {
+    assigningSong.value = false
+  }
+}
+
+// 队长蛇形选人：互动选秀
+const draft = ref<any>(null)
+const draftLoading = ref(false)
+const draftCurrentTeamName = computed(() => {
+  if (!draft.value?.exists || !draft.value?.currentTeamId) return '-'
+  const t = (draft.value.teams || []).find((x: any) => x.id === draft.value.currentTeamId)
+  return t?.name || '-'
+})
+
+async function loadDraft() {
+  const rid = currentRoundId.value
+  if (groupingMode.value !== 'captain_draft' || !rid) return
+  try {
+    draft.value = await getCaptainDraft(rid)
+  } catch (e) {
+    draft.value = null
+  }
+}
+
+async function handleStartDraft() {
+  const rid = currentRoundId.value
+  if (!rid) return
+  const ok = window.confirm('开始互动选秀？将清空本轮现有成员，并按综合分/指派确定各队队长。')
+  if (!ok) return
+  draftLoading.value = true
+  try {
+    draft.value = await startCaptainDraft(rid)
+    MessagePlugin.success('互动选秀已开始')
+    await teamStore.fetchTeams(rid)
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '开始选秀失败')
+  } finally {
+    draftLoading.value = false
+  }
+}
+
+async function handleResetDraft() {
+  const rid = currentRoundId.value
+  if (!rid) return
+  const ok = window.confirm('重置选秀？将删除本次选秀进度（成员需重新开始）。')
+  if (!ok) return
+  draftLoading.value = true
+  try {
+    await resetCaptainDraft(rid)
+    draft.value = { exists: false }
+    MessagePlugin.success('已重置选秀')
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '重置失败')
+  } finally {
+    draftLoading.value = false
+  }
+}
+
+const draftCurrentCaptainName = computed(() => {
+  if (!draft.value?.exists || !draft.value?.currentTeamId) return ''
+  const team = (draft.value.teams || []).find((t: any) => t.id === draft.value.currentTeamId)
+  const cap = team?.members?.find((m: any) => m.isCaptain)
+  return cap?.playerName || ''
+})
+
+// 管理员代理选人（当前轮到的队长由管理员代点）
+async function handleDraftPick(p: any) {
+  const rid = currentRoundId.value
+  if (!rid || draftLoading.value) return
+  const ok = window.confirm(`代理「${draftCurrentCaptainName.value || '队长'}」选择「${p.name}」？`)
+  if (!ok) return
+  draftLoading.value = true
+  try {
+    draft.value = await pickCaptainDraft(rid, p.id)
+    MessagePlugin.success(`已选中 ${p.name}`)
+    await teamStore.fetchTeams(rid)
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '选人失败')
+  } finally {
+    draftLoading.value = false
+  }
+}
 
 // 加载分组模式与意向数量
 async function loadGroupingMode() {
@@ -497,6 +690,12 @@ async function loadGroupingMode() {
     } catch (e) {
       preferenceCount.value = 0
     }
+  }
+  if (groupingMode.value === 'free') {
+    await loadFreeSongs()
+  }
+  if (groupingMode.value === 'captain_draft') {
+    await loadDraft()
   }
 }
 
@@ -1126,6 +1325,12 @@ onMounted(async () => {
     })
   }
 })
+
+// 队长蛇形选人：双端实时同步（队长/管理员任一方选人后自动刷新）
+useSfRefresh(() => {
+  loadDraft()
+  if (currentRoundId.value) teamStore.fetchTeams(currentRoundId.value)
+}, '/teams/')
 </script>
 
 <style lang="scss" scoped>
@@ -1886,6 +2091,119 @@ onMounted(async () => {
 @media (min-width: 1024px) {
   .team-list {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.free-song-assign {
+  background: var(--card-bg, #fff);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+  .assign-hint {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: var(--text-secondary, #666);
+  }
+
+  .assign-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .assign-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--hover-bg, #f7f8fa);
+    border-radius: 8px;
+
+    .assign-index {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #667eea;
+      color: #fff;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .assign-song {
+      font-size: 14px;
+      font-weight: 600;
+      min-width: 120px;
+    }
+    .assign-style {
+      font-size: 12px;
+      color: var(--text-tertiary, #999);
+      flex: 1;
+    }
+    .assign-arrow {
+      color: var(--text-tertiary, #999);
+    }
+  }
+}
+
+.draft-panel {
+  background: var(--card-bg, #fff);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+  .draft-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .draft-current {
+    font-size: 13px;
+    color: var(--text-secondary, #666);
+    margin-bottom: 8px;
+  }
+
+  .draft-pick-area {
+    margin-bottom: 10px;
+
+    .draft-pick-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary, #666);
+      margin-bottom: 8px;
+    }
+
+    .draft-pick-chip {
+      cursor: pointer;
+      transition: all 0.15s;
+
+      &:hover {
+        border-color: #667eea;
+        box-shadow: 0 0 8px rgba(102, 126, 234, 0.35);
+      }
+
+      &.disabled {
+        pointer-events: none;
+        opacity: 0.55;
+      }
+    }
+
+    .draft-empty {
+      font-size: 13px;
+      color: var(--text-tertiary, #999);
+      padding: 8px 0;
+    }
+  }
+
+  .assign-hint {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-tertiary, #999);
   }
 }
 </style>
