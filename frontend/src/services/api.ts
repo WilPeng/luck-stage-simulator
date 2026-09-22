@@ -1005,6 +1005,11 @@ export interface SongGroupOption {
   songId: string
   songName: string
   style: string
+  difficulty?: number | null
+  risk?: number | null
+  baseVocal?: number | null
+  baseDance?: number | null
+  mainAttribute?: string | null
   index: number
   teamId: string | null
   teamName: string

@@ -27,6 +27,13 @@
             <span class="tc-count">{{ opt.memberCount }}/{{ opt.maxMembers }}</span>
           </div>
           <div class="sc-team">队伍：{{ opt.teamName }}</div>
+          <div class="sc-meta">
+            <span>🎲 {{ opt.difficulty ?? '-' }} 面</span>
+            <span>⚠️ {{ opt.risk ?? '-' }}</span>
+            <span>🎤 {{ opt.baseVocal ?? '-' }}</span>
+            <span>💃 {{ opt.baseDance ?? '-' }}</span>
+            <span>★ {{ ({ vocal: '声乐', dance: '舞蹈', charm: '魅力' } as Record<string,string>)[opt.mainAttribute || ''] || '-' }}</span>
+          </div>
           <div class="tc-members">
             <span v-for="(m, i) in membersOf(opt.teamId)" :key="i" class="member-chip">
               <UserAvatar class="chip-av" :name="m.player?.name || m.playerName" :avatar="m.player?.avatar" />
@@ -196,6 +203,7 @@ onMounted(load)
 .sc-song { font-size: 15px; font-weight: 700; }
 .sc-style { font-size: 12px; color: var(--text-tertiary); }
 .sc-team { font-size: 13px; color: var(--text-secondary); }
+.sc-meta { display: flex; flex-wrap: wrap; gap: 6px; span { font-size: 11px; padding: 1px 7px; border-radius: 7px; background: var(--hover-bg); color: var(--text-secondary); } }
 .tc-members { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; }
 .member-chip { padding: 2px 8px; border-radius: 10px; background: var(--hover-bg); font-size: 12px; display: inline-flex; align-items: center; gap: 5px; em { color: #ffb300; font-style: normal; margin-left: 4px; font-size: 11px; } }
 .member-chip .chip-av { width: 18px; height: 18px; border-radius: 50%; overflow: hidden; display: inline-flex; flex-shrink: 0; background: var(--card-bg); }

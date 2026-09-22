@@ -100,6 +100,13 @@
                   <span class="weight">⚠ {{ rs.song?.risk ?? 10 }}</span>
                 </div>
 
+                <div class="rating-toggle-row">
+                  <t-button variant="outline" size="small" @click="toggleRating(rs.id)">
+                    {{ expandedRatingId === rs.id ? '收起评级概率' : '评级概率详情' }}
+                  </t-button>
+                </div>
+                <SongRatingDetail v-if="expandedRatingId === rs.id" :song="rs.song" :attributes="myAttrs" />
+
                 <div class="card-action">
                   <!-- 已被其他队抢走 -->
                   <template v-if="isSongClaimed(rs.id)">
@@ -219,6 +226,7 @@ import { useTeamStore } from '../../stores/teamStore'
 import { getConcurrentReleaseStatus, getGroupingMode } from '../../services/api'
 import type { ConcurrentReleaseStatusResponse } from '../../types/season'
 import StageStatusView from '../../components/StageStatusView.vue'
+import SongRatingDetail from '../../components/common/SongRatingDetail.vue'
 
 const route = useRoute()
 const seasonStore = useSeasonStore()
@@ -227,6 +235,16 @@ const authStore = useAuthStore()
 const teamStore = useTeamStore()
 
 const round = computed(() => Number(route.params.round))
+
+// 当前选手属性（用于评级概率计算）
+const myAttrs = computed(() => {
+  const a = (authStore.currentUser as any)?.attributes || {}
+  return { vocal: a.vocal ?? 0, dance: a.dance ?? 0, charm: a.charm ?? 0 }
+})
+const expandedRatingId = ref<string | null>(null)
+function toggleRating(id: string) {
+  expandedRatingId.value = expandedRatingId.value === id ? null : id
+}
 
 // 并发阶段释放状态
 const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
@@ -673,6 +691,12 @@ color: var(--text-primary);
       font-size: 13px;
       color: var(--text-tertiary);
     }
+  }
+
+  .rating-toggle-row {
+    margin-top: 10px;
+    display: flex;
+    justify-content: flex-end;
   }
 
   .card-action {

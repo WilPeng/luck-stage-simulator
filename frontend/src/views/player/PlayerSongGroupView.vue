@@ -51,24 +51,39 @@
               full: opt.memberCount >= opt.maxMembers
             }"
           >
-            <div class="song-option-icon">🎵</div>
-            <div class="song-option-info">
-              <span class="song-option-name">{{ opt.songName }}</span>
-              <span class="song-option-style">{{ opt.style }}</span>
-              <span class="song-option-count">{{ opt.memberCount }}/{{ opt.maxMembers }} 人</span>
+            <div class="song-option-main">
+              <div class="song-option-icon">🎵</div>
+              <div class="song-option-info">
+                <span class="song-option-name">{{ opt.songName }}</span>
+                <span class="song-option-style">{{ opt.style }}</span>
+                <div class="song-option-meta">
+                  <span>🎲 {{ opt.difficulty ?? '-' }} 面骰</span>
+                  <span>⚠️ 风险 {{ opt.risk ?? '-' }}</span>
+                  <span>🎤 基准V {{ opt.baseVocal ?? '-' }}</span>
+                  <span>💃 基准D {{ opt.baseDance ?? '-' }}</span>
+                  <span class="meta-main">★ {{ mainAttrLabel(opt.mainAttribute) }}</span>
+                </div>
+                <span class="song-option-count">{{ opt.memberCount }}/{{ opt.maxMembers }} 人</span>
+              </div>
+              <div class="song-option-actions">
+                <t-button variant="outline" size="small" @click="toggleDetail(opt.songId)">
+                  {{ expandedSongId === opt.songId ? '收起' : '概率详情' }}
+                </t-button>
+                <t-button
+                  v-if="songReleased && !(myTeam && songOptions.find(o => o.teamId === myTeam.id)?.songId === opt.songId)"
+                  theme="primary"
+                  size="small"
+                  :loading="selectingSongId === opt.songId"
+                  :disabled="opt.memberCount >= opt.maxMembers"
+                  @click="handleSelectSong(opt)"
+                >
+                  选这首
+                </t-button>
+                <t-tag v-else-if="myTeam && songOptions.find(o => o.teamId === myTeam.id)?.songId === opt.songId" theme="success" variant="light">已选</t-tag>
+                <t-tag v-else theme="default" variant="light">满员</t-tag>
+              </div>
             </div>
-            <t-button
-              v-if="songReleased && !(myTeam && songOptions.find(o => o.teamId === myTeam.id)?.songId === opt.songId)"
-              theme="primary"
-              size="small"
-              :loading="selectingSongId === opt.songId"
-              :disabled="opt.memberCount >= opt.maxMembers"
-              @click="handleSelectSong(opt)"
-            >
-              选这首
-            </t-button>
-            <t-tag v-else-if="myTeam && songOptions.find(o => o.teamId === myTeam.id)?.songId === opt.songId" theme="success" variant="light">已选</t-tag>
-            <t-tag v-else theme="default" variant="light">满员</t-tag>
+            <SongRatingDetail v-if="expandedSongId === opt.songId" :song="opt" :attributes="myAttrs" />
           </div>
         </div>
         <div v-if="songOptions.length === 0" class="empty-tip">暂无可选歌曲</div>
@@ -89,6 +104,7 @@ import { getConcurrentReleaseStatus, getSongGroupOptions, selectSongForGroup } f
 import type { ConcurrentReleaseStatusResponse } from '../../types/season'
 import type { SongGroupOption } from '../../services/api'
 import StageStatusView from '../../components/StageStatusView.vue'
+import SongRatingDetail from '../../components/common/SongRatingDetail.vue'
 
 const route = useRoute()
 const teamStore = useTeamStore()
@@ -104,6 +120,21 @@ const selectingSongId = ref<string | null>(null)
 let releaseTimer: number | undefined
 
 const currentUser = computed(() => authStore.currentUser)
+
+// 当前选手属性（用于评级概率计算）
+const myAttrs = computed(() => {
+  const a = (currentUser.value as any)?.attributes || {}
+  return { vocal: a.vocal ?? 0, dance: a.dance ?? 0, charm: a.charm ?? 0 }
+})
+
+// 展开的概率详情
+const expandedSongId = ref<string | null>(null)
+function toggleDetail(songId: string) {
+  expandedSongId.value = expandedSongId.value === songId ? null : songId
+}
+function mainAttrLabel(attr?: string | null): string {
+  return ({ vocal: '🎤 声乐', dance: '💃 舞蹈', charm: '✨ 魅力' } as Record<string, string>)[attr || ''] || (attr || '-')
+}
 
 const myTeam = computed(() => {
   if (!currentUser.value) return null
@@ -264,8 +295,8 @@ onBeforeUnmount(() => {
 
 .song-option-card {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 4px;
   padding: 16px;
   background: var(--hover-bg);
   border: 2px solid var(--border-color);
@@ -281,18 +312,47 @@ onBeforeUnmount(() => {
     opacity: 0.7;
   }
 
+  .song-option-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
   .song-option-icon { font-size: 28px; }
 
   .song-option-info {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
     min-width: 0;
 
     .song-option-name { font-size: 15px; font-weight: 700; color: var(--text-primary); }
     .song-option-style { font-size: 12px; color: var(--text-tertiary); }
     .song-option-count { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+  }
+
+  .song-option-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+
+    span {
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 7px;
+      background: var(--bg-primary);
+      color: var(--text-secondary);
+    }
+    .meta-main { background: rgba(255, 193, 7, 0.18); color: #b8860b; font-weight: 700; }
+  }
+
+  .song-option-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
   }
 }
 
