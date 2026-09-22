@@ -207,6 +207,15 @@
                 >
                   取消本轮成果
                 </t-button>
+                <t-button
+                  :theme="user.finished ? 'default' : 'primary'"
+                  variant="outline"
+                  size="small"
+                  :loading="finishSavingId === user.userId"
+                  @click="handleToggleFinish(user)"
+                >
+                  {{ user.finished ? '取消训练结束' : '标记训练结束' }}
+                </t-button>
               </div>
             </div>
           </div>
@@ -344,6 +353,7 @@
               <span class="col-select" style="width: 50px;"></span>
               <span class="col-time" style="width: 160px;">时间</span>
               <span class="col-player" style="width: 140px;">选手</span>
+              <span class="col-no" style="width: 70px;">序号</span>
               <span class="col-card">卡牌</span>
               <span class="col-effect" style="width: 200px;">效果</span>
               <span class="col-attrs" style="width: 200px;">训练后属性</span>
@@ -363,6 +373,11 @@
               <div class="col-time">{{ formatDateTime(record.createdAt) }}</div>
               <div class="col-player">
                 <span class="player-name">{{ record.userName }}</span>
+              </div>
+              <div class="col-no">
+                <t-tag theme="default" variant="outline" size="small">
+                  #{{ record.cardIndex ?? '—' }}
+                </t-tag>
               </div>
               <div class="col-card">
                 <t-tag theme="primary" variant="light" size="small">
@@ -689,7 +704,7 @@ import { useRoute } from 'vue-router'
 import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next'
 import { useTrainingCardStore } from '../../stores/trainingCardStore'
 import { useSeasonStore } from '../../stores/seasonStore'
-import { getUsers, doRequest, getTrainingRecords, deleteTrainingRecord, batchDeleteTrainingRecords, setupTrainingPool, getTrainingPool, getAllTrainingFinishStatus } from '../../services/api'
+import { getUsers, doRequest, getTrainingRecords, deleteTrainingRecord, batchDeleteTrainingRecords, setupTrainingPool, getTrainingPool, getAllTrainingFinishStatus, setTrainingFinishStatus } from '../../services/api'
 import type { TrainingCard, AutoCompleteResult, TrainingRecord, TrainingRecordListResponse } from '../../types/training'
 import type { User } from '../../types/user'
 
@@ -737,6 +752,22 @@ async function loadFinishStatus() {
     for (const item of res?.list || []) m[item.playerId] = !!item.finished
     finishMap.value = m
   } catch { /* ignore */ }
+}
+
+// 管理员修改选手训练结束状态
+const finishSavingId = ref('')
+async function handleToggleFinish(user: any) {
+  const target = !finishMap.value[user.userId]
+  finishSavingId.value = user.userId
+  try {
+    await setTrainingFinishStatus(`round-${currentRound.value}`, user.userId, target)
+    finishMap.value = { ...finishMap.value, [user.userId]: target }
+    MessagePlugin.success(target ? '已标记训练结束' : '已取消训练结束')
+  } catch (e: any) {
+    MessagePlugin.error(e?.message || '修改失败')
+  } finally {
+    finishSavingId.value = ''
+  }
 }
 
 // ===== 本轮卡池设置 =====
@@ -1086,7 +1117,9 @@ function getRecordTooltip(record: TrainingRecord): string {
       }
       return `${getAttrLabel(key)} ${(value as number) > 0 ? '+' : ''}${value}`
     })
-  return effects.length > 0 ? effects.join('，') : '无效果'
+  const body = effects.length > 0 ? effects.join('，') : '无效果'
+  const cardIndex = (record as any).cardIndex
+  return cardIndex != null ? `#${cardIndex} ${record.cardName || ''}：${body}` : body
 }
 
 function getLatestAttributes(user: { records: TrainingRecord[]; attributes: { vocal: number; dance: number; charm: number } }): { vocal: number; dance: number; charm: number } {

@@ -1680,6 +1680,10 @@ export async function getAllTrainingFinishStatus(roundId?: string | number): Pro
   const qs = roundId !== undefined ? `?roundId=${encodeURIComponent(String(roundId))}` : ''
   return doRequest<any>(`/training/finish-status-all${qs}`)
 }
+// 管理员修改选手训练结束状态
+export async function setTrainingFinishStatus(roundId: string | number, playerId: string, finished: boolean): Promise<any> {
+  return doRequest<any>('/training/finish-status/set', { method: 'POST', body: JSON.stringify({ roundId, playerId, finished }) })
+}
 
 // ===== 3.3 选手本人公演骰子信息（歌曲/难度/风险/各点数评级）=====
 export async function getMyRatingInfo(): Promise<any> {

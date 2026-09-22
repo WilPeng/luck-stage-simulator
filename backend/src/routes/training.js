@@ -306,6 +306,37 @@ router.get('/finish-status', auth, async (req, res) => {
   }
 })
 
+// ===== POST /api/training/finish-status/set - 管理员修改选手训练结束状态 =====
+router.post('/finish-status/set', auth, requireAdmin, async (req, res) => {
+  try {
+    const { roundId, playerId, finished } = req.body || {}
+    if (!playerId) return res.status(400).json({ success: false, error: 'playerId 必填', code: 'MISSING_PARAM' })
+    const round = await getRound(roundId)
+    const rId = round ? round.id : (roundId || 'default-round')
+    const rIdx = round ? round.index : null
+    const wantFinish = finished !== false
+    let st = await TrainingStatus.findOne({ roundId: rId, playerId })
+    if (!st) {
+      st = new TrainingStatus({
+        id: generateId(), roundId: rId, roundIndex: rIdx, playerId,
+        finished: wantFinish, finishedAt: wantFinish ? new Date().toISOString() : null,
+        createdAt: new Date().toISOString()
+      })
+    } else {
+      st.finished = wantFinish
+      st.finishedAt = wantFinish ? (st.finishedAt || new Date().toISOString()) : null
+      st.updatedAt = new Date().toISOString()
+    }
+    await st.save()
+    logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TRAINING_CONFIG, 'training', rId,
+      `${wantFinish ? '标记' : '取消'}选手 ${playerId} 训练结束`)
+    res.json({ success: true, data: { roundId: rId, playerId, finished: st.finished, finishedAt: st.finishedAt } })
+  } catch (e) {
+    console.error('Set finish status error:', e)
+    res.status(500).json({ success: false, error: '修改训练结束状态失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // ===== GET /api/training/cards - 训练卡列表 =====
 router.get('/cards', auth, async (req, res) => {
   try {
@@ -677,6 +708,7 @@ router.post('/draw', auth, async (req, res) => {
       id: generateId(), roundId: rId, roundIndex: rIdx,
       userId: pid, userName: user ? user.name : pid, playerId: pid,
       cardId: drawn.id, cardName: drawn.name, cardType: drawn.type,
+      cardIndex: poolPick ? poolPick.index : null,
       effect: drawn.effect || {}, attrDelta, attributesAfter,
       createdAt: new Date().toISOString()
     })
@@ -692,6 +724,7 @@ router.post('/draw', auth, async (req, res) => {
       cardId: record.cardId,
       cardName: record.cardName,
       cardType: record.cardType,
+      cardIndex: record.cardIndex ?? null,
       effect: record.cardType === 'self_select' ? normalizeEffect(record.effect) : normalizeEffect(record.attrDelta),
       attributesAfter: normalizeAttributesAfter(record.attributesAfter),
       round: record.roundIndex,
@@ -986,6 +1019,23 @@ router.post('/auto-complete-all', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// 撤销训练记录时，释放在卡池中占用的卡牌（返还已用抽取次数）
+async function releasePoolCardsForRecords(records) {
+  if (!records || records.length === 0) return 0
+  const collection = getCollection('TrainingCardPool')
+  let released = 0
+  for (const r of records) {
+    const pid = r.playerId || r.userId
+    if (!pid) continue
+    const roundIds = [r.roundId, r.roundIndex != null ? `round-${r.roundIndex}` : null].filter(Boolean)
+    const q = { roundId: { $in: roundIds }, drawnBy: pid }
+    if (r.cardIndex != null && Number.isFinite(Number(r.cardIndex))) q.index = Number(r.cardIndex)
+    const result = await collection.updateMany(q, { $set: { drawnBy: null, drawnByName: '', drawnAt: null } })
+    released += (result.modifiedCount || 0)
+  }
+  return released
+}
+
 // ===== DELETE /api/training/clear-user-records - 取消某选手/本轮训练成果（回滚属性） =====
 router.delete('/clear-user-records', auth, requireAdmin, async (req, res) => {
   try {
@@ -1057,10 +1107,13 @@ router.delete('/clear-user-records', auth, requireAdmin, async (req, res) => {
 
     await TrainingRecord.deleteMany(filter)
 
+    // 释放在卡池中占用的卡牌，返还抽取次数
+    const releasedCards = await releasePoolCardsForRecords(recordsToDelete)
+
     logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TRAINING_CONFIG, 'training', rId || roundIdx || '',
       `取消训练成果：删除 ${recordsToDelete.length} 条记录，回滚 ${Object.keys(rollbackMap).length} 位选手属性`)
 
-    res.json({ success: true, data: { deletedCount: recordsToDelete.length, affectedUsers: Object.keys(rollbackMap).length } })
+    res.json({ success: true, data: { deletedCount: recordsToDelete.length, affectedUsers: Object.keys(rollbackMap).length, releasedCards } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '取消训练成果失败: ' + (e.message || ''), code: 'SERVER_ERROR' })
@@ -1256,8 +1309,9 @@ router.delete('/records/user/:userId', auth, requireAdmin, async (req, res) => {
     }
 
     const result = await TrainingRecord.deleteMany(filter)
+    const releasedCards = await releasePoolCardsForRecords(records)
     logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TRAINING_CONFIG, 'trainingRecord', userId, `清空用户训练记录 ${records.length} 条`)
-    res.json({ success: true, data: { deletedCount: records.length } })
+    res.json({ success: true, data: { deletedCount: records.length, releasedCards } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '清空训练记录失败', code: 'SERVER_ERROR' })
@@ -1300,8 +1354,9 @@ router.delete('/records/batch', auth, requireAdmin, async (req, res) => {
     }
 
     const result = await TrainingRecord.deleteMany({ id: { $in: ids } })
+    const releasedCards = await releasePoolCardsForRecords(records)
     logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TRAINING_CONFIG, 'trainingRecord', 'batch', `批量撤销训练记录 ${records.length} 条`)
-    res.json({ success: true, data: { deletedCount: result.deletedCount || records.length } })
+    res.json({ success: true, data: { deletedCount: result.deletedCount || records.length, releasedCards } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '批量撤销失败', code: 'SERVER_ERROR' })
@@ -1326,8 +1381,9 @@ router.delete('/records/:id', auth, requireAdmin, async (req, res) => {
     }
 
     await TrainingRecord.deleteOne({ id: req.params.id })
+    const releasedCards = await releasePoolCardsForRecords([record])
     logAction(req.user.userId, req.user.name || 'admin', 'admin', ACTION_TYPES.TRAINING_CONFIG, 'trainingRecord', record.playerId, `撤销训练记录 ${record.cardName}`)
-    res.json({ success: true })
+    res.json({ success: true, data: { releasedCards } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '撤销失败', code: 'SERVER_ERROR' })

@@ -55,6 +55,7 @@ export interface TrainingRecord {
   cardId: string
   cardName: string
   cardType: TrainingCard['type']
+  cardIndex?: number | null
   effect: TrainingEffect
   attributesAfter?: {
     vocal: number

@@ -15,6 +15,7 @@ class TrainingRecord extends BaseModel {
     this.cardId = null
     this.cardName = null
     this.cardType = null
+    this.cardIndex = null            // 所抽卡牌在卡池中的序号（1..N）
     this.effect = null
     this.attrDelta = null
     this.attributesAfter = null
