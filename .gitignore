@@ -6,3 +6,11 @@ frontend/*.log
 frontend/dist/
 *.zip
 .codebuddy/plans/
+
+# 环境变量：本地用本地、云端用云端，不纳入版本管理
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
