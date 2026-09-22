@@ -101,6 +101,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+
           script: |
             set -e
 
@@ -172,7 +173,9 @@ jobs:
               PM2_HOME=/home/admin/.pm2 \
               pm2 restart luck-stage-backend --update-env
 
-            echo "PM2 status:"
+            echo "================================"
+            echo "PM2 Status"
+            echo "================================"
 
             sudo -u admin \
               PM2_HOME=/home/admin/.pm2 \
@@ -184,9 +187,53 @@ jobs:
             echo "Check Backend"
             echo "================================"
 
-            sleep 2
+            echo "Waiting for backend to listen on port 3000..."
 
-            curl -f http://127.0.0.1:3000/ || exit 1
+            BACKEND_READY=0
+
+            for i in {1..15}; do
+              if curl -fsS \
+                --max-time 3 \
+                http://127.0.0.1:3000/ \
+                > /dev/null 2>&1; then
+
+                echo "Backend is ready."
+                BACKEND_READY=1
+                break
+              fi
+
+              echo "Backend not ready yet... attempt $i/15"
+              sleep 2
+            done
+
+            if [ "$BACKEND_READY" -ne 1 ]; then
+              echo "================================"
+              echo "Backend Failed To Start"
+              echo "================================"
+
+              echo "PM2 Status:"
+              sudo -u admin \
+                PM2_HOME=/home/admin/.pm2 \
+                pm2 status luck-stage-backend
+
+              echo "================================"
+              echo "PM2 Logs"
+              echo "================================"
+
+              sudo -u admin \
+                PM2_HOME=/home/admin/.pm2 \
+                pm2 logs luck-stage-backend \
+                --lines 80 \
+                --nostream
+
+              echo "================================"
+              echo "Port 3000 Check"
+              echo "================================"
+
+              ss -lntp | grep ':3000' || true
+
+              exit 1
+            fi
 
             echo "Backend health check passed."
 
@@ -195,6 +242,7 @@ jobs:
             echo "================================"
 
             nginx -t
+
             systemctl reload nginx
 
             echo "Nginx reloaded."
