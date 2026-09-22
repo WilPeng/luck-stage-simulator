@@ -131,7 +131,7 @@ export function calculatePerformanceResults(
         ? { vocal: member.player.attributes.vocal, dance: member.player.attributes.dance, charm: member.player.attributes.charm }
         : (() => {
             const user = users.find(u => u.id === member.playerId)
-            return user?.attributes || { vocal: 50, dance: 50, charm: 50 }
+            return user?.attributes || { vocal: 0, dance: 0, charm: 0 }
           })()
 
       // 获取选手的发挥值（从映射或生成随机）
@@ -178,9 +178,9 @@ export function calculatePerformanceResults(
       teamRatingText: teamRating.text,
       songWeights,
       teamAttributes: {
-        vocal: Math.round(memberScores.reduce((s, m) => s + (m.member.player?.attributes?.vocal || 50), 0) / memberScores.length),
-        dance: Math.round(memberScores.reduce((s, m) => s + (m.member.player?.attributes?.dance || 50), 0) / memberScores.length),
-        charm: Math.round(memberScores.reduce((s, m) => s + (m.member.player?.attributes?.charm || 50), 0) / memberScores.length),
+        vocal: Math.round(memberScores.reduce((s, m) => s + (m.member.player?.attributes?.vocal || 0), 0) / memberScores.length),
+        dance: Math.round(memberScores.reduce((s, m) => s + (m.member.player?.attributes?.dance || 0), 0) / memberScores.length),
+        charm: Math.round(memberScores.reduce((s, m) => s + (m.member.player?.attributes?.charm || 0), 0) / memberScores.length),
       },
       compatibilityScore: 0,
       playerPerformances: []

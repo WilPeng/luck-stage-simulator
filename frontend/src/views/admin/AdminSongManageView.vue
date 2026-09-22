@@ -126,16 +126,14 @@
       :header="editingSong ? '编辑歌曲' : '新增歌曲'"
       :confirm-btn="{ content: '保存', loading: saving }"
       :cancel-btn="{}"
-      width="600px"
+      width="720px"
       @confirm="doSave"
     >
-      <t-form ref="formRef" :data="form" :rules="rules" label-width="90px" class="song-form">
+      <t-form ref="formRef" :data="form" :rules="rules" label-width="96px" class="song-form">
+        <div class="form-section-title">基本信息</div>
         <div class="form-grid">
           <t-form-item label="歌名" name="name">
             <t-input v-model="form.name" placeholder="请输入歌名" />
-          </t-form-item>
-          <t-form-item label="风格" name="style">
-            <t-input v-model="form.style" placeholder="如：流行、摇滚" />
           </t-form-item>
           <t-form-item label="类型" name="type">
             <t-select v-model="form.type">
@@ -151,8 +149,18 @@
               <t-radio-button value="female">女歌手</t-radio-button>
             </t-radio-group>
           </t-form-item>
+          <t-form-item label="风格" name="style">
+            <t-input v-model="form.style" placeholder="如：流行、摇滚" />
+          </t-form-item>
+        </div>
+
+        <div class="form-section-title">评分配置</div>
+        <div class="form-grid">
           <t-form-item label="难度" name="difficulty">
-            <t-input-number v-model="form.difficulty" :min="1" :max="5" />
+            <div class="field-with-hint">
+              <t-input-number v-model="form.difficulty" :min="2" :max="10" />
+              <span class="field-hint">评级骰子面数（2~10）</span>
+            </div>
           </t-form-item>
           <t-form-item label="主属性" name="mainAttribute">
             <t-select v-model="form.mainAttribute">
@@ -171,6 +179,8 @@
             <t-input-number v-model="form.risk" :min="1" :max="100" />
           </t-form-item>
         </div>
+
+        <div class="form-section-title">其他</div>
         <t-form-item label="描述">
           <t-textarea v-model="form.description" :rows="2" placeholder="选填" />
         </t-form-item>
@@ -234,7 +244,7 @@
                 </div>
                 <div class="batch-field">
                   <label class="batch-label">难度</label>
-                  <t-input-number v-model="item.difficulty" :min="1" :max="5" />
+                  <t-input-number v-model="item.difficulty" :min="2" :max="10" />
                 </div>
               </div>
               <div class="batch-row-right">
@@ -695,6 +705,8 @@ onMounted(loadSongs)
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 20px;
 
   h1 {
@@ -723,7 +735,27 @@ onMounted(loadSongs)
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0 16px;
+
+  @media (max-width: 560px) { grid-template-columns: 1fr; }
 }
+
+.song-form { overflow-x: hidden; }
+.song-form :deep(.t-form__item) { min-width: 0; }
+.song-form :deep(.t-form__controls-content) { min-width: 0; flex-wrap: wrap; }
+
+.form-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin: 4px 0 12px;
+  padding-left: 8px;
+  border-left: 3px solid #0052d9;
+  line-height: 1;
+}
+
+.field-with-hint { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; flex-wrap: wrap; }
+.field-with-hint :deep(.t-input-number) { width: 120px !important; }
+.field-with-hint .field-hint { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
 
 .song-form :deep(.t-input-number),
 .song-form :deep(.t-select),

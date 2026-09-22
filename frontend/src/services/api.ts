@@ -769,7 +769,7 @@ export async function randomAssignTeams(roundId: string): Promise<RoundTeam[]> {
             roundId,
             teamId: t.id,
             playerId: player.id,
-            player: { id: player.id, name: player.name, avatar: player.avatar, attributes: player.attributes || { vocal: 50, dance: 50, charm: 50 } }
+            player: { id: player.id, name: player.name, avatar: player.avatar, attributes: player.attributes || { vocal: 0, dance: 0, charm: 0 } }
           } as unknown as RoundTeamMember)
         }
       }
@@ -811,7 +811,7 @@ export async function manualAssignTeams(roundId: string, assignments: { teamId: 
             roundId,
             teamId: a.teamId,
             playerId: pid,
-            player: user ? { id: user.id, name: user.name, avatar: user.avatar, attributes: user.attributes || { vocal: 50, dance: 50, charm: 50 } } : { id: pid, name: pid }
+            player: user ? { id: user.id, name: user.name, avatar: user.avatar, attributes: user.attributes || { vocal: 0, dance: 0, charm: 0 } } : { id: pid, name: pid }
           } as unknown as RoundTeamMember)
         }
       }

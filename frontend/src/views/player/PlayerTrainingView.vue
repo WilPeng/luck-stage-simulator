@@ -15,7 +15,7 @@
     </div>
 
     <!-- ===== 属性面板 ===== -->
-    <div class="attr-panel">
+    <div v-if="attrsLoaded" class="attr-panel">
       <div class="attr-item vocal">
         <span class="attr-icon">🎤</span>
         <div class="attr-body">
@@ -44,6 +44,9 @@
         <span>剩余训练：<strong>{{ remainingDraws }}</strong> 次</span>
         <span>已训练：<strong>{{ trainingCount }}</strong> 次</span>
       </div>
+    </div>
+    <div v-else class="attr-panel attr-panel-loading">
+      <t-loading text="加载属性中..." />
     </div>
 
     <!-- ===== 训练结束确认 & 公演骰子 ===== -->
@@ -201,7 +204,8 @@ const releaseStatus = ref<ConcurrentReleaseStatusResponse | null>(null)
 const isTrainingReleased = computed(() => !!releaseStatus.value?.trainingReleased)
 
 // 属性值（实时响应）
-const attributes = reactive({ vocal: 50, dance: 50, charm: 50 })
+const attributes = reactive({ vocal: 0, dance: 0, charm: 0 })
+const attrsLoaded = ref(false)
 
 // 训练次数
 const remainingDraws = ref(0)
@@ -380,6 +384,7 @@ useSfRefresh(async () => {
       attributes.vocal = userData.attributes.vocal
       attributes.dance = userData.attributes.dance
       attributes.charm = userData.attributes.charm
+      attrsLoaded.value = true
     }
   }
 }, '/training')
@@ -637,6 +642,7 @@ onMounted(async () => {
       attributes.dance = userData.attributes.dance
       attributes.charm = userData.attributes.charm
     }
+    attrsLoaded.value = true
 
     // 2. 加载训练配置与释放状态
     await Promise.all([trainingStore.fetchConfig(), loadReleaseStatus()])
@@ -735,6 +741,13 @@ color: var(--text-primary);
   margin-bottom: 24px;
 
   @media (max-width: 600px) { grid-template-columns: 1fr; }
+}
+
+.attr-panel-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
 }
 
 .attr-item {
