@@ -566,7 +566,7 @@ async function loadData() {
 }
 
 // websocket：选手端生成/抽取发挥值后，管理端「选手实时发挥」表格与排名实时刷新
-useSfRefresh(() => { initPlayerStatuses() })
+useSfRefresh(() => { initPlayerStatuses() }, '/performance')
 
 onMounted(loadData)
 </script>

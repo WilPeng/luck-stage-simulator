@@ -1618,8 +1618,13 @@ export const drawTraining = drawTrainingCard
 export async function setupTrainingPool(data: { roundId?: string | number; roundIndex?: number; perPersonDrawCount: number; totalCards?: number; counts?: { cardId: string; count: number }[] }): Promise<any> {
   return doRequest<any>('/training/pool/setup', { method: 'POST', body: JSON.stringify(data) })
 }
-export async function getTrainingPool(roundId?: string | number): Promise<{ roundId: any; totalCards: number; perPersonDrawCount: number; cards: { index: number; drawn: boolean; mine: boolean; drawnByName: string; card: any }[] }> {
-  const qs = roundId !== undefined ? `?roundId=${encodeURIComponent(String(roundId))}` : ''
+export async function getTrainingPool(roundId?: string | number, opts?: { page?: number; pageSize?: number; filter?: 'all' | 'unopened' }): Promise<{ roundId: any; totalCards: number; perPersonDrawCount: number; myDrawnCount?: number; totalFiltered?: number; page?: number; pageSize?: number; cards: { index: number; drawn: boolean; mine: boolean; drawnByName: string; card: any }[] }> {
+  const params = new URLSearchParams()
+  if (roundId !== undefined) params.set('roundId', String(roundId))
+  if (opts?.page) params.set('page', String(opts.page))
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize))
+  if (opts?.filter) params.set('filter', opts.filter)
+  const qs = params.toString() ? `?${params.toString()}` : ''
   return doRequest<any>(`/training/pool${qs}`)
 }
 export async function drawFromPool(data: { roundId?: string | number; slotIndex: number; playerId?: string; userId?: string }): Promise<any> {

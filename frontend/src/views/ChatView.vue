@@ -259,7 +259,7 @@ function stopPolling() {
 useSfRefresh(async () => {
   await chatStore.fetchMessages(1, 50, searchKeyword.value)
   scrollToBottom()
-})
+}, '/chat')
 
 onMounted(async () => {
   await chatStore.fetchMessages(1, 50, searchKeyword.value)

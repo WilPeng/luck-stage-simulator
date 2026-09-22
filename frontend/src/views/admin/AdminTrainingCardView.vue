@@ -47,6 +47,31 @@
           </span>
         </t-space>
         <p class="pool-tip">为每种卡牌设定张数（可先「一键按权重分配」再手动微调）。生成后每位选手在训练页从卡池中按序号翻牌；每张卡只能被一名选手抽走，抽完或达到每人上限即止。</p>
+
+        <!-- 本轮卡池情况 -->
+        <div v-if="poolInfo && poolInfo.totalCards" class="pool-status">
+          <div class="pool-status-head">本轮卡池情况</div>
+          <div class="pool-status-summary">
+            <span>总张数 <b>{{ poolInfo.totalCards }}</b></span>
+            <span>已抽 <b>{{ poolInfo.drawnCount }}</b></span>
+            <span>剩余 <b>{{ poolRemaining }}</b></span>
+            <span>每人可抽 <b>{{ poolInfo.perPersonDrawCount }}</b></span>
+            <span>存活人数 <b>{{ aliveCount }}</b></span>
+          </div>
+          <table class="pool-status-table">
+            <thead>
+              <tr><th>卡牌</th><th>数量</th><th>已抽</th><th>剩余</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, i) in poolBreakdown" :key="i">
+                <td>{{ row.name }}</td>
+                <td>{{ row.total }}</td>
+                <td>{{ row.drawn }}</td>
+                <td>{{ row.total - row.drawn }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- 训练情况查询 -->
@@ -720,6 +745,20 @@ const poolTargetTotal = ref(100)
 const poolCounts = reactive<Record<string, number>>({})
 const poolSaving = ref(false)
 const poolInfo = ref<any>(null)
+const poolRemaining = computed(() => Math.max(0, (poolInfo.value?.totalCards || 0) - (poolInfo.value?.drawnCount || 0)))
+const poolBreakdown = computed(() => {
+  const cards = poolInfo.value?.cards || []
+  const map = new Map<string, { name: string; total: number; drawn: number }>()
+  for (const c of cards) {
+    const id = c.card?.id || c.cardId || 'unknown'
+    const name = c.card?.name || c.cardName || '未知卡牌'
+    if (!map.has(id)) map.set(id, { name, total: 0, drawn: 0 })
+    const e = map.get(id)!
+    e.total++
+    if (c.drawn) e.drawn++
+  }
+  return Array.from(map.values()).sort((a, b) => b.total - a.total)
+})
 const aliveCount = computed(() => players.value.filter(p => p.status !== 'eliminated').length)
 const poolCountSum = computed(() => store.enabledCards.reduce((s, c) => s + (poolCounts[c.id] || 0), 0))
 const poolInvalid = computed(() => poolPer.value > 0 && poolCountSum.value > 0 && poolPer.value * aliveCount.value > poolCountSum.value)
@@ -1586,7 +1625,7 @@ useSfRefresh(() => {
   fetchTrainingRecords()
   loadFinishStatus()
   loadPoolInfo()
-})
+}, '/training')
 
 onMounted(async () => {
   await store.initialize()
@@ -2341,4 +2380,12 @@ onMounted(async () => {
 .pool-card-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bg-secondary, #f7f8fa); border: 1px solid var(--component-border, #eee); border-radius: 8px; }
 .pool-card-row .pool-card-name { flex: 1; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pool-card-row .pool-card-weight { font-size: 12px; color: #888; white-space: nowrap; }
+.pool-status { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--component-border, #eee); }
+.pool-status-head { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+.pool-status-summary { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: #555; margin-bottom: 10px; }
+.pool-status-summary b { color: #0052d9; }
+.pool-status-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pool-status-table th, .pool-status-table td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--component-border, #f0f0f0); }
+.pool-status-table th { color: #888; font-weight: 600; }
+.pool-status-table td:first-child { font-weight: 600; }
 </style>

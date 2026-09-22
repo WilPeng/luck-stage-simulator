@@ -165,24 +165,26 @@ const router = useRouter()
 const route = useRoute()
 const mobileMenuOpen = ref(false)
 
-// websocket：赛季/轮次配置变化时刷新进度与分组模式
+// websocket：赛季/轮次变化时刷新进度与当前轮分组模式（不再一次性拉取所有轮次，避免请求风暴）
 watch(() => realtime.seasonTick, async () => {
   try {
     await seasonStore.fetchProgress()
-    for (let r = 1; r <= 10; r++) loadGroupingMode(r)
+    const cur = seasonStore.currentRoundNumber || currentRoundNumber.value
+    if (cur) loadGroupingMode(cur)
   } catch { /* ignore */ }
 })
 
-// 任意写操作 → 轻量刷新左侧菜单与阶段状态
+// 任意写操作 → 轻量刷新阶段进度（去抖）
 let sfRefreshTimer: number | undefined
 watch(() => realtime.tick, () => {
+  if (!/\/season|\/admin|\/concurrent/.test(realtime.lastPath || '')) return
   if (sfRefreshTimer) return
   sfRefreshTimer = window.setTimeout(async () => {
     sfRefreshTimer = undefined
     try {
       await seasonStore.fetchProgress()
     } catch { /* ignore */ }
-  }, 400)
+  }, 1000)
 })
 
 const gamePrefix = computed(() => `/games/${authStore.currentGameId}`)

@@ -131,7 +131,7 @@
         </div>
       </div>
       <div v-if="poolTotalPages > 1" class="pool-pager">
-        <t-pagination v-model="poolPage" :total="filteredPoolCards.length" :page-size="poolPageSize" theme="simple" />
+        <t-pagination v-model="poolPage" :total="pool?.totalFiltered || 0" :page-size="poolPageSize" theme="simple" />
       </div>
     </div>
 
@@ -316,24 +316,19 @@ const cardSlots = reactive<CardSlot[]>(
 const changeLog = reactive<{ cardName: string; vocal: number; dance: number; charm: number; desc?: string }[]>([])
 
 // ===== 有限卡池 =====
-const pool = ref<{ totalCards: number; perPersonDrawCount: number; cards: any[] } | null>(null)
+const pool = ref<any>(null)
 const poolDrawing = ref(false)
 const poolFilter = ref<'all' | 'unopened'>('all')
 const poolPage = ref(1)
 const poolPageSize = ref(20)
 
-const myDrawnCount = computed(() => pool.value ? pool.value.cards.filter((c: any) => c.mine).length : 0)
-const filteredPoolCards = computed(() => {
-  const cards = pool.value?.cards || []
-  return poolFilter.value === 'unopened' ? cards.filter((c: any) => !c.drawn) : cards
-})
-const poolTotalPages = computed(() => Math.max(1, Math.ceil(filteredPoolCards.value.length / poolPageSize.value)))
-const pagedPoolCards = computed(() => {
-  const start = (poolPage.value - 1) * poolPageSize.value
-  return filteredPoolCards.value.slice(start, start + poolPageSize.value)
-})
+const myDrawnCount = computed(() => pool.value?.myDrawnCount || 0)
+const pagedPoolCards = computed(() => pool.value?.cards || [])
+const poolTotalPages = computed(() => Math.max(1, Math.ceil((pool.value?.totalFiltered || 0) / poolPageSize.value)))
 
-watch([poolFilter, poolPageSize], () => { poolPage.value = 1 })
+watch(poolFilter, () => { poolPage.value = 1; loadPool() })
+watch(poolPageSize, () => { poolPage.value = 1; loadPool() })
+watch(poolPage, () => { loadPool() })
 
 function formatEffect(effect: any): string {
   if (!effect) return '无属性变化'
@@ -366,7 +361,11 @@ function syncFromPool() {
 
 async function loadPool() {
   try {
-    const res: any = await getTrainingPool(`round-${currentRound.value}`)
+    const res: any = await getTrainingPool(`round-${currentRound.value}`, {
+      page: poolPage.value,
+      pageSize: poolPageSize.value,
+      filter: poolFilter.value
+    })
     pool.value = (res && res.totalCards > 0) ? res : null
     if (pool.value) syncFromPool()
   } catch { pool.value = null }
@@ -383,7 +382,7 @@ useSfRefresh(async () => {
       attributes.charm = userData.attributes.charm
     }
   }
-})
+}, '/training')
 
 async function handlePoolDraw(c: any) {
   if (!pool.value || c.drawn || isTrainingLocked.value || !currentUser.value) return

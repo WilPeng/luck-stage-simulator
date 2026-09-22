@@ -96,7 +96,7 @@ async function handleLeave() {
   }
 }
 
-useSfRefresh(() => { load() })
+useSfRefresh(() => { load() }, '/teams')
 onMounted(load)
 </script>
 

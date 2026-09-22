@@ -373,7 +373,7 @@ let releaseTimer: number | undefined
 useSfRefresh(() => {
   loadReleaseStatus()
   loadGroupingMode()
-})
+}, '/teams|/songs|/concurrent')
 
 onMounted(async () => {
   const roundId = `round-${round.value}`

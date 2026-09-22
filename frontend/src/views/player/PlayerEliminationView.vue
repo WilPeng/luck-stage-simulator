@@ -358,7 +358,7 @@ async function loadAll() {
 }
 
 // websocket：管理员揭晓 PK 票数时选手端实时刷新
-useSfRefresh(() => { loadAll() })
+useSfRefresh(() => { loadAll() }, '/elimination|/performance')
 
 onMounted(async () => {
   await Promise.all([

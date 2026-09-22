@@ -174,27 +174,27 @@ const route = useRoute()
 const router = useRouter()
 const mobileMenuOpen = ref(false)
 
-// 管理员切换轮次/赛季配置后，选手端通过 websocket 实时跟进（刷新进度、菜单、分组模式）
+// 管理员切换轮次/赛季配置后，选手端通过 websocket 实时跟进（进度、菜单、当前轮分组模式）
 watch(() => realtime.seasonTick, async () => {
   try {
     await seasonStore.fetchProgress()
     seasonStore.fetchMenu().catch(() => {})
-    for (let r = 1; r <= 10; r++) loadGroupingMode(r)
+    const cur = seasonStore.currentRoundNumber || currentRoundNumber.value
+    if (cur) loadGroupingMode(cur)
   } catch { /* ignore */ }
 })
 
-// 任意写操作（并发开放/关闭、组队、选歌、训练、发挥值等）→ 轻量刷新左侧菜单与并发开放状态
+// 任意写操作（并发开放/关闭等）→ 只刷新并发开放状态（去抖），避免频繁重拉菜单
 let sfRefreshTimer: number | undefined
 watch(() => realtime.tick, () => {
+  if (!/\/concurrent/.test(realtime.lastPath || '')) return
   if (sfRefreshTimer) return
   sfRefreshTimer = window.setTimeout(async () => {
     sfRefreshTimer = undefined
     try {
-      await seasonStore.fetchProgress()
-      seasonStore.fetchMenu().catch(() => {})
-      seasonStore.fetchAllConcurrentRelease().catch(() => {})
+      await seasonStore.fetchAllConcurrentRelease()
     } catch { /* ignore */ }
-  }, 400)
+  }, 1000)
 })
 
 import { GAMES, getGameById } from '../config/games'

@@ -464,6 +464,9 @@ router.post('/pool/setup', auth, requireAdmin, async (req, res) => {
 router.get('/pool', auth, async (req, res) => {
   try {
     const { roundId } = req.query
+    const page = Math.max(1, parseInt(req.query.page) || 1)
+    const pageSize = parseInt(req.query.pageSize) || 0
+    const filter = req.query.filter === 'unopened' ? 'unopened' : 'all'
     let rId = roundId
     const round = await getRound(roundId)
     if (round) rId = round.id
@@ -479,7 +482,11 @@ router.get('/pool', auth, async (req, res) => {
         if (r.cardIndex !== undefined && r.cardIndex !== null) recByIndex[r.cardIndex] = r
       }
     }
-    const list = cards.map(c => {
+    const myDrawnCount = cards.filter(c => c.drawnBy && c.drawnBy === myId).length
+    const filtered = filter === 'unopened' ? cards.filter(c => !c.drawnBy) : cards
+    const totalFiltered = filtered.length
+    const slice = pageSize > 0 ? filtered.slice((page - 1) * pageSize, page * pageSize) : filtered
+    const list = slice.map(c => {
       const mine = !!(c.drawnBy && c.drawnBy === myId)
       const rec = mine ? recByIndex[c.index] : null
       return {
@@ -497,6 +504,10 @@ router.get('/pool', auth, async (req, res) => {
         roundId: rId,
         totalCards: cards.length,
         perPersonDrawCount: cards[0]?.perPersonDrawCount || 0,
+        myDrawnCount,
+        totalFiltered,
+        page,
+        pageSize,
         cards: list
       }
     })

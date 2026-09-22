@@ -166,7 +166,7 @@ useSfRefresh(() => {
   loadReleaseStatus()
   loadSongOptions()
   loadAll()
-})
+}, '/teams|/songs|/concurrent')
 
 onMounted(async () => {
   await Promise.all([

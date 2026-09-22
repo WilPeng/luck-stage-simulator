@@ -127,7 +127,7 @@ useSfRefresh(() => {
   teamStore.fetchTeams(String(currentRound.value))
   songStore.fetchRoundSongs(String(currentRound.value))
   checkPerfValueDrawn()
-})
+}, '/concurrent|/teams|/songs|/training|/performance')
 
 onMounted(() => {
   loadGroupingMode()

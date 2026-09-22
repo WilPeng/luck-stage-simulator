@@ -707,7 +707,7 @@ useSfRefresh(() => {
   loadMyRating()
   loadRevealedTeamsData()
   performanceStore.fetchPlayerPerformanceResults(String(currentRound.value)).catch(() => {})
-})
+}, '/performance')
 
 onMounted(async () => {
   const uid = currentUser.value?.id

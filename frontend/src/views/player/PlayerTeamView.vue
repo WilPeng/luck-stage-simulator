@@ -647,7 +647,7 @@ useSfRefresh(() => {
   loadAll()
   loadApplications()
   loadInvites()
-})
+}, '/teams|/concurrent')
 
 onMounted(async () => {
   await Promise.all([
