@@ -455,12 +455,15 @@ router.post('/release', auth, requireAdmin, async (req, res) => {
     if (!roundSong) {
       return res.status(404).json({ success: false, error: '歌曲不存在', code: 'SONG_NOT_FOUND' })
     }
-    if (roundSong.assignedTeamId) {
-      return res.status(400).json({ success: false, error: '该歌曲已被分配，无法释放', code: 'SONG_ALREADY_ASSIGNED' })
-    }
-    if (roundSong.released) {
+    if (roundSong.released && !roundSong.assignedTeamId) {
       return res.status(400).json({ success: false, error: '该歌曲已释放', code: 'SONG_ALREADY_RELEASED' })
     }
+    // 释放抢选：清除此前的队伍分配（含 TeamSong 记录），使歌曲可被任意队伍抢选
+    await TeamSong.deleteMany({
+      roundId: { $in: [dbRoundId, roundId].filter(Boolean) },
+      songId: roundSong.songId
+    })
+    roundSong.assignedTeamId = null
     roundSong.released = true
     roundSong.releasedAt = new Date().toISOString()
     roundSong.updatedAt = new Date().toISOString()

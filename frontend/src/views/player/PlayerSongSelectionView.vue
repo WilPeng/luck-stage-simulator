@@ -356,14 +356,21 @@ async function handleClaimSong(roundSongId: string) {
   }
 }
 
-// 检查某首轮次歌曲是否已被其他队伍抢选
+// 检查某首轮次歌曲是否已被其他队伍抢选/分配
 function isSongClaimed(roundSongId: string): boolean {
-  return songStore.teamSongs.some(ts => ts.songId === roundSongId)
+  const rs: any = roundSongs.value.find(r => r.id === roundSongId)
+  if (rs && rs.assignedTeamId) return true
+  // 回退：按分配记录（songId 匹配）
+  const songId = rs?.songId
+  return songStore.teamSongs.some(ts => (songId && ts.songId === songId) || ts.songId === roundSongId)
 }
 
 // 获取抢占了某首歌曲的队伍名称
 function getClaimedTeamName(roundSongId: string): string {
-  const ts = songStore.teamSongs.find(t => t.songId === roundSongId)
+  const rs: any = roundSongs.value.find(r => r.id === roundSongId)
+  if (rs && rs.assignedTeamName) return rs.assignedTeamName
+  const songId = rs?.songId
+  const ts = songStore.teamSongs.find(t => (songId && t.songId === songId) || t.songId === roundSongId)
   if (!ts) return '未知队伍'
   const team = teamStore.getTeamById(ts.teamId)
   return team?.name || '未知队伍'

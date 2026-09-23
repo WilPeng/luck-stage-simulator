@@ -128,7 +128,10 @@
               <t-button v-else theme="success" size="small" @click="openAssignDialog(song)">直接分配</t-button>
               <t-button theme="danger" variant="outline" size="small" @click="handleRemoveSong(song)">移出</t-button>
             </template>
-            <t-tag v-else theme="success" variant="light" size="small">已归 {{ getTeamName(song.assignedTeamId) }}</t-tag>
+            <template v-else>
+              <t-tag theme="success" variant="light" size="small">已归 {{ getTeamName(song.assignedTeamId) }}</t-tag>
+              <t-button theme="warning" variant="outline" size="small" @click="releaseSong(song.id)">重新释放</t-button>
+            </template>
           </div>
         </div>
         <t-empty v-if="roundSongs.length === 0" description="本轮还没有曲目，点击右上角从歌曲库添加" />
