@@ -1618,7 +1618,7 @@ router.post('/select-song', auth, async (req, res) => {
 
     // 加入队伍
     const member = new RoundTeamMember({
-      id: generateId(), roundId: frontRoundId, roundIndex: round.index,
+      id: generateId(), roundId: rId, roundIndex: round.index,
       teamId: team.id, playerId: pid, createdAt: new Date().toISOString()
     })
     await member.save()
@@ -1642,7 +1642,7 @@ router.post('/select-song', auth, async (req, res) => {
     if (!existingTeamSong) {
       const TeamSong = require('../models/TeamSong')
       const ts = new TeamSong({
-        id: generateId(), roundId: frontRoundId, roundIndex: round.index,
+        id: generateId(), roundId: rId, roundIndex: round.index,
         teamId: team.id, songId, assignedBy: req.user.userId, createdAt: new Date().toISOString()
       })
       await ts.save()

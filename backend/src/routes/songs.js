@@ -386,7 +386,10 @@ router.get('/team-songs', auth, async (req, res) => {
     const round = roundId ? await getRound(roundId) : await getRound()
     const rId = round ? round.id : roundId
     const filter = {}
-    if (rId) filter.roundId = rId
+    if (rId) {
+      // 兼容两种 roundId 存储格式（UUID 与 round-N），避免漏查
+      filter.roundId = (roundId && roundId !== rId) ? { $in: [rId, roundId] } : rId
+    }
 
     const [teamSongs, songs, teams] = await Promise.all([
       TeamSong.find(filter), Song.find({}), RoundTeam.find(rId ? { roundId: rId } : {})
@@ -483,17 +486,15 @@ router.post('/claim', auth, async (req, res) => {
     if (!roundId || !roundSongId || !teamId) {
       return res.status(400).json({ success: false, error: '缺少 roundId、roundSongId 或 teamId', code: 'MISSING_PARAM' })
     }
-    // 校验是否是队长
-    const team = await RoundTeam.findOne({ id: teamId, roundId })
-    if (!team) {
-      return res.status(404).json({ success: false, error: '队伍不存在', code: 'TEAM_NOT_FOUND' })
-    }
+    // 先解析轮次（兼容 round-1 / UUID），再校验队伍
+    const round = await getRound(roundId)
+    const dbRoundId = round ? round.id : roundId
+    const team = await RoundTeam.findOne({ id: teamId, roundId: { $in: [dbRoundId, roundId].filter(Boolean) } })
+    if (!team) return res.status(404).json({ success: false, error: '队伍不存在', code: 'TEAM_NOT_FOUND' })
     if (team.captainId !== req.user.userId) {
       return res.status(403).json({ success: false, error: '只有队长才能抢选歌曲', code: 'NOT_CAPTAIN' })
     }
     // 校验歌曲
-    const round = await getRound(roundId)
-    const dbRoundId = round ? round.id : roundId
     // 兼容 roundId 格式：同时匹配 DB UUID 和前端 round-N 两种格式
     const roundSong = await RoundSong.findOne({
       id: roundSongId,
