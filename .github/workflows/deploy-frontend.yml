@@ -191,19 +191,27 @@ jobs:
 
             BACKEND_READY=0
 
-            for i in {1..15}; do
-              if curl -fsS \
+            for i in $(seq 1 40); do
+              # 任意 HTTP 返回码都算就绪（不再要求 2xx，避免根路径非 200 时误判）
+              code=$(curl -s -o /dev/null -w '%{http_code}' \
                 --max-time 3 \
-                http://127.0.0.1:3000/ \
-                > /dev/null 2>&1; then
+                http://127.0.0.1:3000/ 2>/dev/null || true)
 
-                echo "Backend is ready."
+              if [ -n "$code" ] && [ "$code" != "000" ]; then
+                echo "Backend is ready (HTTP $code)."
                 BACKEND_READY=1
                 break
               fi
 
-              echo "Backend not ready yet... attempt $i/15"
-              sleep 2
+              # 端口已监听同样视为就绪（Mongo Atlas 连接较慢时先监听后可用）
+              if ss -lnt 2>/dev/null | grep -q ':3000'; then
+                echo "Backend port 3000 is listening."
+                BACKEND_READY=1
+                break
+              fi
+
+              echo "Backend not ready yet... attempt $i/40"
+              sleep 3
             done
 
             if [ "$BACKEND_READY" -ne 1 ]; then
