@@ -97,14 +97,8 @@
       <div class="pool-header">
         <h2 class="section-title">🎴 卡池 <span class="section-sub">共 {{ pool.totalCards }} 张 · 每人可抽 {{ pool.perPersonDrawCount }} 张 · 已抽 {{ myDrawnCount }} 张</span></h2>
         <div class="pool-controls">
-          <t-radio-group v-model="poolFilter" variant="default-filled" size="small">
-            <t-radio-button value="all">全部</t-radio-button>
-            <t-radio-button value="unopened">未翻开</t-radio-button>
-          </t-radio-group>
-          <t-select v-model="poolPageSize" size="small" style="width: 120px">
-            <t-option :value="20" label="每页 20 张" />
-            <t-option :value="50" label="每页 50 张" />
-          </t-select>
+          <span class="pool-hint">每次随机展示 {{ poolSample }} 张</span>
+          <t-button variant="outline" size="small" :loading="poolLoading" @click="handleRefreshPool">🔄 换一批</t-button>
         </div>
       </div>
       <div class="pool-grid" :class="{ 'grid-settling': settlingSlotIndex !== null }">
@@ -141,8 +135,10 @@
           </template>
         </div>
       </div>
-      <div v-if="poolTotalPages > 1" class="pool-pager">
-        <t-pagination v-model="poolPage" :total="pool?.totalFiltered || 0" :page-size="poolPageSize" theme="simple" />
+      <div class="pool-pager">
+        <t-button v-if="!isTrainingLocked" variant="outline" :loading="poolLoading" @click="handleRefreshPool">
+          🔄 换一批（剩余未翻开 {{ pool?.totalFiltered ?? 0 }} 张）
+        </t-button>
       </div>
     </div>
 
@@ -189,7 +185,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { useTrainingCardStore } from '../../stores/trainingCardStore'
@@ -336,17 +332,20 @@ function flashReveal(index: number) {
   revealedSlotIndex.value = index
   window.setTimeout(() => { if (revealedSlotIndex.value === index) revealedSlotIndex.value = null }, 700)
 }
-const poolFilter = ref<'all' | 'unopened'>('all')
-const poolPage = ref(1)
-const poolPageSize = ref(20)
+// 随机抽样模式：每次只加载 10 张，点击哪张抽哪张，「换一批」重新随机
+const poolSample = ref(10)
+const poolLoading = ref(false)
+// 抽样种子：同一 seed 结果稳定（websocket 刷新不乱跳），「换一批」时更换
+const poolSeed = ref(Math.floor(Math.random() * 1e9))
 
 const myDrawnCount = computed(() => pool.value?.myDrawnCount || 0)
 const pagedPoolCards = computed(() => pool.value?.cards || [])
-const poolTotalPages = computed(() => Math.max(1, Math.ceil((pool.value?.totalFiltered || 0) / poolPageSize.value)))
 
-watch(poolFilter, () => { poolPage.value = 1; loadPool() })
-watch(poolPageSize, () => { poolPage.value = 1; loadPool() })
-watch(poolPage, () => { loadPool() })
+async function handleRefreshPool() {
+  poolSeed.value = Math.floor(Math.random() * 1e9)
+  poolLoading.value = true
+  try { await loadPool() } finally { poolLoading.value = false }
+}
 
 function formatEffect(effect: any): string {
   if (!effect) return '无属性变化'
@@ -380,9 +379,8 @@ function syncFromPool() {
 async function loadPool() {
   try {
     const res: any = await getTrainingPool(`round-${currentRound.value}`, {
-      page: poolPage.value,
-      pageSize: poolPageSize.value,
-      filter: poolFilter.value
+      sample: poolSample.value,
+      seed: poolSeed.value
     })
     pool.value = (res && res.totalCards > 0) ? res : null
     if (pool.value) syncFromPool()
@@ -1027,6 +1025,7 @@ color: var(--text-primary);
 }
 
 .pool-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }.pool-controls { display: flex; align-items: center; gap: 10px; }
+.pool-hint { font-size: 12px; color: var(--text-tertiary); }
 .pool-pager { display: flex; justify-content: center; margin-top: 14px; }
 .pool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
 .pool-grid.grid-settling .pool-slot:not(.settling) { opacity: .45; filter: grayscale(0.4); pointer-events: none; }

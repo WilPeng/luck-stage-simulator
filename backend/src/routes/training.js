@@ -514,9 +514,44 @@ router.get('/pool', auth, async (req, res) => {
       }
     }
     const myDrawnCount = cards.filter(c => c.drawnBy && c.drawnBy === myId).length
-    const filtered = filter === 'unopened' ? cards.filter(c => !c.drawnBy) : cards
-    const totalFiltered = filtered.length
-    const slice = pageSize > 0 ? filtered.slice((page - 1) * pageSize, page * pageSize) : filtered
+    const sample = Math.max(0, parseInt(req.query.sample) || 0)
+    const seed = parseInt(req.query.seed) || 0
+    let totalFiltered = 0
+    let slice = []
+    if (sample > 0) {
+      // 随机抽样模式：只返回少量卡（含本人已抽的），点击哪张抽哪张，减少首屏数据量
+      const unopened = cards.filter(c => !c.drawnBy)
+      // 洗牌：带 seed 时用确定性随机（同一 seed 结果稳定，websocket 刷新不会乱跳）
+      let rand = Math.random
+      if (seed) {
+        let s = seed >>> 0
+        rand = () => {
+          s = (s + 0x6D2B79F5) >>> 0
+          let t = s
+          t = Math.imul(t ^ (t >>> 15), t | 1)
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+        }
+      }
+      for (let i = unopened.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1))
+        ;[unopened[i], unopened[j]] = [unopened[j], unopened[i]]
+      }
+      const mineCards = myId ? cards.filter(c => c.drawnBy === myId) : []
+      const picked = []
+      const seen = new Set()
+      for (const c of mineCards) { if (!seen.has(c.index)) { picked.push(c); seen.add(c.index) } }
+      for (const c of unopened) {
+        if (picked.length >= sample) break
+        if (!seen.has(c.index)) { picked.push(c); seen.add(c.index) }
+      }
+      slice = picked.slice(0, Math.max(sample, mineCards.length))
+      totalFiltered = unopened.length
+    } else {
+      const filtered = filter === 'unopened' ? cards.filter(c => !c.drawnBy) : cards
+      totalFiltered = filtered.length
+      slice = pageSize > 0 ? filtered.slice((page - 1) * pageSize, page * pageSize) : filtered
+    }
     const list = slice.map(c => {
       const mine = !!(c.drawnBy && c.drawnBy === myId)
       const rec = mine ? recByIndex[c.index] : null
