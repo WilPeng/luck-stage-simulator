@@ -160,7 +160,7 @@ async function runCompetition() {
   } catch (e: any) { alert(e.message) }
 }
 
-async function onSelectMinigame(minigameId: string) {
+async function onSelectMinigame(minigameId: string, options?: Record<string, any>) {
   showMinigameModal.value = false
   if (!activeHouseguests.value.length) {
     alert('没有活跃房客')
@@ -171,7 +171,7 @@ async function onSelectMinigame(minigameId: string) {
       playerId: h.id,
       playerName: h.name
     }))
-    const room = await bbCreateMinigameRoom('hoh', minigameId, participants)
+    const room = await bbCreateMinigameRoom('hoh', minigameId, participants, null, options)
     activeRoom.value = room
     alert(`比赛房间已创建！玩家可以加入了。`)
   } catch (e: any) {

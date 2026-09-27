@@ -76,6 +76,9 @@ import MinorityGame from '../../../components/bigbrother/minigames/MinorityGame.
 import SpotDifferenceGame from '../../../components/bigbrother/minigames/SpotDifferenceGame.vue'
 import ReactionGame from '../../../components/bigbrother/minigames/ReactionGame.vue'
 import SequenceMemoryGame from '../../../components/bigbrother/minigames/SequenceMemoryGame.vue'
+import JigsawGame from '../../../components/bigbrother/minigames/JigsawGame.vue'
+import MissingNumberGame from '../../../components/bigbrother/minigames/MissingNumberGame.vue'
+import AbracaGame from '../../../components/bigbrother/minigames/AbracaGame.vue'
 import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
 import JuryQA from '../../../components/bigbrother/JuryQA.vue'
 import type { MinigameRoom, BBEndgameStatus } from '../../../types/bigbrother'
@@ -108,7 +111,10 @@ const gameComponentMap: Record<string, Component> = {
   'minority': markRaw(MinorityGame),
   'spot-difference': markRaw(SpotDifferenceGame),
   'reaction': markRaw(ReactionGame),
-  'sequence-memory': markRaw(SequenceMemoryGame)
+  'sequence-memory': markRaw(SequenceMemoryGame),
+  'jigsaw': markRaw(JigsawGame),
+  'missing-number': markRaw(MissingNumberGame),
+  'abraca': markRaw(AbracaGame)
 }
 
 function inMe(room: MinigameRoom): boolean {

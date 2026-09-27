@@ -41,7 +41,15 @@ function createModeHandler(gameDef) {
   const tbQuestion = allQuestions.find(q => q.tb) || null
   const basicLimitMs = (gameDef.basicTimeLimit || 30) * 1000
   const tbLimitMs = (gameDef.tiebreakTimeLimit || 30) * 1000
+  // 模式1/2/3 的每题限时（管理员可设置，默认 30s）
+  const answerLimitMs = (gameDef.answerTimeLimit || gameDef.basicTimeLimit || 30) * 1000
   const REVEAL_MS = 3000
+
+  function limitFor(state) {
+    if (state.tiebreak) return tbLimitMs
+    if (mode === 'survive-tb' || mode === 'score-tb') return basicLimitMs
+    return answerLimitMs
+  }
 
   function publicQuestion(q) {
     if (!q) return null
@@ -134,7 +142,7 @@ function createModeHandler(gameDef) {
     state._q = q
     state.question = publicQuestion(q)
     state.phase = 'answering'
-    state.deadline = Date.now() + (state.tiebreak ? tbLimitMs : basicLimitMs)
+    state.deadline = Date.now() + limitFor(state)
     state.nextAt = 0
   }
 
@@ -183,6 +191,7 @@ function createModeHandler(gameDef) {
     if (correct) {
       state.phase = 'picking'
       state.pickerId = state.firstId
+      state.pickDeadline = Date.now() + answerLimitMs
       pushEvent(state, 'phase', `${nameOf(state, state.firstId)} 首个作答正确，可选择一人出局`, { pickerId: state.firstId })
     } else {
       const p = state.ps[state.firstId]
@@ -222,7 +231,7 @@ function createModeHandler(gameDef) {
     state._q = allQuestions[state.qIndex]
     state.question = publicQuestion(allQuestions[state.qIndex])
     state.phase = 'answering'
-    state.deadline = 0
+    state.deadline = Date.now() + answerLimitMs
     state.nextAt = 0
   }
 
@@ -235,6 +244,69 @@ function createModeHandler(gameDef) {
     }
     state.current = null
     state.phase = 'pairing'
+    state.nextAt = Date.now() + REVEAL_MS
+    return false
+  }
+
+  // 应用一次「选择出局」（选手点选或超时随机）
+  function applyPick(state, targetId) {
+    const target = state.ps[targetId]
+    if (!target || !target.alive || targetId === state.pickerId) {
+      state.phase = 'reveal'
+      state.nextAt = Date.now() + REVEAL_MS
+      return false
+    }
+    target.alive = false
+    target.eliminated = true
+    pushEvent(state, 'eliminate', `${nameOf(state, targetId)} 被 ${nameOf(state, state.pickerId)} 选择出局`, { eliminatedId: targetId, pickedBy: state.pickerId })
+    state.roundResult = { eliminatedId: targetId, pickedBy: state.pickerId }
+    state.phase = 'reveal'
+    state.nextAt = Date.now() + REVEAL_MS
+    state.pickDeadline = 0
+    return false
+  }
+
+  // 模式1 超时结算
+  function timeoutElimLast(state) {
+    const alive = aliveList(state)
+    let elim = null
+    if (gameDef.eliminateRule === 'first_wrong') {
+      // 无人答错则本轮无人出局
+      elim = null
+    } else {
+      // 未作答者视为最后提交；多个未作答取最后一个
+      const unanswered = alive.filter(p => !p.answered)
+      if (unanswered.length) elim = unanswered[unanswered.length - 1].playerId
+      else {
+        let worst = -1
+        for (const p of alive) { const t = p.submittedAt || 0; if (t >= worst) { worst = t; elim = p.playerId } }
+      }
+    }
+    for (const p of alive) { if (!p.answered) { p.correct = false; p.locked = true } }
+    if (elim && state.ps[elim]) { state.ps[elim].alive = false; state.ps[elim].eliminated = true }
+    if (elim) pushEvent(state, 'eliminate', `超时：${nameOf(state, elim)} 出局`, { eliminatedId: elim, timeout: true })
+    state.roundResult = { eliminatedId: elim, timeout: true }
+    state.phase = 'reveal'
+    state.nextAt = Date.now() + REVEAL_MS
+  }
+
+  // 模式2 超时：无人作答则本轮无人出局
+  function timeoutFirstPick(state) {
+    state.roundResult = { timeout: true, eliminatedId: null }
+    state.phase = 'reveal'
+    state.nextAt = Date.now() + REVEAL_MS
+  }
+
+  // 模式3 超时：随机判负一方
+  function timeoutDuel(state) {
+    const pair = state.current || []
+    if (pair.length !== 2) return advanceDuel(state)
+    const loser = Math.random() < 0.5 ? pair[0] : pair[1]
+    const winner = pair.find(id => id !== loser)
+    if (state.ps[loser]) { state.ps[loser].alive = false; state.ps[loser].eliminated = true }
+    pushEvent(state, 'duel', `超时：${nameOf(state, loser)} 出局`, { winnerId: winner, eliminatedId: loser, timeout: true })
+    state.roundResult = { winnerId: winner, eliminatedId: loser, timeout: true }
+    state.phase = 'reveal'
     state.nextAt = Date.now() + REVEAL_MS
     return false
   }
@@ -284,11 +356,13 @@ function createModeHandler(gameDef) {
         }
       }
       if (!best) {
-        let minVal = null
+        // 无人不超过目标：取最接近目标（绝对差最小）者
+        let minDiff = null
         for (const p of candidates) {
           const a = Number(p.answer)
           if (p.answered && !Number.isNaN(a)) {
-            if (minVal === null || a < minVal) { minVal = a; best = p.playerId }
+            const diff = Math.abs(a - state.target)
+            if (minDiff === null || diff < minDiff) { minDiff = diff; best = p.playerId }
           }
         }
       }
@@ -353,7 +427,14 @@ function createModeHandler(gameDef) {
         if (alive.length && alive.every(p => p.answered)) {
           if (mode === 'elim-last') resolveElimLast(state)
           else resolveFirstPick(state, state.ps[state.firstId] ? state.ps[state.firstId].correct : false)
+        } else if (state.deadline && now >= state.deadline) {
+          if (mode === 'elim-last') timeoutElimLast(state)
+          else if (state.firstId) resolveFirstPick(state, state.ps[state.firstId] ? state.ps[state.firstId].correct : false)
+          else timeoutFirstPick(state)
         }
+      } else if (state.phase === 'picking' && state.pickDeadline && now >= state.pickDeadline) {
+        const others = aliveList(state).filter(p => p.playerId !== state.pickerId)
+        applyPick(state, others.length ? others[Math.floor(Math.random() * others.length)].playerId : null)
       } else if (state.phase === 'reveal' && state.nextAt && now >= state.nextAt) {
         return mode === 'elim-last' ? advanceElimLast(state) : advanceFirstPick(state)
       }
@@ -371,6 +452,8 @@ function createModeHandler(gameDef) {
         state.roundResult = { winnerId: correct ? state.firstId : other, eliminatedId: loser }
         state.phase = 'reveal'
         state.nextAt = now + REVEAL_MS
+      } else if (state.phase === 'answering' && state.deadline && now >= state.deadline) {
+        timeoutDuel(state)
       } else if (state.phase === 'reveal' && state.nextAt && now >= state.nextAt) {
         return advanceDuel(state)
       } else if (state.phase === 'pairing' && state.nextAt && now >= state.nextAt) {
@@ -491,13 +574,7 @@ function createModeHandler(gameDef) {
 
     if (mode === 'first-pick' && action.type === 'pick') {
       if (state.phase !== 'picking' || playerId !== state.pickerId) return { updated: false }
-      const target = state.ps[action.targetId]
-      if (!target || !target.alive || action.targetId === playerId) return { updated: false }
-      target.alive = false
-      target.eliminated = true
-      state.roundResult = { eliminatedId: action.targetId, pickedBy: playerId }
-      state.phase = 'reveal'
-      state.nextAt = Date.now() + REVEAL_MS
+      applyPick(state, action.targetId)
       return { updated: true, finished: false }
     }
 
@@ -531,10 +608,11 @@ function createModeHandler(gameDef) {
         locked: p.locked,
         inTiebreak: p.inTiebreak
       }
-      if (showAnswers && (state.phase === 'reveal' || state.finished)) row.answer = p.answer
-      else if ((mode === 'elim-last' || mode === 'first-pick' || mode === 'duel') && showSubs) {
-        row.correct = p.correct
-        row.answer = p.answered ? p.answer : null
+      const revealPhase = state.phase === 'reveal' || state.finished
+      // 作答阶段只暴露“是否已提交”，答案/对错仅在揭晓后展示，避免泄露
+      if (revealPhase && (showAnswers || showSubs)) {
+        row.answer = p.answer
+        if (!showAnswers) row.correct = p.correct
       }
       if (mode === 'duel' && state.current) row.inDuel = state.current.includes(p.playerId)
       return row
@@ -553,7 +631,10 @@ function createModeHandler(gameDef) {
       question: state.question || null,
       deadline: state.deadline || 0,
       serverNow: Date.now(),
-      timeLimit: state.tiebreak ? gameDef.tiebreakTimeLimit : gameDef.basicTimeLimit,
+      timeLimit: state.tiebreak
+        ? Math.round(tbLimitMs / 1000)
+        : (mode === 'survive-tb' || mode === 'score-tb' ? Math.round(basicLimitMs / 1000) : Math.round(answerLimitMs / 1000)),
+      pickDeadline: state.pickDeadline || 0,
       tiebreak: !!state.tiebreak,
       target: state.finished || state.phase === 'reveal' ? state.target : null,
       current: state.current || null,
@@ -576,11 +657,12 @@ function createModeHandler(gameDef) {
         correct: p.correct,
         inTiebreak: p.inTiebreak,
         canAnswer: state.phase === 'answering' && p.alive &&
+          (mode !== 'duel' || (state.current && state.current.includes(playerId))) &&
           !(state.tiebreak && !p.inTiebreak) &&
           !(mode === 'elim-last' && p.answered) &&
           !(mode === 'first-pick' && state.firstId) &&
           !(mode === 'duel' && state.firstId) &&
-          !((mode === 'survive-tb' || mode === 'score-tb') && state.deadline && Date.now() >= state.deadline),
+          !(state.deadline && Date.now() >= state.deadline),
         canPick: mode === 'first-pick' && state.phase === 'picking' && playerId === state.pickerId
       }
     }

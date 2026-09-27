@@ -34,7 +34,7 @@
         v-for="game in filteredGames"
         :key="game.id"
         class="game-card"
-        @click="$emit('select', game.id)"
+        @click="$emit('select', game.id, game)"
       >
         <div class="card-glow"></div>
         <div class="card-inner">
@@ -71,7 +71,7 @@ import type { MinigameDef } from '../../../types/bigbrother'
 withDefaults(defineProps<{ selectedId: string | null; showTitle?: boolean }>(), {
   showTitle: true
 })
-defineEmits<{ (e: 'select', id: string): void }>()
+defineEmits<{ (e: 'select', id: string, game?: MinigameDef): void }>()
 
 const games = ref<MinigameDef[]>([])
 const loading = ref(false)

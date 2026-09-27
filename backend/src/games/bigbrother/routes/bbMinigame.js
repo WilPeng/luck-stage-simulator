@@ -4,10 +4,40 @@
  */
 const express = require('express')
 const router = express.Router()
+const path = require('path')
+const fs = require('fs')
+const multer = require('multer')
+const { auth, requireAdmin } = require('../../../middleware/auth')
 const { getAllGames, getGame } = require('../minigames/loadAll')
 const { getCurrentSeason } = require('../helpers')
 const BBCustomGame = require('../models/BBCustomGame')
 const BBMinigameReplay = require('../models/BBMinigameReplay')
+
+// 小游戏图片（拼图等）上传目录
+const BBGAME_DIR = path.join(__dirname, '..', '..', '..', '..', 'uploads', 'bbgame')
+try { if (!fs.existsSync(BBGAME_DIR)) fs.mkdirSync(BBGAME_DIR, { recursive: true }) } catch (e) { /* ignore */ }
+const gameImageUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, BBGAME_DIR),
+    filename: (req, file, cb) => {
+      const ext = (path.extname(file.originalname) || '.png').toLowerCase()
+      cb(null, `bbgame-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`)
+    }
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }
+})
+
+// POST /upload-image - 上传小游戏图片（管理员，拼图用）
+router.post('/upload-image', auth, requireAdmin, gameImageUpload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, error: '未收到图片' })
+    res.json({ success: true, data: { url: `/uploads/bbgame/${req.file.filename}` } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '图片上传失败' })
+  }
+})
+
 
 // GET /active-rooms - 所有活跃比赛房间（管理员实时观战）
 router.get('/active-rooms', async (req, res) => {
@@ -112,7 +142,7 @@ router.get('/list', async (req, res) => {
 // POST /create-room - 管理员创建比赛房间
 router.post('/create-room', async (req, res) => {
   try {
-    const { gameType, minigameId, participants, targetScore } = req.body
+    const { gameType, minigameId, participants, targetScore, options } = req.body
 
     if (!gameType || !['hoh', 'veto', 'bbbb'].includes(gameType)) {
       return res.status(400).json({ success: false, error: '无效的比赛类型' })
@@ -162,7 +192,8 @@ router.post('/create-room', async (req, res) => {
     const room = minigameNs.createRoom(gameType, minigameId, participants, target, {
       roundIndex: season?.currentRound ?? null,
       roundId: season ? `round-${season.currentRound}` : '',
-      name: minigameName
+      name: minigameName,
+      options: options && typeof options === 'object' ? options : {}
     })
 
     res.json({

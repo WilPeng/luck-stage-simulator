@@ -55,10 +55,10 @@
           <template v-if="isQuizOrScore">
           <div class="form-row-inline">
             <div class="form-row">
-              <label>提交方式</label>
-              <select v-model="form.submitMode" class="bb-input">
-                <option value="single">单题提交（逐题作答）</option>
-                <option value="batch">全部一起提交</option>
+              <label>题目放出方式</label>
+              <select v-model="form.questionRelease" class="bb-input">
+                <option value="all">同时放出（全部题目一起展示）</option>
+                <option value="sequential">逐题放出（一题一题展示）</option>
               </select>
             </div>
             <div class="form-row">
@@ -135,6 +135,13 @@
           </template>
 
           <template v-else>
+            <div class="form-row-inline" v-if="['elim-last', 'first-pick', 'duel'].includes(form.type)">
+              <div class="form-row">
+                <label>每题限时（秒）</label>
+                <input v-model.number="form.answerTimeLimit" type="number" class="bb-input" min="5" max="600" />
+              </div>
+            </div>
+
             <div class="form-row-inline" v-if="form.type === 'elim-last'">
               <div class="form-row">
                 <label>出局规则</label>
@@ -186,8 +193,8 @@
               </div>
             </div>
             <div class="form-row">
-              <label>题目文本 *</label>
-              <input v-model="q.text" class="bb-input" placeholder="输入题目" />
+              <label>题目文本 *（支持加粗 / 图片 / 链接）</label>
+              <RichTextEditor v-model="q.text" placeholder="输入题目，可加粗、插入图片与链接" />
             </div>
             <div class="form-row">
               <label>题目类型</label>
@@ -242,6 +249,8 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { bbCreateCustomGame, bbUpdateCustomGame } from '../../../services/bbApi'
 import type { BBCustomGameDef, CustomGameQuestion } from '../../../types/bigbrother'
+import RichTextEditor from './RichTextEditor.vue'
+import { hasRichContent } from '../../../utils/richText'
 
 const props = defineProps<{ game: BBCustomGameDef | null }>()
 const emit = defineEmits<{ save: []; close: [] }>()
@@ -275,6 +284,7 @@ const form = reactive({
   type: 'quiz' as string,
   questions: [] as QuestionForm[],
   submitMode: 'single' as 'single' | 'batch',
+  questionRelease: 'all' as 'all' | 'sequential',
   wrongFeedback: 'none' as 'none' | 'count' | 'reveal' | 'all_correct_only',
   lockOnWrong: false,
   targetCorrect: 1,
@@ -285,6 +295,7 @@ const form = reactive({
   winCondition: 'all_correct' as string,
   eliminateRule: 'last' as 'last' | 'first_wrong',
   showSubmissions: true,
+  answerTimeLimit: 30,
   basicTimeLimit: 30,
   tiebreakTimeLimit: 30,
   playerCount: { min: 2, max: 20 }
@@ -326,6 +337,7 @@ onMounted(() => {
     form.icon = props.game.icon
     form.type = props.game.type
     form.submitMode = (props.game as any).submitMode || 'single'
+    form.questionRelease = (props.game as any).questionRelease || ((props.game as any).submitMode === 'batch' ? 'all' : 'sequential')
     form.wrongFeedback = (props.game as any).wrongFeedback || 'none'
     form.lockOnWrong = !!(props.game as any).lockOnWrong
     form.targetCorrect = (props.game as any).targetCorrect ?? 1
@@ -336,6 +348,7 @@ onMounted(() => {
     form.winCondition = props.game.winCondition
     form.eliminateRule = (props.game as any).eliminateRule || 'last'
     form.showSubmissions = (props.game as any).showSubmissions ?? true
+    form.answerTimeLimit = (props.game as any).answerTimeLimit ?? 30
     form.basicTimeLimit = (props.game as any).basicTimeLimit ?? 30
     form.tiebreakTimeLimit = (props.game as any).tiebreakTimeLimit ?? 30
     form.playerCount = { ...props.game.playerCount }
@@ -375,7 +388,7 @@ const isValid = computed(() => {
     if (!form.targetCorrect || form.targetCorrect < 1) return false
   }
   return form.questions.every(q => {
-    if (!q.text.trim()) return false
+    if (!hasRichContent(q.text)) return false
     if (!isAdminJudge.value) {
       if (q.qtype === 'number') {
         if (q.correctAnswer === '' || q.correctAnswer === null || Number.isNaN(Number(q.correctAnswer))) return false
@@ -403,7 +416,8 @@ async function save() {
         points: q.points,
         tb: !!q.tb
       })),
-      submitMode: form.submitMode,
+      submitMode: form.questionRelease === 'sequential' ? 'single' : 'batch',
+      questionRelease: form.questionRelease,
       wrongFeedback: form.wrongFeedback,
       lockOnWrong: form.lockOnWrong,
       targetCorrect: form.targetCorrect,
@@ -414,6 +428,7 @@ async function save() {
       winCondition: form.winCondition,
       eliminateRule: form.eliminateRule,
       showSubmissions: form.showSubmissions,
+      answerTimeLimit: form.answerTimeLimit,
       basicTimeLimit: form.basicTimeLimit,
       tiebreakTimeLimit: form.tiebreakTimeLimit,
       playerCount: form.playerCount

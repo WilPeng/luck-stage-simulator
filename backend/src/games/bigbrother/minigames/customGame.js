@@ -53,7 +53,11 @@ function createCustomGameHandler(gameDef) {
 
   const handlerId = getCustomHandlerId(gameDef.id)
   const isAdminJudge = gameDef.winCondition === 'admin_judge'
-  const submitMode = gameDef.submitMode || 'single'
+  // 题目放出方式：同时放出(all) / 逐题放出(sequential)；兼容旧的 submitMode
+  const releaseSequential = gameDef.questionRelease
+    ? gameDef.questionRelease === 'sequential'
+    : (gameDef.submitMode === 'single')
+  const submitMode = releaseSequential ? 'single' : 'batch'
   const cooldownMs = (gameDef.cooldownSeconds || 0) * 1000
   const maxAttempts = gameDef.maxAttempts || 0
   const totalQuestions = gameDef.questions.length
@@ -334,6 +338,7 @@ function createCustomGameHandler(gameDef) {
         gameType: gameDef.type,
         winCondition: gameDef.winCondition,
         submitMode,
+        questionRelease: releaseSequential ? 'sequential' : 'all',
         wrongFeedback: gameDef.wrongFeedback,
         currentIndex: ps.currentIndex,
         totalQuestions,

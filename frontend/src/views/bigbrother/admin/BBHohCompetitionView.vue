@@ -148,6 +148,7 @@ const showMinigameModal = ref(false)
 const selectedPlayerId = ref('')
 const activeRoom = ref<MinigameRoom | null>(null)
 const selectedMinigameId = ref<string | null>(null)
+const selectedMinigameOptions = ref<Record<string, any>>({})
 const targetScore = ref<number | null>(null)
 const creating = ref(false)
 const summoning = ref(false)
@@ -236,13 +237,14 @@ async function openMinigameModal() {
   showMinigameModal.value = true
 }
 
-async function onSelectMinigame(minigameId: string) {
+async function onSelectMinigame(minigameId: string, options?: Record<string, any>) {
   showMinigameModal.value = false
   if (!activeHouseguests.value.length) {
     alert('没有活跃房客')
     return
   }
   selectedMinigameId.value = minigameId
+  selectedMinigameOptions.value = options || {}
   targetScore.value = null
 }
 
@@ -254,9 +256,10 @@ async function createRoomWithTarget() {
       playerId: h.id,
       playerName: h.name
     }))
-    const room = await bbCreateMinigameRoom('hoh', selectedMinigameId.value, participants, targetScore.value)
+    const room = await bbCreateMinigameRoom('hoh', selectedMinigameId.value, participants, targetScore.value, selectedMinigameOptions.value)
     activeRoom.value = room
     selectedMinigameId.value = null
+    selectedMinigameOptions.value = {}
     targetScore.value = null
     alert(`比赛房间已创建！玩家可以加入了${room.targetScore ? `（目标：达到 ${room.targetScore} 即胜）` : ''}`)
   } catch (e: any) {

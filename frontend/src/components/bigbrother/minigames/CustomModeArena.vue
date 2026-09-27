@@ -58,7 +58,7 @@
     </template>
 
     <template v-else-if="state.question">
-      <div class="q-text">{{ state.question.text }}</div>
+      <div class="q-text" v-html="sanitizeRichText(state.question.text)"></div>
       <div v-if="state.question.points > 1" class="points-hint">本题 {{ state.question.points }} 分</div>
 
       <template v-if="canInput">
@@ -96,6 +96,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import NumberPad from './NumberPad.vue'
+import { sanitizeRichText } from '../../../utils/richText'
 
 const props = defineProps<{ state: any; myId: string }>()
 const emit = defineEmits<{ (e: 'action', a: any): void }>()
@@ -125,7 +126,6 @@ watch(() => props.state.my?.myAnswer, (v) => {
 })
 
 const timerActive = computed(() =>
-  (mode.value === 'survive-tb' || mode.value === 'score-tb') &&
   props.state.phase === 'answering' && !!props.state.deadline
 )
 const remain = computed(() => Math.max(0, Math.ceil((props.state.deadline - now.value) / 1000)))

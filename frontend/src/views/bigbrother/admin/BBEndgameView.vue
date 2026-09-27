@@ -350,11 +350,11 @@ function openRoomPicker(roundIndex: number) {
 
 function closeRoomPicker() { roomPickerOpen.value = false }
 
-async function onRoomMinigameSelect(minigameId: string) {
+async function onRoomMinigameSelect(minigameId: string, options?: Record<string, any>) {
   roomPickerOpen.value = false
   const parts = participantsForRound(roomPickerRound.value)
   try {
-    const room = await bbCreateMinigameRoom('hoh', minigameId, parts)
+    const room = await bbCreateMinigameRoom('hoh', minigameId, parts, null, options)
     activeRoom.value = room
     roomWinner.value = null
     roomRoundRegistered.value = false

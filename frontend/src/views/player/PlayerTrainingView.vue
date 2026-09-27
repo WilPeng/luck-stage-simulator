@@ -416,9 +416,10 @@ async function loadRecordLog() {
   } catch { /* ignore */ }
 }
 
+// 注意：抽卡本身按需/本地更新，不订阅全服抽卡广播，避免“别人一抽就全服重拉”。
+// 仅当管理员改动卡池、撤销记录、修改训练结束状态等（非抽卡写入）时才刷新。
 useSfRefresh(async () => {
   await loadPool()
-  await loadRecordLog()
   await loadRecordLog()
   const uid = currentUser.value?.id
   if (uid) {
@@ -430,7 +431,7 @@ useSfRefresh(async () => {
       attrsLoaded.value = true
     }
   }
-}, '/training')
+}, (path: string) => path.includes('/training/') && !/\/training\/(pool\/)?draw/.test(path))
 
 async function handlePoolDraw(c: any) {
   if (!pool.value || c.drawn || isTrainingLocked.value || !currentUser.value) return
@@ -447,10 +448,20 @@ async function handlePoolDraw(c: any) {
     }
     const delta = res?.attrDelta || {}
     changeLog.unshift({ cardName: res?.card?.name || '', cardIndex: res?.cardIndex ?? null, vocal: delta.vocal || 0, dance: delta.dance || 0, charm: delta.charm || 0, desc: formatEffect(res?.card?.effect) })
+
+    // ===== 本地更新，不整页重拉（避免卡顿）=====
+    c.drawn = true
+    c.mine = true
+    c.drawnByName = currentUser.value.name || ''
+    if (res?.card) c.card = res.card
+    c.delta = delta
+    if (pool.value) {
+      pool.value.myDrawnCount = (pool.value.myDrawnCount || 0) + 1
+      pool.value.totalFiltered = Math.max(0, (pool.value.totalFiltered || 0) - 1)
+    }
     trainingCount.value += 1
     if (typeof res?.remainingDraws === 'number') remainingDraws.value = res.remainingDraws
-    // 先刷新卡池（此时仍保持 loading，揭示动画在结算完成后播放）
-    await loadPool()
+
     if (res?.isSelfSelect) {
       // 自选卡：结算未完成（需选择属性），保持 loading 直到选择完成
       showSelectDialogForPool(res.card?.effect?.selfSelect || 5, res.card?.name || '', res.recordId, () => {
@@ -465,6 +476,13 @@ async function handlePoolDraw(c: any) {
       flashReveal(c.index)
     }
   } catch (e: any) {
+    // 卡片可能已被其他选手抽走：本地移除并提示
+    if (/抢走|已被|TAKEN|已经被/i.test(e?.message || '')) {
+      c.drawn = true
+      c.mine = false
+      c.drawnByName = '其他选手'
+      if (typeof remainingDraws.value === 'number' && remainingDraws.value < 0) remainingDraws.value = 0
+    }
     settlingSlotIndex.value = null
     MessagePlugin.error(e.message || '抽卡失败')
   } finally {

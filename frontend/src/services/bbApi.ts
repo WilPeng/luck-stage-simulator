@@ -535,15 +535,31 @@ export async function bbGetMinigameList(): Promise<MinigameDef[]> {
 }
 
 export async function bbCreateMinigameRoom(
-  gameType: 'hoh' | 'veto',
+  gameType: 'hoh' | 'veto' | 'bbbb',
   minigameId: string,
   participants: { playerId: string; playerName: string; avatar?: string | null }[],
-  targetScore?: number | null
+  targetScore?: number | null,
+  options?: Record<string, any>
 ): Promise<MinigameRoom> {
   return doRequest<MinigameRoom>('/minigame/create-room', {
     method: 'POST',
-    body: JSON.stringify({ gameType, minigameId, participants, targetScore })
+    body: JSON.stringify({ gameType, minigameId, participants, targetScore, options: options || {} })
   })
+}
+
+// 上传小游戏图片（拼图）
+export async function bbUploadGameImage(file: File): Promise<{ url: string }> {
+  const fd = new FormData()
+  fd.append('image', file)
+  const token = getToken()
+  const res = await fetch(`${API_BASE}/minigame/upload-image`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: fd
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || json.success === false) throw new Error(json.error || '图片上传失败')
+  return json.data
 }
 
 export async function bbStartMinigame(roomId: string): Promise<void> {

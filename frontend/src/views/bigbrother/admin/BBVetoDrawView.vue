@@ -270,6 +270,7 @@ async function drawCard() {
 
 // ===== 目标与小游戏创建 =====
 const selectedMinigameId = ref<string | null>(null)
+const selectedMinigameOptions = ref<Record<string, any>>({})
 const targetScore = ref<number | null>(null)
 const targetHint = ref('')
 // 目标输入框的提示：随游戏而变
@@ -496,7 +497,7 @@ async function runCompetition() {
   }
 }
 
-async function onSelectMinigame(minigameId: string) {
+async function onSelectMinigame(minigameId: string, options?: Record<string, any>) {
   showMinigameModal.value = false
   if (!veto.value?.participants?.length) {
     alert('请先抽取参与者')
@@ -504,6 +505,7 @@ async function onSelectMinigame(minigameId: string) {
   }
   // 记录所选游戏，展示目标设置后再创建
   selectedMinigameId.value = minigameId
+  selectedMinigameOptions.value = options || {}
   targetScore.value = null
 }
 
@@ -521,9 +523,10 @@ async function createRoomWithTarget() {
       playerId: p.playerId,
       playerName: p.playerName
     }))
-    const room = await bbCreateMinigameRoom('veto', selectedMinigameId.value, participants, targetScore.value)
+    const room = await bbCreateMinigameRoom('veto', selectedMinigameId.value, participants, targetScore.value, selectedMinigameOptions.value)
     activeRoom.value = room
     selectedMinigameId.value = null
+    selectedMinigameOptions.value = {}
     targetScore.value = null
     // 开始轮询实时进度
     startProgressPolling(room.roomId)

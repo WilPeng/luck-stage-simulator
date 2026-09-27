@@ -32,6 +32,8 @@ class BBCustomGame extends BaseModel {
     this.eliminateRule = data.eliminateRule || 'last'
     // 选手是否能看到其他人的提交情况
     this.showSubmissions = data.showSubmissions ?? true
+    // 模式1/2/3 每题限时（秒）
+    this.answerTimeLimit = data.answerTimeLimit ?? 30
 
     // ===== 模式4/5 =====
     // 基本题限时（秒）
@@ -42,6 +44,8 @@ class BBCustomGame extends BaseModel {
     // ===== 通用规则 =====
     // 提交方式：single=单题提交，batch=全部一起提交
     this.submitMode = data.submitMode || 'single'
+    // 题目放出方式：all=同时放出（全部题目一起展示/提交），sequential=逐题放出
+    this.questionRelease = data.questionRelease || (this.submitMode === 'batch' ? 'all' : 'sequential')
     // 提交次数上限（总提交次数，0=无限）
     this.maxAttempts = data.maxAttempts ?? 0
     // 提交时间间隔（秒）

@@ -34,6 +34,7 @@ class GameRoom {
     this.replaySession = null     // 对局记录/复盘 session
     this.summoned = false         // 是否已召集选手
     this.ready = {}               // playerId -> 是否已准备
+    this.options = {}             // 管理员创建房间时的额外配置（如拼图 imageUrl、限时等）
   }
 
   getParticipant(playerId) {
@@ -294,6 +295,7 @@ const initBBMinigameSocket = (io) => {
       room.roundIndex = meta.roundIndex ?? null
       room.roundId = meta.roundId || ''
       room.minigameName = meta.name || ''
+      room.options = meta.options || {}
     }
     activeRooms.set(roomId, room)
     startSession(room)
@@ -323,9 +325,9 @@ const initBBMinigameSocket = (io) => {
     let gameState
     if (handler.loadQuestions) {
       const pool = await handler.loadQuestions()
-      gameState = handler.init(participants, pool)
+      gameState = handler.init(participants, pool, room.options)
     } else {
-      gameState = handler.init(participants)
+      gameState = handler.init(participants, undefined, room.options)
     }
     room.gameState = gameState
     room.status = 'countdown'
@@ -409,8 +411,8 @@ const initBBMinigameSocket = (io) => {
           if (handler.needsServerTick) {
             startServerTick(room, handler, minigameNs)
           } else {
-            // 其他游戏：设置自动超时
-            const timeoutMs = (handler.duration || 60) * 1000
+            // 其他游戏：设置自动超时（优先使用房间级限时配置）
+            const timeoutMs = (room.options?.timeLimit || handler.duration || 60) * 1000
             setTimeout(() => {
               if (room.status === 'playing') {
                 finishGame(room, minigameNs)
@@ -719,6 +721,7 @@ function pushPlayerStates(room, handler, minigameNs) {
 function startServerTick(room, handler, minigameNs) {
   if (room.tickTimer) return
   const ms = handler.serverTickMs || 500
+  const maxDurationMs = (room.options?.timeLimit || handler.duration || 600) * 1000
   room.tickTimer = setInterval(() => {
     if (room.status !== 'playing') return
     try { handler.tick(room.gameState) } catch (e) { console.error('[BBMinigame] tick error', e) }
@@ -728,6 +731,12 @@ function startServerTick(room, handler, minigameNs) {
     if (handler.isFinished && handler.isFinished(room.gameState)) {
       clearInterval(room.tickTimer)
       room.tickTimer = null
+      finishGame(room, minigameNs)
+    } else if (room.startTime && Date.now() - room.startTime > maxDurationMs) {
+      // 安全兜底：超过总时长强制结束，避免卡死
+      clearInterval(room.tickTimer)
+      room.tickTimer = null
+      try { if (handler.getWinners) room.winners = handler.getWinners(room.gameState) } catch (e) { /* ignore */ }
       finishGame(room, minigameNs)
     }
   }, ms)

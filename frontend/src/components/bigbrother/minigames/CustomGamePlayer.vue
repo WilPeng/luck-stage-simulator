@@ -61,7 +61,7 @@
                 <span class="q-index">Q{{ qi + 1 }}</span>
                 <span v-if="q.locked" class="q-locked">🔒 已锁定</span>
               </div>
-              <div class="batch-q-text">{{ q.text }}</div>
+              <div class="batch-q-text" v-html="sanitizeRichText(q.text)"></div>
               <div v-if="q.options && q.options.length" class="options-grid">
                 <button
                   v-for="opt in q.options"
@@ -99,7 +99,7 @@
           <span class="done-msg">✅ 已完成，等待其他玩家...</span>
         </div>
         <div v-else-if="currentQuestion" class="question-area">
-          <div class="question-text">{{ currentQuestion.text }}</div>
+          <div class="question-text" v-html="sanitizeRichText(currentQuestion.text)"></div>
           <div v-if="currentQuestion.points > 1" class="points-hint">本题 {{ currentQuestion.points }} 分</div>
 
           <div v-if="currentQuestion.options && currentQuestion.options.length" class="options-grid">
@@ -144,6 +144,7 @@ import { useMinigameSocket } from '../../../composables/useMinigameSocket'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import CustomModeArena from './CustomModeArena.vue'
 import NumberPad from './NumberPad.vue'
+import { sanitizeRichText } from '../../../utils/richText'
 
 const props = defineProps<{ roomId: string; participants: { playerId: string; playerName: string }[]; gameTitle?: string }>()
 const emit = defineEmits<{ (e: 'finished', winner: { playerId: string; playerName: string }): void }>()

@@ -464,7 +464,7 @@ export function getEndgameStatus(currentRound: number, currentStage: BBAllStageT
 
 // ===== 小游戏相关类型 =====
 
-export type MinigameId = 'click-speed' | 'memory-match' | 'quick-math' | 'balance-bar' | 'dice-duel' | 'power-challenge' | 'klotski' | 'swing-pointer' | 'minority' | 'spot-difference' | 'reaction' | 'sequence-memory'
+export type MinigameId = 'click-speed' | 'memory-match' | 'quick-math' | 'balance-bar' | 'dice-duel' | 'power-challenge' | 'klotski' | 'swing-pointer' | 'minority' | 'spot-difference' | 'reaction' | 'sequence-memory' | 'jigsaw' | 'missing-number' | 'abraca'
 export type MinigameCategory = 'reaction' | 'memory' | 'intellect' | 'skill' | 'strategy'
 
 export interface MinigameDef {

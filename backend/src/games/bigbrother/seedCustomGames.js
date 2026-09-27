@@ -17,6 +17,7 @@ const EXAMPLES = [
     type: 'elim-last',
     eliminateRule: 'last',
     showSubmissions: true,
+    answerTimeLimit: 30,
     playerCount: { min: 2, max: 20 },
     questions: [
       q('q1', '中国的首都是？', 'choice', '北京', ['北京', '上海', '广州', '深圳']),
@@ -33,6 +34,7 @@ const EXAMPLES = [
     type: 'elim-last',
     eliminateRule: 'first_wrong',
     showSubmissions: false,
+    answerTimeLimit: 30,
     playerCount: { min: 2, max: 20 },
     questions: [
       q('q1', '2 + 2 × 2 = ?', 'number', 6),
@@ -47,6 +49,7 @@ const EXAMPLES = [
     description: '只判定第一个作答者：答对可任选一人出局，答错自己出局',
     icon: '⚡',
     type: 'first-pick',
+    answerTimeLimit: 30,
     playerCount: { min: 2, max: 20 },
     questions: [
       q('q1', '5 × 5 = ?', 'number', 25),
@@ -61,6 +64,7 @@ const EXAMPLES = [
     description: '候选池随机/指定两人 1v1，只判第一个作答者，胜者回池，直至决赛',
     icon: '⚔️',
     type: 'duel',
+    answerTimeLimit: 30,
     playerCount: { min: 2, max: 20 },
     questions: [
       q('q1', '3 + 4 = ?', 'number', 7),

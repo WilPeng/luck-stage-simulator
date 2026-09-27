@@ -115,11 +115,11 @@ async function fetchData() {
   try { activeRoom.value = await bbGetActiveMinigameRoom('bbbb') } catch {}
 }
 
-async function onSelectMinigame(minigameId: string) {
+async function onSelectMinigame(minigameId: string, options?: Record<string, any>) {
   showPicker.value = false
   if (!nominees.value.length) { alert('暂无被提名人'); return }
   try {
-    const room = await bbCreateMinigameRoom('bbbb' as any, minigameId, nominees.value.map(n => ({ playerId: n.id, playerName: n.name })))
+    const room = await bbCreateMinigameRoom('bbbb' as any, minigameId, nominees.value.map(n => ({ playerId: n.id, playerName: n.name })), null, options)
     activeRoom.value = room
     startPolling()
   } catch (e: any) { alert(e?.message || '创建失败') }

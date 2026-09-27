@@ -371,6 +371,22 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
         await h.save()
       }
     }
+
+    // 重置后全部房客移动到「初入屋」(prehouse)
+    const BBPlayerLocation = require('../models/BBPlayerLocation')
+    await BBPlayerLocation.deleteMany({ gameId: 'bigbrother' })
+    const nowIso = new Date().toISOString()
+    for (const h of houseguests) {
+      if (h.role === 'admin') continue
+      await BBPlayerLocation.insertOne({
+        id: h.id,
+        playerId: h.id,
+        playerName: h.name,
+        currentRoomId: 'prehouse',
+        enteredAt: nowIso,
+        gameId: 'bigbrother'
+      })
+    }
     const season = await ensureSeason()
     season.currentRound = 1
     season.currentStage = 'hoh_competition'
