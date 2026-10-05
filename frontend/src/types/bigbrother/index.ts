@@ -246,6 +246,27 @@ export interface BBEndgameStatus {
   championVotes: Record<string, number>
   juryVotes: { juryId: string; juryName: string; voted: boolean; targetId: string | null; targetName: string }[]
   myChampionVote?: { targetId: string; targetName: string } | null
+  championReveal?: BBChampionReveal | null
+}
+
+export interface BBChampionRevealSegment {
+  kind: 'vote' | 'champion'
+  juryId?: string
+  juryName?: string
+  targetId?: string | null
+  targetName?: string
+  text: string
+}
+
+export interface BBChampionReveal {
+  championId: string | null
+  championName: string
+  runnerUpId: string | null
+  runnerUpName: string
+  juryTotal: number
+  half: number
+  segments: BBChampionRevealSegment[]
+  released: number
 }
 
 export interface BBMenuItem {
@@ -292,7 +313,9 @@ export interface BBSeasonProgress {
 export interface BBHouseguest {
   id: string
   name: string
-  loginCode: string
+  username: string
+  password?: string
+  loginCode?: string
   role: 'admin' | 'houseguest'
   status: 'active' | 'evicted' | 'jury' | 'f2'
   hasLogin: boolean

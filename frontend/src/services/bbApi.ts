@@ -50,11 +50,11 @@ export async function doRequest<T>(path: string, options: RequestInit = {}): Pro
 }
 
 // ===== 认证 =====
-export async function bbLogin(loginCode: string): Promise<{ token: string; user: BBHouseguest }> {
-  const res = await fetch(`${API_BASE}/auth/login`, {
+async function authRequest(path: string, username: string, password: string): Promise<{ token: string; user: BBHouseguest }> {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code: loginCode })
+    body: JSON.stringify({ username, password })
   })
   const text = await res.text()
   let json: any = {}
@@ -63,6 +63,14 @@ export async function bbLogin(loginCode: string): Promise<{ token: string; user:
     return { token: json.token, user: json.data }
   }
   throw new Error(json.error || '登录失败')
+}
+
+export async function bbLogin(username: string, password: string): Promise<{ token: string; user: BBHouseguest }> {
+  return authRequest('/auth/login', username, password)
+}
+
+export async function bbAdminLogin(username: string, password: string): Promise<{ token: string; user: BBHouseguest }> {
+  return authRequest('/auth/admin/login', username, password)
 }
 
 export async function bbGetCurrentUser(): Promise<BBHouseguest> {
@@ -187,6 +195,29 @@ export async function bbChampionResult(): Promise<any> {
   return doRequest('/season/endgame/champion-result', { method: 'POST' })
 }
 
+// ===== 冠军揭晓（逐句） =====
+export async function bbPrepareChampionReveal(order?: string[]): Promise<any> {
+  return doRequest('/season/endgame/champion-reveal/prepare', {
+    method: 'POST',
+    body: JSON.stringify({ order })
+  })
+}
+
+export async function bbReorderChampionReveal(order: string[]): Promise<any> {
+  return doRequest('/season/endgame/champion-reveal/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ order })
+  })
+}
+
+export async function bbNextChampionReveal(): Promise<any> {
+  return doRequest('/season/endgame/champion-reveal/next', { method: 'POST' })
+}
+
+export async function bbResetChampionReveal(): Promise<any> {
+  return doRequest('/season/endgame/champion-reveal/reset', { method: 'POST' })
+}
+
 // ===== 直接民主投票 =====
 export async function bbVoteNominees(votes: { voterId: string; voterName: string; targetId: string; targetName: string }[]): Promise<any> {
   return doRequest('/nomination/vote-nominees', {
@@ -222,14 +253,14 @@ export async function bbGetHohEligible(): Promise<{
   return doRequest('/hoh/eligible')
 }
 
-export async function bbCreateHouseguest(data: { name: string; loginCode: string }): Promise<BBHouseguest> {
+export async function bbCreateHouseguest(data: { name: string; username?: string; password?: string }): Promise<BBHouseguest> {
   return doRequest<BBHouseguest>('/houseguests', {
     method: 'POST',
     body: JSON.stringify(data)
   })
 }
 
-export async function bbUpdateHouseguest(id: string, data: { name?: string; status?: string; loginCode?: string; isHaveNot?: boolean }): Promise<BBHouseguest> {
+export async function bbUpdateHouseguest(id: string, data: { name?: string; username?: string; password?: string; status?: string; isHaveNot?: boolean }): Promise<BBHouseguest> {
   return doRequest<BBHouseguest>(`/houseguests/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data)

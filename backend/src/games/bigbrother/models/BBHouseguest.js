@@ -6,6 +6,7 @@ class BBHouseguest extends BaseModel {
     super('BBHouseguest')
     this.id = data?.id || null
     this.name = data?.name || ''
+    this.username = data?.username || ''
     this.loginCode = data?.loginCode || ''
     this.password = data?.password || ''
     this.role = data?.role || 'houseguest' // admin | houseguest
@@ -51,6 +52,7 @@ class BBHouseguest extends BaseModel {
     if (keyword) {
       filter.$or = [
         { name: { $regex: keyword, $options: 'i' } },
+        { username: { $regex: keyword, $options: 'i' } },
         { loginCode: { $regex: keyword, $options: 'i' } },
         { id: { $regex: keyword, $options: 'i' } }
       ]

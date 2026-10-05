@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const BBJuryQA = require('../models/BBJuryQA')
 const BBSeason = require('../models/BBSeason')
+const BBHouseguest = require('../models/BBHouseguest')
 const { generateId } = require('../helpers')
 const { auth, requireAdmin } = require('../../../middleware/auth')
 const { broadcastBBGame } = require('../../../socket/bbGame')
@@ -29,11 +30,13 @@ router.post('/ask', auth, async (req, res) => {
     }
     const season = await BBSeason.findOne({ gameId: 'bigbrother' })
     const roundId = `round-${season?.currentRound || 1}`
+    // 溯源提问者：优先 token 中的姓名，否则回查房客
+    const asker = req.user?.name || (await BBHouseguest.findOne({ id: req.user?.userId }))?.name || ''
     const doc = new BBJuryQA({
       id: generateId(),
       roundId,
       juryId: req.user?.userId || null,
-      juryName: req.user?.name || '',
+      juryName: asker,
       question: String(question).trim(),
       gameId: 'bigbrother',
       createdAt: new Date().toISOString()
@@ -56,9 +59,10 @@ router.post('/answer', auth, async (req, res) => {
     }
     const doc = await BBJuryQA.findOne({ id: questionId, gameId: 'bigbrother' })
     if (!doc) return res.status(404).json({ success: false, error: '问题不存在' })
+    const answererName = req.user?.name || (await BBHouseguest.findOne({ id: req.user?.userId }))?.name || ''
     doc.answer = String(answer).trim()
     doc.answerBy = req.user?.userId || null
-    doc.answerByName = req.user?.name || ''
+    doc.answerByName = answererName
     doc.answeredAt = new Date().toISOString()
     doc.updatedAt = doc.answeredAt
     await doc.save()

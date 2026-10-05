@@ -164,6 +164,50 @@
         <button class="bb-btn bb-btn-primary" @click="resolveChampion">🏆 结算冠军</button>
       </div>
 
+      <!-- 冠军揭晓（逐句） -->
+      <div v-if="status.finalTwo.length === 2" class="reveal-admin">
+        <div class="board-title">🎬 冠军揭晓（逐句）</div>
+
+        <div v-if="!reveal" class="action-row">
+          <button class="bb-btn bb-btn-primary" @click="prepareReveal">准备揭晓</button>
+          <span class="hint">根据陪审团投票生成逐句揭示；当某位选手得票超过陪审团半数时，紧随其后出现「恭喜冠军」句。</span>
+        </div>
+
+        <template v-else>
+          <div class="reveal-progress">已揭晓 {{ reveal.released }} / {{ reveal.segments.length }} 句</div>
+
+          <TransitionGroup name="reveal" tag="div" class="reveal-lines">
+            <div v-for="(seg, i) in revealSegments" :key="seg.juryId || `champ-${i}`"
+              class="reveal-line" :class="{ champion: seg.kind === 'champion' }">
+              {{ seg.text }}
+            </div>
+          </TransitionGroup>
+
+          <div v-if="revealRemaining.length" class="reveal-remaining">
+            <div v-for="(seg, i) in revealRemaining" :key="'pending-' + i" class="reveal-line dim">
+              {{ reveal.released + i + 1 }}. ？？？（待揭晓）
+            </div>
+          </div>
+
+          <div class="action-row">
+            <button v-if="reveal.released < reveal.segments.length" class="bb-btn bb-btn-primary" @click="nextReveal">▶ 揭晓下一句</button>
+            <button class="bb-btn bb-btn-warn" @click="resetReveal">清除揭晓</button>
+          </div>
+
+          <!-- 顺序调整 -->
+          <div v-if="revealVoteSegments.length > 1" class="reveal-order">
+            <div class="board-title">调整投票揭晓顺序（应用后从头揭晓）</div>
+            <div v-for="(v, idx) in orderedVoteSegments" :key="v.juryId" class="order-row">
+              <span class="order-index">{{ idx + 1 }}</span>
+              <span class="order-name">{{ v.juryName }} → {{ v.targetName }}</span>
+              <button class="mini-btn" :disabled="idx === 0" @click="moveVote(idx, -1)">↑</button>
+              <button class="mini-btn" :disabled="idx === orderedVoteSegments.length - 1" @click="moveVote(idx, 1)">↓</button>
+            </div>
+            <button class="bb-btn" @click="applyOrder">应用顺序</button>
+          </div>
+        </template>
+      </div>
+
       <div v-if="status.champion" class="champion-card">
         <div class="champ-icon">🏆</div>
         <div class="champ-info">
@@ -189,11 +233,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
 import {
   bbGetEndgameStatus, bbFinal3Round, bbFhohPick, bbChampionResult, bbChampionVote, bbResetEndgame,
-  bbCreateMinigameRoom, bbStartMinigame, bbGetMinigameRoom, bbSummonMinigamePlayers
+  bbCreateMinigameRoom, bbStartMinigame, bbGetMinigameRoom, bbSummonMinigamePlayers,
+  bbPrepareChampionReveal, bbNextChampionReveal, bbResetChampionReveal, bbReorderChampionReveal
 } from '../../../services/bbApi'
 import type { BBEndgameStatus } from '../../../types/bigbrother'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
@@ -251,6 +296,45 @@ const isEndgameActive = computed(() => {
 })
 
 const juryVotes = computed(() => status.value?.juryVotes || [])
+
+// ===== 冠军揭晓（逐句） =====
+const reveal = computed(() => (status.value as any)?.championReveal || null)
+const revealSegments = computed(() => reveal.value ? reveal.value.segments.slice(0, reveal.value.released) : [])
+const revealRemaining = computed(() => reveal.value ? reveal.value.segments.slice(reveal.value.released) : [])
+const revealVoteSegments = computed(() => reveal.value ? reveal.value.segments.filter((s: any) => s.kind === 'vote') : [])
+const revealOrder = ref<string[]>([])
+const orderedVoteSegments = computed(() => {
+  const map = new Map(revealVoteSegments.value.map((s: any) => [s.juryId, s]))
+  const list: any[] = []
+  for (const id of revealOrder.value) { const s = map.get(id); if (s) list.push(s) }
+  for (const s of revealVoteSegments.value) if (!revealOrder.value.includes(s.juryId)) list.push(s)
+  return list
+})
+
+watch(reveal, (r) => {
+  if (r) revealOrder.value = (r.segments || []).filter((s: any) => s.kind === 'vote').map((s: any) => s.juryId)
+}, { immediate: true })
+
+async function prepareReveal() {
+  try { await bbPrepareChampionReveal(); await refresh() } catch (e: any) { alert(e.message) }
+}
+async function nextReveal() {
+  try { await bbNextChampionReveal(); await refresh() } catch (e: any) { alert(e.message) }
+}
+async function resetReveal() {
+  if (!confirm('确定清除当前揭晓内容吗？')) return
+  try { await bbResetChampionReveal(); await refresh() } catch (e: any) { alert(e.message) }
+}
+function moveVote(idx: number, dir: number) {
+  const arr = revealOrder.value.slice()
+  const j = idx + dir
+  if (j < 0 || j >= arr.length) return
+  const tmp = arr[idx]; arr[idx] = arr[j]; arr[j] = tmp
+  revealOrder.value = arr
+}
+async function applyOrder() {
+  try { await bbReorderChampionReveal(revealOrder.value); await refresh() } catch (e: any) { alert(e.message) }
+}
 
 const final3Winners = computed<Record<string, { playerId: string; name: string }>>(() => (status.value as any)?.final3Winners || {})
 
@@ -501,8 +585,22 @@ onMounted(refresh)
 .room-status.finished { border-color: #ffaa00; }
 .room-badge { font-size: 12px; font-weight: 700; color: #4488ff; }
 .room-info { flex: 1; font-size: 13px; color: #aaa; }
-.bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; max-width: 90vw; width: 680px; }
+.reveal-admin { margin-top: 16px; padding: 14px; background: #ffffff05; border: 1px solid #ffaa0044; border-radius: 10px; }
+.reveal-progress { font-size: 13px; color: #ffaa00; margin-bottom: 10px; }
+.reveal-lines { display: flex; flex-direction: column; gap: 8px; }
+.reveal-line { font-size: 14px; color: #ddd; padding: 8px 12px; background: #16163a; border-radius: 8px; border-left: 3px solid #ffaa0066; }
+.reveal-line.champion { font-size: 17px; font-weight: 800; color: #ffaa00; background: #ffaa0010; border-left-color: #ffaa00; }
+.reveal-line.dim { color: #555; border-left-color: #333; font-style: italic; }
+.reveal-remaining { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.reveal-order { margin-top: 14px; padding-top: 12px; border-top: 1px solid #ffffff11; }
+.order-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; color: #ccc; }
+.order-index { width: 20px; color: #888; }
+.order-name { flex: 1; }
+.mini-btn { background: #1a1a3e; border: 1px solid #444; color: #ccc; border-radius: 4px; cursor: pointer; padding: 2px 8px; }
+.mini-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.reveal-enter-active { transition: all 0.5s ease; }
+.reveal-enter-from { opacity: 0; transform: translateY(-8px); }
+.bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }.bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; max-width: 90vw; width: 680px; }
 .bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #00ff8822; }
 .bb-modal-header h3 { margin: 0; color: #00ff88; font-size: 16px; }
 .close-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 18px; }

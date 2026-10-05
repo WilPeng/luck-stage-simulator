@@ -44,7 +44,6 @@
         <div class="header-info">
           <span class="stage-tag">{{ seasonStore.stageName }}</span>
           <span class="user-name">{{ currentUser?.name }}</span>
-          <button class="bb-btn bb-btn-sm" @click="openSwitchModal">切换</button>
           <button class="bb-btn bb-btn-sm" @click="handleLogout">退出</button>
         </div>
         <button class="menu-toggle" @click="mobileMenuOpen = !mobileMenuOpen">
@@ -93,29 +92,6 @@
         <router-view :key="'bb-stage-' + realtime.stageTick" />
       </main>
     </div>
-
-    <!-- 切换选手弹窗 -->
-    <Teleport to="body">
-      <div v-if="showSwitchModal" class="bb-modal-overlay" @click.self="showSwitchModal = false">
-        <div class="bb-modal">
-          <div class="bb-modal-header">
-            <h3>切换选手</h3>
-            <button class="close-btn" @click="showSwitchModal = false">✕</button>
-          </div>
-          <div class="bb-modal-body">
-            <div v-for="p in loggedPlayers" :key="p.id"
-              class="player-option" @click="switchPlayer(p)">
-              <span class="player-avatar">{{ p.name[0] }}</span>
-              <div class="player-info">
-                <div class="player-name">{{ p.name }}</div>
-                <div class="player-code">{{ p.loginCode }}</div>
-              </div>
-            </div>
-            <div v-if="loggedPlayers.length === 0" class="empty-tip">暂无历史登录记录</div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -149,7 +125,6 @@ watch(() => realtime.lastMinigameSummon, (s) => {
 })
 
 const mobileMenuOpen = ref(false)
-const showSwitchModal = ref(false)
 const collapsedRounds = ref<Set<number>>(new Set())
 
 // 睡眠全局状态
@@ -241,8 +216,6 @@ const roundGroups = computed(() => {
   })
 })
 
-const loggedPlayers = computed(() => authStore.getLoggedPlayers())
-
 function isActive(path: string): boolean {
   return route.path.startsWith(path)
 }
@@ -274,19 +247,6 @@ function isStageAccessible(round: number, stage: string): boolean {
 
 function getStageStatusClass(round: number, stage: string): string {
   return seasonStore.getStageStatus(round, stage as any)
-}
-
-function openSwitchModal() {
-  showSwitchModal.value = true
-}
-
-async function switchPlayer(player: { loginCode: string }) {
-  try {
-    await authStore.loginUser(player.loginCode)
-    showSwitchModal.value = false
-  } catch (e: any) {
-    alert(e.message || '切换失败')
-  }
 }
 
 async function handleLogout() {

@@ -36,6 +36,8 @@ class BBSeason extends BaseModel {
     this.runnerUpId = data?.runnerUpId || null
     this.runnerUpName = data?.runnerUpName || ''
     this.final3Winners = data?.final3Winners || {} // { 1:{playerId,name}, 2:{...}, 3:{...} }
+    // 冠军揭晓（逐句）：{ championId, championName, runnerUpId, runnerUpName, juryTotal, half, segments:[{kind,juryId,juryName,targetId,targetName,text}], released }
+    this.championReveal = data?.championReveal || null
     // House 状态
     this.backyardDoorOpen = data?.backyardDoorOpen ?? true
     this.autoSleepHour = data?.autoSleepHour ?? 18   // 每天 N 点未完成睡觉则自动进入睡眠

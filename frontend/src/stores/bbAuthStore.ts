@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { BBHouseguest } from '../types/bigbrother'
-import { bbLogin, bbGetCurrentUser, bbLogout } from '../services/bbApi'
+import { bbLogin, bbAdminLogin, bbLogout } from '../services/bbApi'
 
 export const useBbAuthStore = defineStore('bbAuth', () => {
   const currentUser = ref<BBHouseguest | null>(null)
@@ -14,23 +14,24 @@ export const useBbAuthStore = defineStore('bbAuth', () => {
     return `bigbrother_${base}`
   }
 
-  async function loginUser(code: string) {
-    const result = await bbLogin(code)
-    currentUser.value = result.user
+  function persist(token: string, user: BBHouseguest) {
+    currentUser.value = user
     const tokenKey = gameKey('token')
     const userKey = gameKey('user')
-    sessionStorage.setItem(tokenKey, result.token)
-    localStorage.setItem(tokenKey, result.token)
-    sessionStorage.setItem(userKey, JSON.stringify(result.user))
-    // 保存登录历史
-    try {
-      const historyKey = gameKey('logged_players')
-      const history = JSON.parse(localStorage.getItem(historyKey) || '[]')
-      if (!history.find((h: any) => h.id === result.user.id)) {
-        history.push({ id: result.user.id, name: result.user.name, role: result.user.role, loginCode: result.user.loginCode })
-        localStorage.setItem(historyKey, JSON.stringify(history))
-      }
-    } catch {}
+    sessionStorage.setItem(tokenKey, token)
+    localStorage.setItem(tokenKey, token)
+    sessionStorage.setItem(userKey, JSON.stringify(user))
+  }
+
+  async function loginUser(username: string, password: string) {
+    const result = await bbLogin(username, password)
+    persist(result.token, result.user)
+    return result
+  }
+
+  async function adminLogin(username: string, password: string) {
+    const result = await bbAdminLogin(username, password)
+    persist(result.token, result.user)
     return result
   }
 
@@ -56,15 +57,8 @@ export const useBbAuthStore = defineStore('bbAuth', () => {
     return false
   }
 
-  function getLoggedPlayers(): { id: string; name: string; role: string; loginCode: string }[] {
-    try {
-      const historyKey = gameKey('logged_players')
-      return JSON.parse(localStorage.getItem(historyKey) || '[]')
-    } catch { return [] }
-  }
-
   return {
     currentUser, isLoggedIn, isAdmin, isHouseguest,
-    gameKey, loginUser, logout, restoreSession, getLoggedPlayers
+    gameKey, loginUser, adminLogin, logout, restoreSession
   }
 })

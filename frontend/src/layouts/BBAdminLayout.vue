@@ -258,7 +258,7 @@ async function nextStage() {
 
 async function handleLogout() {
   await authStore.logout()
-  router.push('/games/bigbrother/login')
+  router.push('/games/bigbrother/admin/login')
 }
 
 onMounted(async () => {

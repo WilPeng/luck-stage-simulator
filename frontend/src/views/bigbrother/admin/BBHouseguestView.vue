@@ -13,7 +13,7 @@
     </div>
 
     <div class="toolbar">
-      <input v-model="searchKeyword" class="bb-input" placeholder="搜索房客名称/登录码..." @input="onSearch" />
+      <input v-model="searchKeyword" class="bb-input" placeholder="搜索房客名称/账号..." @input="onSearch" />
       <select v-model="statusFilter" class="bb-select" @change="fetchData">
         <option value="">全部状态</option>
         <option value="active">活跃</option>
@@ -29,7 +29,8 @@
             <th class="check-col"><input type="checkbox" :checked="allSelected" @change="toggleAll" /></th>
             <th>头像</th>
             <th>名称</th>
-            <th>登录码</th>
+            <th>账号</th>
+            <th>密码</th>
             <th>角色</th>
             <th>状态</th>
             <th>Have-Not</th>
@@ -44,7 +45,8 @@
             </td>
             <td><BBAvatar :name="h.name" :avatar="h.avatar" size="sm" /></td>
             <td class="name-cell">{{ h.name }}</td>
-            <td><code class="code-tag">{{ h.loginCode }}</code></td>
+            <td><code class="code-tag">{{ h.username }}</code></td>
+            <td><code class="code-tag">{{ h.password }}</code></td>
             <td>{{ h.role === 'admin' ? '管理员' : '房客' }}</td>
             <td><span class="status-tag" :class="h.status">{{ statusText(h.status) }}</span></td>
             <td>
@@ -59,7 +61,7 @@
               <button v-if="h.role !== 'admin'" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
             </td>
           </tr>
-          <tr v-if="list.length === 0"><td colspan="9" class="empty-cell">暂无数据</td></tr>
+          <tr v-if="list.length === 0"><td colspan="10" class="empty-cell">暂无数据</td></tr>
         </tbody>
       </table>
     </div>
@@ -84,8 +86,12 @@
               <input v-model="formName" class="bb-input" placeholder="房客名称" />
             </div>
             <div class="form-group">
-              <label>登录码</label>
-              <input v-model="formCode" class="bb-input" placeholder="登录码" />
+              <label>账号</label>
+              <input v-model="formUsername" class="bb-input" placeholder="登录账号（唯一）" />
+            </div>
+            <div class="form-group">
+              <label>密码</label>
+              <input v-model="formPassword" class="bb-input" placeholder="登录密码" />
             </div>
             <div v-if="editingId" class="form-group">
               <label>状态</label>
@@ -140,7 +146,8 @@ const statusFilter = ref('')
 const showCreateModal = ref(false)
 const editingId = ref<string | null>(null)
 const formName = ref('')
-const formCode = ref('')
+const formUsername = ref('')
+const formPassword = ref('')
 const formStatus = ref('active')
 const formIsHaveNot = ref(false)
 const editingAvatar = ref<string | null>(null)
@@ -193,7 +200,8 @@ function statusText(status: string): string {
 function editHouseguest(h: BBHouseguest) {
   editingId.value = h.id
   formName.value = h.name
-  formCode.value = h.loginCode
+  formUsername.value = h.username
+  formPassword.value = h.password || ''
   formStatus.value = h.status
   formIsHaveNot.value = !!h.isHaveNot
   editingAvatar.value = h.avatar
@@ -231,16 +239,17 @@ async function onAdminDeleteAvatar() {
 async function saveHouseguest() {
   try {
     if (editingId.value) {
-      const payload: any = { name: formName.value, loginCode: formCode.value, status: formStatus.value }
+      const payload: any = { name: formName.value, username: formUsername.value, password: formPassword.value, status: formStatus.value }
       if (formStatus.value === 'active') payload.isHaveNot = formIsHaveNot.value
       await bbUpdateHouseguest(editingId.value, payload)
     } else {
-      await bbCreateHouseguest({ name: formName.value, loginCode: formCode.value })
+      await bbCreateHouseguest({ name: formName.value, username: formUsername.value, password: formPassword.value })
     }
     showCreateModal.value = false
     editingId.value = null
     formName.value = ''
-    formCode.value = ''
+    formUsername.value = ''
+    formPassword.value = ''
     formIsHaveNot.value = false
     await fetchData()
   } catch (e: any) { alert(e.message) }
@@ -272,10 +281,11 @@ function statusLabel(s: string): string {
 async function exportCsv() {
   try {
     const rows = await fetchAllHouseguests()
-    const header = ['名称', '登录码', '角色', '状态', '已登录']
+    const header = ['名称', '账号', '密码', '角色', '状态', '已登录']
     const lines = rows.map(h => [
       h.name,
-      h.loginCode,
+      h.username,
+      h.password || '',
       h.role === 'admin' ? '管理员' : '房客',
       statusLabel(h.status),
       h.hasLogin ? '是' : '否'
@@ -335,28 +345,32 @@ async function onImportFile(e: Event) {
     const rows = parseCsv(text)
     if (rows.length === 0) { alert('文件为空或格式错误'); return }
     // 找表头/列位置
-    let nameIdx = 0, codeIdx = 1, statusIdx = -1, roleIdx = -1
+    let nameIdx = 0, usernameIdx = 1, passwordIdx = 2, statusIdx = -1, roleIdx = -1
     const first = rows[0].map(c => c.trim().toLowerCase())
     if (first.some(c => c.includes('名'))) {
       nameIdx = first.findIndex(c => c.includes('名')) >= 0 ? first.findIndex(c => c.includes('名')) : 0
-      codeIdx = first.findIndex(c => c.includes('登录')) >= 0 ? first.findIndex(c => c.includes('登录')) : first.findIndex(c => c.includes('码'))
+      usernameIdx = first.findIndex(c => c.includes('账号')) >= 0
+        ? first.findIndex(c => c.includes('账号'))
+        : first.findIndex(c => c.includes('登录'))
+      passwordIdx = first.findIndex(c => c.includes('密码'))
       statusIdx = first.findIndex(c => c.includes('状态'))
       roleIdx = first.findIndex(c => c.includes('角色'))
       rows.shift()
     }
     const existing = await fetchAllHouseguests()
-    const existingCodes = new Set(existing.map(h => h.loginCode))
+    const existingUsers = new Set(existing.map(h => h.username))
     let ok = 0, skip = 0, fail = 0
     const messages: string[] = []
     for (const r of rows) {
       const name = (r[nameIdx] || '').trim()
-      const code = (r[codeIdx] || '').trim()
+      const username = (r[usernameIdx] || '').trim()
+      const password = (passwordIdx >= 0 ? (r[passwordIdx] || '').trim() : '')
       if (!name) { skip++; continue }
-      if (!code) { fail++; messages.push(`「${name}」缺少登录码`); continue }
-      if (existingCodes.has(code)) { skip++; messages.push(`登录码 ${code} 已存在，跳过 ${name}`); continue }
+      if (!username) { fail++; messages.push(`「${name}」缺少账号`); continue }
+      if (existingUsers.has(username)) { skip++; messages.push(`账号 ${username} 已存在，跳过 ${name}`); continue }
       try {
-        await bbCreateHouseguest({ name, loginCode: code })
-        existingCodes.add(code)
+        await bbCreateHouseguest({ name, username, password })
+        existingUsers.add(username)
         ok++
       } catch (err: any) {
         fail++

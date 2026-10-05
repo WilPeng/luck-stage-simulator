@@ -21,250 +21,10 @@ app.use(cors({
 }))
 app.use(express.json())
 
-// 确保上传目录存在
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'avatars')
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true })
-}
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
-
-// 确保恋综头像上传目录存在
-const LV_AVATAR_DIR = path.join(__dirname, '..', 'uploads', 'lvavatars')
-if (!fs.existsSync(LV_AVATAR_DIR)) fs.mkdirSync(LV_AVATAR_DIR, { recursive: true })
-
 // 确保 Big Brother 头像上传目录存在
 const BB_AVATAR_DIR = path.join(__dirname, '..', 'uploads', 'bbavatars')
 if (!fs.existsSync(BB_AVATAR_DIR)) fs.mkdirSync(BB_AVATAR_DIR, { recursive: true })
-
-const initData = async () => {
-  const User = require('./models/User')
-  const Season = require('./models/Season')
-  const Song = require('./models/Song')
-  const TrainingCard = require('./models/TrainingCard')
-  const Team = require('./models/Team')
-  const StageEvent = require('./models/StageEvent')
-
-  const { v4: uuidv4 } = require('uuid')
-  const generateId = () => uuidv4()
-  const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
-  const gameId = 'shengfeng2026'
-
-  // ===== 管理员 =====
-  const admin = await User.findOne({ role: 'admin' })
-  if (!admin) {
-    console.log('Initializing admin user...')
-    const newAdmin = new User({
-      id: generateId(),
-      name: '赛事管理员',
-      loginCode: 'ADMIN2026',
-      password: '$2a$10$rJ3iK8WX5v9u0V7k8M2yUe7i8j9k0L1m2n3o4p5q6r7s8t9u0',
-      role: 'admin',
-      status: 'active',
-      hasLogin: false,
-      attributes: { vocal: 0, dance: 0, charm: 0 },
-      trainingCount: 0,
-      gameId
-    })
-    await newAdmin.save()
-    console.log('Created admin user')
-  }
-
-  // ===== 选手 =====
-  const playerCount = await User.countDocuments({ role: { $in: ['player', 'captain'] } })
-  if (playerCount === 0) {
-    console.log('Initializing player seed data...')
-    const playerNames = [
-      { name: '44岚', vocal: 58, dance: 42, charm: 55 },
-      { name: '星辰', vocal: 62, dance: 38, charm: 48 },
-      { name: '月影', vocal: 45, dance: 55, charm: 60 },
-      { name: '晨曦', vocal: 50, dance: 48, charm: 52 },
-      { name: '清风', vocal: 42, dance: 60, charm: 45 },
-      { name: '暮光', vocal: 55, dance: 50, charm: 42 },
-      { name: '繁星', vocal: 48, dance: 45, charm: 58 },
-      { name: '云海', vocal: 60, dance: 35, charm: 50 },
-      { name: '银辉', vocal: 38, dance: 52, charm: 56 },
-      { name: '金焰', vocal: 52, dance: 46, charm: 48 }
-    ]
-    const users = []
-    for (let i = 0; i < 10; i++) {
-      const player = playerNames[i]
-      const user = new User({
-        id: `u${String(i + 1).padStart(3, '0')}`,
-        name: player.name,
-        loginCode: `CF2026-A${String(i + 1).padStart(3, '0')}`,
-        password: '$2a$10$rJ3iK8WX5v9u0V7k8M2yUe7i8j9k0L1m2n3o4p5q6r7s8t9u0',
-        role: 'player',
-        status: 'active',
-        teamId: null,
-        hasLogin: false,
-        attributes: {
-          vocal: player.vocal,
-          dance: player.dance,
-          charm: player.charm
-        },
-        trainingCount: randomInt(0, 3),
-        gameId
-      })
-      users.push(user)
-    }
-    await User.insertMany(users)
-    console.log(`Created ${users.length} players`)
-  }
-
-  // ===== Season =====
-  const season = await Season.findOne({})
-  if (!season) {
-    console.log('Initializing season...')
-    const newSeason = new Season({
-      id: generateId(),
-      name: '乘风2026第一季',
-      currentStage: 'setup',
-      status: 'running',
-      teamSetup: null,
-      gameId
-    })
-    await newSeason.save()
-    console.log('Created season')
-  }
-
-  // ===== 歌曲库 =====
-  const songCount = await Song.countDocuments({})
-  if (songCount === 0) {
-    console.log('Initializing songs...')
-    const songs = [
-      { id: 's001', name: '逆光飞翔', style: '流行', difficulty: 3, mainAttribute: 'vocal', baseVocal: 35, baseDance: 30, risk: 10, gameId },
-      { id: 's002', name: '舞动奇迹', style: '舞曲', difficulty: 4, mainAttribute: 'dance', baseVocal: 25, baseDance: 40, risk: 12, gameId },
-      { id: 's003', name: '星光大道', style: '抒情', difficulty: 3, mainAttribute: 'vocal', baseVocal: 40, baseDance: 25, risk: 8, gameId },
-      { id: 's004', name: '魅力四射', style: '动感', difficulty: 4, mainAttribute: 'charm', baseVocal: 30, baseDance: 30, risk: 11, gameId },
-      { id: 's005', name: '乘风破浪', style: '励志', difficulty: 5, mainAttribute: 'dance', baseVocal: 35, baseDance: 35, risk: 15, gameId },
-      { id: 's006', name: '梦想舞台', style: '流行', difficulty: 3, mainAttribute: 'vocal', baseVocal: 30, baseDance: 35, risk: 10, gameId }
-    ]
-    await Song.insertMany(songs.map(s => new Song(s)))
-    console.log(`Created ${songs.length} songs`)
-  }
-
-  // ===== 训练卡 =====
-  const tcCount = await TrainingCard.countDocuments({})
-  if (tcCount === 0) {
-    console.log('Initializing training cards...')
-    const trainingCards = [
-      { id: 'tc001', name: '声乐老师加课', type: 'vocal', description: '声乐老师单独辅导，Vocal大幅提升', effect: { vocal: 5 }, weight: 15, enabled: true, gameId },
-      { id: 'tc002', name: '高强度舞蹈课', type: 'dance', description: '魔鬼训练，Dance能力大幅提升', effect: { dance: 5 }, weight: 15, enabled: true, gameId },
-      { id: 'tc003', name: '镜头感爆发', type: 'charm', description: '突然开窍，Charm大幅提升', effect: { charm: 5 }, weight: 15, enabled: true, gameId },
-      { id: 'tc004', name: '状态稳定', type: 'mixed', description: '状态良好，三项属性均有提升', effect: { vocal: 2, dance: 2, charm: 2 }, weight: 20, enabled: true, gameId },
-      { id: 'tc005', name: '摆烂一天', type: 'event', description: '状态不佳，随机一项属性下降', effect: { randomOne: -4 }, weight: 10, enabled: true, gameId },
-      { id: 'tc006', name: '黑马时刻', type: 'event', description: '潜力爆发，最低属性大幅提升', effect: { lowest: 6 }, weight: 10, enabled: true, gameId },
-      { id: 'tc007', name: '全能特训', type: 'mixed', description: '全面训练，两项属性提升', effect: { randomTwo: 3 }, weight: 10, enabled: true, gameId },
-      { id: 'tc008', name: '巅峰突破', type: 'event', description: '突破瓶颈，最高属性大幅提升', effect: { highest: 4 }, weight: 5, enabled: true, gameId },
-      { id: 'tc009', name: '轻声吟唱', type: 'vocal', description: '轻声练习，Vocal小幅提升', effect: { vocal: 3 }, weight: 18, enabled: true, gameId },
-      { id: 'tc010', name: '舞蹈基础', type: 'dance', description: '基础舞步练习，Dance小幅提升', effect: { dance: 3 }, weight: 18, enabled: true, gameId },
-      { id: 'tc011', name: '表情管理', type: 'charm', description: '学习表情管理，Charm小幅提升', effect: { charm: 3 }, weight: 18, enabled: true, gameId },
-      { id: 'tc012', name: '综合练习', type: 'mixed', description: '综合能力训练', effect: { vocal: 1, dance: 1, charm: 1 }, weight: 25, enabled: true, gameId },
-      { id: 'tc013', name: '超级摆烂', type: 'event', description: '彻底休息，随机两项属性下降', effect: { randomTwo: -3 }, weight: 8, enabled: true, gameId },
-      { id: 'tc014', name: '潜力觉醒', type: 'event', description: '潜力觉醒，最低属性中幅提升', effect: { lowest: 4 }, weight: 12, enabled: true, gameId },
-      { id: 'tc015', name: '突破极限', type: 'event', description: '突破自身极限，最高属性中幅提升', effect: { highest: 3 }, weight: 10, enabled: true, gameId }
-    ]
-    await TrainingCard.insertMany(trainingCards.map(tc => new TrainingCard(tc)))
-    console.log(`Created ${trainingCards.length} training cards`)
-  }
-
-  // ===== 舞台事件 =====
-  const eventCount = await StageEvent.countDocuments({})
-  if (eventCount === 0) {
-    console.log('Initializing stage events...')
-    const stageEvents = [
-      { id: 'evt001', name: '观众沸腾', voteEffect: 87, description: '现场气氛极佳，观众给予了极高认可', gameId },
-      { id: 'evt002', name: '全场合唱', voteEffect: 120, description: '全场观众起立合唱，场面震撼人心', gameId },
-      { id: 'evt003', name: '舞台事故', voteEffect: -100, description: '演出中出现意外，影响了整体表现', gameId },
-      { id: 'evt004', name: '完美配合', voteEffect: 65, description: '队员之间配合默契，舞台效果极佳', gameId },
-      { id: 'evt005', name: '灯光故障', voteEffect: -50, description: '灯光系统出现短暂故障，但选手坚持完成演出', gameId },
-      { id: 'evt006', name: '即兴发挥', voteEffect: 45, description: '选手临场即兴发挥，给观众带来惊喜', gameId },
-      { id: 'evt007', name: '深情演绎', voteEffect: 55, description: '情感投入极深，打动了许多观众', gameId },
-      { id: 'evt008', name: '高音爆发', voteEffect: 70, description: '高音部分爆发力十足，全场欢呼', gameId },
-      { id: 'evt009', name: '服装失误', voteEffect: -30, description: '服装出现小问题，略微影响了视觉效果', gameId },
-      { id: 'evt010', name: '中规中矩', voteEffect: 0, description: '演出平稳进行，没有特别出彩但也没有失误', gameId }
-    ]
-    await StageEvent.insertMany(stageEvents.map(se => new StageEvent(se)))
-    console.log(`Created ${stageEvents.length} stage events`)
-  }
-
-  // ===== 迁移：为没有 gameId 的用户补全默认 gameId =====
-  const usersWithoutGameId = await User.countDocuments({ gameId: null })
-  if (usersWithoutGameId > 0) {
-    console.log(`Migrating ${usersWithoutGameId} users without gameId...`)
-    await User._collection().updateMany(
-      { gameId: null },
-      { $set: { gameId } }
-    )
-    console.log('User gameId migration completed')
-  }
-
-  // ===== 数据迁移：修复 seed 数据中的 roundIndex 字段 =====
-  await migrateRoundIndex()
-}
-
-// 修复种子数据中 Round 字段名错误（roundIndex → index），合并重复 Round
-async function migrateRoundIndex() {
-  const Round = require('./models/Round')
-  const collections = [
-    require('./models/RoundTeam'), require('./models/RoundTeamMember'),
-    require('./models/RoundCaptain'), require('./models/RoundPreparation'),
-    require('./models/TeamSong'), require('./models/TrainingRecord'),
-    require('./models/CaptainVote'),
-    require('./models/PerformanceValue'), require('./models/PerformanceRoundState'),
-    require('./models/TeamInvite'), require('./models/TeamApplication'),
-    require('./models/TeamPerformance'), require('./models/PlayerPerformance'),
-    require('./models/AudienceVote'), require('./models/SafeTeam'),
-    require('./models/DangerConfirm'), require('./models/EliminationPk')
-  ]
-
-  const oldRounds = await Round.find({})
-  let migrated = 0
-  for (const r of oldRounds) {
-    if (r.roundIndex != null && r.index == null) {
-      r.index = r.roundIndex
-      delete r.roundIndex
-      await r.save()
-
-      const dup = await Round.findOne({ seasonId: r.seasonId, index: r.index, id: { $ne: r.id } })
-      if (dup) {
-        const oldId = r.id, newId = dup.id
-        for (const model of collections) {
-          if (model.updateMany) {
-            try { await model.updateMany({ roundId: oldId }, { $set: { roundId: newId } }) }
-            catch (e) { /* ignore */ }
-          }
-        }
-        await Round.deleteOne({ id: oldId })
-        migrated++
-      }
-    }
-  }
-  if (migrated > 0) console.log(`[Migration] Fixed ${migrated} round(s): merged duplicate round data`)
-}
-
-// gameId 中间件：从路由参数提取 gameId 注入到 req
-app.use('/api/:gameId', (req, res, next) => {
-  req.gameId = req.params.gameId
-  next()
-})
-
-// ===== 通用游戏全局实时广播：任意 /api/:gameId 写操作成功后推送 sf:update =====
-app.use('/api/:gameId', (req, res, next) => {
-  if (req.method === 'GET' || req.method === 'OPTIONS') return next()
-  const gameId = req.params.gameId
-  if (gameId === 'bigbrother') return next() // BB 已有独立广播
-  const fullPath = req.originalUrl || req.path
-  res.on('finish', () => {
-    if (res.statusCode < 400) {
-      try {
-        const { broadcastSfGame } = require('./socket/sfGame')
-        broadcastSfGame(gameId, { gameId, path: fullPath, method: req.method })
-      } catch (e) { /* ignore */ }
-    }
-  })
-  next()
-})
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')))
 
 // ===== Big Brother 全局实时广播：任意 /api/bigbrother 写操作成功后推送 bb:update =====
 app.use('/api/bigbrother', (req, res, next) => {
@@ -282,7 +42,7 @@ app.use('/api/bigbrother', (req, res, next) => {
   next()
 })
 
-// ===== Big Brother 路由（固定 gameId = bigbrother，必须在 :gameId 路由之前注册）=====
+// ===== Big Brother 路由（固定 gameId = bigbrother）=====
 const bbGameIdMiddleware = (req, res, next) => { req.gameId = 'bigbrother'; next() }
 app.use('/api/bigbrother/auth', bbGameIdMiddleware, require('./games/bigbrother/routes/bbAuth'))
 app.use('/api/bigbrother/season', bbGameIdMiddleware, require('./games/bigbrother/routes/bbSeason'))
@@ -298,46 +58,19 @@ app.use('/api/bigbrother/custom-game', bbGameIdMiddleware, require('./games/bigb
 app.use('/api/bigbrother/power-challenge', bbGameIdMiddleware, require('./games/bigbrother/routes/bbPowerChallenge'))
 app.use('/api/bigbrother/house', bbGameIdMiddleware, require('./games/bigbrother/routes/bbHouse'))
 
-// ===== 恋综路由（固定 gameId = lovevariety）=====
-const lvGameIdMiddleware = (req, res, next) => { req.gameId = 'lovevariety'; next() }
-app.use('/api/lovevariety/auth', lvGameIdMiddleware, require('./games/lovevariety/routes/lvAuth'))
-app.use('/api/lovevariety/season', lvGameIdMiddleware, require('./games/lovevariety/routes/lvSeason'))
-app.use('/api/lovevariety/players', lvGameIdMiddleware, require('./games/lovevariety/routes/lvPlayers'))
-app.use('/api/lovevariety/votes', lvGameIdMiddleware, require('./games/lovevariety/routes/lvVotes'))
-app.use('/api/lovevariety/pairing', lvGameIdMiddleware, require('./games/lovevariety/routes/lvPairing'))
-app.use('/api/lovevariety/elimination', lvGameIdMiddleware, require('./games/lovevariety/routes/lvElimination'))
-app.use('/api/lovevariety/letters', lvGameIdMiddleware, require('./games/lovevariety/routes/lvLetter'))
+app.get('/', (req, res) => {
+  res.send('Big Brother API 服务运行中')
+})
 
-// ===== 实力大挑战路由（固定 gameId = powerchallenge）=====
-const pcGameIdMiddleware = (req, res, next) => { req.gameId = 'powerchallenge'; next() }
-app.use('/api/powerchallenge/auth', pcGameIdMiddleware, require('./games/powerchallenge/routes/pcAuth'))
-app.use('/api/powerchallenge/season', pcGameIdMiddleware, require('./games/powerchallenge/routes/pcSeason'))
-app.use('/api/powerchallenge/players', pcGameIdMiddleware, require('./games/powerchallenge/routes/pcPlayers'))
-app.use('/api/powerchallenge/power-challenge', pcGameIdMiddleware, require('./games/powerchallenge/routes/pcPowerChallenge'))
-
-app.use('/api/:gameId/auth', require('./routes/auth'))
-app.use('/api/:gameId/season', require('./routes/season'))
-app.use('/api/:gameId/admin', require('./routes/admin'))
-app.use('/api/:gameId/users', require('./routes/users'))
-app.use('/api/:gameId/teams', require('./routes/teams'))
-app.use('/api/:gameId/captain', require('./routes/captain'))
-app.use('/api/:gameId/songs', require('./routes/songs'))
-app.use('/api/:gameId/training', require('./routes/training'))
-app.use('/api/:gameId/performance', require('./routes/performance'))
-app.use('/api/:gameId/concurrent', require('./routes/concurrent'))
-app.use('/api/:gameId/player', require('./routes/player'))
-app.use('/api/:gameId/admin/audience-vote', require('./routes/audienceVote'))
-app.use('/api/:gameId/audience-vote', require('./routes/audienceVote'))
-app.use('/api/:gameId/elimination', require('./routes/elimination'))
-app.use('/api/:gameId/logs', require('./routes/logs'))
-app.use('/api/:gameId/chat', require('./routes/chat'))
-app.use('/api/:gameId/songs/round', require('./routes/roundSongs'))
+app.get('/api', (req, res) => {
+  res.json({ success: true, message: 'Big Brother API 服务运行中', version: '1.0.0' })
+})
 
 // ===== Big Brother Seed 数据初始化 =====
 async function initBBData() {
   const BBHouseguest = require('./games/bigbrother/models/BBHouseguest')
   const BBSeason = require('./games/bigbrother/models/BBSeason')
-  const { generateId, randomInt } = require('./games/bigbrother/helpers')
+  const { generateId } = require('./games/bigbrother/helpers')
 
   const existing = await BBHouseguest.countDocuments({ gameId: 'bigbrother' })
   if (existing > 0) {
@@ -348,6 +81,24 @@ async function initBBData() {
     // 幂等补齐新增模式的示例题目
     const { ensureCustomGameExamples } = require('./games/bigbrother/seedCustomGames')
     await ensureCustomGameExamples()
+    // 幂等补齐账号密码（老数据迁移：从登录码迁移为「账号+密码」）
+    const allGuests = await BBHouseguest.find({ gameId: 'bigbrother' })
+    let idx = 0
+    for (const h of allGuests) {
+      idx++
+      let changed = false
+      if (!h.username) {
+        h.username = h.role === 'admin'
+          ? 'admin'
+          : (h.loginCode || `houseguest${String(idx).padStart(2, '0')}`)
+        changed = true
+      }
+      if (!h.password) {
+        h.password = h.role === 'admin' ? 'ADMIN2026' : 'BB1234'
+        changed = true
+      }
+      if (changed) await h.save()
+    }
     return
   }
 
@@ -356,7 +107,8 @@ async function initBBData() {
   const admin = new BBHouseguest({
     id: generateId(),
     name: 'Big Brother 管理员',
-    loginCode: 'BB_ADMIN',
+    username: 'admin',
+    password: 'ADMIN2026',
     role: 'admin',
     status: 'active',
     gameId: 'bigbrother'
@@ -372,7 +124,8 @@ async function initBBData() {
   const houseguests = houseguestNames.map((h, i) => new BBHouseguest({
     id: generateId(),
     name: h.name,
-    loginCode: `BB-HOUSE-${String(i + 1).padStart(3, '0')}`,
+    username: `houseguest${String(i + 1).padStart(2, '0')}`,
+    password: `BB${String(i + 1).padStart(3, '0')}`,
     role: 'houseguest',
     status: 'active',
     gameId: 'bigbrother'
@@ -416,219 +169,41 @@ async function initBBData() {
   await adminLoc.save()
 
   console.log('[Big Brother] Seed data initialized:')
-  console.log(`  - 1 admin (loginCode: BB_ADMIN)`)
+  console.log(`  - 1 admin (账号: admin / 密码: ADMIN2026)`)
   console.log(`  - ${houseguests.length} houseguests`)
-  houseguests.forEach(h => console.log(`    ${h.name} (loginCode: ${h.loginCode})`))
+  houseguests.forEach(h => console.log(`    ${h.name} (账号: ${h.username} / 密码: ${h.password})`))
   console.log(`  - 1 season (Round 1, Stage: HOH Competition)`)
   const { ensureCustomGameExamples } = require('./games/bigbrother/seedCustomGames')
   await ensureCustomGameExamples()
 }
 
-// ===== 实力大挑战 Seed 数据初始化 =====
-async function initPCData() {
-  const PCPlayer = require('./games/powerchallenge/models/PCPlayer')
-  const PCSeason = require('./games/powerchallenge/models/PCSeason')
-  const PCPowerChallenge = require('./games/powerchallenge/models/PCPowerChallenge')
-  const { generateId } = require('./games/powerchallenge/helpers')
-
-  const existing = await PCPlayer.countDocuments({ gameId: 'powerchallenge' })
-  if (existing > 0) {
-    const engine = require('./games/powerchallenge/engine')
-    await engine.ensureSeason()
-    console.log('[实力大挑战] Existing data found, skipping initialization')
-    return
-  }
-
-  console.log('[实力大挑战] Initializing seed data...')
-
-  const admin = new PCPlayer({
-    id: generateId(),
-    name: '实力大挑战管理员',
-    loginCode: 'PC_ADMIN',
-    role: 'admin',
-    status: 'active',
-    gameId: 'powerchallenge'
-  })
-  await admin.save()
-
-  const playerNames = [
-    { name: '阿豪' }, { name: '小雪' }, { name: '大熊' },
-    { name: '思远' }, { name: '明轩' }, { name: '可欣' },
-    { name: '子航' }, { name: '语桐' }
-  ]
-  const players = playerNames.map((h, i) => new PCPlayer({
-    id: generateId(),
-    name: h.name,
-    loginCode: `PC${String(i + 1).padStart(3, '0')}`,
-    role: 'player',
-    status: 'active',
-    gameId: 'powerchallenge'
-  }))
-  await PCPlayer.insertMany(players)
-
-  const seedQuestions = [
-    { id: generateId(), text: '世界上最高的山峰是？', options: ['珠穆朗玛峰', '乔戈里峰', '干城章嘉峰', '洛子峰'], correctAnswer: '珠穆朗玛峰' },
-    { id: generateId(), text: '《三国演义》的作者是？', options: ['曹雪芹', '罗贯中', '施耐庵', '吴承恩'], correctAnswer: '罗贯中' },
-    { id: generateId(), text: '太阳系中最大的行星是？', options: ['地球', '土星', '木星', '海王星'], correctAnswer: '木星' },
-    { id: generateId(), text: '水的化学式是？', options: ['CO2', 'H2O', 'O2', 'NaCl'], correctAnswer: 'H2O' },
-    { id: generateId(), text: '被称为“诗仙”的唐代诗人是？', options: ['杜甫', '王维', '李白', '白居易'], correctAnswer: '李白' },
-    { id: generateId(), text: '一年有多少个星期？', options: ['50', '52', '54', '48'], correctAnswer: '52' },
-    { id: generateId(), text: '光速约为每秒多少公里？', options: ['30万公里', '3万公里', '300万公里', '3000公里'], correctAnswer: '30万公里' },
-    { id: generateId(), text: '奥运会每几年举办一次？', options: ['2年', '3年', '4年', '5年'], correctAnswer: '4年' },
-    { id: generateId(), text: '中国最长的河流是？', options: ['黄河', '长江', '珠江', '黑龙江'], correctAnswer: '长江' },
-    { id: generateId(), text: '海平面以上的高度用什么单位？', options: ['千克', '米', '帕斯卡', '秒'], correctAnswer: '米' }
-  ]
-
-  const season = new PCSeason({
-    id: generateId(),
-    gameId: 'powerchallenge',
-    name: '实力大挑战',
-    totalRounds: 5,
-    answerCooldown: 3,
-    status: 'idle',
-    currentRound: 1,
-    roundPhase: 'waiting',
-    theme: '常识大作战',
-    questions: seedQuestions,
-    alivePlayers: players.map(p => p.id),
-    points: {},
-    eliminated: [],
-    started: false
-  })
-  await season.save()
-
-  const pool = new PCPowerChallenge({
-    id: generateId(),
-    gameId: 'powerchallenge',
-    name: '默认题库·常识',
-    theme: '常识大作战',
-    questions: seedQuestions,
-    enabled: true
-  })
-  await pool.save()
-
-  console.log('[实力大挑战] Seed data initialized:')
-  console.log(`  - 1 admin (loginCode: PC_ADMIN)`)
-  console.log(`  - ${players.length} players`)
-  players.forEach(h => console.log(`    ${h.name} (loginCode: ${h.loginCode})`))
-  console.log('  - 1 season (Round 1) + 1 question pool')
-}
-
-// ===== 恋综 Seed 数据初始化 =====
-async function initLoveVarietyData() {
-  const LVPlayer = require('./games/lovevariety/models/LVPlayer')
-  const LVSeason = require('./games/lovevariety/models/LVSeason')
-  const { generateId, randomInt } = require('./games/lovevariety/helpers')
-
-  const existing = await LVPlayer.countDocuments({ gameId: 'lovevariety' })
-  if (existing > 0) {
-    console.log('[恋综] Existing data found, skipping initialization')
-    return
-  }
-
-  console.log('[恋综] Initializing seed data...')
-
-  const admin = new LVPlayer({
-    id: generateId(),
-    name: '恋综管理员',
-    loginCode: 'LV_ADMIN',
-    role: 'admin',
-    status: 'active',
-    gameId: 'lovevariety'
-  })
-  await admin.save()
-
-  const playerNames = [
-    { name: '小美' }, { name: '小帅' }, { name: '小丽' },
-    { name: '小杰' }, { name: '小芳' }, { name: '小强' },
-    { name: '小雅' }, { name: '小豪' }, { name: '小欣' },
-    { name: '小宇' }
-  ]
-  const players = playerNames.map((h, i) => new LVPlayer({
-    id: generateId(),
-    name: h.name,
-    loginCode: `LV-PLAYER-${String(i + 1).padStart(3, '0')}`,
-    role: 'player',
-    status: 'active',
-    gameId: 'lovevariety'
-  }))
-  await LVPlayer.insertMany(players)
-
-  const season = new LVSeason({
-    id: generateId(),
-    name: '恋综第一季',
-    currentRound: 1,
-    currentStage: 'love_vote',
-    totalRounds: 10,
-    status: 'running',
-    gameId: 'lovevariety'
-  })
-  await season.save()
-
-  console.log('[恋综] Seed data initialized:')
-  console.log(`  - 1 admin (loginCode: LV_ADMIN)`)
-  console.log(`  - ${players.length} players`)
-  players.forEach(h => console.log(`    ${h.name} (loginCode: ${h.loginCode})`))
-  console.log(`  - 1 season (Round 1, Stage: 喜爱值投送)`)
-}
-
-app.get('/', (req, res) => {
-  res.send('乘风2026运气赛 API 服务运行中')
-})
-
-app.get('/api', (req, res) => {
-  res.json({ success: true, message: '乘风2026运气赛 API 服务运行中', version: '1.0.0' })
-})
-
 const PORT = process.env.PORT || 3000
 
 initStore().then(() => {
-  initData().then(() => {
-    initBBData().then(() => {
-      initLoveVarietyData().then(() => {
-        initPCData().then(() => {
-        // 创建 HTTP 服务器并绑定 socket.io
-        const server = http.createServer(app)
-        const io = new Server(server, {
-          cors: {
-            origin: '*',
-            methods: ['GET', 'POST']
-          }
-        })
-        // 将 io 存入 app 以便路由访问
-        app.set('io', io)
-
-        // 初始化聊天 WebSocket
-        const { initChatSocket } = require('./socket/chat')
-        initChatSocket(io)
-
-        // 初始化 Big Brother 小游戏 WebSocket
-        const { initBBMinigameSocket } = require('./socket/bbMinigame')
-        initBBMinigameSocket(io)
-
-        // 初始化 Big Brother House 实时通信
-        const { initBBHouseSocket } = require('./socket/bbHouse')
-        initBBHouseSocket(io)
-
-        // 初始化 实力大挑战 实时比赛
-        const { initPCGameSocket } = require('./socket/pcGame')
-        initPCGameSocket(io)
-
-        // 初始化 Big Brother 全局实时通信
-        const { initBBGameSocket } = require('./socket/bbGame')
-        initBBGameSocket(io)
-
-        // 初始化 通用游戏全局实时通信（乘风2026 等）
-        const { initSfGameSocket } = require('./socket/sfGame')
-        initSfGameSocket(io)
-
-        server.listen(PORT, () => {
-          console.log(`Server running on port ${PORT}`)
-          console.log(`WebSocket (Socket.IO) enabled`)
-          console.log(`Database persistence enabled: ${process.env.MONGODB_URI}`)
-        })
-        })
+  initBBData().then(() => {
+    // 创建 HTTP 服务器并绑定 socket.io
+    const server = http.createServer(app)
+    const io = new Server(server, {
+      cors: { origin: '*', methods: ['GET', 'POST'] }
     })
+    app.set('io', io)
+
+    // 初始化 Big Brother 小游戏 WebSocket
+    const { initBBMinigameSocket } = require('./socket/bbMinigame')
+    initBBMinigameSocket(io)
+
+    // 初始化 Big Brother House 实时通信
+    const { initBBHouseSocket } = require('./socket/bbHouse')
+    initBBHouseSocket(io)
+
+    // 初始化 Big Brother 全局实时通信
+    const { initBBGameSocket } = require('./socket/bbGame')
+    initBBGameSocket(io)
+
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`)
+      console.log(`WebSocket (Socket.IO) enabled`)
+      console.log(`Database persistence enabled: ${process.env.MONGODB_URI}`)
     })
   })
 }).catch((error) => {

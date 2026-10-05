@@ -9,6 +9,7 @@ const BBVetoRecord = require('../models/BBVetoRecord')
 const BBEvictionVote = require('../models/BBEvictionVote')
 const BBEviction = require('../models/BBEviction')
 const BBChampionVote = require('../models/BBChampionVote')
+const BBJuryQA = require('../models/BBJuryQA')
 const BBHouseguest = require('../models/BBHouseguest')
 const BBChatMessage = require('../models/BBChatMessage')
 const BBOperationLog = require('../models/BBOperationLog')
@@ -353,7 +354,7 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
   try {
     const modelsToClear = [
       BBHohRecord, BBNomination, BBVetoRecord, BBEvictionVote, BBEviction,
-      BBChatMessage, BBRound, BBOperationLog, BBChampionVote
+      BBChatMessage, BBRound, BBOperationLog, BBChampionVote, BBJuryQA
     ]
     for (const model of modelsToClear) {
       if (model.deleteMany) await model.deleteMany({ gameId: 'bigbrother' })
@@ -408,6 +409,7 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
     season.championName = ''
     season.runnerUpId = null
     season.runnerUpName = ''
+    season.championReveal = null
     season.updatedAt = new Date().toISOString()
     await season.save()
     await logAction(req.user.userId, req.user.name || 'admin', 'admin',
@@ -1037,7 +1039,8 @@ router.get('/endgame/status', auth, async (req, res) => {
         runnerUp: season.runnerUpId ? { playerId: season.runnerUpId, name: season.runnerUpName } : null,
         championVotes: votesByTarget,
         juryVotes,
-        myChampionVote
+        myChampionVote,
+        championReveal: season.championReveal || null
       }
     })
   } catch (e) {
@@ -1080,6 +1083,7 @@ router.post('/endgame/reset', auth, requireAdmin, async (req, res) => {
     season.championName = ''
     season.runnerUpId = null
     season.runnerUpName = ''
+    season.championReveal = null
     season.status = 'running'
 
     // 3) 回退进度到 F3 轮（若已是冠军轮/已结束）
@@ -1088,8 +1092,9 @@ router.post('/endgame/reset', auth, requireAdmin, async (req, res) => {
     season.updatedAt = new Date().toISOString()
     await season.save()
 
-    // 4) 清空冠军投票
+    // 4) 清空冠军投票与陪审团问答
     await BBChampionVote.deleteMany({ gameId: 'bigbrother' })
+    await BBJuryQA.deleteMany({ gameId: 'bigbrother' })
 
     await logAction(req.user.userId, req.user.name || 'admin', 'admin',
       BB_ACTION_TYPES.PROGRESS_SET, 'season', season.id,
@@ -1154,11 +1159,16 @@ router.post('/endgame/final3', auth, requireAdmin, async (req, res) => {
 })
 
 // POST /endgame/fhoh-pick - FHOH 选择带谁进 FTC（另 1 人成为最后一位 jury）
-router.post('/endgame/fhoh-pick', auth, requireAdmin, async (req, res) => {
+// 允许管理员代选，或 FHOH 本人操作
+router.post('/endgame/fhoh-pick', auth, async (req, res) => {
   try {
     const season = await ensureSeason()
     if (!season.fhohId) {
       return res.status(400).json({ success: false, error: '尚无 FHOH', code: 'NO_FHOH' })
+    }
+    const isAdmin = req.user.role === 'admin'
+    if (!isAdmin && req.user.userId !== season.fhohId) {
+      return res.status(403).json({ success: false, error: '只有 FHOH 本人或管理员可以进行此操作', code: 'FORBIDDEN' })
     }
     const { pickedId } = req.body
     const { getCollection } = require('../../../config/db')
@@ -1260,6 +1270,12 @@ router.post('/endgame/champion-result', auth, requireAdmin, async (req, res) => 
     if (season.finalTwo.length !== 2) {
       return res.status(400).json({ success: false, error: '尚未确定 FTC 决赛二人', code: 'NO_FTC' })
     }
+    // 已通过揭晓流程产出冠军：直接返回，避免重复结算/结果不一致
+    if (season.championId) {
+      const ch = season.finalTwo.find(f => f.playerId === season.championId) || { playerId: season.championId, playerName: season.championName }
+      const ru = season.finalTwo.find(f => f.playerId === season.runnerUpId) || { playerId: season.runnerUpId, playerName: season.runnerUpName }
+      return res.json({ success: true, data: { champion: { playerId: ch.playerId, name: ch.playerName || ch.name, votes: 0 }, runnerUp: { playerId: ru.playerId, name: ru.playerName || ru.name, votes: 0 }, already: true } })
+    }
     const allVotes = await BBChampionVote.find({})
     const tally = {}
     for (const v of allVotes) {
@@ -1300,6 +1316,170 @@ router.post('/endgame/champion-result', auth, requireAdmin, async (req, res) => 
   } catch (e) {
     console.error('Champion result error:', e)
     res.status(500).json({ success: false, error: '结算冠军失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ================================================================
+// 冠军揭晓（逐句）
+// ================================================================
+
+/** 依据冠军票构建逐句揭晓段（含「恭喜冠军」句，位置由过半票决定） */
+function buildChampionRevealPayload(season, votes, juryOrder) {
+  const finalTwo = season.finalTwo || []
+  const byVoter = new Map(votes.map(v => [v.voterId, v]))
+  let voteList = votes.map(v => ({ voterId: v.voterId, voterName: v.voterName || '', targetId: v.targetId, targetName: v.targetName || '' }))
+  if (Array.isArray(juryOrder) && juryOrder.length) {
+    const ordered = []
+    for (const jid of juryOrder) { const v = byVoter.get(jid); if (v) ordered.push({ voterId: v.voterId, voterName: v.voterName || '', targetId: v.targetId, targetName: v.targetName || '' }) }
+    for (const v of voteList) if (!juryOrder.includes(v.voterId)) ordered.push(v)
+    voteList = ordered
+  }
+  const juryTotal = voteList.length
+  const tally = {}
+  for (const v of voteList) tally[v.targetId] = (tally[v.targetId] || 0) + 1
+
+  const nameOfFinal = (f) => f?.playerName || f?.name || ''
+  const a = finalTwo[0], b = finalTwo[1]
+  const aCount = (a && tally[a.playerId]) || 0
+  const bCount = (b && tally[b.playerId]) || 0
+
+  let champion, runnerUp
+  if (season.championId) {
+    champion = finalTwo.find(f => f.playerId === season.championId) || { playerId: season.championId, playerName: season.championName }
+    runnerUp = finalTwo.find(f => f.playerId !== season.championId) || null
+  } else if (aCount === bCount) {
+    const w = Math.random() < 0.5 ? a : b
+    champion = w
+    runnerUp = w === a ? b : a
+  } else {
+    champion = aCount > bCount ? a : b
+    runnerUp = aCount > bCount ? b : a
+  }
+
+  const half = Math.floor(juryTotal / 2) // 超过一半：票数 > half
+  const segments = voteList.map((v, i) => ({
+    kind: 'vote',
+    juryId: v.voterId,
+    juryName: v.voterName,
+    targetId: v.targetId,
+    targetName: v.targetName,
+    text: `Jury ${i + 1} ${v.voterName}，把票投给了 ${v.targetName}。`
+  }))
+
+  // 冠军累计票首次超过 half 的位置
+  let insertAt = segments.length - 1
+  if (champion) {
+    let cum = 0
+    for (let i = 0; i < voteList.length; i++) {
+      if (voteList[i].targetId === champion.playerId) cum++
+      if (cum > half) { insertAt = i; break }
+    }
+  }
+  const champSeg = {
+    kind: 'champion',
+    targetId: champion?.playerId || null,
+    targetName: champion ? nameOfFinal(champion) : '',
+    text: champion ? `恭喜 ${nameOfFinal(champion)} 获得冠军！` : '冠军产生！'
+  }
+  const withChamp = [...segments]
+  withChamp.splice(insertAt + 1, 0, champSeg)
+
+  return {
+    championId: champion?.playerId || null,
+    championName: champion ? nameOfFinal(champion) : '',
+    runnerUpId: runnerUp?.playerId || null,
+    runnerUpName: runnerUp ? nameOfFinal(runnerUp) : '',
+    juryTotal,
+    half,
+    segments: withChamp,
+    released: 0
+  }
+}
+
+// POST /endgame/champion-reveal/prepare - 准备逐句揭晓（管理员）
+router.post('/endgame/champion-reveal/prepare', auth, requireAdmin, async (req, res) => {
+  try {
+    const season = await ensureSeason()
+    if ((season.finalTwo || []).length !== 2) {
+      return res.status(400).json({ success: false, error: '尚未确定 FTC 决赛二人', code: 'NO_FTC' })
+    }
+    const votes = await BBChampionVote.find({ gameId: 'bigbrother' })
+    let order = Array.isArray(req.body?.order) ? req.body.order : null
+    if (!order) {
+      const { getCollection } = require('../../../config/db')
+      const jurys = await getCollection('BBHouseguest').find({ gameId: 'bigbrother', role: 'houseguest', status: 'jury' }).toArray()
+      order = jurys.map(j => j.id)
+    }
+    season.championReveal = buildChampionRevealPayload(season, votes, order)
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    res.json({ success: true, data: season.championReveal })
+  } catch (e) {
+    console.error('Champion reveal prepare error:', e)
+    res.status(500).json({ success: false, error: '准备冠军揭晓失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /endgame/champion-reveal/reorder - 调整揭晓顺序（管理员）body: { order: [juryId...] }
+router.post('/endgame/champion-reveal/reorder', auth, requireAdmin, async (req, res) => {
+  try {
+    const season = await ensureSeason()
+    if ((season.finalTwo || []).length !== 2) {
+      return res.status(400).json({ success: false, error: '尚未确定 FTC 决赛二人', code: 'NO_FTC' })
+    }
+    const votes = await BBChampionVote.find({ gameId: 'bigbrother' })
+    const order = Array.isArray(req.body?.order) ? req.body.order : null
+    season.championReveal = buildChampionRevealPayload(season, votes, order)
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    res.json({ success: true, data: season.championReveal })
+  } catch (e) {
+    console.error('Champion reveal reorder error:', e)
+    res.status(500).json({ success: false, error: '调整揭晓顺序失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /endgame/champion-reveal/next - 揭晓下一句（管理员）
+router.post('/endgame/champion-reveal/next', auth, requireAdmin, async (req, res) => {
+  try {
+    const season = await ensureSeason()
+    const cr = season.championReveal
+    if (!cr) return res.status(400).json({ success: false, error: '尚未准备揭晓', code: 'NO_REVEAL' })
+    cr.released = Math.min((cr.released || 0) + 1, (cr.segments || []).length)
+    const seg = cr.segments[cr.released - 1]
+    if (seg && seg.kind === 'champion' && !season.championId) {
+      season.championId = cr.championId
+      season.championName = cr.championName
+      season.runnerUpId = cr.runnerUpId
+      season.runnerUpName = cr.runnerUpName
+      season.status = 'finished'
+      const { getCollection } = require('../../../config/db')
+      const hg = getCollection('BBHouseguest')
+      for (const id of [cr.championId, cr.runnerUpId]) {
+        if (id) await hg.updateOne({ id }, { $set: { status: 'f2', updatedAt: new Date().toISOString() } })
+      }
+    }
+    season.championReveal = cr
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    res.json({ success: true, data: cr })
+  } catch (e) {
+    console.error('Champion reveal next error:', e)
+    res.status(500).json({ success: false, error: '揭晓失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /endgame/champion-reveal/reset - 清除揭晓（管理员）
+router.post('/endgame/champion-reveal/reset', auth, requireAdmin, async (req, res) => {
+  try {
+    const season = await ensureSeason()
+    season.championReveal = null
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    res.json({ success: true })
+  } catch (e) {
+    console.error('Champion reveal reset error:', e)
+    res.status(500).json({ success: false, error: '清除揭晓失败', code: 'SERVER_ERROR' })
   }
 })
 

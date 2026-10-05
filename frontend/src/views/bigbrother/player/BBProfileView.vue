@@ -12,7 +12,7 @@
       </label>
       <div class="profile-info">
         <div class="profile-name">{{ user?.name }}</div>
-        <div class="profile-code">登录码: {{ user?.loginCode }}</div>
+        <div class="profile-code">账号: {{ user?.username }}</div>
         <div class="profile-status">
           <span class="status-tag" :class="user?.status">{{ statusText }}</span>
         </div>
@@ -35,8 +35,8 @@
           <span class="info-value">{{ statusText }}</span>
         </div>
         <div class="info-item">
-          <span class="info-label">登录码</span>
-          <span class="info-value"><code>{{ user?.loginCode }}</code></span>
+          <span class="info-label">账号</span>
+          <span class="info-value"><code>{{ user?.username }}</code></span>
         </div>
       </div>
     </div>

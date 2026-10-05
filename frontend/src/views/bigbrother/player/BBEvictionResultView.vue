@@ -11,11 +11,11 @@
     <div v-if="night" class="announce-stage">
       <template v-if="night.phase === 'announce'">
         <div class="announce-title">📢 淘汰结果宣布</div>
-        <template v-for="(s, i) in (night.segments || [])" :key="i">
-          <div v-if="i < (night.released || 0)" class="ann-line shown">
-            {{ s.text }}
+        <TransitionGroup name="announce" tag="div" class="announce-lines">
+          <div v-for="line in announceLines" :key="line.key" class="ann-line shown">
+            {{ line.text }}
           </div>
-        </template>
+        </TransitionGroup>
       </template>
       <template v-else>
         <div class="door-stage">
@@ -71,6 +71,15 @@ const evictionResult = ref<BBEviction | null>(null)
 const nomination = ref<any>(null)
 const night = ref<any>(null)
 
+const announceLines = computed(() => {
+  const n = night.value
+  if (!n || !Array.isArray(n.segments)) return []
+  return n.segments.slice(0, n.released || 0).map((s: any, i: number) => ({
+    key: `${n.round}-${i}`,
+    text: s.text
+  }))
+})
+
 function isMe(name: string): boolean { return name === authStore.currentUser?.name }
 
 async function loadNight() {
@@ -124,8 +133,11 @@ onMounted(() => {
 .nominee-chip { background: #ffaa0015; border: 1px solid #ffaa0033; border-radius: 6px; padding: 8px 16px; font-size: 14px; color: #ffaa00; }
 .announce-stage { margin-top: 16px; background: #0f0f2e; border: 1px solid #ffaa0044; border-radius: 12px; padding: 28px 24px; text-align: center; }
 .announce-title { color: #ffaa00; font-size: 14px; margin-bottom: 18px; }
-.ann-line { min-height: 44px; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #e0e0e0; opacity: 0; transition: opacity 0.3s; }
-.ann-line.shown { opacity: 1; animation: fadeIn 0.6s ease both; }
+.announce-lines { display: flex; flex-direction: column; }
+.ann-line { min-height: 44px; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #e0e0e0; }
+.ann-line.shown { animation: fadeIn 0.6s ease both; }
+.announce-enter-active { transition: all 0.5s ease; }
+.announce-enter-from { opacity: 0; transform: translateY(8px); }
 .door-stage { text-align: center; }
 .door-icon { font-size: 64px; margin-bottom: 12px; }
 .door-name { font-size: 30px; font-weight: 700; color: #ff4444; }

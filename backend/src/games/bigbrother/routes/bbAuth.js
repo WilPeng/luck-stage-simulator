@@ -1,32 +1,70 @@
 const express = require('express')
 const router = express.Router()
 const jwt = require('jsonwebtoken')
+const bcrypt = require('bcryptjs')
 const BBHouseguest = require('../models/BBHouseguest')
-const { generateId, logAction, BB_ACTION_TYPES } = require('../helpers')
+const { logAction, BB_ACTION_TYPES } = require('../helpers')
 
+// 校验密码：支持明文（初始种子）与 bcrypt 哈希两种存储
+function checkPassword(input, stored) {
+  if (!stored) return false
+  if (/^\$2[aby]\$/.test(stored)) {
+    try { return bcrypt.compareSync(input, stored) } catch { return false }
+  }
+  return input === stored
+}
+
+function issueToken(user) {
+  return jwt.sign(
+    { userId: user.id, role: user.role, name: user.name },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+  )
+}
+
+async function doLogin(req, res, { requireRole, forbiddenHint }) {
+  const { username, password } = req.body || {}
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: '账号和密码不能为空', code: 'INVALID_INPUT' })
+  }
+  const user = await BBHouseguest.findOne({ username: String(username).trim(), gameId: 'bigbrother' })
+  if (!user || !checkPassword(password, user.password)) {
+    return res.status(401).json({ success: false, error: '账号或密码错误', code: 'INVALID_CREDENTIALS' })
+  }
+  if (requireRole && user.role !== requireRole) {
+    return res.status(403).json({ success: false, error: forbiddenHint || '无权登录', code: 'FORBIDDEN' })
+  }
+  user.hasLogin = true
+  await user.save()
+  const token = issueToken(user)
+  const userObj = user.toObject()
+  delete userObj.password
+  await logAction(user.id, user.name, user.role, BB_ACTION_TYPES.LOGIN, 'user', user.id, `用户 ${user.name} 登录`)
+  return res.json({ success: true, data: userObj, token })
+}
+
+// POST /auth/login - 选手登录（账号 + 密码）
 router.post('/login', async (req, res) => {
   try {
-    const { code } = req.body
-    if (!code) {
-      return res.status(400).json({ success: false, error: '登录码不能为空', code: 'INVALID_CODE' })
-    }
-    const filter = { loginCode: code, gameId: 'bigbrother' }
-    const user = await BBHouseguest.findOne(filter)
-    if (!user) {
-      return res.status(404).json({ success: false, error: '登录码不存在', code: 'INVALID_CODE' })
-    }
-    user.hasLogin = true
-    await user.save()
-    const token = jwt.sign(
-      { userId: user.id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    )
-    const userObj = user.toObject()
-    await logAction(user.id, user.name, user.role, BB_ACTION_TYPES.LOGIN, 'user', user.id, `用户 ${user.name} 登录`)
-    res.json({ success: true, data: userObj, token })
+    return await doLogin(req, res, {
+      requireRole: 'houseguest',
+      forbiddenHint: '管理员请从管理员登录入口登录'
+    })
   } catch (error) {
     console.error('BB Login error:', error)
+    res.status(500).json({ success: false, error: '登录失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /auth/admin/login - 管理员登录（独立入口，仅管理员）
+router.post('/admin/login', async (req, res) => {
+  try {
+    return await doLogin(req, res, {
+      requireRole: 'admin',
+      forbiddenHint: '该账号不是管理员'
+    })
+  } catch (error) {
+    console.error('BB Admin login error:', error)
     res.status(500).json({ success: false, error: '登录失败', code: 'SERVER_ERROR' })
   }
 })
@@ -43,7 +81,9 @@ router.get('/me', async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, error: '用户不存在', code: 'USER_NOT_FOUND' })
     }
-    res.json({ success: true, data: user.toObject() })
+    const userObj = user.toObject()
+    delete userObj.password
+    res.json({ success: true, data: userObj })
   } catch (error) {
     res.status(401).json({ success: false, error: '令牌无效或已过期', code: 'INVALID_TOKEN' })
   }

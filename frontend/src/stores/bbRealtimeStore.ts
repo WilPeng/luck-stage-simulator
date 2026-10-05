@@ -62,7 +62,11 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
       const p = data?.path || ''
       // 投票等高频写操作不触发整页重载（否则选手端会不停刷新）
       const isVoteWrite = /\/eviction\/(vote|my-vote)\b/.test(p)
-      if (!isVoteWrite && /\/(season|hoh|nomination|veto|eviction|endgame)/.test(p)) {
+      // 逐句揭晓类写入（淘汰夜 / 宣布 / 冠军揭晓）：仅更新展示内容，选手端靠广播事件增量展示，
+      // 绝不能整页重载，否则每次「下一句」都会刷新整个页面
+      const isRevealWrite = /\/(night|announce)\/(start|next|confirm|reset|prepare)\b/.test(p)
+        || /\/champion-reveal\b/.test(p)
+      if (!isVoteWrite && !isRevealWrite && /\/(season|hoh|nomination|veto|eviction|endgame)/.test(p)) {
         stageTick.value++
       }
     })

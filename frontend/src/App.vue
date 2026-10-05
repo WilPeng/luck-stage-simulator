@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container" :data-theme="theme" :class="{ 'dark': theme === 'dark' }">
+  <div class="app-container dark" data-theme="dark">
     <ConfigProvider>
       <div>
         <router-view />
@@ -9,15 +9,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { ConfigProvider } from 'tdesign-vue-next'
-import { useAuthStore } from './stores/authStore'
-
-const authStore = useAuthStore()
-const theme = computed(() => authStore.theme)
-
-// 尽早应用主题，避免页面闪烁
-authStore.initTheme()
 </script>
 
 <style>
@@ -37,6 +29,8 @@ body {
   font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: #1a1a2e;
+  color: #fff;
 }
 
 #app {
@@ -49,32 +43,19 @@ body {
   width: 6px;
   height: 6px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
   background: rgba(128, 128, 128, 0.3);
   border-radius: 3px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(128, 128, 128, 0.5);
 }
 
-/* 移除默认 a 标签样式 */
 a {
   text-decoration: none;
   color: inherit;
-}
-
-/* 暗色模式全局底色与文字色 */
-[data-theme="dark"] html,
-[data-theme="dark"] body,
-[data-theme="dark"] #app,
-[data-theme="dark"] .app-container {
-  background: #1a1a2e;
-  color: #ffffff;
 }
 </style>
