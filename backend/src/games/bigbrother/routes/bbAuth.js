@@ -3,6 +3,7 @@ const router = express.Router()
 const jwt = require('jsonwebtoken')
 const bcrypt = require('bcryptjs')
 const BBHouseguest = require('../models/BBHouseguest')
+const { auth } = require('../../../middleware/auth')
 const { logAction, BB_ACTION_TYPES } = require('../helpers')
 
 // 校验密码：支持明文（初始种子）与 bcrypt 哈希两种存储
@@ -59,6 +60,18 @@ router.post('/login', async (req, res) => {
 // POST /auth/admin/login - 管理员登录（独立入口，仅管理员）
 router.post('/admin/login', async (req, res) => {
   try {
+    // 容错：老库可能没有 username='admin' 的记录，用首个管理员账号补齐
+    if (String(req.body?.username || '').trim() === 'admin') {
+      const exists = await BBHouseguest.findOne({ username: 'admin', gameId: 'bigbrother' })
+      if (!exists) {
+        const firstAdmin = await BBHouseguest.findOne({ role: 'admin', gameId: 'bigbrother' })
+        if (firstAdmin) {
+          firstAdmin.username = 'admin'
+          if (!firstAdmin.password) firstAdmin.password = 'ADMIN2026'
+          await firstAdmin.save()
+        }
+      }
+    }
     return await doLogin(req, res, {
       requireRole: 'admin',
       forbiddenHint: '该账号不是管理员'
@@ -86,6 +99,28 @@ router.get('/me', async (req, res) => {
     res.json({ success: true, data: userObj })
   } catch (error) {
     res.status(401).json({ success: false, error: '令牌无效或已过期', code: 'INVALID_TOKEN' })
+  }
+})
+
+// POST /auth/change-password - 选手自助修改密码（不可修改账号）
+router.post('/change-password', auth, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body || {}
+    if (!newPassword || String(newPassword).length < 4) {
+      return res.status(400).json({ success: false, error: '新密码至少需要 4 位', code: 'WEAK_PASSWORD' })
+    }
+    const user = await BBHouseguest.findOne({ id: req.user.userId, gameId: 'bigbrother' })
+    if (!user) return res.status(404).json({ success: false, error: '用户不存在', code: 'USER_NOT_FOUND' })
+    if (!checkPassword(oldPassword, user.password)) {
+      return res.status(401).json({ success: false, error: '原密码错误', code: 'INVALID_OLD_PASSWORD' })
+    }
+    user.password = String(newPassword)
+    await user.save()
+    await logAction(user.id, user.name, user.role, BB_ACTION_TYPES.UPDATE || 'UPDATE', 'user', user.id, `用户 ${user.name} 修改密码`)
+    res.json({ success: true, data: null })
+  } catch (error) {
+    console.error('BB change password error:', error)
+    res.status(500).json({ success: false, error: '修改密码失败', code: 'SERVER_ERROR' })
   }
 })
 

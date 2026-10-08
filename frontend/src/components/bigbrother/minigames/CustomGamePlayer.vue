@@ -22,6 +22,13 @@
     </div>
 
     <div v-else class="game-playing">
+      <div v-if="media && media.url" class="cg-media">
+        <div class="cg-media-title">{{ media.kind === 'video' ? '🎬 比赛视频' : '🎵 比赛音乐' }}
+          <span class="cg-media-tag">{{ media.playMode === 'once' ? '统一播放一次' : '可自由播放' }}</span>
+        </div>
+        <video v-if="media.kind === 'video'" :src="mediaUrl" controls class="cg-media-el" :autoplay="media.playMode === 'once'" playsinline></video>
+        <audio v-else :src="mediaUrl" controls class="cg-media-el" :autoplay="media.playMode === 'once'"></audio>
+      </div>
       <CustomModeArena v-if="isModeGame" :state="modeState" :myId="myId" @action="sendAction" />
       <template v-else>
       <!-- 顶部信息栏 -->
@@ -151,6 +158,16 @@ const emit = defineEmits<{ (e: 'finished', winner: { playerId: string; playerNam
 
 const bbAuth = useBbAuthStore()
 const myId = computed(() => bbAuth.currentUser?.id || '')
+
+const media = computed<any>(() => (gameState.value as any)?.media || null)
+const mediaUrl = computed(() => {
+  const u = media.value?.url as string
+  if (!u) return ''
+  if (/^https?:\/\//.test(u)) return u
+  const base = ((import.meta as any).env?.VITE_API_BASE || '').replace(/\/$/, '') || '/api'
+  const root = base.replace(/\/api$/, '')
+  return `${root}${u.startsWith('/') ? '' : '/'}${u}`
+})
 
 const roomIdRef = ref(props.roomId)
 const { gameState, countdown, winner, finished, connect, sendAction, disconnect } = useMinigameSocket(roomIdRef)
@@ -382,4 +399,8 @@ p { color: #888; margin: 0; }
 .winner-name { font-size: 24px; font-weight: 700; color: #00ff88; }
 .winner-label { font-size: 18px; color: #aaa; margin-left: 8px; }
 .final-stats { margin-top: 16px; color: #888; font-size: 14px; }
+.cg-media { background: #0f0f2e; border: 1px solid #ffaa0055; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+.cg-media-title { font-size: 14px; color: #ffaa00; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.cg-media-tag { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #ffaa0022; color: #ffaa00; }
+.cg-media-el { width: 100%; max-height: 300px; border-radius: 8px; background: #000; }
 </style>

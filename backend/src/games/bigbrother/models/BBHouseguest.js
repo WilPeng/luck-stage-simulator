@@ -11,6 +11,8 @@ class BBHouseguest extends BaseModel {
     this.password = data?.password || ''
     this.role = data?.role || 'houseguest' // admin | houseguest
     this.status = data?.status || 'active' // active | evicted | jury
+    // 管理员权限（仅 role=admin 有效）。空数组表示拥有全部权限。
+    this.permissions = Array.isArray(data?.permissions) ? data.permissions : (data?.permissions || [])
     this.hasLogin = data?.hasLogin || false
     this.avatar = data?.avatar || null
     this.currentRoomId = data?.currentRoomId || 'living_room'

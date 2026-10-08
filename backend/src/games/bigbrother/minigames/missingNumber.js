@@ -43,7 +43,7 @@ registerGame({
     const timeLimit = Math.max(10, Number(options && options.timeLimit) || DEFAULT_LIMIT)
     const playerStates = {}
     for (const p of participants) {
-      playerStates[p.playerId] = { submitted: false, value: null, correct: false, submittedAt: null }
+      playerStates[p.playerId] = { value: null, correct: false, submittedAt: null, cooldownUntil: 0, attempts: 0 }
     }
     return { playerStates, status: 'ready', startTime: null, cells, missing, size: SIZE, timeLimit }
   },
@@ -56,17 +56,27 @@ registerGame({
       if (!state.startTime) state.startTime = Date.now()
       return { updated: true, finished: false }
     }
-    if (ps.submitted) return { updated: false, result: { error: '你已提交过' } }
+    if (ps.correct) return { updated: false, result: { error: '你已答对' } }
 
     if (action.type === 'submit') {
+      const now = Date.now()
+      if (ps.cooldownUntil && now < ps.cooldownUntil) {
+        return { updated: false, result: { cooldownUntil: ps.cooldownUntil } }
+      }
       const v = Number(action.value)
       if (!Number.isFinite(v)) return { updated: false }
-      ps.submitted = true
       ps.value = v
-      ps.submittedAt = Date.now()
+      ps.submittedAt = now
+      ps.attempts = (ps.attempts || 0) + 1
       ps.correct = v === state.missing
-      const all = Object.values(state.playerStates).every(s => s.submitted)
-      return { updated: true, finished: all, result: { submitted: true, correct: ps.correct } }
+      if (ps.correct) {
+        ps.cooldownUntil = 0
+      } else {
+        // 答错：3 秒内不可再作答
+        ps.cooldownUntil = now + 3000
+      }
+      const allCorrect = Object.values(state.playerStates).every(s => s.correct)
+      return { updated: true, finished: allCorrect, result: { correct: ps.correct, cooldownUntil: ps.cooldownUntil } }
     }
 
     return { updated: false }
@@ -78,7 +88,7 @@ registerGame({
   },
 
   getWinners(state) {
-    const entries = Object.entries(state.playerStates).filter(([, ps]) => ps.submitted)
+    const entries = Object.entries(state.playerStates).filter(([, ps]) => ps.value != null)
     if (!entries.length) return []
     // 1) 最先答对
     const correct = entries.filter(([, ps]) => ps.correct)
@@ -104,9 +114,10 @@ registerGame({
       size: state.size,
       cells: state.cells,
       timeLimit: state.timeLimit,
-      submitted: ps.submitted,
+      submitted: ps.correct,
       myValue: ps.value,
-      correct: ps.correct
+      correct: ps.correct,
+      cooldownUntil: ps.cooldownUntil || 0
     }
   },
 
@@ -115,10 +126,10 @@ registerGame({
     for (const [pid, ps] of Object.entries(state.playerStates)) {
       result[pid] = {
         score: ps.correct ? 1 : 0,
-        progress: ps.submitted ? 1 : 0,
+        progress: ps.correct ? 1 : 0,
         max: 1,
-        done: ps.submitted,
-        label: ps.submitted ? `已提交 ${ps.value}` : '未提交'
+        done: ps.correct,
+        label: ps.correct ? `已答对 ${ps.value}` : (ps.value != null ? `最近提交 ${ps.value}` : '未提交')
       }
     }
     return result

@@ -438,7 +438,7 @@ async function onRoomMinigameSelect(minigameId: string, options?: Record<string,
   roomPickerOpen.value = false
   const parts = participantsForRound(roomPickerRound.value)
   try {
-    const room = await bbCreateMinigameRoom('hoh', minigameId, parts, null, options)
+    const room = await bbCreateMinigameRoom('finale', minigameId, parts, null, options)
     activeRoom.value = room
     roomWinner.value = null
     roomRoundRegistered.value = false

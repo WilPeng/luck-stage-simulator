@@ -344,7 +344,9 @@ async function computePickData() {
   let allActive: { id: string; name: string }[] = []
   try {
     const res = await bbGetHouseguests({ status: 'active', pageSize: 200 })
-    allActive = (res?.list || []).map((h: any) => ({ id: h.id, name: h.name }))
+    allActive = (res?.list || [])
+      .filter((h: any) => h.role !== 'admin')
+      .map((h: any) => ({ id: h.id, name: h.name }))
   } catch {}
 
   // 判断哪些被抽中的 HOH/提名者可以自选

@@ -5,6 +5,7 @@ const BBHouseguest = require('../models/BBHouseguest')
 const { generateId, logAction, getCurrentSeason, BB_ACTION_TYPES, hasTwist } = require('../helpers')
 const { auth } = require('../../../middleware/auth')
 const { broadcastBBGame } = require('../../../socket/bbGame')
+const { postRoomMessage, moveAllToRoom } = require('../../../socket/bbHouse')
 const { dealVetoCards, drawVetoCard } = require('../vetoCardService')
 
 function shuffleArr(arr) {
@@ -241,8 +242,8 @@ router.post('/pick', async (req, res) => {
       return res.status(400).json({ success: false, error: '该房客已被选中，请选择其他人', code: 'ALREADY_IN_PARTICIPANTS' })
     }
 
-    // 校验：pickedPlayerId 必须是活跃房客
-    const pickedPlayer = await col.findOne({ gameId: 'bigbrother', id: pickedPlayerId, status: 'active' })
+    // 校验：pickedPlayerId 必须是活跃房客（且非管理员）
+    const pickedPlayer = await col.findOne({ gameId: 'bigbrother', id: pickedPlayerId, status: 'active', role: 'houseguest' })
     if (!pickedPlayer) {
       return res.status(400).json({ success: false, error: '所选房客不存在或已淘汰', code: 'PLAYER_NOT_FOUND' })
     }
@@ -351,6 +352,22 @@ router.post('/use', async (req, res) => {
       { $set: { used: true, status: 'used', usedOnPlayerId: targetPlayerId, usedOnPlayerName: targetPlayerName, updatedAt: new Date().toISOString() } }
     )
 
+    // POV 获得者发言：决定使用否决权 + 提示 HOH 选择替补
+    try {
+      const vetoRec = await vetoCol.findOne({ gameId: 'bigbrother', roundId })
+      if (vetoRec) {
+        const ceremony = ensureCeremony(vetoRec)
+        if (!ceremony.messages.some(m => m.type === 'decision')) {
+          const nm = targetPlayerName || '被提名者'
+          ceremony.messages.push({ playerId: vetoRec.winnerId, playerName: vetoRec.winnerName, text: `我决定对${nm}使用POV`, type: 'decision', at: new Date().toISOString() })
+          ceremony.messages.push({ playerId: vetoRec.winnerId, playerName: vetoRec.winnerName, text: `因为我对${nm}使用了POV，所以HOH需要选择1名其他房客进行替补。`, type: 'decision', at: new Date().toISOString() })
+          await vetoCol.updateOne({ gameId: 'bigbrother', roundId }, { $set: { ceremony, updatedAt: new Date().toISOString() } })
+          try { await postRoomMessage('living_room', { senderId: vetoRec.winnerId, senderName: vetoRec.winnerName, content: `我决定对${nm}使用POV。因为我对${nm}使用了POV，所以HOH需要选择1名其他房客进行替补。` }) } catch (e) { /* ignore */ }
+          broadcastBBGame('bb:veto-ceremony', { roundId, ceremony })
+        }
+      }
+    } catch (e) { /* ignore */ }
+
     const nomCol = getCollection('BBNomination')
     const nominationDoc = await nomCol.findOne({ gameId: 'bigbrother', roundId })
 
@@ -400,8 +417,15 @@ router.post('/skip', async (req, res) => {
     if (record) {
       record.used = false
       record.status = 'skipped'
+      // 未使用否决权：POV 获得者先发言「我决定不使用POV」
+      const ceremony = ensureCeremony(record)
+      if (!ceremony.messages.some(m => m.type === 'decision')) {
+        ceremony.messages.push({ playerId: record.winnerId, playerName: record.winnerName, text: '我决定不使用POV', type: 'decision', at: new Date().toISOString() })
+        try { await postRoomMessage('living_room', { senderId: record.winnerId, senderName: record.winnerName, content: '我决定不使用POV' }) } catch (e) { /* ignore */ }
+      }
       record.updatedAt = new Date().toISOString()
       await record.save()
+      broadcastBBGame('bb:veto-ceremony', { roundId: `round-${season.currentRound}`, ceremony: record.ceremony })
     }
     res.json({ success: true, data: record ? record.toObject() : null })
   } catch (e) {
@@ -519,6 +543,78 @@ router.post('/card-draw', auth, async (req, res) => {
   const result = await drawVetoCard(req.user?.userId, isAdmin)
   if (!result.success) return res.status(400).json(result)
   res.json(result)
+})
+
+// ===== POV 仪式（否决权会议） =====
+
+function ensureCeremony(record) {
+  if (!record.ceremony) {
+    record.ceremony = { started: false, openingSpoken: false, closingSpoken: false, messages: [] }
+  }
+  if (!Array.isArray(record.ceremony.messages)) record.ceremony.messages = []
+  return record.ceremony
+}
+
+// POST /ceremony-start - 开始 POV 仪式：把在线玩家移动到客厅
+router.post('/ceremony-start', auth, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const roundId = `round-${season.currentRound}`
+    const record = await BBVetoRecord.findOne({ gameId: 'bigbrother', roundId })
+    if (!record) return res.status(404).json({ success: false, error: '否决权记录不存在', code: 'NOT_FOUND' })
+    if (req.user?.role !== 'admin' && req.user?.userId !== record.winnerId) {
+      return res.status(403).json({ success: false, error: '只有 POV 获得者或管理员可以开始仪式' })
+    }
+    const ceremony = ensureCeremony(record)
+    ceremony.started = true
+    record.updatedAt = new Date().toISOString()
+    await record.save()
+    try { await moveAllToRoom('living_room', 'POV 仪式开始') } catch (e) { /* ignore */ }
+    broadcastBBGame('bb:veto-ceremony', { roundId, ceremony })
+    res.json({ success: true, data: record.toObject() })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '开始 POV 仪式失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /speech - POV 获得者发言（opening 开场 / closing 结束）
+router.post('/speech', auth, async (req, res) => {
+  try {
+    const { phase, text } = req.body || {}
+    const season = await getCurrentSeason()
+    const roundId = `round-${season.currentRound}`
+    const record = await BBVetoRecord.findOne({ gameId: 'bigbrother', roundId })
+    if (!record) return res.status(404).json({ success: false, error: '否决权记录不存在', code: 'NOT_FOUND' })
+    const isAdmin = req.user?.role === 'admin'
+    if (!isAdmin && req.user?.userId !== record.winnerId) {
+      return res.status(403).json({ success: false, error: '只有 POV 获得者可以发言' })
+    }
+    const ceremony = ensureCeremony(record)
+    if (phase === 'opening' && ceremony.openingSpoken) {
+      return res.status(400).json({ success: false, error: '开场发言已发表', code: 'ALREADY_SPOKEN' })
+    }
+    if (phase === 'closing' && ceremony.closingSpoken) {
+      return res.status(400).json({ success: false, error: '结束发言已发表', code: 'ALREADY_SPOKEN' })
+    }
+    let content = text && String(text).trim() ? String(text).trim() : ''
+    if (!content) {
+      content = phase === 'opening'
+        ? '现在是POV仪式，我作为否决权获得者，将决定是否使用否决权。'
+        : 'POV仪式结束。'
+    }
+    ceremony.messages.push({ playerId: record.winnerId, playerName: record.winnerName, text: content, type: phase || 'speech', at: new Date().toISOString() })
+    if (phase === 'opening') ceremony.openingSpoken = true
+    if (phase === 'closing') ceremony.closingSpoken = true
+    record.updatedAt = new Date().toISOString()
+    await record.save()
+    try { await postRoomMessage('living_room', { senderId: record.winnerId, senderName: record.winnerName, content }) } catch (e) { /* ignore */ }
+    broadcastBBGame('bb:veto-ceremony', { roundId, ceremony })
+    res.json({ success: true, data: record.toObject() })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '发言失败', code: 'SERVER_ERROR' })
+  }
 })
 
 module.exports = router

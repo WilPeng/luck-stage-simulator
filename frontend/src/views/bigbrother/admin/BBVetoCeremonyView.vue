@@ -33,6 +33,29 @@
       <p>暂无否决权记录</p>
     </div>
 
+    <!-- POV 仪式控制 -->
+    <div v-if="veto" class="ceremony-panel">
+      <div class="cer-title">🎤 POV 仪式（将全员移动到客厅）</div>
+      <div class="cer-msgs">
+        <div v-for="(m, i) in (veto.ceremony?.messages || [])" :key="i" class="cer-msg">
+          <span class="cer-sender">{{ m.playerName }}</span><span class="cer-text">{{ m.text }}</span>
+        </div>
+        <div v-if="!(veto.ceremony?.messages || []).length" class="cer-empty">尚未发言</div>
+      </div>
+      <div class="cer-actions">
+        <button v-if="!veto.ceremony?.started" class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="startCeremony">▶ 开始仪式并移动到客厅</button>
+        <template v-else-if="!veto.ceremony?.openingSpoken">
+          <input v-model="ceremonyText" class="cer-input" placeholder="POV 开场发言（留空默认）" />
+          <button class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="speak('opening')">发表开场发言</button>
+        </template>
+        <template v-else-if="veto.status === 'skipped' && !veto.ceremony?.closingSpoken">
+          <input v-model="ceremonyText" class="cer-input" placeholder="结束发言（留空默认：POV仪式结束。）" />
+          <button class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="speak('closing')">发表结束发言</button>
+        </template>
+        <span v-else-if="veto.ceremony?.closingSpoken" class="cer-done">POV 仪式已结束</span>
+      </div>
+    </div>
+
     <!-- 当前 HOH 和提名信息 -->
     <div class="status-panel">
       <div class="status-row hoh-row">
@@ -164,10 +187,28 @@
 import { ref, computed, onMounted } from 'vue'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
-import { bbGetCurrentVeto, bbUseVeto, bbSkipVeto, bbGetCurrentNomination, bbGetCurrentHoh, bbGetNominationHistory } from '../../../services/bbApi'
+import { bbGetCurrentVeto, bbUseVeto, bbSkipVeto, bbGetCurrentNomination, bbGetCurrentHoh, bbGetNominationHistory, bbVetoCeremonyStart, bbVetoSpeech } from '../../../services/bbApi'
 import type { BBVetoRecord, BBNomination, BBHohRecord } from '../../../types/bigbrother'
 
 const veto = ref<BBVetoRecord | null>(null)
+const ceremonyText = ref('')
+const ceremonyBusy = ref(false)
+
+async function startCeremony() {
+  if (ceremonyBusy.value) return
+  ceremonyBusy.value = true
+  try { await bbVetoCeremonyStart(); await fetchData() }
+  catch (e: any) { alert(e?.message || '开始仪式失败') }
+  finally { ceremonyBusy.value = false }
+}
+
+async function speak(phase: 'opening' | 'closing') {
+  if (ceremonyBusy.value) return
+  ceremonyBusy.value = true
+  try { await bbVetoSpeech(phase, ceremonyText.value); ceremonyText.value = ''; await fetchData() }
+  catch (e: any) { alert(e?.message || '发言失败') }
+  finally { ceremonyBusy.value = false }
+}
 const twistInfo = ref<any>(null)
 const nomination = ref<BBNomination | null>(null)
 const hoh = ref<BBHohRecord | null>(null)
@@ -328,4 +369,13 @@ onMounted(fetchData)
 .skip-result-detail { font-size: 13px; color: #888; }
 .skip-result-detail .highlight { color: #ffaa00; }
 .skip-result-hint { font-size: 13px; color: #00ff88; margin: 16px 0 0; padding: 12px; background: #00ff8808; border: 1px solid #00ff8822; border-radius: 6px; }
+.ceremony-panel { background: #0f0f2e; border: 1px solid #ffaa0044; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.cer-title { font-size: 15px; font-weight: 700; color: #ffaa00; margin-bottom: 10px; }
+.cer-msgs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.cer-msg { background: #16163a; border-radius: 8px; padding: 8px 12px; font-size: 14px; color: #ddd; border-left: 3px solid #ffaa0066; }
+.cer-sender { color: #ffaa00; font-weight: 600; margin-right: 6px; }
+.cer-empty { color: #666; font-size: 13px; }
+.cer-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.cer-input { flex: 1; min-width: 200px; background: #0a0a24; border: 1px solid #ffaa0044; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; outline: none; }
+.cer-done { color: #00ff88; font-size: 13px; }
 </style>

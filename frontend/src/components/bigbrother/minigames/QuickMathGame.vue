@@ -16,11 +16,12 @@
         <div class="question">{{ currentQuestion }} = ?</div>
         <div class="answer-input">
           <input ref="inputRef" v-model="userAnswer" type="number"
-            class="math-input" placeholder="输入答案"
+            class="math-input" placeholder="输入答案" :disabled="cooling"
             @keyup.enter="submitAnswer" />
-          <button class="submit-btn" @click="submitAnswer">确认</button>
+          <button class="submit-btn" :disabled="cooling" @click="submitAnswer">{{ cooling ? `冷却 ${coolRemain}s` : '确认' }}</button>
         </div>
-        <div v-if="lastResult" class="result-feedback" :class="{ correct: lastResult.correct, wrong: !lastResult.correct }">
+        <div v-if="cooling" class="result-feedback wrong">❌ 答错，{{ coolRemain }} 秒后可重试</div>
+        <div v-else-if="lastResult" class="result-feedback" :class="{ correct: lastResult.correct, wrong: !lastResult.correct }">
           {{ lastResult.correct ? '✅ 正确！' : '❌ 错误，请重试' }}
         </div>
       </div>
@@ -41,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useMinigameSocket } from '../../../composables/useMinigameSocket'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 
@@ -62,9 +63,14 @@ const lastResult = computed(() => gameState.value?.lastResult || gameState.value
 
 const userAnswer = ref('')
 const inputRef = ref<HTMLInputElement | null>(null)
+const now = ref(Date.now())
+let cooldownTimer: ReturnType<typeof setInterval> | null = null
+const cooldownUntil = computed(() => Number(gameState.value?.cooldownUntil || gameState.value?.actionResult?.cooldownUntil || 0))
+const cooling = computed(() => cooldownUntil.value > now.value)
+const coolRemain = computed(() => Math.max(0, Math.ceil((cooldownUntil.value - now.value) / 1000)))
 
 function submitAnswer() {
-  if (!userAnswer.value) return
+  if (!userAnswer.value || cooling.value) return
   sendAction({ type: 'answer', answer: userAnswer.value })
   userAnswer.value = ''
   nextTick(() => inputRef.value?.focus())
@@ -74,7 +80,11 @@ watch(finished, (val) => {
   if (val && winner.value) emit('finished', winner.value)
 })
 
-onMounted(() => connect())
+onMounted(() => {
+  connect()
+  cooldownTimer = setInterval(() => { now.value = Date.now() }, 300)
+})
+onUnmounted(() => { if (cooldownTimer) clearInterval(cooldownTimer) })
 </script>
 
 <style scoped>

@@ -24,6 +24,27 @@
       <p>暂无否决权记录</p>
     </div>
 
+    <!-- POV 仪式发言区 -->
+    <div v-if="veto && isVetoHolder && !isFuture" class="ceremony-panel">
+      <div class="cer-title">🎤 POV 仪式发言</div>
+      <div class="cer-msgs">
+        <div v-for="(m, i) in (veto.ceremony?.messages || [])" :key="i" class="cer-msg">
+          <span class="cer-sender">{{ m.playerName }}</span>
+          <span class="cer-text">{{ m.text }}</span>
+        </div>
+        <div v-if="!(veto.ceremony?.messages || []).length" class="cer-empty">尚未发言</div>
+      </div>
+      <div v-if="!veto.ceremony?.openingSpoken" class="cer-actions">
+        <input v-model="openingText" class="bb-input" placeholder="开场发言（留空使用默认）" />
+        <button class="bb-btn bb-btn-primary" :disabled="speaking" @click="speak('opening')">发表开场发言</button>
+      </div>
+      <div v-else-if="veto.status === 'skipped' && !veto.ceremony?.closingSpoken" class="cer-actions">
+        <input v-model="closingText" class="bb-input" placeholder="结束发言（留空默认：POV仪式结束。）" />
+        <button class="bb-btn bb-btn-primary" :disabled="speaking" @click="speak('closing')">发表结束发言</button>
+      </div>
+      <div v-else-if="veto.ceremony?.closingSpoken" class="cer-done">POV 仪式已结束</div>
+    </div>
+
     <!-- 提名信息 -->
     <div v-if="nomination" class="nomination-panel">
       <div class="nom-title">🎯 当前提名</div>
@@ -123,7 +144,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetVetoHistory, bbGetCurrentNomination, bbUseVeto, bbSkipVeto } from '../../../services/bbApi'
+import { bbGetVetoHistory, bbGetCurrentNomination, bbUseVeto, bbSkipVeto, bbVetoSpeech } from '../../../services/bbApi'
 import type { BBVetoRecord, BBNomination } from '../../../types/bigbrother'
 
 const route = useRoute()
@@ -175,6 +196,25 @@ const showSkipModal = ref(false)
 const savePlayerId = ref('')
 const using = ref(false)
 const skipping = ref(false)
+const openingText = ref('')
+const closingText = ref('')
+const speaking = ref(false)
+
+async function speak(phase: 'opening' | 'closing') {
+  if (speaking.value) return
+  speaking.value = true
+  try {
+    const text = phase === 'opening' ? openingText.value : closingText.value
+    await bbVetoSpeech(phase, text)
+    if (phase === 'opening') openingText.value = ''
+    else closingText.value = ''
+    await fetchData()
+  } catch (e: any) {
+    alert(e?.message || '发言失败')
+  } finally {
+    speaking.value = false
+  }
+}
 
 async function useVeto() {
   if (!savePlayerId.value || using.value) return
@@ -337,4 +377,13 @@ onMounted(async () => {
 .nominee-radio { accent-color: #00ff88; }
 .nominee-name { font-size: 14px; color: #e0e0e0; font-weight: 500; }
 .no-nominees { text-align: center; color: #666; font-size: 13px; padding: 16px; }
+.ceremony-panel { background: #0f0f2e; border: 1px solid #ffaa0044; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.cer-title { font-size: 15px; font-weight: 700; color: #ffaa00; margin-bottom: 10px; }
+.cer-msgs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.cer-msg { background: #16163a; border-radius: 8px; padding: 8px 12px; font-size: 14px; color: #ddd; border-left: 3px solid #ffaa0066; }
+.cer-sender { color: #ffaa00; font-weight: 600; margin-right: 6px; }
+.cer-empty { color: #666; font-size: 13px; }
+.cer-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.cer-actions .bb-input { flex: 1; min-width: 180px; background: #0a0a24; border: 1px solid #ffaa0044; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; outline: none; }
+.cer-done { color: #00ff88; font-size: 13px; }
 </style>

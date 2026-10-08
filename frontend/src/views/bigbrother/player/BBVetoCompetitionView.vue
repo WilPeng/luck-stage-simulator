@@ -141,6 +141,8 @@ import SequenceMemoryGame from '../../../components/bigbrother/minigames/Sequenc
 import JigsawGame from '../../../components/bigbrother/minigames/JigsawGame.vue'
 import MissingNumberGame from '../../../components/bigbrother/minigames/MissingNumberGame.vue'
 import AbracaGame from '../../../components/bigbrother/minigames/AbracaGame.vue'
+import DescribeGuessGame from '../../../components/bigbrother/minigames/DescribeGuessGame.vue'
+import StayOrFoldGame from '../../../components/bigbrother/minigames/StayOrFold.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import type { BBVetoRecord, MinigameRoom } from '../../../types/bigbrother'
 
@@ -213,7 +215,9 @@ const gameComponentMap: Record<string, Component> = {
   'sequence-memory': markRaw(SequenceMemoryGame),
   'jigsaw': markRaw(JigsawGame),
   'missing-number': markRaw(MissingNumberGame),
-  'abraca': markRaw(AbracaGame)
+  'abraca': markRaw(AbracaGame),
+  'describe-guess': markRaw(DescribeGuessGame),
+  'stay-or-fold': markRaw(StayOrFoldGame)
 }
 
 function isMe(name: string): boolean { return name === myName.value }

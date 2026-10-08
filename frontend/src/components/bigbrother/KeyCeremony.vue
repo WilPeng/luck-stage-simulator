@@ -69,6 +69,7 @@
       </div>
 
       <!-- 抽钥匙 -->
+      <div v-else-if="!keyCeremony.openingSpoken" class="kc-waiting">请等待房主发表开场发言后再抽取钥匙…</div>
       <div v-else-if="keyCeremony.drawnCount < keyCeremony.order.length" class="kc-draw">
         <button v-if="iAmActor" class="kc-btn kc-btn-draw" :disabled="drawing" @click="doDraw">
           {{ drawing ? '抽钥匙中…' : '🔑 从箱子中抽出一把钥匙' }}

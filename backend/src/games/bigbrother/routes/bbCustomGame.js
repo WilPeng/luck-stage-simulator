@@ -77,7 +77,7 @@ router.post('/', async (req, res) => {
       name, description, icon, type, questions, cooldownSeconds, maxAttempts,
       timeLimit, scoringRule, playerCount, winCondition,
       submitMode, wrongFeedback, lockOnWrong, targetCorrect,
-      eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit
+      eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit, media
     } = req.body
 
     if (!name || !name.trim()) {
@@ -128,6 +128,7 @@ router.post('/', async (req, res) => {
       showSubmissions: showSubmissions !== false,
       basicTimeLimit: basicTimeLimit ?? 30,
       tiebreakTimeLimit: tiebreakTimeLimit ?? 30,
+      media: media || null,
       enabled: true
     })
 
@@ -153,7 +154,7 @@ router.put('/:id', async (req, res) => {
       name, description, icon, type, questions, cooldownSeconds, maxAttempts,
       timeLimit, scoringRule, playerCount, winCondition, enabled,
       submitMode, wrongFeedback, lockOnWrong, targetCorrect,
-      eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit
+      eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit, media
     } = req.body
 
     const finalWin = winCondition !== undefined ? winCondition : existing.winCondition
@@ -192,6 +193,7 @@ router.put('/:id', async (req, res) => {
     if (showSubmissions !== undefined) existing.showSubmissions = !!showSubmissions
     if (basicTimeLimit !== undefined) existing.basicTimeLimit = basicTimeLimit
     if (tiebreakTimeLimit !== undefined) existing.tiebreakTimeLimit = tiebreakTimeLimit
+    if (media !== undefined) existing.media = media
     if (enabled !== undefined) existing.enabled = enabled
     existing.updatedAt = new Date().toISOString()
 

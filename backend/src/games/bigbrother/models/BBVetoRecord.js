@@ -14,6 +14,8 @@ class BBVetoRecord extends BaseModel {
     this.usedOnPlayerId = data?.usedOnPlayerId || null // 被拯救的提名者
     this.usedOnPlayerName = data?.usedOnPlayerName || ''
     this.cardDraw = data?.cardDraw || null // POV 抽卡环节（存活>6时）：{ cards, drawerOrder, drawerIndex, participants, canPick, pickablePlayers }
+    // 否决权会议仪式发言（POV 获得者）
+    this.ceremony = data?.ceremony || null // { started, openingSpoken, closingSpoken, messages:[{playerId,playerName,text,type,at}] }
     this.gameId = data?.gameId || 'bigbrother'
     this.createdAt = data?.createdAt || new Date().toISOString()
     this.updatedAt = data?.updatedAt || new Date().toISOString()

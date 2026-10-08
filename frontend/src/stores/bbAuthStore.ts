@@ -19,8 +19,12 @@ export const useBbAuthStore = defineStore('bbAuth', () => {
     const tokenKey = gameKey('token')
     const userKey = gameKey('user')
     sessionStorage.setItem(tokenKey, token)
-    localStorage.setItem(tokenKey, token)
     sessionStorage.setItem(userKey, JSON.stringify(user))
+    // 持久化，支持关闭浏览器后自动登录
+    try {
+      localStorage.setItem(tokenKey, token)
+      localStorage.setItem(userKey, JSON.stringify(user))
+    } catch {}
   }
 
   async function loginUser(username: string, password: string) {
@@ -43,11 +47,12 @@ export const useBbAuthStore = defineStore('bbAuth', () => {
     sessionStorage.removeItem(gameKey('token'))
     sessionStorage.removeItem(gameKey('user'))
     localStorage.removeItem(gameKey('token'))
+    localStorage.removeItem(gameKey('user'))
   }
 
   function restoreSession(): boolean {
     const userKey = gameKey('user')
-    const stored = sessionStorage.getItem(userKey)
+    const stored = sessionStorage.getItem(userKey) || localStorage.getItem(userKey)
     if (stored) {
       try {
         currentUser.value = JSON.parse(stored)

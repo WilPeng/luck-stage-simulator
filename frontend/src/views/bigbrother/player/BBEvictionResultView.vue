@@ -21,7 +21,7 @@
         <div class="door-stage">
           <div class="door-icon">🚪</div>
           <div v-for="e in night.evicted" :key="e.id" class="door-name">{{ e.name }}</div>
-          <div class="door-votes">{{ night.big }}-{{ night.small }}</div>
+          <div class="door-votes">{{ nightVotePattern }}</div>
         </div>
       </template>
     </div>
@@ -31,7 +31,7 @@
         <div class="result-icon">🚪</div>
         <div class="result-info">
           <div class="result-name">{{ evictionResult.evictedName }}</div>
-          <div class="result-votes">{{ evictionResult.voteCount }}{{ evictionResult.otherVotes != null ? '-' + evictionResult.otherVotes : '' }}</div>
+          <div class="result-votes">{{ votePattern(evictionResult) }}</div>
           <div v-if="isMe(evictionResult.evictedName)" class="me-evicted">你被淘汰了！</div>
         </div>
       </div>
@@ -78,6 +78,20 @@ const announceLines = computed(() => {
     key: `${n.round}-${i}`,
     text: s.text
   }))
+})
+
+// 票型：始终显示全部票数（位数 = 最终提名人数），如 3-0-0
+function votePattern(e: any): string {
+  if (e?.voteResults?.length) return e.voteResults.map((v: any) => v.votes).join('-')
+  if (e && e.voteCount != null) return e.otherVotes != null ? `${e.voteCount}-${e.otherVotes}` : String(e.voteCount)
+  return ''
+}
+
+const nightVotePattern = computed(() => {
+  const n = night.value
+  if (!n) return ''
+  if (Array.isArray(n.voteTally) && n.voteTally.length) return n.voteTally.join('-')
+  return `${n.big ?? 0}-${n.small ?? 0}`
 })
 
 function isMe(name: string): boolean { return name === authStore.currentUser?.name }

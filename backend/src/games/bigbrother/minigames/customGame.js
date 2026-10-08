@@ -353,6 +353,7 @@ function createCustomGameHandler(gameDef) {
         timeLimit: state.timeLimit,
         done: ps.done,
         status: state.status,
+        media: gameDef.media || null,
         lastResult: null
       }
 

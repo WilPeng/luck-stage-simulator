@@ -83,14 +83,22 @@ async function initBBData() {
     await ensureCustomGameExamples()
     // 幂等补齐账号密码（老数据迁移：从登录码迁移为「账号+密码」）
     const allGuests = await BBHouseguest.find({ gameId: 'bigbrother' })
+    const usedNames = new Set(allGuests.map(g => g.username).filter(Boolean))
+    let pendingAdminIndex = 0
     let idx = 0
     for (const h of allGuests) {
       idx++
       let changed = false
       if (!h.username) {
-        h.username = h.role === 'admin'
-          ? 'admin'
-          : (h.loginCode || `houseguest${String(idx).padStart(2, '0')}`)
+        if (h.role === 'admin') {
+          let candidate = pendingAdminIndex === 0 ? 'admin' : `admin${pendingAdminIndex + 1}`
+          while (usedNames.has(candidate)) { pendingAdminIndex++; candidate = `admin${pendingAdminIndex + 1}` }
+          h.username = candidate
+          pendingAdminIndex++
+        } else {
+          h.username = h.loginCode || `houseguest${String(idx).padStart(2, '0')}`
+        }
+        usedNames.add(h.username)
         changed = true
       }
       if (!h.password) {
@@ -98,6 +106,20 @@ async function initBBData() {
         changed = true
       }
       if (changed) await h.save()
+    }
+    // 保证始终存在可用的 admin / ADMIN2026 账号
+    const adminExists = await BBHouseguest.findOne({ gameId: 'bigbrother', role: 'admin', username: 'admin' })
+    if (!adminExists) {
+      await new BBHouseguest({
+        id: generateId(),
+        name: 'Big Brother 管理员',
+        username: 'admin',
+        password: 'ADMIN2026',
+        role: 'admin',
+        status: 'active',
+        gameId: 'bigbrother'
+      }).save()
+      console.log('[Big Brother] Ensured admin account (admin / ADMIN2026)')
     }
     return
   }

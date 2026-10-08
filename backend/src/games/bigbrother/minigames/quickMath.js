@@ -43,7 +43,8 @@ registerGame({
         currentIndex: 0,
         answers: [],         // 用户答案记录
         startTime: null,
-        finishTime: null
+        finishTime: null,
+        cooldownUntil: 0     // 答错后的冷却截止时间（3s 内不可作答）
       }
     })
     return { playerStates, status: 'ready' }
@@ -56,6 +57,10 @@ registerGame({
     if (action.type === 'answer') {
       if (!ps.startTime) ps.startTime = Date.now()
       if (ps.currentIndex >= TOTAL_QUESTIONS) return { updated: false }
+      const now = Date.now()
+      if (ps.cooldownUntil && now < ps.cooldownUntil) {
+        return { updated: false, result: { correct: false, cooldownUntil: ps.cooldownUntil } }
+      }
 
       const q = ps.questions[ps.currentIndex]
       const userAnswer = parseInt(action.answer, 10)
@@ -65,6 +70,7 @@ registerGame({
       ps.answers.push({ question: q.expression, userAnswer, correctAnswer: q.answer, correct })
 
       if (correct) {
+        ps.cooldownUntil = 0
         ps.currentIndex++
         if (ps.currentIndex >= TOTAL_QUESTIONS) {
           ps.finishTime = ps.finishTime || Date.now()
@@ -75,9 +81,12 @@ registerGame({
             return { updated: true, finished: true, winner: this.computeWinner(state), result: { correct } }
           }
         }
+      } else {
+        // 答错：3 秒内不可作答
+        ps.cooldownUntil = now + 3000
       }
       // 不返回正确答案
-      return { updated: true, finished: false, result: { correct } }
+      return { updated: true, finished: false, result: { correct, cooldownUntil: ps.cooldownUntil } }
     }
 
     return { updated: false }
@@ -110,6 +119,7 @@ registerGame({
       lastResult: ps.answers.length > 0
         ? (() => { const a = ps.answers[ps.answers.length - 1]; return a.correct ? a : { ...a, correctAnswer: undefined } })()
         : null,
+      cooldownUntil: ps.cooldownUntil || 0,
       status: state.status
     }
   },

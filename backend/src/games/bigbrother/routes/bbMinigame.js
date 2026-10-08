@@ -38,6 +38,33 @@ router.post('/upload-image', auth, requireAdmin, gameImageUpload.single('image')
   }
 })
 
+// 比赛内容音乐/视频附件上传（管理员）
+const gameMediaUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, BBGAME_DIR),
+    filename: (req, file, cb) => {
+      const ext = (path.extname(file.originalname) || '').toLowerCase()
+      cb(null, `bbmedia-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`)
+    }
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/')) return cb(null, true)
+    cb(new Error('仅支持音频或视频文件'))
+  }
+})
+
+router.post('/upload-media', auth, requireAdmin, gameMediaUpload.single('media'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, error: '未收到文件' })
+    const kind = req.file.mimetype.startsWith('video/') ? 'video' : 'audio'
+    res.json({ success: true, data: { url: `/uploads/bbgame/${req.file.filename}`, kind, mime: req.file.mimetype, name: req.file.originalname } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '媒体上传失败' })
+  }
+})
+
 
 // GET /active-rooms - 所有活跃比赛房间（管理员实时观战）
 router.get('/active-rooms', async (req, res) => {
@@ -144,7 +171,7 @@ router.post('/create-room', async (req, res) => {
   try {
     const { gameType, minigameId, participants, targetScore, options } = req.body
 
-    if (!gameType || !['hoh', 'veto', 'bbbb'].includes(gameType)) {
+    if (!gameType || !['hoh', 'veto', 'bbbb', 'finale'].includes(gameType)) {
       return res.status(400).json({ success: false, error: '无效的比赛类型' })
     }
     if (!minigameId) {
@@ -205,7 +232,8 @@ router.post('/create-room', async (req, res) => {
         minigameName: room.minigameName || '',
         participants: room.participants,
         targetScore: room.targetScore,
-        status: room.status
+        status: room.status,
+        options: room.options || {}
       }
     })
   } catch (e) {
@@ -261,7 +289,8 @@ router.get('/room/:roomId', (req, res) => {
         minigameName: room.minigameName || '',
         participants: room.participants,
         status: room.status,
-        winner: room.winner
+        winner: room.winner,
+        options: room.options || {}
       }
     })
   } catch (e) {
@@ -293,7 +322,8 @@ router.get('/active-room/:gameType', (req, res) => {
         minigameName: room.minigameName || '',
         participants: room.participants,
         status: room.status,
-        winner: room.winner
+        winner: room.winner,
+        options: room.options || {}
       }
     })
   } catch (e) {

@@ -48,6 +48,22 @@
           </div>
         </div>
 
+        <!-- 比赛内容附件 -->
+        <div class="form-section">
+          <h3>比赛内容附件（可选）</h3>
+          <div class="form-row">
+            <div v-if="form.media && form.media.url" class="media-preview">
+              <span>{{ form.media.kind === 'video' ? '🎬' : '🎵' }} {{ form.media.name || form.media.url }}</span>
+              <button class="mini-btn" @click="form.media = null">移除</button>
+            </div>
+            <BBUploadBox v-else accept="audio/*,video/*" icon="🎵🎬" label="点击或拖拽上传音乐 / 视频" hint="支持 MP3 / MP4 等" :busy="uploadingMedia" @file="onMediaFile" />
+          </div>
+          <div v-if="form.media && form.media.url" class="form-row-inline">
+            <label class="radio-inline"><input type="radio" value="free" v-model="form.media.playMode" /> 选手自由播放</label>
+            <label class="radio-inline"><input type="radio" value="once" v-model="form.media.playMode" /> 统一播放一次</label>
+          </div>
+        </div>
+
         <!-- 规则设置 -->
         <div class="form-section">
           <h3>规则设置</h3>
@@ -247,9 +263,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { bbCreateCustomGame, bbUpdateCustomGame } from '../../../services/bbApi'
+import { bbCreateCustomGame, bbUpdateCustomGame, bbUploadGameMedia } from '../../../services/bbApi'
 import type { BBCustomGameDef, CustomGameQuestion } from '../../../types/bigbrother'
 import RichTextEditor from './RichTextEditor.vue'
+import BBUploadBox from '../BBUploadBox.vue'
 import { hasRichContent } from '../../../utils/richText'
 
 const props = defineProps<{ game: BBCustomGameDef | null }>()
@@ -298,8 +315,23 @@ const form = reactive({
   answerTimeLimit: 30,
   basicTimeLimit: 30,
   tiebreakTimeLimit: 30,
-  playerCount: { min: 2, max: 20 }
+  playerCount: { min: 2, max: 20 },
+  media: null as any
 })
+
+const uploadingMedia = ref(false)
+
+async function onMediaFile(file: File) {
+  uploadingMedia.value = true
+  try {
+    const res = await bbUploadGameMedia(file)
+    form.media = { url: res.url, kind: res.kind, name: res.name, playMode: 'free' }
+  } catch (e: any) {
+    alert(e?.message || '上传失败')
+  } finally {
+    uploadingMedia.value = false
+  }
+}
 
 const MODE_TYPES = ['elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb']
 const isQuizOrScore = computed(() => form.type === 'quiz' || form.type === 'score')
@@ -352,6 +384,7 @@ onMounted(() => {
     form.basicTimeLimit = (props.game as any).basicTimeLimit ?? 30
     form.tiebreakTimeLimit = (props.game as any).tiebreakTimeLimit ?? 30
     form.playerCount = { ...props.game.playerCount }
+    form.media = (props.game as any).media || null
     form.questions = props.game.questions.map(q => ({
       ...q,
       qtype: (q as any).qtype || ((q.options && q.options.length) ? 'choice' : 'text'),
@@ -431,7 +464,8 @@ async function save() {
       answerTimeLimit: form.answerTimeLimit,
       basicTimeLimit: form.basicTimeLimit,
       tiebreakTimeLimit: form.tiebreakTimeLimit,
-      playerCount: form.playerCount
+      playerCount: form.playerCount,
+      media: form.media
     }
     if (isEdit.value) {
       await bbUpdateCustomGame(props.game!.id, payload)
@@ -464,6 +498,10 @@ async function save() {
 .form-row-inline { display: flex; gap: 16px; }
 .form-row-inline .form-row { flex: 1; }
 .hint-line { color: #6fb98f; font-size: 12px; margin: 2px 0 8px; line-height: 1.5; }
+.media-preview { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #0a1a10; border: 1px solid #00ff8844; border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #cfe3ff; word-break: break-all; }
+.mini-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; border-radius: 6px; padding: 4px 12px; cursor: pointer; font-size: 12px; }
+.radio-inline { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #bbb; cursor: pointer; }
+.radio-inline input { accent-color: #00ff88; }
 .bb-input { width: 100%; padding: 8px 12px; background: #0a1a10; border: 1px solid #00ff8833; border-radius: 6px; color: #e0e0e0; font-size: 14px; outline: none; box-sizing: border-box; }
 .bb-input:focus { border-color: #00ff88; }
 select.bb-input { cursor: pointer; }

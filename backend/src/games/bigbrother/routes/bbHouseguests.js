@@ -108,7 +108,7 @@ router.get('/:id', async (req, res) => {
 // POST / - 创建房客（管理员为选手开账号：姓名 + 账号 + 密码）
 router.post('/', async (req, res) => {
   try {
-    const { name, username, password } = req.body
+    const { name, username, password, role, permissions } = req.body
     if (!name) return res.status(400).json({ success: false, error: '姓名不能为空', code: 'INVALID_NAME' })
     const uname = String(username || '').trim() || `houseguest${Date.now().toString().slice(-6)}`
     const exists = await BBHouseguest.findOne({ username: uname, gameId: 'bigbrother' })
@@ -119,7 +119,8 @@ router.post('/', async (req, res) => {
       name,
       username: uname,
       password: pwd,
-      role: 'houseguest',
+      role: role === 'admin' ? 'admin' : 'houseguest',
+      permissions: Array.isArray(permissions) ? permissions : [],
       status: 'active',
       gameId: 'bigbrother'
     })
@@ -136,7 +137,7 @@ router.put('/:id', async (req, res) => {
   try {
     const houseguest = await BBHouseguest.findOne({ id: req.params.id, gameId: 'bigbrother' })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
-    const { name, username, password, status, isHaveNot } = req.body
+    const { name, username, password, status, isHaveNot, role, permissions } = req.body
     if (name) houseguest.name = name
     if (username && String(username).trim() !== houseguest.username) {
       const uname = String(username).trim()
@@ -147,6 +148,8 @@ router.put('/:id', async (req, res) => {
       houseguest.username = uname
     }
     if (password) houseguest.password = String(password)
+    if (role === 'admin' || role === 'houseguest') houseguest.role = role
+    if (Array.isArray(permissions)) houseguest.permissions = permissions
     if (status) houseguest.status = status
     if (typeof isHaveNot === 'boolean') houseguest.isHaveNot = isHaveNot
     houseguest.updatedAt = new Date().toISOString()

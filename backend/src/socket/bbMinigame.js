@@ -411,13 +411,16 @@ const initBBMinigameSocket = (io) => {
           if (handler.needsServerTick) {
             startServerTick(room, handler, minigameNs)
           } else {
-            // 其他游戏：设置自动超时（优先使用房间级限时配置）
-            const timeoutMs = (room.options?.timeLimit || handler.duration || 60) * 1000
-            setTimeout(() => {
-              if (room.status === 'playing') {
-                finishGame(room, minigameNs)
-              }
-            }, timeoutMs)
+            // 其他游戏：设置自动超时（优先使用房间级限时配置；timeLimit===0 表示无限时）
+            const unlimited = room.options && room.options.timeLimit === 0
+            if (!unlimited) {
+              const timeoutMs = (room.options?.timeLimit || handler.duration || 60) * 1000
+              setTimeout(() => {
+                if (room.status === 'playing') {
+                  finishGame(room, minigameNs)
+                }
+              }, timeoutMs)
+            }
           }
         }
       }
@@ -524,7 +527,7 @@ const initBBMinigameSocket = (io) => {
           }
         }
         const elapsed = Date.now() - room.startTime
-        if (elapsed >= (handler.duration || 60) * 1000) {
+        if (!(room.options && room.options.timeLimit === 0) && elapsed >= (handler.duration || 60) * 1000) {
           clearInterval(room.tickTimer)
           room.tickTimer = null
           room.gameState.status = 'finished'
@@ -721,7 +724,8 @@ function pushPlayerStates(room, handler, minigameNs) {
 function startServerTick(room, handler, minigameNs) {
   if (room.tickTimer) return
   const ms = handler.serverTickMs || 500
-  const maxDurationMs = (room.options?.timeLimit || handler.duration || 600) * 1000
+  const unlimited = room.options && room.options.timeLimit === 0
+  const maxDurationMs = unlimited ? Infinity : (room.options?.timeLimit || handler.duration || 600) * 1000
   room.tickTimer = setInterval(() => {
     if (room.status !== 'playing') return
     try { handler.tick(room.gameState) } catch (e) { console.error('[BBMinigame] tick error', e) }
@@ -732,7 +736,7 @@ function startServerTick(room, handler, minigameNs) {
       clearInterval(room.tickTimer)
       room.tickTimer = null
       finishGame(room, minigameNs)
-    } else if (room.startTime && Date.now() - room.startTime > maxDurationMs) {
+    } else if (!unlimited && room.startTime && Date.now() - room.startTime > maxDurationMs) {
       // 安全兜底：超过总时长强制结束，避免卡死
       clearInterval(room.tickTimer)
       room.tickTimer = null

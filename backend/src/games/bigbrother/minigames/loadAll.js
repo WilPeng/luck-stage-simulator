@@ -16,6 +16,8 @@ require('./sequenceMemory')
 require('./jigsaw')
 require('./missingNumber')
 require('./abraca')
+require('./describeGuess')
+require('./stayOrFold')
 
 const { getAllGames, getGame, GAME_REGISTRY } = require('./index')
 const { loadCustomGame, createCustomGameHandler, getCustomHandlerId, clearCustomGameCache } = require('./customGame')

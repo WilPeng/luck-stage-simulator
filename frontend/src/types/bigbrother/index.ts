@@ -318,6 +318,7 @@ export interface BBHouseguest {
   loginCode?: string
   role: 'admin' | 'houseguest'
   status: 'active' | 'evicted' | 'jury' | 'f2'
+  permissions?: string[]
   hasLogin: boolean
   avatar: string | null
   isHaveNot?: boolean
@@ -402,6 +403,12 @@ export interface BBVetoRecord {
   used: boolean
   usedOnPlayerId: string | null
   usedOnPlayerName: string
+  ceremony?: {
+    started: boolean
+    openingSpoken: boolean
+    closingSpoken: boolean
+    messages: { playerId: string; playerName: string; text: string; type?: string; at: string }[]
+  } | null
   gameId: string
   createdAt: string
   updatedAt: string
@@ -487,7 +494,7 @@ export function getEndgameStatus(currentRound: number, currentStage: BBAllStageT
 
 // ===== 小游戏相关类型 =====
 
-export type MinigameId = 'click-speed' | 'memory-match' | 'quick-math' | 'balance-bar' | 'dice-duel' | 'power-challenge' | 'klotski' | 'swing-pointer' | 'minority' | 'spot-difference' | 'reaction' | 'sequence-memory' | 'jigsaw' | 'missing-number' | 'abraca'
+export type MinigameId = 'click-speed' | 'memory-match' | 'quick-math' | 'balance-bar' | 'dice-duel' | 'power-challenge' | 'klotski' | 'swing-pointer' | 'minority' | 'spot-difference' | 'reaction' | 'sequence-memory' | 'jigsaw' | 'missing-number' | 'abraca' | 'describe-guess' | 'stay-or-fold'
 export type MinigameCategory = 'reaction' | 'memory' | 'intellect' | 'skill' | 'strategy'
 
 export interface MinigameDef {
@@ -513,7 +520,7 @@ export type MinigameRoomStatus = 'waiting' | 'countdown' | 'playing' | 'finished
 
 export interface MinigameRoom {
   roomId: string
-  gameType: 'hoh' | 'veto'
+  gameType: 'hoh' | 'veto' | 'bbbb' | 'finale'
   minigameId: MinigameId
   minigameName?: string
   participants: MinigameParticipant[]
@@ -521,6 +528,7 @@ export interface MinigameRoom {
   startTime: number | null
   winner: { playerId: string; playerName: string } | null
   targetScore?: number | null
+  options?: Record<string, any>
 }
 
 // 单个玩家的实时进度
@@ -669,6 +677,7 @@ export interface BBCustomGameDef {
   showSubmissions?: boolean
   basicTimeLimit?: number
   tiebreakTimeLimit?: number
+  media?: { url: string; kind: 'audio' | 'video'; name?: string; playMode?: 'once' | 'free' } | null
   enabled: boolean
   createdAt: string
   updatedAt: string

@@ -31,7 +31,6 @@
             <th>名称</th>
             <th>账号</th>
             <th>密码</th>
-            <th>角色</th>
             <th>状态</th>
             <th>Have-Not</th>
             <th>已登录</th>
@@ -47,8 +46,11 @@
             <td class="name-cell">{{ h.name }}</td>
             <td><code class="code-tag">{{ h.username }}</code></td>
             <td><code class="code-tag">{{ h.password }}</code></td>
-            <td>{{ h.role === 'admin' ? '管理员' : '房客' }}</td>
-            <td><span class="status-tag" :class="h.status">{{ statusText(h.status) }}</span></td>
+            <td>
+              <span class="status-tag" :class="h.role === 'admin' ? 'admin' : h.status">
+                {{ h.role === 'admin' ? '管理员' : statusText(h.status) }}
+              </span>
+            </td>
             <td>
               <span v-if="h.isHaveNot" class="havenot-tag">🥶 是</span>
               <button v-if="h.role !== 'admin' && h.status === 'active'" class="bb-btn bb-btn-xs" @click="toggleHaveNot(h)">
@@ -58,10 +60,10 @@
             <td>{{ h.hasLogin ? '是' : '否' }}</td>
             <td class="actions">
               <button class="bb-btn bb-btn-xs" @click="editHouseguest(h)">编辑</button>
-              <button v-if="h.role !== 'admin'" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
+              <button v-if="!(h.role === 'admin' && h.username === 'admin')" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
             </td>
           </tr>
-          <tr v-if="list.length === 0"><td colspan="10" class="empty-cell">暂无数据</td></tr>
+          <tr v-if="list.length === 0"><td colspan="9" class="empty-cell">暂无数据</td></tr>
         </tbody>
       </table>
     </div>
@@ -93,15 +95,32 @@
               <label>密码</label>
               <input v-model="formPassword" class="bb-input" placeholder="登录密码" />
             </div>
-            <div v-if="editingId" class="form-group">
+            <div class="form-group">
+              <label>身份</label>
+              <select v-model="formRole" class="bb-select">
+                <option value="houseguest">房客</option>
+                <option value="admin">管理员</option>
+              </select>
+            </div>
+            <div v-if="formRole === 'admin'" class="form-group">
+              <label>权限（不勾选 = 拥有全部权限）</label>
+              <div class="perm-grid">
+                <label v-for="p in PERMISSIONS" :key="p.key" class="checkbox-row">
+                  <input type="checkbox" :value="p.key" v-model="formPermissions" />
+                  <span>{{ p.label }}</span>
+                </label>
+              </div>
+            </div>
+            <div v-if="editingId && formRole !== 'admin'" class="form-group">
               <label>状态</label>
               <select v-model="formStatus" class="bb-select">
                 <option value="active">活跃</option>
                 <option value="evicted">已淘汰</option>
                 <option value="jury">陪审团</option>
+                <option value="f2">决赛二人</option>
               </select>
             </div>
-            <div v-if="editingId && formStatus === 'active'" class="form-group">
+            <div v-if="editingId && formRole !== 'admin' && formStatus === 'active'" class="form-group">
               <label class="checkbox-row">
                 <input type="checkbox" v-model="formIsHaveNot" />
                 <span>🥶 Have-Not（可进入贫民屋）</span>
@@ -148,10 +167,28 @@ const editingId = ref<string | null>(null)
 const formName = ref('')
 const formUsername = ref('')
 const formPassword = ref('')
+const formRole = ref<'houseguest' | 'admin'>('houseguest')
+const formPermissions = ref<string[]>([])
 const formStatus = ref('active')
 const formIsHaveNot = ref(false)
 const editingAvatar = ref<string | null>(null)
 const selectedIds = ref<string[]>([])
+
+const PERMISSIONS = [
+  { key: 'dashboard', label: '总览' },
+  { key: 'houseguests', label: '房客管理' },
+  { key: 'house', label: 'BB House' },
+  { key: 'chat', label: '聊天记录' },
+  { key: 'guest-states', label: '睡眠/洗澡记录' },
+  { key: 'game-library', label: '游戏库' },
+  { key: 'power-challenge', label: '实力大挑战' },
+  { key: 'stage', label: '赛程控制' },
+  { key: 'round', label: '轮次环节' },
+  { key: 'endgame', label: '终局 F3/冠军' },
+  { key: 'season-result', label: '赛季结果' },
+  { key: 'minigame', label: '小游戏实况/复盘' },
+  { key: 'logs', label: '操作日志' }
+]
 
 const selectableList = computed(() => list.value.filter(h => h.role !== 'admin'))
 const allSelected = computed(() => selectableList.value.length > 0 && selectableList.value.every(h => selectedIds.value.includes(h.id)))
@@ -193,7 +230,7 @@ function onSearch() { page.value = 1; fetchData() }
 function changePage(p: number) { page.value = p; fetchData() }
 
 function statusText(status: string): string {
-  const map: Record<string, string> = { active: '活跃', evicted: '已淘汰', jury: '陪审团' }
+  const map: Record<string, string> = { active: '活跃', evicted: '已淘汰', jury: '陪审团', f2: '决赛二人' }
   return map[status] || status
 }
 
@@ -202,6 +239,8 @@ function editHouseguest(h: BBHouseguest) {
   formName.value = h.name
   formUsername.value = h.username
   formPassword.value = h.password || ''
+  formRole.value = h.role === 'admin' ? 'admin' : 'houseguest'
+  formPermissions.value = Array.isArray(h.permissions) ? [...h.permissions] : []
   formStatus.value = h.status
   formIsHaveNot.value = !!h.isHaveNot
   editingAvatar.value = h.avatar
@@ -238,18 +277,27 @@ async function onAdminDeleteAvatar() {
 
 async function saveHouseguest() {
   try {
+    const base: any = {
+      name: formName.value,
+      username: formUsername.value,
+      password: formPassword.value,
+      role: formRole.value,
+      permissions: formRole.value === 'admin' ? formPermissions.value : []
+    }
     if (editingId.value) {
-      const payload: any = { name: formName.value, username: formUsername.value, password: formPassword.value, status: formStatus.value }
-      if (formStatus.value === 'active') payload.isHaveNot = formIsHaveNot.value
+      const payload: any = { ...base, status: formRole.value === 'admin' ? 'active' : formStatus.value }
+      if (formRole.value !== 'admin' && formStatus.value === 'active') payload.isHaveNot = formIsHaveNot.value
       await bbUpdateHouseguest(editingId.value, payload)
     } else {
-      await bbCreateHouseguest({ name: formName.value, username: formUsername.value, password: formPassword.value })
+      await bbCreateHouseguest(base)
     }
     showCreateModal.value = false
     editingId.value = null
     formName.value = ''
     formUsername.value = ''
     formPassword.value = ''
+    formRole.value = 'houseguest'
+    formPermissions.value = []
     formIsHaveNot.value = false
     await fetchData()
   } catch (e: any) { alert(e.message) }
@@ -431,6 +479,9 @@ onMounted(fetchData)
 .status-tag.active { background: #00ff8822; color: #00ff88; }
 .status-tag.evicted { background: #ff444422; color: #ff4444; }
 .status-tag.jury { background: #ffaa0022; color: #ffaa00; }
+.status-tag.f2 { background: #a855f722; color: #c084fc; }
+.status-tag.admin { background: #4488ff22; color: #66aaff; }
+.perm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 12px; }
 .havenot-tag { padding: 2px 10px; border-radius: 10px; font-size: 12px; background: #66aaff22; color: #66aaff; margin-right: 6px; }
 .checkbox-row { display: flex; align-items: center; gap: 8px; color: #ccc; cursor: pointer; }
 .checkbox-row input { width: 16px; height: 16px; accent-color: #00ff88; }

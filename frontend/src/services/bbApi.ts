@@ -86,6 +86,13 @@ export async function bbLogout(): Promise<void> {
   } catch {}
 }
 
+export async function bbChangePassword(oldPassword: string, newPassword: string): Promise<void> {
+  return doRequest<void>('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ oldPassword, newPassword })
+  })
+}
+
 // ===== 赛季 =====
 export async function bbGetSeason(): Promise<BBSeason> {
   return doRequest<BBSeason>('/season')
@@ -253,14 +260,14 @@ export async function bbGetHohEligible(): Promise<{
   return doRequest('/hoh/eligible')
 }
 
-export async function bbCreateHouseguest(data: { name: string; username?: string; password?: string }): Promise<BBHouseguest> {
+export async function bbCreateHouseguest(data: { name: string; username?: string; password?: string; role?: string; permissions?: string[] }): Promise<BBHouseguest> {
   return doRequest<BBHouseguest>('/houseguests', {
     method: 'POST',
     body: JSON.stringify(data)
   })
 }
 
-export async function bbUpdateHouseguest(id: string, data: { name?: string; username?: string; password?: string; status?: string; isHaveNot?: boolean }): Promise<BBHouseguest> {
+export async function bbUpdateHouseguest(id: string, data: { name?: string; username?: string; password?: string; status?: string; isHaveNot?: boolean; role?: string; permissions?: string[] }): Promise<BBHouseguest> {
   return doRequest<BBHouseguest>(`/houseguests/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data)
@@ -443,6 +450,17 @@ export async function bbSkipVeto(): Promise<BBVetoRecord | null> {
   return doRequest<BBVetoRecord | null>('/veto/skip', { method: 'POST' })
 }
 
+export async function bbVetoCeremonyStart(): Promise<BBVetoRecord> {
+  return doRequest<BBVetoRecord>('/veto/ceremony-start', { method: 'POST' })
+}
+
+export async function bbVetoSpeech(phase: 'opening' | 'closing', text?: string): Promise<BBVetoRecord> {
+  return doRequest<BBVetoRecord>('/veto/speech', {
+    method: 'POST',
+    body: JSON.stringify({ phase, text })
+  })
+}
+
 export async function bbGetVetoHistory(): Promise<BBVetoRecord[]> {
   return doRequest<BBVetoRecord[]>('/veto/history')
 }
@@ -566,7 +584,7 @@ export async function bbGetMinigameList(): Promise<MinigameDef[]> {
 }
 
 export async function bbCreateMinigameRoom(
-  gameType: 'hoh' | 'veto' | 'bbbb',
+  gameType: 'hoh' | 'veto' | 'bbbb' | 'finale',
   minigameId: string,
   participants: { playerId: string; playerName: string; avatar?: string | null }[],
   targetScore?: number | null,
@@ -593,6 +611,21 @@ export async function bbUploadGameImage(file: File): Promise<{ url: string }> {
   return json.data
 }
 
+// 上传比赛内容音乐/视频附件
+export async function bbUploadGameMedia(file: File): Promise<{ url: string; kind: 'audio' | 'video'; mime: string; name: string }> {
+  const fd = new FormData()
+  fd.append('media', file)
+  const token = getToken()
+  const res = await fetch(`${API_BASE}/minigame/upload-media`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: fd
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || json.success === false) throw new Error(json.error || '媒体上传失败')
+  return json.data
+}
+
 export async function bbStartMinigame(roomId: string): Promise<void> {
   return doRequest<void>('/minigame/start', {
     method: 'POST',
@@ -604,7 +637,7 @@ export async function bbGetMinigameRoom(roomId: string): Promise<MinigameRoom | 
   return doRequest<MinigameRoom | null>(`/minigame/room/${roomId}`)
 }
 
-export async function bbGetActiveMinigameRoom(gameType: 'hoh' | 'veto'): Promise<MinigameRoom | null> {
+export async function bbGetActiveMinigameRoom(gameType: 'hoh' | 'veto' | 'finale'): Promise<MinigameRoom | null> {
   return doRequest<MinigameRoom | null>(`/minigame/active-room/${gameType}`)
 }
 

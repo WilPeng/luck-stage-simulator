@@ -613,6 +613,34 @@ async function movePlayerSockets(playerId, oldRoomId, newRoomId, reason = '管�
   if (oldRoomId !== newRoomId) await broadcastRoomPresence(newRoomId)
 }
 
+// 把「在线」玩家（活跃房客 + 已登录管理员）统一移动到指定房间（仪式开始等场景）
+async function moveAllToRoom(targetRoomId, reason = '仪式开始') {
+  const guests = await BBHouseguest.find({ gameId })
+  const moved = []
+  for (const g of guests) {
+    if (g.role === 'admin' && !g.hasLogin) continue
+    if (g.role === 'houseguest' && g.status !== 'active') continue
+    const loc = await BBPlayerLocation.findOne({ playerId: g.id, gameId })
+    const oldRoomId = loc?.currentRoomId || 'living_room'
+    if (oldRoomId === targetRoomId) continue
+    if (loc) {
+      loc.currentRoomId = targetRoomId
+      loc.enteredAt = new Date().toISOString()
+      await loc.save()
+    } else {
+      await BBPlayerLocation.insertOne({
+        id: g.id, playerId: g.id, playerName: g.name,
+        currentRoomId: targetRoomId, enteredAt: new Date().toISOString(), gameId
+      })
+    }
+    g.currentRoomId = targetRoomId
+    await g.save()
+    try { await movePlayerSockets(g.id, oldRoomId, targetRoomId, reason) } catch (e) { /* ignore */ }
+    moved.push(g.name)
+  }
+  return moved
+}
+
 // 广播给所有 House 连接（供管理员广播使用）
 function broadcastHouse(event, payload) {
   if (!bbHouseNamespace) return
@@ -629,5 +657,6 @@ module.exports = {
   broadcastRoomPresence,
   broadcastMonitorUpdate,
   movePlayerSockets,
+  moveAllToRoom,
   takePendingInvite
 }

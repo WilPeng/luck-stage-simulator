@@ -106,15 +106,15 @@ function initCollapsed() {
   }
 }
 
-const fixedItems = [
-  { icon: '📊', text: '总览', path: '/games/bigbrother/admin/dashboard' },
-  { icon: '👥', text: '房客管理', path: '/games/bigbrother/admin/houseguests' },
+const fixedItemsAll = [
+  { icon: '📊', text: '总览', path: '/games/bigbrother/admin/dashboard', perm: 'dashboard' },
+  { icon: '👥', text: '房客管理', path: '/games/bigbrother/admin/houseguests', perm: 'houseguests' },
 ]
 
-const stageItems = [
-  { icon: '🎯', text: '赛季设置', path: '/games/bigbrother/admin/stage' },
-  { icon: '🏁', text: '终局F3 / 冠军', path: '/games/bigbrother/admin/endgame' },
-  { icon: '🏆', text: '季终结算', path: '/games/bigbrother/admin/season-result' },
+const stageItemsAll = [
+  { icon: '🎯', text: '赛季设置', path: '/games/bigbrother/admin/stage', perm: 'stage' },
+  { icon: '🏁', text: '终局F3 / 冠军', path: '/games/bigbrother/admin/endgame', perm: 'endgame' },
+  { icon: '🏆', text: '季终结算', path: '/games/bigbrother/admin/season-result', perm: 'season-result' },
 ]
 
 const stageList = [
@@ -127,16 +127,25 @@ const stageList = [
   { key: 'eviction' as BBStageType, icon: '🚪', text: '淘汰结果', route: 'eviction' },
 ]
 
-const otherItems = [
-  { icon: '🏡', text: 'BB House 管理', path: '/games/bigbrother/admin/house-admin' },
-  { icon: '💬', text: '房间聊天记录', path: '/games/bigbrother/admin/house-chat' },
-  { icon: '😴', text: '睡眠/洗澡记录', path: '/games/bigbrother/admin/guest-states' },
-  { icon: '🎮', text: '游戏库', path: '/games/bigbrother/admin/game-library' },
-  { icon: '👁', text: '小游戏实时观战', path: '/games/bigbrother/admin/minigame-live' },
-  { icon: '🎬', text: '小游戏复盘', path: '/games/bigbrother/admin/minigame-replay' },
-  { icon: '📜', text: '操作日志', path: '/games/bigbrother/admin/logs' },
-  { icon: '▶️', text: '推进到下一阶段', path: '#', click: 'nextStage' },
+const otherItemsAll = [
+  { icon: '🏡', text: 'BB House 管理', path: '/games/bigbrother/admin/house-admin', perm: 'house' },
+  { icon: '💬', text: '房间聊天记录', path: '/games/bigbrother/admin/house-chat', perm: 'chat' },
+  { icon: '😴', text: '睡眠/洗澡记录', path: '/games/bigbrother/admin/guest-states', perm: 'guest-states' },
+  { icon: '🎮', text: '游戏库', path: '/games/bigbrother/admin/game-library', perm: 'game-library' },
+  { icon: '👁', text: '小游戏实时观战', path: '/games/bigbrother/admin/minigame-live', perm: 'minigame' },
+  { icon: '🎬', text: '小游戏复盘', path: '/games/bigbrother/admin/minigame-replay', perm: 'minigame' },
+  { icon: '📜', text: '操作日志', path: '/games/bigbrother/admin/logs', perm: 'logs' },
+  { icon: '▶️', text: '推进到下一阶段', path: '#', click: 'nextStage', perm: 'stage' },
 ]
+
+// ===== 管理员权限过滤（权限为空 = 全部可见）=====
+const adminPerms = computed<string[]>(() => (authStore.currentUser?.permissions as string[]) || [])
+function hasPerm(perm: string): boolean {
+  return adminPerms.value.length === 0 || adminPerms.value.includes(perm)
+}
+const fixedItems = computed(() => fixedItemsAll.filter(i => hasPerm(i.perm)))
+const stageItems = computed(() => stageItemsAll.filter(i => hasPerm(i.perm)))
+const otherItems = computed(() => otherItemsAll.filter(i => hasPerm(i.perm)))
 
 const adminStageMeta: Record<string, { icon: string; route: string }> = {
   hoh_competition: { icon: '👑', route: 'hoh' },

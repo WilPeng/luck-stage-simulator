@@ -4,7 +4,7 @@ const BBNomination = require('../models/BBNomination')
 const BBHouseguest = require('../models/BBHouseguest')
 const { auth } = require('../../../middleware/auth')
 const { broadcastBBGame } = require('../../../socket/bbGame')
-const { postRoomMessage } = require('../../../socket/bbHouse')
+const { postRoomMessage, moveAllToRoom } = require('../../../socket/bbHouse')
 const {
   generateId, logAction, getCurrentSeason, BB_ACTION_TYPES,
   hasTwist, getTwistsForRound
@@ -181,6 +181,29 @@ router.post('/replace', async (req, res) => {
         }
       )
     }
+    // POV 使用后的联动：HOH 决定替换者后，由 POV 获得者宣布「POV仪式结束。」
+    try {
+      const { getCollection } = require('../../../config/db')
+      const vetoCol = getCollection('BBVetoRecord')
+      const vetoRec = await vetoCol.findOne({ gameId: 'bigbrother', roundId })
+      if (vetoRec && vetoRec.used) {
+        const ceremony = vetoRec.ceremony || { started: true, openingSpoken: false, closingSpoken: false, messages: [] }
+        if (!Array.isArray(ceremony.messages)) ceremony.messages = []
+        if (!ceremony.messages.some(m => m.type === 'hoh')) {
+          const hohMsg = `${playerName || '你'}，我选择提名你`
+          ceremony.messages.push({ playerId: existing?.hohId || null, playerName: existing?.hohName || 'HOH', text: hohMsg, type: 'hoh', at: new Date().toISOString() })
+          try { await postRoomMessage('living_room', { senderId: existing?.hohId, senderName: existing?.hohName || 'HOH', content: hohMsg }) } catch (e) { /* ignore */ }
+        }
+        if (!ceremony.closingSpoken) {
+          const content = 'POV仪式结束。'
+          ceremony.messages.push({ playerId: vetoRec.winnerId, playerName: vetoRec.winnerName, text: content, type: 'closing', at: new Date().toISOString() })
+          ceremony.closingSpoken = true
+          await vetoCol.updateOne({ gameId: 'bigbrother', roundId }, { $set: { ceremony, updatedAt: new Date().toISOString() } })
+          try { await postRoomMessage('living_room', { senderId: vetoRec.winnerId, senderName: vetoRec.winnerName, content }) } catch (e) { /* ignore */ }
+          broadcastBBGame('bb:veto-ceremony', { roundId, ceremony })
+        }
+      }
+    } catch (e) { /* ignore */ }
     const updated = await col.findOne({ gameId: 'bigbrother', roundId })
     res.json({ success: true, data: updated || {} })
   } catch (e) {
@@ -432,6 +455,8 @@ router.post('/key-setup', auth, async (req, res) => {
       createdAt: new Date().toISOString()
     })
     await doc.save()
+    // 提名仪式在餐厅进行：把在线玩家移动到餐厅
+    try { await moveAllToRoom('dining_room', '提名仪式开始') } catch (e) { /* ignore */ }
     broadcastBBGame('bb:key-ceremony', { roundId, keyCeremony: doc.keyCeremony, nomineeIds: doc.nomineeIds, nomineeNames: doc.nomineeNames })
     res.json({ success: true, data: doc.toObject() })
   } catch (e) {
@@ -448,6 +473,9 @@ router.post('/key-draw', auth, async (req, res) => {
     const doc = await BBNomination.findOne({ gameId: 'bigbrother', roundId })
     if (!doc || !doc.keyCeremony) return res.status(400).json({ success: false, error: '尚未开始钥匙仪式' })
     const kc = doc.keyCeremony
+    if (!kc.openingSpoken) {
+      return res.status(400).json({ success: false, error: '请先由 HOH 发表开场发言，再抽取钥匙', code: 'OPENING_NOT_SPOKEN' })
+    }
     if ((kc.drawnCount || 0) >= kc.order.length) {
       return res.status(400).json({ success: false, error: '钥匙已抽完' })
     }

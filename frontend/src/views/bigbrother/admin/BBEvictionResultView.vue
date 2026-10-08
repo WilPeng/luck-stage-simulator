@@ -10,7 +10,7 @@
       <div class="result-info">
         <div class="result-label">最新淘汰结果</div>
         <div class="result-name">{{ lastEviction.evictedName }}</div>
-        <div class="result-votes">{{ lastEviction.voteCount }}{{ lastEviction.otherVotes != null ? '-' + lastEviction.otherVotes : '' }}</div>
+        <div class="result-votes">{{ votePattern(lastEviction) }}</div>
       </div>
     </div>
 
@@ -90,7 +90,7 @@
             <tr v-for="e in evictionHistory" :key="e.id">
               <td>{{ formatTime(e.createdAt) }}</td>
               <td class="highlight">{{ e.evictedName }}</td>
-              <td>{{ e.voteCount }}{{ e.otherVotes != null ? '-' + e.otherVotes : '' }}</td>
+              <td>{{ votePattern(e) }}</td>
               <td class="time">{{ formatTime(e.updatedAt) }}</td>
             </tr>
             <tr v-if="evictionHistory.length === 0"><td colspan="4" class="empty-cell">暂无淘汰记录</td></tr>
@@ -165,6 +165,13 @@ async function resetNight() {
 watch(() => realtime.lastEvictionNight, (v) => { night.value = v })
 
 function formatTime(t: string) { return t ? new Date(t).toLocaleString('zh-CN') : '' }
+
+// 票型：始终显示全部票数（位数 = 最终提名人数），如 3-0-0
+function votePattern(e: any): string {
+  if (e?.voteResults?.length) return e.voteResults.map((v: any) => v.votes).join('-')
+  if (e && e.voteCount != null) return e.otherVotes != null ? `${e.voteCount}-${e.otherVotes}` : String(e.voteCount)
+  return ''
+}
 
 useBbRefresh(fetchData)
 onMounted(fetchData)

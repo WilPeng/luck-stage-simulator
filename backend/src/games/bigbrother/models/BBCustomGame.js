@@ -70,6 +70,10 @@ class BBCustomGame extends BaseModel {
     // ===== 通用 =====
     this.playerCount = data.playerCount || { min: 2, max: 20 }
 
+    // ===== 比赛内容音乐/视频附件 =====
+    // { url, kind: 'audio'|'video', name, playMode: 'once'|'free' }
+    this.media = data.media || null
+
     this.enabled = data.enabled ?? true
     this.createdAt = data.createdAt || new Date().toISOString()
     this.updatedAt = data.updatedAt || new Date().toISOString()

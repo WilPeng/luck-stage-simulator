@@ -141,10 +141,21 @@ async function computeEvictionResult(season) {
   const evictCount = getEvictCountForRound(curRound, twistConfigs, roundConfigs)
 
   const tally = new Map()
+  const nameById = new Map()
+  ;(nominationDoc?.nomineeIds || []).forEach((id, i) => {
+    nameById.set(id, (nominationDoc?.nomineeNames || [])[i] || '')
+  })
+  // 先为所有最终提名者初始化 0 票，保证票型位数 = 提名人数
+  validTargetIds.forEach(id => {
+    tally.set(id, { id, name: nameById.get(id) || '', count: 0 })
+  })
   votes.forEach(v => {
     if (!validTargetIds.has(v.targetId)) return
     if (currentHoh && v.voterId === currentHoh.winnerId) return
-    tally.set(v.targetId, { id: v.targetId, name: v.targetName, count: (tally.get(v.targetId)?.count || 0) + 1 })
+    const entry = tally.get(v.targetId) || { id: v.targetId, name: v.targetName, count: 0 }
+    entry.count += 1
+    if (!entry.name) entry.name = v.targetName
+    tally.set(v.targetId, entry)
   })
 
   const counts = Array.from(tally.values()).sort((a, b) => b.count - a.count)
@@ -211,6 +222,7 @@ async function computeEvictionResult(season) {
   const evictedIdSet = new Set(evictedTargets.map(t => t.id))
   const otherEntry = counts.find(c => !evictedIdSet.has(c.id))
   const otherVotes = otherEntry ? otherEntry.count : null
+  const voteResults = counts.map(c => ({ playerId: c.id, playerName: c.name, votes: c.count }))
   for (let i = 0; i < evictedTargets.length; i++) {
     const target = evictedTargets[i]
     const result = new BBEviction({
@@ -222,6 +234,7 @@ async function computeEvictionResult(season) {
       voteCount: target.count,
       otherVotes,
       totalVotes: votes.length,
+      voteResults,
       isJury: evictedResults[i]?.status === 'jury',
       gameId: 'bigbrother',
       createdAt: new Date().toISOString()
@@ -318,6 +331,7 @@ router.post('/night/start', auth, requireAdmin, async (req, res) => {
       totalVotes: data.totalVotes || 0,
       big,
       small,
+      voteTally: counts.map(c => c.count),
       isTripleEviction: data.isTripleEviction,
       karmicHoh: data.karmicHoh || null,
       createdAt: new Date().toISOString()

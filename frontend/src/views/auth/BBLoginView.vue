@@ -38,6 +38,17 @@
             />
           </div>
 
+          <div class="remember-row">
+            <label class="remember-item">
+              <input type="checkbox" v-model="rememberAccount" />
+              <span>记住账号</span>
+            </label>
+            <label class="remember-item">
+              <input type="checkbox" v-model="rememberPassword" />
+              <span>记住密码（自动登录）</span>
+            </label>
+          </div>
+
           <t-button
             :loading="isLoading"
             theme="primary"
@@ -63,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useBbAuthStore } from '../../stores/bbAuthStore'
 import { useRouter, useRoute } from 'vue-router'
 
@@ -71,14 +82,40 @@ const authStore = useBbAuthStore()
 const router = useRouter()
 const route = useRoute()
 
+const SAVED_KEY = 'bigbrother_saved_player'
+
 const username = ref('')
 const password = ref('')
+const rememberAccount = ref(true)
+const rememberPassword = ref(false)
 const isLoading = ref(false)
 const error = ref('')
 const success = ref('')
 
 function goAdminLogin() {
   router.push('/games/bigbrother/admin/login')
+}
+
+function loadSaved() {
+  try {
+    const raw = localStorage.getItem(SAVED_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as { username: string; password: string; rememberPassword: boolean }
+  } catch { return null }
+}
+
+function saveSaved() {
+  try {
+    if (rememberAccount.value && username.value.trim()) {
+      localStorage.setItem(SAVED_KEY, JSON.stringify({
+        username: username.value.trim(),
+        password: rememberPassword.value ? password.value : '',
+        rememberPassword: rememberPassword.value
+      }))
+    } else {
+      localStorage.removeItem(SAVED_KEY)
+    }
+  } catch {}
 }
 
 async function handleLogin() {
@@ -96,6 +133,7 @@ async function handleLogin() {
       error.value = '请使用选手账号登录（管理员请走管理员入口）'
       return
     }
+    saveSaved()
     success.value = '登录成功，正在进入...'
     await new Promise((resolve) => setTimeout(resolve, 400))
     await router.replace((route.query.redirect as string) || '/games/bigbrother/player/home')
@@ -105,6 +143,18 @@ async function handleLogin() {
     isLoading.value = false
   }
 }
+
+onMounted(async () => {
+  const saved = loadSaved()
+  if (!saved) return
+  username.value = saved.username || ''
+  rememberPassword.value = !!saved.rememberPassword
+  if (saved.rememberPassword && saved.password) {
+    password.value = saved.password
+    // 已记住密码：自动登录
+    await handleLogin()
+  }
+})
 </script>
 
 <style lang="scss" scoped>
@@ -153,6 +203,9 @@ async function handleLogin() {
 .form-group { display: flex; flex-direction: column; gap: 8px; }
 .form-label { color: rgba(255, 255, 255, 0.7); font-size: 14px; font-weight: 500; }
 .alert-message { margin-top: 8px; }
+.remember-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-size: 13px; color: rgba(255, 255, 255, 0.7); }
+.remember-item { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.remember-item input { accent-color: #a29bfe; width: 15px; height: 15px; }
 .footer-links { margin-top: 24px; text-align: center; font-size: 13px; }
 
 ::deep(.t-input) {

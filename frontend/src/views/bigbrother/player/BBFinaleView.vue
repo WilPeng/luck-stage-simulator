@@ -128,6 +128,8 @@ import SequenceMemoryGame from '../../../components/bigbrother/minigames/Sequenc
 import JigsawGame from '../../../components/bigbrother/minigames/JigsawGame.vue'
 import MissingNumberGame from '../../../components/bigbrother/minigames/MissingNumberGame.vue'
 import AbracaGame from '../../../components/bigbrother/minigames/AbracaGame.vue'
+import DescribeGuessGame from '../../../components/bigbrother/minigames/DescribeGuessGame.vue'
+import StayOrFoldGame from '../../../components/bigbrother/minigames/StayOrFold.vue'
 import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
 import JuryQA from '../../../components/bigbrother/JuryQA.vue'
 import type { MinigameRoom, BBEndgameStatus } from '../../../types/bigbrother'
@@ -179,7 +181,9 @@ const gameComponentMap: Record<string, Component> = {
   'sequence-memory': markRaw(SequenceMemoryGame),
   'jigsaw': markRaw(JigsawGame),
   'missing-number': markRaw(MissingNumberGame),
-  'abraca': markRaw(AbracaGame)
+  'abraca': markRaw(AbracaGame),
+  'describe-guess': markRaw(DescribeGuessGame),
+  'stay-or-fold': markRaw(StayOrFoldGame)
 }
 
 function inMe(room: MinigameRoom): boolean {
@@ -241,7 +245,7 @@ onMounted(async () => {
   const checkRoom = async () => {
     if (!isFinal3.value) return
     try {
-      const room = await bbGetActiveMinigameRoom('hoh')
+      const room = await bbGetActiveMinigameRoom('finale')
       if (room) {
         activeRoom.value = room
         gameComponent.value = gameComponentMap[room.minigameId] || null

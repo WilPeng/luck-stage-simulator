@@ -29,14 +29,18 @@
 
       <div class="answer-area">
         <template v-if="!mine.submitted">
-          <input v-model.number="inputValue" type="number" class="ans-input" placeholder="缺少的数字" min="1" max="50" @keyup.enter="submit" />
-          <button class="submit-btn" :disabled="inputValue === null || inputValue === '' || submitting" @click="submit">提交（仅1次）</button>
+          <input v-model.number="inputValue" type="number" class="ans-input" placeholder="缺少的数字" min="1" max="50"
+            :disabled="cooling" @keyup.enter="submit" />
+          <button class="submit-btn" :disabled="inputValue === null || inputValue === '' || submitting || cooling" @click="submit">
+            {{ cooling ? `冷却 ${coolRemain}s` : '提交' }}
+          </button>
         </template>
         <div v-else class="submitted">
-          <p class="submitted-title">已提交：<strong>{{ mine.myValue }}</strong></p>
-          <p class="submitted-hint">等待其他选手提交或时间结束…</p>
+          <p class="submitted-title">已答对：<strong>{{ mine.myValue }}</strong> ✅</p>
+          <p class="submitted-hint">等待其他选手或时间结束…</p>
         </div>
       </div>
+      <p v-if="!mine.submitted && cooling" class="cool-hint">答错啦，{{ coolRemain }} 秒后可再次作答</p>
     </div>
   </div>
 </template>
@@ -61,12 +65,16 @@ let tickTimer: ReturnType<typeof setInterval> | null = null
 
 const gameStarted = computed(() => (gameState.value as any)?.started === true)
 const mine = computed<any>(() => gameState.value || {})
+const now = ref(Date.now())
+const cooling = computed(() => ((mine.value.cooldownUntil || 0) > now.value))
+const coolRemain = computed(() => Math.max(0, Math.ceil(((mine.value.cooldownUntil || 0) - now.value) / 1000)))
 
 function submit() {
-  if (submitting.value || mine.value.submitted) return
+  if (submitting.value || mine.value.submitted || cooling.value) return
   if (inputValue.value === null || inputValue.value === '') return
   submitting.value = true
   sendAction({ type: 'submit', value: Number(inputValue.value) })
+  setTimeout(() => { submitting.value = false }, 500)
 }
 
 watch(gameState, (state: any) => {
@@ -81,7 +89,7 @@ watch(() => (gameState.value as any)?.status, (val) => {
     sendAction({ type: 'start' })
     if (timeLimit.value > 0) {
       remaining.value = timeLimit.value
-      tickTimer = setInterval(() => { if (remaining.value > 0) remaining.value-- }, 1000)
+      tickTimer = setInterval(() => { if (remaining.value > 0) remaining.value--; now.value = Date.now() }, 1000)
     }
   }
 })
@@ -114,6 +122,7 @@ p { color: #888; font-size: 14px; }
 .submitted { color: #00ff88; }
 .submitted-title { margin: 0 0 6px; }
 .submitted-hint { color: #888; margin: 0; }
+.cool-hint { color: #ff6b6b; margin-top: 10px; font-size: 14px; }
 .winner-name { font-size: 26px; font-weight: 700; color: #ffaa00; }
 .winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
 </style>
