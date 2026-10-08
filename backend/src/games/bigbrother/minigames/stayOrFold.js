@@ -179,6 +179,10 @@ registerGame({
 
   handleAction(state, playerId, action) {
     if (!state.scores.hasOwnProperty(playerId)) return { updated: false }
+    // 已被淘汰的选手不得再参与后续估算与 Stay/Fold
+    if (!state.alive.includes(playerId)) {
+      return { updated: false, result: { error: '你已被淘汰，无法参与后续环节' } }
+    }
     if (action.type === 'estimate') {
       if (state.phase !== 'estimate') return { updated: false }
       if (state.estimates[playerId] != null) return { updated: false }
@@ -229,6 +233,7 @@ registerGame({
       alive: state.alive,
       eliminated: state.eliminated,
       aliveCount: state.alive.length,
+      aliveMe: state.alive.includes(pid),
       secondsLeft: Math.max(0, Math.ceil((state.phaseEndsAt - Date.now()) / 1000)),
       myEstimate: state.estimates[pid] != null ? state.estimates[pid] : null,
       myDecision: state.decisions[pid] || null,

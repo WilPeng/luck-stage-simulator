@@ -23,6 +23,8 @@
         <span class="my-score">我的得分：{{ myScore }}</span>
       </div>
 
+      <div v-if="!aliveMe" class="spectator-banner">你已被淘汰，进入观战模式（无法参与后续估算与 Stay/Fold）</div>
+
       <!-- 展示散点图 -->
       <div v-if="phase === 'show'" class="phase-block">
         <div class="phase-tip">👀 记住图中各 emoji 的数量（{{ secondsLeft }}s）</div>
@@ -34,10 +36,11 @@
       <!-- 估算 -->
       <div v-else-if="phase === 'estimate'" class="phase-block">
         <div class="phase-tip">请估算目标 emoji <span class="target-emoji">{{ target }}</span> 出现了多少次（{{ secondsLeft }}s）</div>
-        <div v-if="myEstimate == null" class="answer-area">
+        <div v-if="aliveMe && myEstimate == null" class="answer-area">
           <input v-model.number="inputValue" type="number" min="0" class="ans-input" placeholder="你的估算" @keyup.enter="submitEstimate" />
           <button class="op-btn stay" :disabled="inputValue === null || inputValue === '' || submitting" @click="submitEstimate">提交估算（仅 1 次）</button>
         </div>
+        <div v-else-if="!aliveMe" class="submitted">你已被淘汰，观战中…</div>
         <div v-else class="submitted">已提交估算：<strong>{{ myEstimate }}</strong>，等待其他选手…</div>
       </div>
 
@@ -56,10 +59,11 @@
       <!-- 决定 Stay / Fold -->
       <div v-else-if="phase === 'decide'" class="phase-block">
         <div class="phase-tip">目标 <span class="target-emoji">{{ target }}</span> · 决定是否继续（{{ secondsLeft }}s）</div>
-        <div v-if="!myDecision" class="answer-area">
+        <div v-if="aliveMe && !myDecision" class="answer-area">
           <button class="op-btn stay" :disabled="submitting" @click="decide('stay')">🙌 Stay 继续</button>
           <button class="op-btn fold" :disabled="submitting" @click="decide('fold')">🏳️ Fold 退出本轮</button>
         </div>
+        <div v-else-if="!aliveMe" class="submitted">你已被淘汰，观战中…</div>
         <div v-else class="submitted">你的选择：<strong>{{ myDecision === 'stay' ? 'Stay' : 'Fold' }}</strong></div>
       </div>
 
@@ -114,6 +118,7 @@ const estimateCount = computed(() => Object.keys(estimates.value).length)
 const scores = computed<Record<string, number>>(() => state.value.scores || {})
 const eliminated = computed<string[]>(() => state.value.eliminated || [])
 const aliveCount = computed(() => state.value.aliveCount ?? 0)
+const aliveMe = computed(() => state.value.aliveMe !== false)
 const myEstimate = computed(() => state.value.myEstimate ?? null)
 const myDecision = computed(() => state.value.myDecision || null)
 const myScore = computed(() => state.value.myScore || 0)
@@ -157,6 +162,7 @@ p { color: #888; font-size: 14px; }
 .waiting-text { color: #666; margin-top: 12px; }
 .game-header { display: flex; justify-content: space-between; color: #aaa; font-size: 15px; font-weight: 600; margin-bottom: 12px; }
 .my-score { color: #00ff88; }
+.spectator-banner { margin: 0 0 12px; padding: 10px 14px; background: #ff444415; border: 1px solid #ff444455; border-radius: 8px; color: #ff9a9a; font-size: 14px; }
 .phase-block { margin-bottom: 14px; }
 .phase-tip { color: #d6e4ff; font-size: 15px; margin-bottom: 12px; }
 .target-emoji { font-size: 26px; }
