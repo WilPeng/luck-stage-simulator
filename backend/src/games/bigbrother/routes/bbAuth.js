@@ -30,6 +30,13 @@ async function doLogin(req, res, { requireRole, forbiddenHint }) {
   }
   const user = await BBHouseguest.findOne({ username: String(username).trim(), gameId: 'bigbrother' })
   if (!user || !checkPassword(password, user.password)) {
+    // 诊断日志：帮助排查远程登录问题
+    if (!user) {
+      console.warn(`[BB Auth] login failed: username "${String(username).trim()}" not found`)
+    } else {
+      const ptype = !user.password ? 'empty' : (/^\$2[aby]\$/.test(user.password) ? 'bcrypt' : 'plaintext')
+      console.warn(`[BB Auth] login failed: username "${user.username}" password mismatch (stored: ${ptype})`)
+    }
     return res.status(401).json({ success: false, error: '账号或密码错误', code: 'INVALID_CREDENTIALS' })
   }
   if (requireRole && user.role !== requireRole) {
@@ -79,6 +86,18 @@ router.post('/admin/login', async (req, res) => {
   } catch (error) {
     console.error('BB Admin login error:', error)
     res.status(500).json({ success: false, error: '登录失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// GET /auth/admin/status - 诊断：是否存在可用管理员账号（不返回密码）
+router.get('/admin/status', async (req, res) => {
+  try {
+    const admin = await BBHouseguest.findOne({ gameId: 'bigbrother', username: 'admin' })
+    const passwordType = !admin ? null : (!admin.password ? 'empty' : (/^\$2[aby]\$/.test(admin.password) ? 'bcrypt' : 'plaintext'))
+    res.json({ success: true, data: { hasAdmin: !!admin, username: admin ? admin.username : null, role: admin ? admin.role : null, passwordType } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '诊断失败' })
   }
 })
 

@@ -107,19 +107,27 @@ async function initBBData() {
       }
       if (changed) await h.save()
     }
-    // 保证始终存在可用的 admin / ADMIN2026 账号
-    const adminExists = await BBHouseguest.findOne({ gameId: 'bigbrother', role: 'admin', username: 'admin' })
-    if (!adminExists) {
-      await new BBHouseguest({
+    // 保证始终存在可用的 admin / ADMIN2026 账号（每次启动都校正该账号密码）
+    const desiredAdminPassword = process.env.BB_ADMIN_PASSWORD || 'ADMIN2026'
+    let adminDoc = await BBHouseguest.findOne({ gameId: 'bigbrother', username: 'admin' })
+    if (!adminDoc) {
+      adminDoc = new BBHouseguest({
         id: generateId(),
         name: 'Big Brother 管理员',
         username: 'admin',
-        password: 'ADMIN2026',
+        password: desiredAdminPassword,
         role: 'admin',
         status: 'active',
         gameId: 'bigbrother'
-      }).save()
-      console.log('[Big Brother] Ensured admin account (admin / ADMIN2026)')
+      })
+      await adminDoc.save()
+      console.log('[Big Brother] Created admin account (admin)')
+    } else {
+      let changed = false
+      if (adminDoc.role !== 'admin') { adminDoc.role = 'admin'; changed = true }
+      if (adminDoc.password !== desiredAdminPassword) { adminDoc.password = desiredAdminPassword; changed = true }
+      if (changed) await adminDoc.save()
+      console.log(`[Big Brother] Admin account ready: username=admin (password ${changed ? 'reset' : 'unchanged'})`)
     }
     return
   }
