@@ -147,6 +147,11 @@ registerGame({
     return best ? [best] : []
   },
 
+  computeWinner(state) {
+    const w = this.getWinners(state)
+    return w.length ? w[0] : null
+  },
+
   getState(state, playerId) {
     const q = state.questions[state.currentIndex] || { clues: [] }
     const pid = playerId || ''

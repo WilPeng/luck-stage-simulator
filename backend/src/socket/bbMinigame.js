@@ -759,6 +759,10 @@ function finishGame(room, minigameNs) {
   if (!winnerId && handler.computeWinner) {
     winnerId = handler.computeWinner(room.gameState)
   }
+  if (!winnerId && handler.getWinners) {
+    const ws = handler.getWinners(room.gameState) || []
+    winnerId = ws[0] || null
+  }
   const participant = room.participants.find(p => p.playerId === winnerId)
   room.winner = participant
     ? { playerId: participant.playerId, playerName: participant.playerName }

@@ -211,6 +211,11 @@ registerGame({
     return best ? [best] : []
   },
 
+  computeWinner(state) {
+    const w = this.getWinners(state)
+    return w.length ? w[0] : null
+  },
+
   getState(state, playerId) {
     const pid = playerId || ''
     const base = {
