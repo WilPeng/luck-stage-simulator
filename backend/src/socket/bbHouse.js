@@ -181,9 +181,9 @@ function initBBHouseSocket(io) {
         let older
         if (before) {
           const idx = visible.findIndex(m => new Date(m.createdAt).getTime() < new Date(before).getTime())
-          older = idx >= 0 ? visible.slice(idx, idx + 30) : []
+          older = idx >= 0 ? visible.slice(idx, idx + 50) : []
         } else {
-          older = visible.slice(0, 30)
+          older = visible.slice(0, 50)
         }
         older = older.slice().reverse()
 

@@ -387,4 +387,23 @@ async function applyCondemned(getCollection, season, hohId) {
   }
 }
 
+// POST /undo - 撤销 HOH 产生（删除本轮 HOH、提名、否决权记录，回到 HOH 竞争阶段）
+router.post('/undo', async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const roundId = `round-${season.currentRound}`
+    const { getCollection } = require('../../../config/db')
+    await BBHohRecord.deleteMany({ gameId: 'bigbrother', roundId })
+    await getCollection('BBNomination').deleteMany({ gameId: 'bigbrother', roundId })
+    await getCollection('BBVetoRecord').deleteMany({ gameId: 'bigbrother', roundId })
+    season.currentStage = 'hoh_competition'
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    res.json({ success: true, data: null })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '撤销 HOH 失败', code: 'SERVER_ERROR' })
+  }
+})
+
 module.exports = router

@@ -184,4 +184,13 @@ p { color: #888; font-size: 14px; }
 .eliminated { color: #ff6b6b; margin-top: 14px; font-size: 14px; }
 .winner-name { font-size: 26px; font-weight: 700; color: #ffaa00; }
 .winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+@media (max-width: 480px) {
+  .sequence-memory { padding: 12px; }
+  .countdown-big { font-size: 52px; }
+  .game-icon { font-size: 48px; }
+  .flash-single { font-size: 64px; height: 110px; }
+  .flash-item { font-size: 32px; }
+  .options { gap: 8px; }
+  .opt-btn { padding: 14px; font-size: 28px; }
+}
 </style>

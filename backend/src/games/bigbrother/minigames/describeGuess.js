@@ -186,5 +186,24 @@ registerGame({
       return { text: `作答：${v || '（空）'}` }
     }
     return null
+  },
+
+  getReplayMeta(state) {
+    const players = {}
+    for (const pid of Object.keys(state.scores)) {
+      players[pid] = {
+        records: state.records[pid] || {},
+        score: state.scores[pid] || 0,
+        submitMs: state.submitMs[pid] || 0
+      }
+    }
+    return {
+      type: 'describe-guess',
+      clueCount: state.M,
+      questionCount: state.N,
+      interval: state.K,
+      questions: (state.questions || []).map(q => ({ answer: q.answer, clues: q.clues })),
+      players
+    }
   }
 })

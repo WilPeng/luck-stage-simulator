@@ -63,4 +63,8 @@ function confirm() {
 .np-confirm { padding: 14px; font-size: 16px; font-weight: 700; border: 1px solid #00ff88; border-radius: 8px; background: #00ff8833; color: #00ff88; cursor: pointer; }
 .np-confirm:hover:not(:disabled) { background: #00ff8855; }
 .np-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
+@media (max-width: 480px) {
+  .np-total { font-size: 32px; padding: 8px; }
+  .np-buttons { gap: 6px; }
+}
 </style>

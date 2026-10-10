@@ -78,6 +78,7 @@ registerGame({
       alive,
       eliminated: [],
       lastResult: null,
+      history: [],
       opts,
       correctCounts
     }
@@ -164,6 +165,7 @@ registerGame({
       farthest,
       eliminated: willEliminate ? farthest : []
     }
+    state.history.push(state.lastResult)
     // 胜负判定：先达到目标分
     const reached = state.alive.filter(pid => (state.scores[pid] || 0) >= state.opts.targetPoints)
     if (reached.length > 0) {
@@ -268,5 +270,29 @@ registerGame({
     if (action && action.type === 'estimate') return { text: `提交估算：${action.value}` }
     if (action && action.type === 'decide') return { text: action.value === 'fold' ? '选择 Fold' : '选择 Stay' }
     return null
+  },
+
+  getReplayMeta(state) {
+    return {
+      type: 'stay-or-fold',
+      targetPoints: state.opts.targetPoints,
+      correctCounts: state.correctCounts,
+      history: state.history || []
+    }
+  },
+
+  getReplaySnapshot(state) {
+    return {
+      round: state.round,
+      phase: state.phase,
+      target: state.target,
+      trueCount: state.trueCount,
+      estimates: { ...state.estimates },
+      decisions: { ...state.decisions },
+      diffs: state.lastResult ? { ...state.lastResult.diffs } : {},
+      scores: { ...state.scores },
+      alive: [...state.alive],
+      eliminated: [...state.eliminated]
+    }
   }
 })

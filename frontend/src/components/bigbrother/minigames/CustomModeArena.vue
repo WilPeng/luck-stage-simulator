@@ -193,4 +193,8 @@ function submitText() {
 .submit-btn { padding: 12px 20px; border: 1px solid #00ff8866; border-radius: 8px; background: #00ff8822; color: #00ff88; font-size: 15px; font-weight: 600; cursor: pointer; }
 .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .waiting-msg { text-align: center; color: #8a8aa5; font-size: 14px; padding: 16px 0; }
+@media (max-width: 480px) {
+  .pick-grid { grid-template-columns: 1fr; }
+  .options-grid { grid-template-columns: 1fr; }
+}
 </style>

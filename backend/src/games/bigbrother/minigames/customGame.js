@@ -419,6 +419,37 @@ function createCustomGameHandler(gameDef) {
         return !!ps.done
       }
       return false
+    },
+
+    getReplayMeta(state) {
+      const players = {}
+      for (const [pid, ps] of Object.entries(state.playerStates)) {
+        players[pid] = {
+          score: ps.score,
+          correctCount: ps.correctCount,
+          done: ps.done,
+          answers: (ps.questions || []).map(q => {
+            const a = ps.answers[q.id]
+            return {
+              qid: q.id,
+              text: q.text,
+              qtype: q.qtype,
+              options: q.qtype === 'choice' ? (q.options || []) : [],
+              correctAnswer: q.correctAnswer,
+              userAnswer: a ? a.userAnswer : null,
+              correct: a ? a.correct : null
+            }
+          }),
+          submissions: ps.submissions || []
+        }
+      }
+      return {
+        type: 'custom',
+        gameType: gameDef.type,
+        winCondition: gameDef.winCondition,
+        questions: gameDef.questions.map(q => ({ id: q.id, text: q.text, qtype: q.qtype, options: q.options || [], correctAnswer: q.correctAnswer })),
+        players
+      }
     }
   }
 }

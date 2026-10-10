@@ -144,14 +144,14 @@ async function handleLogin() {
   }
 }
 
-onMounted(async () => {
+onMounted(() => {
   const saved = loadSaved()
   if (!saved) return
   username.value = saved.username || ''
   rememberPassword.value = !!saved.rememberPassword
   if (saved.rememberPassword && saved.password) {
+    // 仅自动填充账号密码，不自动发送登录请求
     password.value = saved.password
-    await handleLogin()
   }
 })
 </script>

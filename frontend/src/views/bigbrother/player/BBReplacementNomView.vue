@@ -27,6 +27,9 @@
         </div>
       </div>
 
+      <!-- 否决权被使用：展示 POV 仪式发言（客厅） -->
+      <CeremonyChat v-if="veto && veto.used" room-id="living_room" title="🎤 POV 仪式发言（客厅）" empty-text="暂无发言" />
+
       <!-- 当前提名信息 -->
       <div v-if="nomination" class="info-card nomination-card">
         <div class="card-icon">📋</div>
@@ -97,6 +100,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
+import CeremonyChat from '../../../components/bigbrother/CeremonyChat.vue'
 import {
   bbGetNominationHistory, bbGetCurrentHoh, bbGetCurrentVeto,
   bbGetActiveHouseguests, bbReplaceNomination
@@ -134,8 +138,10 @@ const needReplacement = computed(() => {
 const availablePlayers = computed(() => {
   const hohId = nomination.value?.hohId || ''
   const savedId = veto.value?.usedOnPlayerId || ''
+  const vetoWinnerId = veto.value?.winnerId || ''
   const nomineeIds = new Set(nomination.value?.nomineeIds || [])
-  const excludeIds = new Set([hohId, savedId])
+  // 不可作为替补：HOH、POV 获得者、POV 刚拯救的人、已在提名名单中的人
+  const excludeIds = new Set([hohId, savedId, vetoWinnerId])
   return activePlayers.value.filter(p =>
     !excludeIds.has(p.id) && !nomineeIds.has(p.id)
   )

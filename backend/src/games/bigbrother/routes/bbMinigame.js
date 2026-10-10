@@ -132,6 +132,25 @@ router.delete('/replay/:id', async (req, res) => {
   }
 })
 
+// POST /replay/batch-delete - 批量删除复盘
+router.post('/replay/batch-delete', async (req, res) => {
+  try {
+    const { ids } = req.body || {}
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: '请选择要删除的复盘' })
+    }
+    let deleted = 0
+    for (const id of ids) {
+      const r = await BBMinigameReplay.deleteOne({ id })
+      if (r && r.deletedCount) deleted++
+    }
+    res.json({ success: true, data: { deleted } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '批量删除失败' })
+  }
+})
+
 // GET /list - 获取所有可用小游戏（内置 + 自定义）
 router.get('/list', async (req, res) => {
   try {

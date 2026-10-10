@@ -155,6 +155,17 @@ router.post('/replace', async (req, res) => {
     const { getCollection } = require('../../../config/db')
     const col = getCollection('BBNomination')
     const existing = await col.findOne({ gameId: 'bigbrother', roundId })
+    // 校验：替补提名不能是 HOH / POV 获得者 / POV 刚救过的人
+    const vetoRec = await getCollection('BBVetoRecord').findOne({ gameId: 'bigbrother', roundId })
+    if (existing && existing.hohId && playerId === existing.hohId) {
+      return res.status(400).json({ success: false, error: 'HOH 不能被提名', code: 'HOH_NOT_ALLOWED' })
+    }
+    if (vetoRec && vetoRec.winnerId && playerId === vetoRec.winnerId) {
+      return res.status(400).json({ success: false, error: 'POV 获得者不能作为替补提名', code: 'POV_WINNER_NOT_ALLOWED' })
+    }
+    if (vetoRec && vetoRec.usedOnPlayerId && playerId === vetoRec.usedOnPlayerId) {
+      return res.status(400).json({ success: false, error: 'POV 刚拯救的玩家不能作为替补提名', code: 'SAVED_NOT_ALLOWED' })
+    }
     if (existing) {
       // 如果已有替换人选，先移除旧的替换人选
       if (existing.replacementNomineeId) {
@@ -596,6 +607,51 @@ router.post('/key-speech', auth, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '发言失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /undo - 撤销 HOH 提名（删除本轮提名与否决权记录，回到提名阶段）
+router.post('/undo', auth, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const roundId = `round-${season.currentRound}`
+    const { getCollection } = require('../../../config/db')
+    await getCollection('BBNomination').deleteMany({ gameId: 'bigbrother', roundId })
+    await getCollection('BBVetoRecord').deleteMany({ gameId: 'bigbrother', roundId })
+    season.currentStage = 'nomination'
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    res.json({ success: true, data: null })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '撤销提名失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /replace/undo - 撤销替补决策（移除替补提名，回到替换提名阶段）
+router.post('/replace/undo', auth, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const roundId = `round-${season.currentRound}`
+    const { getCollection } = require('../../../config/db')
+    const col = getCollection('BBNomination')
+    const nomination = await col.findOne({ gameId: 'bigbrother', roundId })
+    if (nomination && nomination.replacementNomineeId) {
+      await col.updateOne(
+        { gameId: 'bigbrother', roundId },
+        {
+          $pull: { nomineeIds: nomination.replacementNomineeId, nomineeNames: nomination.replacementNomineeName },
+          $set: { replacementNomineeId: null, replacementNomineeName: '', updatedAt: new Date().toISOString() }
+        }
+      )
+    }
+    season.currentStage = 'replacement_nom'
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    res.json({ success: true, data: null })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '撤销替补失败', code: 'SERVER_ERROR' })
   }
 })
 

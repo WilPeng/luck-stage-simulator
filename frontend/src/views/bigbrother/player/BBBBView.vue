@@ -43,7 +43,7 @@
 import { ref, computed, onMounted, onUnmounted, markRaw, type Component } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
-import { bbGetCurrentNomination, bbGetActiveMinigameRoom, bbSetBbbbWinner } from '../../../services/bbApi'
+import { bbGetCurrentNomination, bbGetActiveMinigameRoom, bbSetBbbbWinner, bbGetActiveHouseguests } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
 import ClickSpeedGame from '../../../components/bigbrother/minigames/ClickSpeedGame.vue'
@@ -105,10 +105,15 @@ const gameComponentMap: Record<string, Component> = {
 }
 
 async function fetchData() {
+  let avatarMap: Record<string, string | null> = {}
+  try {
+    const list = await bbGetActiveHouseguests()
+    for (const h of (list || [])) avatarMap[h.id] = (h as any).avatar || null
+  } catch {}
   try {
     const nom = await bbGetCurrentNomination()
     nominees.value = (nom?.nomineeIds || []).map((id: string, i: number) => ({
-      id, name: nom.nomineeNames?.[i] || id, avatar: null
+      id, name: nom.nomineeNames?.[i] || id, avatar: avatarMap[id] || null
     }))
     bbbbWinnerId.value = nom?.bbbbWinnerId || null
     bbbbWinnerName.value = nom?.bbbbWinnerName || ''

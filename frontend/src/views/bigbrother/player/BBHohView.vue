@@ -161,6 +161,7 @@ async function onMinigameFinished(winner: { playerId: string; playerName: string
 }
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let checking = false
 
 async function loadCurrentHoh(): Promise<boolean> {
   try {
@@ -174,6 +175,9 @@ async function loadCurrentHoh(): Promise<boolean> {
 }
 
 async function checkRoom() {
+  if (checking) return
+  checking = true
+  try {
   // 优先刷新 HOH 结果：管理员指定 / 比赛结束后无需刷新页面即可跳转
   if (await loadCurrentHoh()) {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
@@ -198,6 +202,7 @@ async function checkRoom() {
       }
     }
   } catch {}
+  } finally { checking = false }
 }
 
 async function initEligibility() {

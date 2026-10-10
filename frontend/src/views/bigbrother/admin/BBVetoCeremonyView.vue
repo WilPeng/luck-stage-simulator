@@ -36,12 +36,7 @@
     <!-- POV 仪式控制 -->
     <div v-if="veto" class="ceremony-panel">
       <div class="cer-title">🎤 POV 仪式（将全员移动到客厅）</div>
-      <div class="cer-msgs">
-        <div v-for="(m, i) in (veto.ceremony?.messages || [])" :key="i" class="cer-msg">
-          <span class="cer-sender">{{ m.playerName }}</span><span class="cer-text">{{ m.text }}</span>
-        </div>
-        <div v-if="!(veto.ceremony?.messages || []).length" class="cer-empty">尚未发言</div>
-      </div>
+      <CeremonyChat room-id="living_room" title="💬 POV 仪式记录（客厅）" empty-text="暂无发言" />
       <div class="cer-actions">
         <button v-if="!veto.ceremony?.started" class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="startCeremony">▶ 开始仪式并移动到客厅</button>
         <template v-else-if="!veto.ceremony?.openingSpoken">
@@ -53,6 +48,7 @@
           <button class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="speak('closing')">发表结束发言</button>
         </template>
         <span v-else-if="veto.ceremony?.closingSpoken" class="cer-done">POV 仪式已结束</span>
+        <button v-if="veto.status && veto.status !== 'pending'" class="bb-btn bb-btn-danger" :disabled="ceremonyBusy" @click="undoDecision">↩ 撤销 POV 决策</button>
       </div>
     </div>
 
@@ -187,12 +183,22 @@
 import { ref, computed, onMounted } from 'vue'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
-import { bbGetCurrentVeto, bbUseVeto, bbSkipVeto, bbGetCurrentNomination, bbGetCurrentHoh, bbGetNominationHistory, bbVetoCeremonyStart, bbVetoSpeech } from '../../../services/bbApi'
+import CeremonyChat from '../../../components/bigbrother/CeremonyChat.vue'
+import { bbGetCurrentVeto, bbUseVeto, bbSkipVeto, bbGetCurrentNomination, bbGetCurrentHoh, bbGetNominationHistory, bbVetoCeremonyStart, bbVetoSpeech, bbUndoVetoDecision } from '../../../services/bbApi'
 import type { BBVetoRecord, BBNomination, BBHohRecord } from '../../../types/bigbrother'
 
 const veto = ref<BBVetoRecord | null>(null)
 const ceremonyText = ref('')
 const ceremonyBusy = ref(false)
+
+async function undoDecision() {
+  if (ceremonyBusy.value) return
+  if (!confirm('确定撤销本轮 POV 决策吗？\n将还原提名名单（若已使用否决权）并回到否决权会议阶段。')) return
+  ceremonyBusy.value = true
+  try { await bbUndoVetoDecision(); await fetchData() }
+  catch (e: any) { alert(e?.message || '撤销失败') }
+  finally { ceremonyBusy.value = false }
+}
 
 async function startCeremony() {
   if (ceremonyBusy.value) return
@@ -329,7 +335,7 @@ onMounted(fetchData)
 .bb-btn-warning:hover { background: #ffaa0015; }
 .bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; width: 400px; max-width: 90vw; }
-.skip-modal { width: 520px; }
+.skip-modal { width: 520px; max-width: 92vw; }
 .bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #00ff8822; }
 .bb-modal-header h3 { margin: 0; color: #00ff88; font-size: 16px; }
 .close-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 18px; }
@@ -378,4 +384,6 @@ onMounted(fetchData)
 .cer-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .cer-input { flex: 1; min-width: 200px; background: #0a0a24; border: 1px solid #ffaa0044; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; outline: none; }
 .cer-done { color: #00ff88; font-size: 13px; }
+.bb-btn-danger { border-color: #ff444466; color: #ff4444; }
+.bb-btn-danger:hover { background: #ff444422; }
 </style>

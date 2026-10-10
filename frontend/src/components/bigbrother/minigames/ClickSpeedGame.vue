@@ -100,7 +100,7 @@ onMounted(() => connect())
 .game-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; font-size: 18px; color: #e0e0e0; }
 .score { color: #00ff88; font-weight: 600; }
 .click-btn {
-  width: 200px; height: 200px; border-radius: 50%; border: 3px solid #00ff88;
+  width: min(200px, 62vw); height: min(200px, 62vw); border-radius: 50%; border: 3px solid #00ff88;
   background: linear-gradient(135deg, #00ff8833, #00ff8811); color: #00ff88;
   font-size: 24px; font-weight: 700; cursor: pointer; user-select: none;
   transition: all 0.1s; margin: 20px auto; display: flex; align-items: center; justify-content: center;
@@ -117,4 +117,9 @@ onMounted(() => connect())
 .rank { font-weight: 700; color: #ffaa00; width: 40px; }
 .name { flex: 1; text-align: left; color: #e0e0e0; }
 .pts { color: #00ff88; font-weight: 500; }
+@media (max-width: 480px) {
+  .click-speed { padding: 12px; }
+  .countdown-big { font-size: 52px; }
+  .game-icon { font-size: 48px; }
+}
 </style>

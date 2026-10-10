@@ -748,7 +748,7 @@ onMounted(fetchData)
 .auto-lock-hint { font-size: 12px; color: #888; margin: 12px 0 0; }
 
 /* Twist 选择弹窗 */
-.twist-picker-modal { width: 520px; }
+.twist-picker-modal { width: 520px; max-width: 92vw; }
 .twist-options { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; }
 .twist-option {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;

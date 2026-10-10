@@ -70,6 +70,7 @@
       </template>
       <div v-else class="action-buttons">
         <button class="bb-btn" @click="showSetModal = true">✏️ 设置提名</button>
+        <button v-if="nomination" class="bb-btn bb-btn-danger" @click="undoNomination">↩ 撤销提名</button>
       </div>
     </div>
 
@@ -131,7 +132,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
-import { bbGetCurrentNomination, bbSetNomination, bbGetNominationHistory, bbGetActiveHouseguests, bbVoteNominees, bbGetCurrentHoh, bbGetCurrentVeto, bbKeySetup, bbKeyDraw, bbKeyAnnounce, bbKeySpeech, bbGetSeasonConfig } from '../../../services/bbApi'
+import { bbGetCurrentNomination, bbSetNomination, bbGetNominationHistory, bbGetActiveHouseguests, bbVoteNominees, bbGetCurrentHoh, bbGetCurrentVeto, bbKeySetup, bbKeyDraw, bbKeyAnnounce, bbKeySpeech, bbGetSeasonConfig, bbUndoNomination } from '../../../services/bbApi'
 import type { BBNomination, BBRoundConfig } from '../../../types/bigbrother'
 import KeyCeremony from '../../../components/bigbrother/KeyCeremony.vue'
 
@@ -215,6 +216,11 @@ const isBbbb = computed(() =>
   hasTwist('bbbb', (nomination.value as any)?.isBbbb || twistInfo.value?.isBbbb)
 )
 const needThree = computed(() => isTripleOffering.value || isBbbb.value)
+
+async function undoNomination() {
+  if (!confirm('确定撤销本周提名吗？\n将删除本周提名与否决权记录，并回到提名阶段。')) return
+  try { await bbUndoNomination(); await fetchData() } catch (e: any) { alert(e?.message || '撤销失败') }
+}
 
 async function fetchData() {
   try {
@@ -336,6 +342,8 @@ onMounted(fetchData)
 .bb-btn:hover { background: #00ff8822; }
 .bb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .bb-btn-primary { background: #00ff8822; border-color: #00ff88; }
+.bb-btn-danger { border-color: #ff444466; color: #ff4444; }
+.bb-btn-danger:hover { background: #ff444422; }
 .history-section h3 { font-size: 16px; color: #e0e0e0; margin: 0 0 12px; }
 .bb-table { width: 100%; border-collapse: collapse; }
 .bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #00ff8811; font-size: 14px; color: #ccc; }

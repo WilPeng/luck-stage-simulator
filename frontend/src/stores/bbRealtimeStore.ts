@@ -22,10 +22,16 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
   const lastVetoCard = ref<{ roundId: string; cardDraw: any } | null>(null)
   const lastEvictionNight = ref<any>(null)
   const lastMinigameSummon = ref<any>(null)
+  const lastKeyCeremony = ref<{ roundId: string; keyCeremony: any; nomineeIds: string[]; nomineeNames: string[] } | null>(null)
 
   let socket: Socket | null = null
+  let bumpTimer: ReturnType<typeof setTimeout> | null = null
 
-  function bump() { tick.value++ }
+  // 合并短时间内的大量更新为一次，避免同一批写操作触发多次重复请求
+  function bump() {
+    if (bumpTimer) return
+    bumpTimer = setTimeout(() => { bumpTimer = null; tick.value++ }, 80)
+  }
 
   function emitWithAck(event: string, payload: any = {}): Promise<any> {
     return new Promise((resolve) => {
@@ -55,10 +61,6 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
     socket.on('connect', () => { connected.value = true })
     socket.on('disconnect', () => { connected.value = false })
     socket.on('bb:update', async (data: any) => {
-      const season = useBbSeasonStore()
-      try { await season.fetchProgress(); await season.fetchMenu() } catch {}
-      bump()
-      // 阶段/赛程相关操作 → 触发选手端页面重新加载
       const p = data?.path || ''
       // 投票等高频写操作不触发整页重载（否则选手端会不停刷新）
       const isVoteWrite = /\/eviction\/(vote|my-vote)\b/.test(p)
@@ -66,7 +68,20 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
       // 绝不能整页重载，否则每次「下一句」都会刷新整个页面
       const isRevealWrite = /\/(night|announce)\/(start|next|confirm|reset|prepare)\b/.test(p)
         || /\/champion-reveal\b/.test(p)
-      if (!isVoteWrite && !isRevealWrite && /\/(season|hoh|nomination|veto|eviction|endgame)/.test(p)) {
+      // 高频写操作（投票 / 逐句揭晓 / 小游戏 / House / 聊天 / 提名仪式）：不重新拉取赛季进度与菜单，
+      // 避免“每次有人投票，所有客户端都各发 2 个请求”的请求风暴导致卡顿
+      const isKeyWrite = /\/nomination\/key-/.test(p)
+      const isHighFreq = isVoteWrite || isRevealWrite || isKeyWrite
+        || /\/(minigame|house|chat)\b/.test(p) || /\/jury-qa\b/.test(p)
+
+      if (!isHighFreq) {
+        const season = useBbSeasonStore()
+        try { await season.fetchProgress(); await season.fetchMenu() } catch {}
+      }
+      bump()
+
+      // 提名仪式逐句环节：不整页重载，靠 bb:key-ceremony 广播增量更新
+      if (!isVoteWrite && !isRevealWrite && !isKeyWrite && /\/(season|hoh|nomination|veto|eviction|endgame)/.test(p)) {
         stageTick.value++
       }
     })
@@ -90,6 +105,10 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
       lastMinigameSummon.value = data
       bump()
     })
+    socket.on('bb:key-ceremony', (data: any) => {
+      lastKeyCeremony.value = data
+      bump()
+    })
   }
 
   function clearBroadcast() { lastBroadcast.value = null }
@@ -99,5 +118,5 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
     connected.value = false
   }
 
-  return { tick, stageTick, connected, lastBroadcast, lastEvictionAnnounce, lastVetoCard, lastEvictionNight, lastMinigameSummon, connect, disconnect, bump, clearBroadcast, vetoDeal, vetoDraw }
+  return { tick, stageTick, connected, lastBroadcast, lastEvictionAnnounce, lastVetoCard, lastEvictionNight, lastMinigameSummon, lastKeyCeremony, connect, disconnect, bump, clearBroadcast, vetoDeal, vetoDraw }
 })

@@ -402,6 +402,23 @@ export async function bbReplaceNomination(playerId: string, playerName: string):
   })
 }
 
+// ===== 撤销（管理员） =====
+export async function bbUndoHoh(): Promise<void> {
+  return doRequest<void>('/hoh/undo', { method: 'POST' })
+}
+export async function bbUndoNomination(): Promise<void> {
+  return doRequest<void>('/nomination/undo', { method: 'POST' })
+}
+export async function bbUndoVetoCompetition(): Promise<void> {
+  return doRequest<void>('/veto/undo-competition', { method: 'POST' })
+}
+export async function bbUndoVetoDecision(): Promise<void> {
+  return doRequest<void>('/veto/undo-decision', { method: 'POST' })
+}
+export async function bbUndoReplacement(): Promise<void> {
+  return doRequest<void>('/nomination/replace/undo', { method: 'POST' })
+}
+
 export async function bbGetNominationHistory(): Promise<BBNomination[]> {
   return doRequest<BBNomination[]>('/nomination/history')
 }
@@ -706,6 +723,13 @@ export async function bbGetMinigameReplay(id: string): Promise<any> {
 
 export async function bbDeleteMinigameReplay(id: string): Promise<void> {
   return doRequest<void>(`/minigame/replay/${id}`, { method: 'DELETE' })
+}
+
+export async function bbBatchDeleteMinigameReplays(ids: string[]): Promise<{ deleted: number }> {
+  return doRequest<{ deleted: number }>('/minigame/replay/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids })
+  })
 }
 
 // ===== 钥匙仪式（提名） =====

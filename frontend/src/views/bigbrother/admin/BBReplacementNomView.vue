@@ -17,6 +17,9 @@
       </div>
     </div>
 
+    <!-- 否决权被使用：展示 POV 仪式发言（客厅） -->
+    <CeremonyChat v-if="veto && veto.used" room-id="living_room" title="🎤 POV 仪式发言（客厅）" empty-text="暂无发言" />
+
     <!-- 回旋镖护符提示 -->
     <div v-if="twistInfo?.isBoomerangPendant && nomination" class="twist-action-hint">
       🪃 回旋镖护符已触发！提名名单已清空，HOH 需要重新提名所有被提名人。
@@ -50,6 +53,7 @@
     <!-- 替换完成提示 -->
     <div v-if="nomination?.replacementNomineeId" class="done-hint">
       <span>✅ 替补提名已完成：<strong>{{ nomination.replacementNomineeName }}</strong> 已加入最终提名名单，将进入驱逐投票阶段。</span>
+      <button class="bb-btn bb-btn-danger" @click="undoReplacement">↩ 撤销替补决策</button>
     </div>
 
     <!-- 操作按钮 -->
@@ -89,8 +93,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
-import { bbGetCurrentNomination, bbReplaceNomination, bbGetActiveHouseguests, bbGetCurrentVeto } from '../../../services/bbApi'
+import { bbGetCurrentNomination, bbReplaceNomination, bbGetActiveHouseguests, bbGetCurrentVeto, bbUndoReplacement } from '../../../services/bbApi'
 import type { BBNomination, BBVetoRecord } from '../../../types/bigbrother'
+import CeremonyChat from '../../../components/bigbrother/CeremonyChat.vue'
 
 const nomination = ref<BBNomination | null>(null)
 const twistInfo = ref<any>(null)
@@ -113,6 +118,11 @@ const baseAvailable = computed(() => {
     !nomineeIdSet.has(h.id)
   )
 })
+
+async function undoReplacement() {
+  if (!confirm('确定撤销替补决策吗？\n将移除替补提名并回到替换提名阶段。')) return
+  try { await bbUndoReplacement(); await fetchData() } catch (e: any) { alert(e?.message || '撤销失败') }
+}
 
 async function fetchData() {
   try {
@@ -152,6 +162,9 @@ onMounted(fetchData)
 <style scoped>
 .bb-replacement-admin { max-width: 1000px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.bb-btn-danger { border-color: #ff444466; color: #ff4444; background: transparent; }
+.bb-btn-danger:hover { background: #ff444422; }
+.done-hint { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
 .round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
 

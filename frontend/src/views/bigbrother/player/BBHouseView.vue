@@ -301,7 +301,7 @@ house.onNewMessage.value = (data) => {
 house.onOlderMessages.value = (data) => {
   if (data.roomId === currentRoomId.value && data.messages.length > 0) {
     messages.value = [...data.messages, ...messages.value]
-    if (data.messages.length < 30) hasMore.value = false
+    if (data.messages.length < 50) hasMore.value = false
   }
   loadingMore.value = false
 }

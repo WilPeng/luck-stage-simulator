@@ -30,9 +30,9 @@ const SPELLS = [
   { id: 2, name: '暗黑幽灵', icon: '👻', desc: '其他存活玩家各失去 1 点生命，自己恢复 1 点（上限 6）。' },
   { id: 3, name: '甜蜜的梦', icon: '💤', desc: '掷 1-3 点骰子，自己恢复对应生命（上限 6）。' },
   { id: 4, name: '夜之歌者 / 猫头鹰', icon: '🦉', desc: '从中央秘密魔法石中获取 1 块（轮末每块 +1 分）。' },
-  { id: 5, name: '闪电暴风雨', icon: '⚡', desc: '左手边和右手边的有效玩家各失去 1 点生命。' },
-  { id: 6, name: '暴风雪', icon: '❄️', desc: '左手边玩家失去 1 点生命。' },
-  { id: 7, name: '火球', icon: '🔥', desc: '右手边的有效玩家失去 1 点生命。' },
+  { id: 5, name: '闪电暴风雨', icon: '⚡', desc: '左手边（序号+1，下一位）与右手边（序号-1，上一位）的存活玩家各失去 1 点生命。' },
+  { id: 6, name: '暴风雪', icon: '❄️', desc: '左手边（序号+1，下一位）的存活玩家失去 1 点生命。' },
+  { id: 7, name: '火球', icon: '🔥', desc: '右手边（序号-1，上一位）的存活玩家失去 1 点生命。' },
   { id: 8, name: '魔法药水', icon: '🧪', desc: '自己恢复 1 点生命（上限 6）。' }
 ]
 
@@ -122,6 +122,8 @@ registerGame({
       roundResults: null,
       nextAt: 0,
       winner: null,
+      tiebreakPids: null,
+      pendingTiebreak: false,
       _processedOps: {},
       _replayEvents: []
     }
@@ -213,6 +215,10 @@ registerGame({
     const now = Date.now()
     if (state.phase === 'roundEnd' && state.nextAt && now >= state.nextAt) {
       if (state.winner) { state.phase = 'gameOver'; return true }
+      if (state.pendingTiebreak && state.tiebreakPids && state.tiebreakPids.length) {
+        startTiebreakRound(state)
+        return false
+      }
       startRound(state)
       return false
     }
@@ -344,6 +350,56 @@ registerGame({
     const evs = state._replayEvents || []
     state._replayEvents = []
     return evs
+  },
+
+  getReplayMeta(state) {
+    const players = state.order.map(pid => {
+      const p = state.players[pid]
+      return {
+        playerId: pid, name: p.name, hp: p.hp, maxHp: p.maxHp,
+        alive: p.alive, owls: (p.owls || []).length,
+        scoreTotal: p.scoreTotal, scoreRound: p.scoreRound,
+        spentAll: !!p.spentAll
+      }
+    })
+    const tower = {}
+    for (let s = 1; s <= 8; s++) {
+      tower[s] = { total: state.tower[s].total, cast: state.tower[s].cast, remaining: Math.max(0, state.tower[s].total - state.tower[s].cast), lastCasterName: state.tower[s].lastCasterName || '' }
+    }
+    return {
+      type: 'abraca',
+      round: state.round,
+      spells: SPELLS.map(s => ({ id: s.id, name: s.name, icon: s.icon, desc: s.desc })),
+      tower,
+      players,
+      log: (state.log || []).slice(-200)
+    }
+  },
+
+  // 明牌快照：每位选手手牌（公开）、生命、猫头鹰、分数、当前回合
+  getReplaySnapshot(state) {
+    const currentId = state.order[state.turnIndex]
+    const players = state.order.map(pid => {
+      const p = state.players[pid]
+      return {
+        playerId: pid,
+        name: p.name,
+        seat: p.seat,
+        hp: p.hp,
+        maxHp: p.maxHp,
+        alive: p.alive,
+        hand: [...p.hand].sort((a, b) => a - b),
+        owls: [...p.owls],
+        scoreTotal: p.scoreTotal,
+        scoreRound: p.scoreRound,
+        isTurn: pid === currentId
+      }
+    })
+    const tower = {}
+    for (let s = 1; s <= 8; s++) {
+      tower[s] = { total: state.tower[s].total, cast: state.tower[s].cast, remaining: Math.max(0, state.tower[s].total - state.tower[s].cast) }
+    }
+    return { round: state.round, phase: state.phase, turnPlayerId: currentId, players, tower }
   }
 })
 
@@ -380,10 +436,12 @@ function startRound(state) {
     p.hasCastThisTurn = false
     p.hand = state.stock.splice(0, state.handSize)
   }
-  state.turnIndex = 0
+  // 每轮首位施法者轮换：第 1 轮从 1 号玩家开始，第 2 轮从 2 号开始，依此类推
+  const startIdx = (state.round - 1) % state.order.length
+  state.turnIndex = startIdx
   state.turnDeadline = Date.now() + state.turnMs
-  state.log.push(`—— 第 ${state.round} 轮开始 ——`)
-  pushEvent(state, `第 ${state.round} 轮开始`)
+  state.log.push(`—— 第 ${state.round} 轮开始（首位：${state.players[state.order[startIdx]].name}）——`)
+  pushEvent(state, `第 ${state.round} 轮开始，首位 ${state.players[state.order[startIdx]].name}`)
 }
 
 function refillHand(state, p) {
@@ -422,7 +480,10 @@ function advanceTurn(state) {
   maybeRoundEnd(state, 'lastStanding')
 }
 
-/** 按座位顺序找左/右的下一位存活玩家 */
+/**
+ * 按座位顺序找相邻的下一位存活玩家。
+ * dir = +1 → 左手边（序号+1，下一位）；dir = -1 → 右手边（序号-1，上一位）。
+ */
 function neighbor(state, fromId, dir) {
   const n = state.order.length
   const start = state.order.indexOf(fromId)
@@ -536,7 +597,7 @@ function maybeRoundEnd(state, reason) {
   let r = reason
   if (!r) {
     if (alive.length <= 1) r = 'lastStanding'
-    else if (Object.values(state.players).some(p => p.spentAll || p.hand.length === 0)) r = 'spentAll'
+    else if (alive.some(p => p.spentAll || p.hand.length === 0)) r = 'spentAll'
   }
   if (!r) return false
   resolveRound(state, r)
@@ -576,19 +637,72 @@ function resolveRound(state, reason) {
   state.log.push(`—— 第 ${state.round} 轮结束（${roundReasonText(reason)}）——`)
   pushEvent(state, `第 ${state.round} 轮结束：${roundReasonText(reason)}`)
 
-  // 判定比赛结束
-  let winner = null
+  // 判定比赛结束：达到目标分后，比较总分 → 最近一轮得分 → 同分者加赛
+  const outcome = determineOutcome(state)
+  state.nextAt = Date.now() + ROUND_END_PAUSE_MS
+  state.pendingTiebreak = false
+  state.tiebreakPids = null
+  if (outcome.winner) {
+    state.winner = outcome.winner
+    state.log.push(`🏆 ${state.players[outcome.winner].name} 赢得比赛（总分 ${state.players[outcome.winner].scoreTotal}）！`)
+    pushEvent(state, `${state.players[outcome.winner].name} 赢得比赛`)
+  } else if (outcome.tiebreak && outcome.tiebreak.length > 1) {
+    state.pendingTiebreak = true
+    state.tiebreakPids = outcome.tiebreak
+    const names = outcome.tiebreak.map(id => state.players[id].name).join('、')
+    state.log.push(`⚖️ ${names} 总分与最近一轮得分均相同，加赛一轮决胜！`)
+    pushEvent(state, `${names} 加赛一轮决胜`)
+  }
+}
+
+/** 判定：达到目标分后，总分最高者胜；同分比最近一轮得分；再同分则返回需加赛名单 */
+function determineOutcome(state) {
+  const players = state.order.map(id => state.players[id])
+  const anyReached = players.some(p => p.scoreTotal >= state.target)
+  if (!anyReached) return { winner: null, tiebreak: null }
+  const maxTotal = Math.max(...players.map(p => p.scoreTotal))
+  let pool = players.filter(p => p.scoreTotal === maxTotal)
+  if (pool.length === 1) return { winner: pool[0].playerId, tiebreak: null }
+  const maxRound = Math.max(...pool.map(p => p.scoreRound || 0))
+  pool = pool.filter(p => (p.scoreRound || 0) === maxRound)
+  if (pool.length === 1) return { winner: pool[0].playerId, tiebreak: null }
+  return { winner: null, tiebreak: pool.map(p => p.playerId) }
+}
+
+/** 加赛轮：仅同分玩家参与，其余成为观战者 */
+function startTiebreakRound(state) {
+  const ids = new Set(state.tiebreakPids || [])
+  state.round += 1
+  state.phase = 'playing'
+  state.roundResults = null
+  state.stock = buildDeck(state.deckCfg)
+  state.recent = []
+  for (let s = 1; s <= 8; s++) { state.tower[s].cast = 0; state.tower[s].lastCasterName = '' }
   for (const pid of state.order) {
-    if (state.players[pid].scoreTotal >= state.target) { winner = pid; break }
+    const p = state.players[pid]
+    p.hp = p.maxHp
+    p.killerThisRound = false
+    p.spentAll = false
+    p.scoreRound = 0
+    p.lastSpell = 0
+    p.hasCastThisTurn = false
+    p.killsRound = 0
+    if (ids.has(pid)) {
+      p.alive = true
+      p.owls = []
+      p.hand = state.stock.splice(0, state.handSize)
+    } else {
+      p.alive = false
+      p.owls = []
+      p.hand = []
+    }
   }
-  if (winner) {
-    state.winner = winner
-    state.nextAt = Date.now() + ROUND_END_PAUSE_MS
-    state.log.push(`🏆 ${state.players[winner].name} 达到 ${state.target} 分，赢得比赛！`)
-    pushEvent(state, `${state.players[winner].name} 赢得比赛`)
-  } else {
-    state.nextAt = Date.now() + ROUND_END_PAUSE_MS
-  }
+  const firstIdx = state.order.findIndex(id => ids.has(id))
+  state.turnIndex = firstIdx >= 0 ? firstIdx : 0
+  state.turnDeadline = Date.now() + state.turnMs
+  const names = state.tiebreakPids.map(id => state.players[id].name).join('、')
+  state.log.push(`—— 加赛第 ${state.round} 轮开始（${names}）——`)
+  pushEvent(state, `加赛轮开始：${names}`)
 }
 
 function roundReasonText(reason) {

@@ -51,11 +51,11 @@
     <div v-if="nomination && ceremonyDone" class="nomination-card">
       <div class="hoh-info">HOH: {{ nomination.hohName }}</div>
       <div class="nominees">
-        <div v-for="(name, i) in (nomination.nomineeNames || [])" :key="i" class="nominee-item"
-          :class="{ warned: isMe(name) }">
-          <span class="nominee-icon">📋</span>
-          <span class="nominee-name">{{ name }}</span>
-          <span v-if="isMe(name)" class="me-badge">我</span>
+        <div v-for="(id, i) in (nomination.nomineeIds || [])" :key="id" class="nominee-item"
+          :class="{ warned: id === authStore.currentUser?.id }">
+          <BBAvatar :name="nomination.nomineeNames?.[i] || id" :avatar="avatarById(id)" size="sm" />
+          <span class="nominee-name">{{ nomination.nomineeNames?.[i] }}</span>
+          <span v-if="id === authStore.currentUser?.id" class="me-badge">我</span>
           <span class="nominee-order">被提名人 {{ i + 1 }}</span>
         </div>
       </div>
@@ -74,10 +74,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
+import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
 import { bbGetNominationHistory, bbGetActiveHouseguests, bbGetHohHistory, bbGetSeasonConfig, bbVoteNominees, bbGetCurrentNomination, bbKeySetup, bbKeyDraw, bbKeyAnnounce, bbKeySpeech } from '../../../services/bbApi'
 import KeyCeremony from '../../../components/bigbrother/KeyCeremony.vue'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
@@ -190,11 +191,31 @@ async function refreshNomination() {
   } catch {}
 }
 
+// 提名仪式逐句环节：只增量更新仪式状态，不整页重载
+const realtime = useBbRealtimeStore()
+watch(() => realtime.lastKeyCeremony, (payload) => {
+  if (!payload) return
+  if (payload.roundId && payload.roundId !== `round-${roundNum.value}`) return
+  if (payload.keyCeremony) keyCeremony.value = payload.keyCeremony
+  if (Array.isArray(payload.nomineeIds)) {
+    nomination.value = {
+      ...(nomination.value || {}),
+      nomineeIds: payload.nomineeIds,
+      nomineeNames: payload.nomineeNames || []
+    }
+  }
+})
+
 // 直接民主投票候选人（所有活跃玩家）
 const democracyCandidates = computed(() => activeList.value)
 
 function isMe(name: string): boolean {
   return name === authStore.currentUser?.name
+}
+
+function avatarById(id: string): string | null {
+  const h = activeList.value.find(x => x.id === id)
+  return h?.avatar || null
 }
 
 async function submitDemocracyVotes() {

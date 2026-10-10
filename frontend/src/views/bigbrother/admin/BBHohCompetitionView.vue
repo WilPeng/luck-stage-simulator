@@ -39,6 +39,7 @@
         <button class="bb-btn" @click="runCompetition">🎲 模拟 HOH 竞争</button>
         <button class="bb-btn" @click="openMinigameModal">🎮 开启小游戏</button>
         <button class="bb-btn" @click="showAssignModal = true">✏️ 手动指定 HOH</button>
+        <button v-if="currentHoh" class="bb-btn bb-btn-danger" @click="undoHoh">↩ 撤销 HOH</button>
       </div>
       <!-- 小游戏房间状态 -->
       <div v-if="activeRoom" class="room-status" :class="activeRoom.status">
@@ -130,7 +131,7 @@ import { useRoute } from 'vue-router'
 import {
   bbGetCurrentHoh, bbGetHohHistory, bbRunHohCompetition, bbAssignHoh,
   bbGetHohEligible, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom,
-  bbPauseMinigame, bbResumeMinigame, bbStopMinigame, bbSummonMinigamePlayers
+  bbPauseMinigame, bbResumeMinigame, bbStopMinigame, bbSummonMinigamePlayers, bbUndoHoh
 } from '../../../services/bbApi'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
 import MinigameObserver from '../../../components/bigbrother/MinigameObserver.vue'
@@ -195,6 +196,11 @@ const hasAnyTwist = computed(() => {
   return twistInfo.value.isSecretKeeper || twistInfo.value.isKarmicPawnship ||
     twistInfo.value.isCondemned || twistInfo.value.isSerpentMark
 })
+
+async function undoHoh() {
+  if (!confirm('确定撤销本轮 HOH 产生吗？\n将删除本轮 HOH、提名与否决权记录，并回到 HOH 竞争阶段。')) return
+  try { await bbUndoHoh(); await fetchData() } catch (e: any) { alert(e?.message || '撤销失败') }
+}
 
 async function fetchData() {
   try {
@@ -385,7 +391,7 @@ onMounted(fetchData)
 .empty-cell { text-align: center; color: #666; padding: 32px; }
 .bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; width: 400px; max-width: 90vw; }
-.bb-modal-xl { width: 680px; }
+.bb-modal-xl { width: 680px; max-width: 92vw; }
 .bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #00ff8822; }
 .bb-modal-header h3 { margin: 0; color: #00ff88; font-size: 16px; }
 .close-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 18px; }
@@ -414,7 +420,7 @@ onMounted(fetchData)
 .target-input:focus { outline: none; border-color: #ffaa00; }
 
 /* 小游戏选择弹窗 */
-.twist-picker-modal { width: 520px; }
+.twist-picker-modal { width: 520px; max-width: 92vw; }
 .twist-options { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; }
 .twist-option {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;

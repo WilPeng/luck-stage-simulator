@@ -403,4 +403,10 @@ p { color: #888; margin: 0; }
 .cg-media-title { font-size: 14px; color: #ffaa00; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
 .cg-media-tag { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #ffaa0022; color: #ffaa00; }
 .cg-media-el { width: 100%; max-height: 300px; border-radius: 8px; background: #000; }
+@media (max-width: 480px) {
+  .minigame { padding: 12px; }
+  .countdown-big { font-size: 52px; }
+  .game-icon { font-size: 48px; }
+  .options-grid { grid-template-columns: 1fr; }
+}
 </style>

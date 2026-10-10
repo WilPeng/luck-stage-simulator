@@ -150,4 +150,9 @@ p { color: #888; font-size: 14px; }
 .eliminated { color: #ff6b6b; margin-top: 14px; font-size: 14px; }
 .winner-name { font-size: 26px; font-weight: 700; color: #ffaa00; }
 .winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+@media (max-width: 480px) {
+  .minority { padding: 12px; }
+  .countdown-big { font-size: 52px; }
+  .game-icon { font-size: 48px; }
+}
 </style>

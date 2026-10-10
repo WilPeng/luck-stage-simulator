@@ -371,6 +371,14 @@ router.post('/use', async (req, res) => {
     const nomCol = getCollection('BBNomination')
     const nominationDoc = await nomCol.findOne({ gameId: 'bigbrother', roundId })
 
+    // 记录使用前的提名名单，供「撤销 POV 决策」还原
+    if (nominationDoc) {
+      await vetoCol.updateOne(
+        { gameId: 'bigbrother', roundId },
+        { $set: { priorNomineeIds: nominationDoc.nomineeIds || [], priorNomineeNames: nominationDoc.nomineeNames || [], updatedAt: new Date().toISOString() } }
+      )
+    }
+
     if (nominationDoc) {
       if (isBoomerang) {
         // 回旋镖护符：清空所有被提名人，HOH 需重新提名全部人
@@ -614,6 +622,74 @@ router.post('/speech', auth, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '发言失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /undo-competition - 撤销 POV 产生（清空获胜者，回到否决权竞争阶段）
+router.post('/undo-competition', auth, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const roundId = `round-${season.currentRound}`
+    const { getCollection } = require('../../../config/db')
+    const vetoCol = getCollection('BBVetoRecord')
+    const rec = await vetoCol.findOne({ gameId: 'bigbrother', roundId })
+    if (!rec) return res.status(404).json({ success: false, error: '否决权记录不存在', code: 'NOT_FOUND' })
+    // 若已使用否决权，先还原提名名单
+    if (rec.used && Array.isArray(rec.priorNomineeIds)) {
+      await getCollection('BBNomination').updateOne(
+        { gameId: 'bigbrother', roundId },
+        { $set: { nomineeIds: rec.priorNomineeIds, nomineeNames: rec.priorNomineeNames || [], vetoUsed: false, replacementNomineeId: null, replacementNomineeName: '', updatedAt: new Date().toISOString() } }
+      )
+    }
+    await vetoCol.updateOne(
+      { gameId: 'bigbrother', roundId },
+      { $set: { winnerId: null, winnerName: '', status: 'pending', used: false, usedOnPlayerId: null, usedOnPlayerName: '', ceremony: null, priorNomineeIds: null, priorNomineeNames: null, updatedAt: new Date().toISOString() } }
+    )
+    season.currentStage = 'veto_competition'
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    res.json({ success: true, data: null })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '撤销 POV 产生失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /undo-decision - 撤销 POV 决策（使用/不使用），回到否决权会议阶段
+router.post('/undo-decision', auth, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const roundId = `round-${season.currentRound}`
+    const { getCollection } = require('../../../config/db')
+    const vetoCol = getCollection('BBVetoRecord')
+    const rec = await vetoCol.findOne({ gameId: 'bigbrother', roundId })
+    if (!rec) return res.status(404).json({ success: false, error: '否决权记录不存在', code: 'NOT_FOUND' })
+    const nomCol = getCollection('BBNomination')
+    if (Array.isArray(rec.priorNomineeIds)) {
+      await nomCol.updateOne(
+        { gameId: 'bigbrother', roundId },
+        { $set: { nomineeIds: rec.priorNomineeIds, nomineeNames: rec.priorNomineeNames || [], vetoUsed: false, replacementNomineeId: null, replacementNomineeName: '', updatedAt: new Date().toISOString() } }
+      )
+    } else if (rec.usedOnPlayerId) {
+      await nomCol.updateOne(
+        { gameId: 'bigbrother', roundId },
+        { $push: { nomineeIds: rec.usedOnPlayerId, nomineeNames: rec.usedOnPlayerName }, $set: { vetoUsed: false, replacementNomineeId: null, replacementNomineeName: '', updatedAt: new Date().toISOString() } }
+      )
+    }
+    const ceremony = rec.ceremony || {}
+    ceremony.messages = (ceremony.messages || []).filter(m => m.type !== 'decision' && m.type !== 'closing' && m.type !== 'hoh')
+    ceremony.closingSpoken = false
+    await vetoCol.updateOne(
+      { gameId: 'bigbrother', roundId },
+      { $set: { used: false, status: 'pending', usedOnPlayerId: null, usedOnPlayerName: '', ceremony, priorNomineeIds: null, priorNomineeNames: null, updatedAt: new Date().toISOString() } }
+    )
+    season.currentStage = 'veto_ceremony'
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    res.json({ success: true, data: null })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '撤销 POV 决策失败', code: 'SERVER_ERROR' })
   }
 })
 

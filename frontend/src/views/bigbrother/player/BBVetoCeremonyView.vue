@@ -26,14 +26,8 @@
 
     <!-- POV 仪式发言区 -->
     <div v-if="veto && isVetoHolder && !isFuture" class="ceremony-panel">
-      <div class="cer-title">🎤 POV 仪式发言</div>
-      <div class="cer-msgs">
-        <div v-for="(m, i) in (veto.ceremony?.messages || [])" :key="i" class="cer-msg">
-          <span class="cer-sender">{{ m.playerName }}</span>
-          <span class="cer-text">{{ m.text }}</span>
-        </div>
-        <div v-if="!(veto.ceremony?.messages || []).length" class="cer-empty">尚未发言</div>
-      </div>
+      <div class="cer-title">🎤 POV 仪式发言（客厅）</div>
+      <CeremonyChat room-id="living_room" title="💬 POV 仪式记录（客厅）" empty-text="暂无发言" />
       <div v-if="!veto.ceremony?.openingSpoken" class="cer-actions">
         <input v-model="openingText" class="bb-input" placeholder="开场发言（留空使用默认）" />
         <button class="bb-btn bb-btn-primary" :disabled="speaking" @click="speak('opening')">发表开场发言</button>
@@ -146,6 +140,7 @@ import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
 import { bbGetVetoHistory, bbGetCurrentNomination, bbUseVeto, bbSkipVeto, bbVetoSpeech } from '../../../services/bbApi'
 import type { BBVetoRecord, BBNomination } from '../../../types/bigbrother'
+import CeremonyChat from '../../../components/bigbrother/CeremonyChat.vue'
 
 const route = useRoute()
 const authStore = useBbAuthStore()
@@ -356,7 +351,7 @@ onMounted(async () => {
 /* 弹窗 */
 .bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; width: 400px; max-width: 90vw; }
-.skip-modal { width: 440px; }
+.skip-modal { width: 440px; max-width: 92vw; }
 .bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #00ff8822; }
 .bb-modal-header h3 { margin: 0; color: #00ff88; font-size: 16px; }
 .close-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 18px; }

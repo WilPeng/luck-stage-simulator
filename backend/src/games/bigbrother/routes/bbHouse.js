@@ -181,10 +181,7 @@ router.get('/reachable', auth, async (req, res) => {
               denyReason = '需要 HOH 邀请'
             }
           } else if (room.accessRule === 'have_not_only') {
-            if (!player?.isHaveNot) {
-              canEnter = false
-              denyReason = '仅 Have-Not 可进入'
-            }
+            // 任何人（无论是否 Have-Not）都可进入贫民屋
           } else if (room.accessRule === 'single') {
             const count = await BBPlayerLocation.countDocuments({ currentRoomId: id, gameId: 'bigbrother' })
             if (count >= 1) {
@@ -315,9 +312,7 @@ router.post('/move', auth, async (req, res) => {
         return res.status(403).json({ success: false, error: '需要 HOH 邀请' })
       }
     } else if (targetRoom.accessRule === 'have_not_only') {
-      if (!player.isHaveNot) {
-        return res.status(403).json({ success: false, error: '仅 Have-Not 可进入' })
-      }
+      // 任何人（无论是否 Have-Not）都可进入贫民屋
     } else if (targetRoom.accessRule === 'single') {
       const count = await BBPlayerLocation.countDocuments({ currentRoomId: targetRoomId, gameId })
       if (count >= 1) {

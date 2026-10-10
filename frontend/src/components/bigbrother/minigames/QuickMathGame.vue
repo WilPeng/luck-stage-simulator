@@ -116,4 +116,11 @@ onUnmounted(() => { if (cooldownTimer) clearInterval(cooldownTimer) })
 .game-finished h2 { font-size: 22px; color: #e0e0e0; margin-bottom: 16px; }
 .winner-name { font-size: 28px; font-weight: 700; color: #ffaa00; }
 .winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+@media (max-width: 480px) {
+  .quick-math { padding: 12px; }
+  .countdown-big { font-size: 52px; }
+  .game-icon { font-size: 48px; }
+  .question { font-size: 28px; }
+  .math-input { width: 110px; font-size: 20px; }
+}
 </style>

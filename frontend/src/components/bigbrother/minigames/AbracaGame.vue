@@ -57,6 +57,7 @@
             <div v-for="p in opponents" :key="p.playerId" class="ab-player" :class="{ turn: p.isTurn, out: !p.alive, me: p.playerId === myId }">
               <div class="ab-p-head">
                 <span class="ab-p-name">{{ p.name }}</span>
+                <span v-if="p.playerId === myId" class="ab-p-me-tag">我</span>
                 <span class="ab-p-seat">#{{ p.seat + 1 }}</span>
               </div>
               <div class="ab-p-stats">
@@ -65,10 +66,16 @@
                 <span v-if="p.owlsCount">🦉 {{ p.owlsCount }}</span>
                 <span>⭐ {{ p.scoreTotal }}</span>
               </div>
-              <!-- 其他人的正常魔法石编号（可见） -->
+              <!-- 自己的手牌为 ? ；其他玩家的正常魔法石编号可见 -->
               <div class="ab-p-hand">
-                <span v-for="(s, i) in (p.hand || [])" :key="i" class="ab-stone small" :class="'s' + s">{{ s }}</span>
-                <span v-if="!p.hand || !p.hand.length" class="ab-dim">无石</span>
+                <template v-if="p.playerId === myId">
+                  <span v-for="i in (p.handCount || 0)" :key="'self' + i" class="ab-stone small back">?</span>
+                  <span v-if="!p.handCount" class="ab-dim">无石</span>
+                </template>
+                <template v-else>
+                  <span v-for="(s, i) in (p.hand || [])" :key="i" class="ab-stone small" :class="'s' + s">{{ s }}</span>
+                  <span v-if="!p.hand || !p.hand.length" class="ab-dim">无石</span>
+                </template>
               </div>
               <div v-if="!p.alive" class="ab-out-tag">已淘汰</div>
             </div>
@@ -84,6 +91,7 @@
                   <span class="ab-spell-id">{{ s.id }}</span>
                 </div>
                 <div class="ab-spell-name">{{ s.name }}</div>
+                <div class="ab-spell-desc">{{ s.desc }}</div>
                 <div class="ab-spell-stock">库存 {{ s.remaining }}<span class="ab-dim"> /{{ s.total }}</span> · 已施 {{ s.cast }}</div>
                 <div v-if="s.lastCasterName" class="ab-spell-last">最近：{{ s.lastCasterName }}</div>
               </div>
@@ -178,7 +186,8 @@ const state = computed<any>(() => gameState.value || {})
 const myId = computed(() => state.value.me?.playerId || props.myId || bbAuth.currentUser?.id || '')
 const gameStarted = computed(() => state.value.started !== undefined ? !!state.value.started : (state.value.status === 'playing' && state.value.players))
 const players = computed<any[]>(() => state.value.players || [])
-const opponents = computed<any[]>(() => players.value.filter(p => p.playerId !== myId.value))
+// 按座位号顺序展示所有玩家（含自己），方便看清自己的序号位置；自己的牌显示为 ?
+const opponents = computed<any[]>(() => [...players.value].sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0)))
 const turnPlayerId = computed(() => state.value.turnPlayerId)
 const turnPlayerName = computed(() => players.value.find(p => p.playerId === turnPlayerId.value)?.name || '—')
 const winnerName = computed(() => players.value.find(p => p.playerId === winner.value?.playerId)?.name || (winner.value as any)?.playerName || '')
@@ -281,6 +290,8 @@ onUnmounted(() => disconnect())
 .ab-player.out { opacity: 0.5; }
 .ab-p-head { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; }
 .ab-p-seat { color: #8a8aa5; font-size: 12px; }
+.ab-p-me-tag { font-size: 11px; color: #00ff88; border: 1px solid #00ff8866; border-radius: 999px; padding: 0 6px; margin-left: 4px; }
+.ab-stone.back { background: #2a2a55; color: #b9b9e0; }
 .ab-p-stats { display: flex; gap: 10px; font-size: 12px; color: #bdbdd8; margin: 6px 0; }
 .ab-hp { color: #ff6b6b; }
 .ab-p-hand { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -296,6 +307,7 @@ onUnmounted(() => disconnect())
 .ab-tower-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
 .ab-spell { background: #141430; border: 1px solid #ffffff14; border-radius: 8px; padding: 8px; }
 .ab-spell.disabled { opacity: 0.45; }
+.ab-spell-desc { font-size: 11px; color: #8a8aa5; line-height: 1.4; margin: 2px 0 4px; }
 .ab-spell-top { display: flex; justify-content: space-between; align-items: center; }
 .ab-spell-icon { font-size: 20px; }
 .ab-spell-id { color: #00ff88; font-weight: 800; }
@@ -330,7 +342,7 @@ onUnmounted(() => disconnect())
 .ab-log-item { padding: 2px 0; border-bottom: 1px dashed #ffffff0e; }
 
 .ab-confirm-overlay { position: fixed; inset: 0; background: #000000aa; display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.ab-confirm { background: #141430; border: 1px solid #00ff8855; border-radius: 12px; padding: 20px; width: 340px; }
+.ab-confirm { background: #141430; border: 1px solid #00ff8855; border-radius: 12px; padding: 20px; width: 340px; max-width: 90vw; }
 .ab-confirm h3 { margin: 0 0 8px; color: #00ff88; }
 .ab-confirm p { font-size: 14px; color: #cfcfe6; margin: 4px 0; }
 .ab-warn { color: #ff8866 !important; font-size: 12px !important; }

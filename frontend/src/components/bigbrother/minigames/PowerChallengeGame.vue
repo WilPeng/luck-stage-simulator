@@ -117,4 +117,11 @@ onMounted(() => connect())
 .winners-title { font-size: 18px; font-weight: 700; color: #ffaa00; margin-bottom: 12px; }
 .winner-item { padding: 8px 16px; color: #e0e0e0; font-size: 15px; }
 .empty-state { text-align: center; color: #666; padding: 40px; font-size: 14px; }
+@media (max-width: 480px) {
+  .power-challenge-game { padding: 10px; }
+  .pc-header { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  .pc-theme { font-size: 17px; }
+  .question-card { padding: 14px; }
+  .q-options { grid-template-columns: 1fr; }
+}
 </style>

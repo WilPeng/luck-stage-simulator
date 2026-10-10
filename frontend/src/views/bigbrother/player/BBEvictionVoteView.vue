@@ -35,7 +35,7 @@
           <div class="nominee-chips">
             <span v-for="(name, i) in voteOptions" :key="i" class="nominee-chip"
               :class="{ 'is-self': voteOptionIds[i] === authStore.currentUser?.id }">
-              <BBAvatar :name="name" :avatar="null" size="sm" />
+              <BBAvatar :name="name" :avatar="avatarMap[voteOptionIds[i]] || null" size="sm" />
               {{ name }}{{ voteOptionIds[i] === authStore.currentUser?.id ? '（你）' : '' }}
             </span>
           </div>
@@ -55,7 +55,7 @@
             :class="{ selected: selectedVote === voteOptionIds[i] }"
             @click="selectedVote = voteOptionIds[i]">
             <span class="vote-icon">🗳️</span>
-            <BBAvatar :name="name" :avatar="null" size="md" />
+            <BBAvatar :name="name" :avatar="avatarMap[voteOptionIds[i]] || null" size="md" />
             <span class="vote-name">{{ name }}</span>
             <span v-if="selectedVote === voteOptionIds[i]" class="check-mark">✓</span>
           </div>
@@ -81,7 +81,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetCurrentNomination, bbGetNominationHistory, bbCastVote, bbGetMyVote, bbGetCurrentHoh } from '../../../services/bbApi'
+import { bbGetCurrentNomination, bbGetNominationHistory, bbCastVote, bbGetMyVote, bbGetCurrentHoh, bbGetActiveHouseguests } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBNomination, BBEvictionVote } from '../../../types/bigbrother'
 
@@ -99,6 +99,7 @@ const myVote = ref<BBEvictionVote | null>(null)
 const currentHoh = ref<any>(null)
 const selectedVote = ref<string>('')
 const loading = ref(true)
+const avatarMap = ref<Record<string, string | null>>({})
 
 const hasVoted = computed(() => !!myVote.value)
 const isHoh = computed(() => currentHoh.value?.winnerId === authStore.currentUser?.id)
@@ -154,6 +155,12 @@ onMounted(async () => {
     try { currentHoh.value = await bbGetCurrentHoh() } catch {}
     try { myVote.value = await bbGetMyVote() } catch {}
   }
+  try {
+    const list = await bbGetActiveHouseguests()
+    const m: Record<string, string | null> = {}
+    for (const h of (list || [])) m[h.id] = (h as any).avatar || null
+    avatarMap.value = m
+  } catch {}
   loading.value = false
 })
 </script>

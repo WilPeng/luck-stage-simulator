@@ -55,7 +55,7 @@
               self: p.playerId === myId
             }">
             <div class="p-avatar-wrap">
-              <span class="p-avatar">{{ (p.playerName || '?').charAt(0) }}</span>
+              <BBAvatar :name="p.playerName" :avatar="(p as any).avatar || avatarMap[p.playerId] || null" size="md" />
               <span v-if="p.playerId === veto.winnerId" class="p-crown">🏆</span>
             </div>
             <div class="p-name">{{ p.playerName }}</div>
@@ -99,12 +99,14 @@
         <span>你已选择：<strong>{{ myPickedPlayer }}</strong></span>
       </div>
       <div v-else class="pick-form">
-        <select v-model="selectedPickId" class="pick-select">
-          <option value="">-- 请选择一名房客 --</option>
-          <option v-for="opt in pickableOptions" :key="opt.playerId" :value="opt.playerId">
-            {{ opt.playerName }}
-          </option>
-        </select>
+        <div class="pick-options">
+          <div v-for="opt in pickableOptions" :key="opt.playerId" class="pick-option"
+            :class="{ selected: selectedPickId === opt.playerId }" @click="selectedPickId = opt.playerId">
+            <BBAvatar :name="opt.playerName" :avatar="avatarMap[opt.playerId] || null" size="sm" />
+            <span class="pick-option-name">{{ opt.playerName }}</span>
+            <span v-if="selectedPickId === opt.playerId" class="pick-check">✓</span>
+          </div>
+        </div>
         <button class="bb-btn bb-btn-pick" :disabled="!selectedPickId || picking" @click="confirmPick">
           {{ picking ? '确认中...' : '确认自选' }}
         </button>
@@ -123,7 +125,7 @@ import { ref, computed, onMounted, onUnmounted, markRaw, watch, type Component }
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetVetoHistory, bbGetActiveMinigameRoom, bbRunVetoCompetition, bbGetCurrentHoh, bbGetCurrentNomination, bbPickVetoParticipant, bbGetVetoPickable, bbGetCurrentVeto } from '../../../services/bbApi'
+import { bbGetVetoHistory, bbGetActiveMinigameRoom, bbRunVetoCompetition, bbGetCurrentHoh, bbGetCurrentNomination, bbPickVetoParticipant, bbGetVetoPickable, bbGetCurrentVeto, bbGetActiveHouseguests } from '../../../services/bbApi'
 import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
 import VetoCardDraw from '../../../components/bigbrother/VetoCardDraw.vue'
 import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
@@ -145,6 +147,7 @@ import DescribeGuessGame from '../../../components/bigbrother/minigames/Describe
 import StayOrFoldGame from '../../../components/bigbrother/minigames/StayOrFold.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import type { BBVetoRecord, MinigameRoom } from '../../../types/bigbrother'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 
 const route = useRoute()
 const authStore = useBbAuthStore()
@@ -160,6 +163,7 @@ const hohId = ref('')
 const nomineeIds = ref<string[]>([])
 const pickablePlayers = ref<{ playerId: string; playerName: string }[]>([])
 const loading = ref(true)
+const avatarMap = ref<Record<string, string | null>>({})
 
 const myId = computed(() => authStore.currentUser?.id || '')
 const myName = computed(() => authStore.currentUser?.name || '')
@@ -341,6 +345,13 @@ onMounted(async () => {
   await loadPickable()
   await loadVeto()
 
+  try {
+    const list = await bbGetActiveHouseguests()
+    const m: Record<string, string | null> = {}
+    for (const h of (list || [])) m[h.id] = h.avatar || null
+    avatarMap.value = m
+  } catch {}
+
   // 检查活跃的小游戏房间
   let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -505,8 +516,14 @@ onMounted(async () => {
 .pick-done strong { font-weight: 600; }
 
 .pick-form {
-  display: flex; gap: 10px; align-items: center;
+  display: flex; flex-direction: column; gap: 12px;
 }
+.pick-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.pick-option { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #0f0f2e; border: 1px solid #aa44ff33; border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+.pick-option:hover { border-color: #aa44ff; background: #aa44ff10; }
+.pick-option.selected { border-color: #aa44ff; background: #aa44ff22; }
+.pick-option-name { flex: 1; font-size: 14px; color: #e0e0e0; }
+.pick-check { color: #aa44ff; font-weight: 700; }
 .pick-select {
   flex: 1;
   background: #0f0f2e; border: 1px solid #aa44ff44; color: #e0e0e0;

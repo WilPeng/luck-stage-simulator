@@ -3,6 +3,7 @@
     <div class="page-header">
       <h1>否决权参与者抽选</h1>
       <span class="round-tag">第{{ $route.params.round }}周</span>
+      <button v-if="veto?.winnerId" class="bb-btn bb-btn-danger header-undo" @click="undoVetoCompetition">↩ 撤销 POV 产生</button>
     </div>
 
     <div v-if="twistInfo?.isNoPendantChallenge" class="twist-info-bar">
@@ -226,7 +227,7 @@ import {
   bbGetCurrentVeto, bbRunVetoCompetition, bbDrawVetoParticipants, bbGetCurrentHoh,
   bbGetCurrentNomination, bbPickVetoParticipant, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom,
   bbGetMinigameRoomProgress, bbSetMinigameWinner, bbGetHouseguests,
-  bbPauseMinigame, bbResumeMinigame, bbStopMinigame, bbSummonMinigamePlayers
+  bbPauseMinigame, bbResumeMinigame, bbStopMinigame, bbSummonMinigamePlayers, bbUndoVetoCompetition
 } from '../../../services/bbApi'
 import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
@@ -407,6 +408,11 @@ function getPickerName(pickedBy?: string): string {
 function getAvailableOptions(pickerId: string): { playerId: string; playerName: string }[] {
   const usedIds = new Set((veto.value?.participants || []).map(p => p.playerId))
   return pickablePlayers.value.filter(p => !usedIds.has(p.playerId))
+}
+
+async function undoVetoCompetition() {
+  if (!confirm('确定撤销本轮 POV 产生吗？\n将清空否决权获胜者（并还原被救提名），回到否决权竞争阶段。')) return
+  try { await bbUndoVetoCompetition(); await fetchData() } catch (e: any) { alert(e?.message || '撤销失败') }
 }
 
 async function fetchData() {
@@ -680,6 +686,7 @@ onUnmounted(stopProgressPolling)
 <style scoped>
 .bb-veto-draw { max-width: 1000px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.header-undo { margin-left: auto; }
 .page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
 .round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
 
@@ -831,7 +838,7 @@ onUnmounted(stopProgressPolling)
 .status-info { flex: 1; font-size: 13px; color: #aaa; }
 .bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; width: 400px; max-width: 90vw; }
-.bb-modal-lg { width: 700px; }
+.bb-modal-lg { width: 700px; max-width: 92vw; }
 .bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #00ff8822; }
 .bb-modal-header h3 { margin: 0; color: #00ff88; font-size: 16px; }
 .close-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 18px; }

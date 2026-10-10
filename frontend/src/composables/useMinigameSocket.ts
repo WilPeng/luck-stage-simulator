@@ -31,6 +31,7 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
   const paused = ref(false)
   const allReady = ref(false)
   const summoned = ref(false)
+  const adminView = ref<any>(null)
 
   function connect() {
     if (socket.value) return
@@ -103,6 +104,11 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
       events.value = [...events.value, data]
     })
 
+    // 管理员专属完整局面（含隐藏信息）
+    s.on('game_admin_view', (data: any) => {
+      if (data && data.view) adminView.value = data.view
+    })
+
     s.on('game_finished', (data: { winner: { playerId: string; playerName: string } | null; scores: Record<string, number> }) => {
       finished.value = true
       winner.value = data.winner
@@ -169,6 +175,7 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
     paused.value = false
     allReady.value = false
     summoned.value = false
+    adminView.value = null
   }
 
   onUnmounted(() => {
@@ -177,7 +184,7 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
 
   return {
     socket, connected, gameState, countdown, participants,
-    winner, scores, error, finished, progress, events, paused, allReady, summoned,
+    winner, scores, error, finished, progress, events, paused, allReady, summoned, adminView,
     connect, joinRoom, sendAction, setReady, disconnect
   }
 }

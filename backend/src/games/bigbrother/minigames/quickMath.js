@@ -146,5 +146,22 @@ registerGame({
     if (!ps) return false
     if (!targetScore || targetScore <= 0) return ps.currentIndex >= TOTAL_QUESTIONS
     return ps.currentIndex >= targetScore
+  },
+
+  // 复盘数据：题目与真实答案、每位选手的作答与用时
+  getReplayMeta(state) {
+    const pids = Object.keys(state.playerStates)
+    const src = pids.length ? state.playerStates[pids[0]] : null
+    const questions = (src?.questions || []).map(q => ({ expression: q.expression, answer: q.answer }))
+    const players = {}
+    for (const pid of pids) {
+      const ps = state.playerStates[pid]
+      players[pid] = {
+        answers: (ps.answers || []).map(a => ({ question: a.question, userAnswer: a.userAnswer, correctAnswer: a.correctAnswer, correct: a.correct })),
+        durationMs: (ps.finishTime && ps.startTime) ? (ps.finishTime - ps.startTime) : null,
+        done: ps.currentIndex >= TOTAL_QUESTIONS
+      }
+    }
+    return { type: 'quick-math', questions, players }
   }
 })

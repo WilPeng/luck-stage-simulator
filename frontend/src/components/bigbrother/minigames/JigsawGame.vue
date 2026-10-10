@@ -169,4 +169,9 @@ p { color: #888; font-size: 14px; }
 .submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .winner-name { font-size: 26px; font-weight: 700; color: #ffaa00; }
 .winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+@media (max-width: 480px) {
+  .jigsaw { padding: 12px; }
+  .countdown-big { font-size: 52px; }
+  .game-icon { font-size: 48px; }
+}
 </style>

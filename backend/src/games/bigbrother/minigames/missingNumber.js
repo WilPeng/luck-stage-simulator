@@ -143,5 +143,13 @@ registerGame({
   describeEvent(state, playerId, action) {
     if (action && action.type === 'submit') return { text: `提交数字：${action.value}` }
     return null
+  },
+
+  getReplayMeta(state) {
+    const players = {}
+    for (const [pid, ps] of Object.entries(state.playerStates)) {
+      players[pid] = { value: ps.value, correct: ps.correct, attempts: ps.attempts || 0, submittedAt: ps.submittedAt }
+    }
+    return { type: 'missing-number', missing: state.missing, cells: state.cells, players }
   }
 })

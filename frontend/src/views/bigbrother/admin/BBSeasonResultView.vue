@@ -93,7 +93,7 @@
             <tr v-for="p in orderedPlayers" :key="p.playerId" class="player-row">
               <td class="label-col player-cell">
                 <div class="player-label">
-                  <span class="player-avatar">{{ (p.name || '?').charAt(0) }}</span>
+                  <BBAvatar :name="p.name" :avatar="avatarMap[p.playerId] || (p as any).avatar || null" size="sm" />
                   <span class="player-name">{{ p.name }}</span>
                   <span v-if="p.status === 'f2'" class="mini-tag f2">F2</span>
                   <span v-else-if="p.status === 'jury'" class="mini-tag jury">jury</span>
@@ -152,10 +152,12 @@
 import { ref, reactive, computed, nextTick, onMounted } from 'vue'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
 import html2canvas from 'html2canvas'
-import { bbGetSeasonSettlement } from '../../../services/bbApi'
+import { bbGetSeasonSettlement, bbGetHouseguests } from '../../../services/bbApi'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBSettlement, BBSettlementRound } from '../../../types/bigbrother'
 
 const settlement = ref<BBSettlement | null>(null)
+const avatarMap = ref<Record<string, string | null>>({})
 const loading = ref(false)
 const theme = ref<'black' | 'white'>('black')
 const themeClass = computed(() => `theme-${theme.value}`)
@@ -470,6 +472,12 @@ async function fetchData() {
   try {
     settlement.value = await bbGetSeasonSettlement()
   } catch { settlement.value = null }
+  try {
+    const res = await bbGetHouseguests({ pageSize: 200 })
+    const m: Record<string, string | null> = {}
+    for (const h of (res?.list || [])) m[h.id] = (h as any).avatar || null
+    avatarMap.value = m
+  } catch {}
   loading.value = false
 }
 

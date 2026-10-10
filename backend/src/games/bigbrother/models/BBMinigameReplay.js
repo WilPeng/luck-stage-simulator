@@ -28,6 +28,8 @@ class BBMinigameReplay extends BaseModel {
     this.winners = data.winners || []
     this.scores = data.scores || {}
     this.finalStates = data.finalStates || {}
+    this.meta = data.meta || null
+    this.snapshots = data.snapshots || []
 
     // 事件日志：[{ t, playerId, playerName, type, text, data }]
     this.events = data.events || []

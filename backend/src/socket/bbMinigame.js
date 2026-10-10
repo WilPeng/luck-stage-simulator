@@ -230,6 +230,13 @@ const initBBMinigameSocket = (io) => {
       // 处理器内部事件（回合结算/淘汰等）
       drainHandlerEvents(minigameNs, room, handler)
 
+      // 记录“明牌快照”（该选手决策后的完整局面，仅复盘可见）
+      try {
+        const p = room.getParticipant(userId)
+        const label = `${p?.playerName || userName} ${data.action && data.action.type ? data.action.type : '操作'}`
+        pushReplaySnapshot(room, handler, label)
+      } catch (e) { /* ignore */ }
+
       // 发送操作结果给该玩家
       const playerState = handler.getState
         ? handler.getState(room.gameState, userId)
@@ -355,6 +362,7 @@ const initBBMinigameSocket = (io) => {
             participants: room.participants.map(p => ({ playerId: p.playerId, playerName: p.playerName }))
           }
         })
+        pushReplaySnapshot(room, handler, '游戏开始')
 
         // 非 balance-bar 游戏：给每个已连接的选手发送各自的 game_state
         if (room.minigameId !== 'balance-bar' && handler.getState) {
@@ -662,6 +670,26 @@ function publicParticipants(room) {
 function broadcastProgress(room, minigameNs) {
   if (!room || room.status === 'finished') return
   try { minigameNs.to(room.roomId).emit('game_progress', buildProgress(room)) } catch (e) { /* ignore */ }
+  // 管理员专属：完整局面（含隐藏信息，仅发给 admin，不泄露给选手）
+  try {
+    const handler = room.handler || getGame(room.minigameId)
+    let view = null
+    if (handler && handler.getReplaySnapshot) view = handler.getReplaySnapshot(room.gameState)
+    if (!view) {
+      const { buildAdminView } = require('../games/bigbrother/minigames/adminViews')
+      view = buildAdminView(room.minigameId, room.gameState)
+    }
+    if (!view && handler && handler.getReplayMeta) view = handler.getReplayMeta(room.gameState)
+    if (view) {
+      minigameNs.fetchSockets().then(socks => {
+        for (const s of socks) {
+          if (s.user && s.user.role === 'admin' && s.rooms.has(room.roomId)) {
+            s.emit('game_admin_view', { roomId: room.roomId, minigameId: room.minigameId, view })
+          }
+        }
+      }).catch(() => {})
+    }
+  } catch (e) { /* ignore */ }
 }
 
 // ===== 对局复盘：事件记录与广播 =====
@@ -696,6 +724,20 @@ function recordAndBroadcast(minigameNs, room, ev) {
   const event = recordEvent(room, ev)
   if (event) minigameNs.to(room.roomId).emit('game_event', event)
   return event
+}
+
+// 记录“明牌快照”：每位选手当前面临决策时的完整局面（含隐藏信息，仅复盘可见）
+function pushReplaySnapshot(room, handler, label) {
+  if (!room || !handler || !handler.getReplaySnapshot) return
+  const s = room.replaySession
+  if (!s) return
+  try {
+    const snap = handler.getReplaySnapshot(room.gameState)
+    if (!snap) return
+    if (!Array.isArray(s.snapshots)) s.snapshots = []
+    s.snapshots.push({ t: Date.now(), label: label || '', data: snap })
+    if (s.snapshots.length > 300) s.snapshots = s.snapshots.slice(-300)
+  } catch (e) { /* ignore */ }
 }
 
 function drainHandlerEvents(minigameNs, room, handler) {

@@ -136,7 +136,7 @@ p { color: #888; font-size: 14px; }
 .game-header { color: #aaa; font-size: 14px; margin-bottom: 12px; }
 .boards { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
 .board-title { color: #8a8aa5; font-size: 13px; margin-bottom: 6px; }
-.grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; width: 320px; max-width: 44vw; }
+.grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; width: min(320px, 88vw); }
 .cell { aspect-ratio: 1/1; border-radius: 3px; border: 1px solid #00000033; }
 .cell.clickable { cursor: pointer; }
 .cell.marked { outline: 3px solid #00ff88; outline-offset: -2px; box-shadow: 0 0 8px #00ff88; }
@@ -148,4 +148,11 @@ p { color: #888; font-size: 14px; }
 .cool-timer { color: #ffaa00; font-size: 20px; font-weight: 700; }
 .winner-name { font-size: 26px; font-weight: 700; color: #ffaa00; }
 .winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+@media (max-width: 480px) {
+  .spot-difference { padding: 12px; }
+  .countdown-big { font-size: 52px; }
+  .game-icon { font-size: 48px; }
+  .boards { gap: 10px; }
+  .submit-btn { padding: 12px 28px; width: 100%; }
+}
 </style>

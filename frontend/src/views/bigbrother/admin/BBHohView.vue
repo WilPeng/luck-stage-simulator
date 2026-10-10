@@ -267,7 +267,7 @@ onMounted(fetchData)
   display: flex; align-items: center; justify-content: center; z-index: 1000;
 }
 .bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; width: 400px; max-width: 90vw; }
-.bb-modal-lg { width: 700px; }
+.bb-modal-lg { width: 700px; max-width: 92vw; }
 .room-status { margin-top: 14px; padding: 10px 16px; background: #ffffff05; border: 1px solid #00ff8822; border-radius: 8px; display: flex; align-items: center; gap: 12px; }
 .room-status.playing { border-color: #00ff88; }
 .room-status.finished { border-color: #ffaa00; }

@@ -32,6 +32,8 @@ function startSession(room) {
     winners: [],
     scores: {},
     finalStates: {},
+    meta: null,          // 仅复盘可见的游戏专属数据（正确答案/回合详情等）
+    snapshots: [],       // 明牌快照：各决策点的完整局面（含隐藏信息，仅复盘可见）
     events: [],
     gameId: 'bigbrother',
     createdAt: new Date().toISOString(),
@@ -73,6 +75,10 @@ async function finalizeSession(room, { winner = null, winners = [], scores = {},
   try {
     s.finalStates = room.handler && room.handler.getAllStates ? room.handler.getAllStates(room.gameState) : {}
   } catch { s.finalStates = {} }
+  // 游戏专属复盘数据（真实答案/回合详情等，仅管理员复盘可见）
+  try {
+    s.meta = room.handler && room.handler.getReplayMeta ? room.handler.getReplayMeta(room.gameState) : null
+  } catch (e) { s.meta = null }
   s.endedAt = new Date().toISOString()
   s.updatedAt = s.endedAt
   sessions.delete(room.roomId)

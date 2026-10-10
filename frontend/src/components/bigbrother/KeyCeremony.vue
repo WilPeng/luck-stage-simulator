@@ -35,7 +35,10 @@
         <div class="box-keys">
           <div v-for="(k, i) in keyCeremony.order" :key="k.playerId" class="kc-key"
             :class="{ drawn: i < keyCeremony.drawnCount, pop: i === keyCeremony.drawnCount - 1 }">
-            <span v-if="i < (keyCeremony.announcedCount || 0)" class="kc-key-name">{{ k.playerName }}</span>
+            <template v-if="i < (keyCeremony.announcedCount || 0)">
+              <BBAvatar :name="k.playerName" :avatar="avatarOf(k.playerId)" size="sm" />
+              <span class="kc-key-name">{{ k.playerName }}</span>
+            </template>
             <span v-else-if="i < keyCeremony.drawnCount" class="kc-key-name">🔑</span>
             <span v-else class="kc-key-lock">🔒</span>
           </div>
@@ -51,7 +54,9 @@
       <div class="kc-risk">
         <div class="kc-risk-title">⚠️ 暂时危险（未被抽出钥匙，共 {{ atRisk.length }} 人）</div>
         <div class="kc-risk-list">
-          <span v-for="p in atRisk" :key="p.playerId" class="kc-risk-chip">{{ p.playerName }}</span>
+          <span v-for="p in atRisk" :key="p.playerId" class="kc-risk-chip">
+            <BBAvatar :name="p.playerName" :avatar="avatarOf(p.playerId)" size="sm" />{{ p.playerName }}
+          </span>
           <span v-if="!atRisk.length" class="kc-risk-empty">无</span>
         </div>
       </div>
@@ -79,20 +84,8 @@
 
       <div v-else class="kc-done">🔑 所有钥匙已抽完</div>
 
-      <!-- 类聊天框：宣布记录 -->
-      <div class="kc-chat">
-        <div class="kc-chat-title">💬 宣布记录</div>
-        <div class="kc-chat-body">
-          <div v-for="(m, i) in keyCeremony.messages" :key="i" class="kc-msg">
-            <BBAvatar :name="m.playerName" size="sm" />
-            <div class="kc-msg-body">
-              <div class="kc-sender">{{ m.playerName }}</div>
-              <div class="kc-bubble">{{ m.text }}</div>
-            </div>
-          </div>
-          <div v-if="!keyCeremony.messages?.length" class="kc-empty">暂无宣布</div>
-        </div>
-      </div>
+      <!-- 宣布记录：直接加载餐厅聊天（仅本人可见范围内的消息） -->
+      <CeremonyChat room-id="dining_room" title="💬 宣布记录（餐厅）" empty-text="暂无宣布" />
 
       <div v-if="(keyCeremony.announcedCount || 0) >= keyCeremony.order.length" class="kc-nominees">
         🎯 被提名者：<strong>{{ (keyCeremony.nominees || []).map(n => n.playerName).join('、') }}</strong>
@@ -140,13 +133,14 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import BBAvatar from './BBAvatar.vue'
+import CeremonyChat from './CeremonyChat.vue'
 
 const props = defineProps<{
   keyCeremony: any | null
   myId: string
   isAdmin?: boolean
   isHoh?: boolean
-  eligible: { id: string; name: string }[]
+  eligible: { id: string; name: string; avatar?: string | null }[]
   nomineeCount: number
   submitting?: boolean
   drawing?: boolean
@@ -164,6 +158,13 @@ const selectedNominees = ref<string[]>([])
 const safeOrder = ref<string[]>([])
 const announceText = ref('')
 const nomineeOrderList = ref<any[]>([])
+
+// 头像查询（依据 eligible 列表中的 id → avatar）
+function avatarOf(id?: string | null): string | null {
+  if (!id) return null
+  const found = props.eligible.find(e => e.id === id)
+  return (found as any)?.avatar || null
+}
 
 // 发言稿：浏览器本地保存（开场发言 + 提名原因）
 const LS_OPEN = 'bb_nom_draft_opening'
@@ -338,7 +339,7 @@ onMounted(() => {
 .kc-box { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
 .box-icon { font-size: 44px; }
 .box-keys { display: flex; flex-wrap: wrap; gap: 8px; }
-.kc-key { min-width: 64px; padding: 8px 12px; border-radius: 8px; background: #ffffff08; border: 1px solid #ffffff18; color: #666; font-size: 13px; text-align: center; }
+.kc-key { min-width: 64px; padding: 8px 12px; border-radius: 8px; background: #ffffff08; border: 1px solid #ffffff18; color: #666; font-size: 13px; text-align: center; display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
 .kc-key.drawn { background: #ffaa0018; border-color: #ffaa00; color: #ffaa00; font-weight: 600; }
 .kc-key.pop { animation: keyPop 0.6s ease; }
 @keyframes keyPop { 0% { transform: scale(0.3) rotate(-20deg); opacity: 0; } 60% { transform: scale(1.15) rotate(6deg); } 100% { transform: scale(1) rotate(0); opacity: 1; } }
@@ -347,7 +348,7 @@ onMounted(() => {
 .kc-risk { background: #ff444410; border: 1px solid #ff444433; border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
 .kc-risk-title { font-size: 13px; color: #ff6b6b; margin-bottom: 8px; }
 .kc-risk-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.kc-risk-chip { padding: 4px 12px; border-radius: 8px; background: #ff444422; border: 1px solid #ff444455; color: #ff8a8a; font-size: 13px; }
+.kc-risk-chip { padding: 4px 12px; border-radius: 8px; background: #ff444422; border: 1px solid #ff444455; color: #ff8a8a; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
 .kc-risk-empty { color: #666; font-size: 13px; }
 .kc-announce { background: #ffaa0012; border: 1px solid #ffaa0044; border-radius: 10px; padding: 12px; margin-bottom: 14px; }
 .kc-revealed { font-size: 15px; color: #e0e0e0; margin-bottom: 10px; }
