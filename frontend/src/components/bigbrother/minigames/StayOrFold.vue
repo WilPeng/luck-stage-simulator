@@ -25,11 +25,14 @@
 
       <div v-if="!aliveMe" class="spectator-banner">你已被淘汰，进入观战模式（无法参与后续估算与 Stay/Fold）</div>
 
-      <!-- 展示散点图 -->
+      <!-- 展示散点图（自动匀速滚动，不可手动滑动；首尾各静止 1s） -->
       <div v-if="phase === 'show'" class="phase-block">
-        <div class="phase-tip">👀 记住图中各 emoji 的数量（{{ secondsLeft }}s）</div>
-        <div class="emoji-grid">
-          <span v-for="(e, i) in grid" :key="i" class="emoji-cell">{{ e }}</span>
+        <div class="phase-tip">👀 观察并记住图中各 emoji 的数量（{{ secondsLeft }}s）</div>
+        <div class="emoji-viewport" ref="viewportRef">
+          <div class="emoji-grid" ref="gridRef"
+            :style="{ transform: `translateY(${-scrollOffset}px)`, gridTemplateColumns: `repeat(${columns}, 1fr)` }">
+            <span v-for="(e, i) in grid" :key="i" class="emoji-cell">{{ e }}</span>
+          </div>
         </div>
       </div>
 
@@ -106,6 +109,43 @@ const { gameState, countdown, winner, finished, connect, sendAction, disconnect 
 const inputValue = ref<number | null>(null)
 const submitting = ref(false)
 
+// ===== 散点图自动滚动（固定列数 = 每行 emoji 数相等 → 不同响应式下滚动速度一致） =====
+const columns = 16
+const scrollOffset = ref(0)
+const viewportRef = ref<HTMLElement | null>(null)
+const gridRef = ref<HTMLElement | null>(null)
+let rafId: number | null = null
+const SCROLL_SPEED = 26 // px/s（匀速）
+
+function stopScroll() { if (rafId != null) { cancelAnimationFrame(rafId); rafId = null } }
+function startScroll() {
+  stopScroll()
+  scrollOffset.value = 0
+  const viewport = viewportRef.value
+  const gridEl = gridRef.value
+  if (!viewport || !gridEl) return
+  const distance = Math.max(0, gridEl.scrollHeight - viewport.clientHeight)
+  if (distance <= 0) return
+  const PAUSE = 1000
+  const scrollMs = (distance / SCROLL_SPEED) * 1000
+  let stage: 'top' | 'scroll' | 'bottom' = 'top'
+  let t0 = performance.now()
+  const step = (now: number) => {
+    const dt = now - t0
+    if (stage === 'top') {
+      if (dt >= PAUSE) { stage = 'scroll'; t0 = now }
+    } else if (stage === 'scroll') {
+      const p = Math.min(1, dt / scrollMs)
+      scrollOffset.value = distance * p
+      if (p >= 1) { stage = 'bottom'; t0 = now }
+    } else {
+      if (dt >= PAUSE) { stage = 'top'; t0 = now; scrollOffset.value = 0 }
+    }
+    rafId = requestAnimationFrame(step)
+  }
+  rafId = requestAnimationFrame(step)
+}
+
 const state = computed<any>(() => gameState.value || {})
 const started = computed(() => !!state.value.started)
 const phase = computed(() => state.value.phase || 'show')
@@ -125,6 +165,12 @@ const myScore = computed(() => state.value.myScore || 0)
 const targetPoints = computed(() => state.value.targetPoints || 3)
 const secondsLeft = computed(() => state.value.secondsLeft || 0)
 const lastResult = computed(() => state.value.lastResult || null)
+
+// 阶段切换：展示阶段启用自动滚动，其余停止
+watch(phase, (p) => {
+  if (p === 'show') requestAnimationFrame(() => startScroll())
+  else stopScroll()
+}, { immediate: true })
 
 function nameOf(pid: string): string {
   return props.participants.find(p => p.playerId === pid)?.playerName || pid.slice(0, 4)
@@ -149,7 +195,7 @@ watch(phase, (p) => { if (p !== 'estimate') inputValue.value = null })
 watch(finished, (val) => { if (val && winner.value) emit('finished', winner.value) })
 
 onMounted(() => { connect() })
-onUnmounted(() => { disconnect() })
+onUnmounted(() => { stopScroll(); disconnect() })
 </script>
 
 <style scoped>
@@ -166,7 +212,9 @@ p { color: #888; font-size: 14px; }
 .phase-block { margin-bottom: 14px; }
 .phase-tip { color: #d6e4ff; font-size: 15px; margin-bottom: 12px; }
 .target-emoji { font-size: 26px; }
-.emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, 22px); gap: 2px; justify-content: center; background: #0b0b1c; border: 1px solid #00ff8822; border-radius: 8px; padding: 8px; max-height: 340px; overflow: auto; }
+.emoji-viewport { height: min(340px, 46vh); overflow: hidden; background: #0b0b1c; border: 1px solid #00ff8822; border-radius: 8px; padding: 8px; box-sizing: border-box; }
+.emoji-grid { display: grid; gap: 2px; width: 100%; will-change: transform; }
+.emoji-cell { font-size: 16px; line-height: 22px; text-align: center; }
 .emoji-cell { font-size: 16px; line-height: 22px; text-align: center; }
 .answer-area { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
 .ans-input { width: 180px; padding: 12px 14px; font-size: 16px; text-align: center; background: #0a1a10; border: 1px solid #00ff8844; border-radius: 8px; color: #e0e0e0; outline: none; }

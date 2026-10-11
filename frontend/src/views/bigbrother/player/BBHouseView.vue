@@ -1,5 +1,11 @@
 <template>
   <div class="bb-house">
+    <!-- 位置未确定前，全屏 loading，避免默认显示 living_room -->
+    <div v-if="!locationLoaded" class="house-loading-overlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">正在确定你的位置…</div>
+    </div>
+
     <div class="page-header">
       <h1>🏠 BB House</h1>
       <div class="header-meta">
@@ -199,6 +205,7 @@ const seasonStore = useBbSeasonStore()
 const house = useHouseSocket()
 
 const currentRoomId = ref('living_room')
+const locationLoaded = ref(false)
 const rooms = ref<BBHouseRoomWithCount[]>([])
 const reachableRooms = ref<any[]>([])
 const houseLocked = ref(false)
@@ -439,6 +446,7 @@ async function loadData() {
     backyardDoorOpen.value = reachableRes?.backyardDoorOpen ?? true
     hohDoorOpen.value = reachableRes?.hohDoorOpen ?? false
     house.currentRoomId.value = currentRoomId.value
+    locationLoaded.value = true
 
     // 睡眠/洗澡状态
     try { myState.value = await bbGetMyState() } catch {}
@@ -477,6 +485,7 @@ async function loadData() {
     await loadPhotoWall()
   } catch (e) {
     console.error('[BBHouse] Load data error:', e)
+    locationLoaded.value = true
   }
 }
 
@@ -600,6 +609,10 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   max-width: 1200px;
   margin: 0 auto;
 }
+.house-loading-overlay { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #1a1a2e; }
+.loading-spinner { width: 36px; height: 36px; border: 3px solid #00ff8822; border-top-color: #00ff88; border-radius: 50%; animation: hspin 0.8s linear infinite; }
+.loading-text { color: #9fb3d1; font-size: 14px; }
+@keyframes hspin { to { transform: rotate(360deg); } }
 .page-header {
   display: flex;
   align-items: center;

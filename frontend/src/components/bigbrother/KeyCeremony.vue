@@ -141,6 +141,7 @@ const props = defineProps<{
   isAdmin?: boolean
   isHoh?: boolean
   eligible: { id: string; name: string; avatar?: string | null }[]
+  avatars?: { id: string; name: string; avatar?: string | null }[]
   nomineeCount: number
   submitting?: boolean
   drawing?: boolean
@@ -159,10 +160,10 @@ const safeOrder = ref<string[]>([])
 const announceText = ref('')
 const nomineeOrderList = ref<any[]>([])
 
-// 头像查询（依据 eligible 列表中的 id → avatar）
+// 头像查询（优先用全量列表，含自己；回退 eligible）
 function avatarOf(id?: string | null): string | null {
   if (!id) return null
-  const found = props.eligible.find(e => e.id === id)
+  const found = (props.avatars || []).find(e => e.id === id) || props.eligible.find(e => e.id === id)
   return (found as any)?.avatar || null
 }
 

@@ -1483,6 +1483,22 @@ router.post('/endgame/champion-reveal/reset', auth, requireAdmin, async (req, re
   }
 })
 
+// POST /summon - 管理员召集所有选手到指定页面（path）
+router.post('/summon', auth, requireAdmin, async (req, res) => {
+  try {
+    const { path } = req.body || {}
+    if (!path || typeof path !== 'string' || !path.startsWith('/games/bigbrother/')) {
+      return res.status(400).json({ success: false, error: '无效的目标页面', code: 'BAD_PATH' })
+    }
+    const { broadcastBBGame } = require('../../../socket/bbGame')
+    broadcastBBGame('bb:summon', { path, at: Date.now(), by: req.user?.name || 'admin' })
+    res.json({ success: true, data: { path } })
+  } catch (e) {
+    console.error('Summon error:', e)
+    res.status(500).json({ success: false, error: '召集失败', code: 'SERVER_ERROR' })
+  }
+})
+
 module.exports = router
 
 

@@ -466,8 +466,8 @@ router.post('/key-setup', auth, async (req, res) => {
       createdAt: new Date().toISOString()
     })
     await doc.save()
-    // 提名仪式在餐厅进行：把在线玩家移动到餐厅
-    try { await moveAllToRoom('dining_room', '提名仪式开始') } catch (e) { /* ignore */ }
+    // 提名仪式在餐厅进行：把在线玩家移动到餐厅（后台执行，不阻塞设置接口响应）
+    moveAllToRoom('dining_room', '提名仪式开始').catch(() => {})
     broadcastBBGame('bb:key-ceremony', { roundId, keyCeremony: doc.keyCeremony, nomineeIds: doc.nomineeIds, nomineeNames: doc.nomineeNames })
     res.json({ success: true, data: doc.toObject() })
   } catch (e) {
@@ -539,7 +539,7 @@ router.post('/key-announce', auth, async (req, res) => {
     doc.updatedAt = new Date().toISOString()
     await doc.save()
     // 同步到餐厅聊天记录（提名仪式在餐厅进行）
-    await postRoomMessage('dining_room', { senderId: drawerId, senderName: drawerName, content: msg })
+    postRoomMessage('dining_room', { senderId: drawerId, senderName: drawerName, content: msg }).catch(() => {})
     broadcastBBGame('bb:key-ceremony', { roundId, keyCeremony: kc, nomineeIds: doc.nomineeIds, nomineeNames: doc.nomineeNames })
     res.json({ success: true, data: doc.toObject() })
   } catch (e) {
@@ -601,7 +601,7 @@ router.post('/key-speech', auth, async (req, res) => {
     doc.updatedAt = new Date().toISOString()
     await doc.save()
     // 同步到餐厅聊天记录
-    await postRoomMessage('dining_room', { senderId: kc.hohId, senderName: kc.hohName, content })
+    postRoomMessage('dining_room', { senderId: kc.hohId, senderName: kc.hohName, content }).catch(() => {})
     broadcastBBGame('bb:key-ceremony', { roundId, keyCeremony: kc, nomineeIds: doc.nomineeIds, nomineeNames: doc.nomineeNames })
     res.json({ success: true, data: doc.toObject() })
   } catch (e) {

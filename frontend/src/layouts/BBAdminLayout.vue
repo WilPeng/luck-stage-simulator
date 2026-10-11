@@ -9,6 +9,7 @@
         <div class="header-info">
           <span class="stage-tag">{{ stageDisplay }}</span>
           <span class="user-name">{{ authStore.currentUser?.name }}</span>
+          <button class="bb-btn bb-btn-sm bb-btn-summon" @click="summonPlayers">📢 召集</button>
           <button class="bb-btn bb-btn-sm" @click="handleLogout">退出</button>
         </div>
         <button class="mobile-menu-btn" @click="mobileMenuOpen = !mobileMenuOpen">
@@ -85,6 +86,7 @@ import { useBbSeasonStore } from '../stores/bbSeasonStore'
 import { useBbRealtimeStore } from '../stores/bbRealtimeStore'
 import { BB_STAGE_NAME, type BBStageType } from '../types/bigbrother'
 import { applyGamePageMeta } from '../router'
+import { bbSummonPage } from '../services/bbApi'
 
 const router = useRouter()
 const route = useRoute()
@@ -263,6 +265,21 @@ function navigateToStage(round: number, stage: BBStageType) {
 async function nextStage() {
   mobileMenuOpen.value = false
   await seasonStore.nextStage()
+}
+
+async function summonPlayers() {
+  const cur = route.path
+  let playerPath = '/games/bigbrother/player/home'
+  const roundMatch = cur.match(/\/admin\/round\/(\d+)\/([a-z-]+)/)
+  if (roundMatch) {
+    playerPath = `/games/bigbrother/player/round/${roundMatch[1]}/${roundMatch[2]}`
+  } else if (cur.includes('/admin/endgame') || cur.includes('/admin/season-result')) {
+    playerPath = '/games/bigbrother/player/finale'
+  } else if (cur.includes('/admin/house')) {
+    playerPath = '/games/bigbrother/player/house'
+  }
+  try { await bbSummonPage(playerPath); alert('已召集所有选手前往该页面') }
+  catch (e: any) { alert(e?.message || '召集失败') }
 }
 
 async function handleLogout() {

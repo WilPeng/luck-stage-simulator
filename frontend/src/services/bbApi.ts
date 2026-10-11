@@ -419,6 +419,11 @@ export async function bbUndoReplacement(): Promise<void> {
   return doRequest<void>('/nomination/replace/undo', { method: 'POST' })
 }
 
+// 召集所有选手到指定页面
+export async function bbSummonPage(path: string): Promise<void> {
+  return doRequest<void>('/season/summon', { method: 'POST', body: JSON.stringify({ path }) })
+}
+
 export async function bbGetNominationHistory(): Promise<BBNomination[]> {
   return doRequest<BBNomination[]>('/nomination/history')
 }
@@ -502,7 +507,7 @@ export async function bbCastVote(targetId: string, targetName: string, voterId?:
 }
 
 export async function bbGetMyVote(): Promise<BBEvictionVote | null> {
-  return doRequest<BBEvictionVote | null>('/eviction/my-vote', { method: 'POST' })
+  return doRequest<BBEvictionVote | null>('/eviction/my-vote')
 }
 
 export async function bbAnnounceEviction(): Promise<BBEviction> {

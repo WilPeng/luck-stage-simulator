@@ -37,6 +37,7 @@
       :myId="authStore.currentUser?.id || ''"
       :isHoh="isCurrentHoh"
       :eligible="keyEligible"
+      :avatars="activeList"
       :nomineeCount="nomineeCount"
       :submitting="submittingKey"
       :drawing="drawingKey"
@@ -135,9 +136,12 @@ const announcingKey = ref(false)
 const nomineeCount = computed(() => needThree.value ? 3 : 2)
 const keyEligible = computed(() => activeList.value.filter(h => h.id !== authStore.currentUser?.id))
 // 提名仪式是否已结束（HOH 结束发言后才公布被提名者）
+const nominationLoaded = ref(false)
 const ceremonyDone = computed(() => {
+  // 数据未加载完成前，绝不展示被提名者（避免慢网速下剧透）
+  if (!nominationLoaded.value) return false
   const kc = keyCeremony.value
-  if (!kc) return true
+  if (!kc) return true // 无钥匙仪式（旧流程）时直接展示
   return !!kc.ended
 })
 async function onKeySetup(payload: { nominees: string[]; order: string[] }) {
@@ -189,6 +193,8 @@ async function refreshNomination() {
       keyCeremony.value = nom.keyCeremony || null
     }
   } catch {}
+  // 状态确认完成（含失败也标记，避免一直空白）；仅在成功后才允许展示
+  nominationLoaded.value = true
 }
 
 // 提名仪式逐句环节：只增量更新仪式状态，不整页重载

@@ -103,8 +103,8 @@ router.post('/vote', async (req, res) => {
   }
 })
 
-// POST /my-vote - 获取当前用户投票
-router.post('/my-vote', async (req, res) => {
+// GET /my-vote - 获取当前用户投票（只读，避免触发全局写广播导致前端反复刷新）
+router.get('/my-vote', async (req, res) => {
   try {
     const authHeader = req.header('Authorization')
     if (!authHeader) return res.status(401).json({ success: false, error: '未认证', code: 'NO_TOKEN' })

@@ -36,6 +36,16 @@
       </div>
     </div>
 
+    <!-- 管理员召集：召集所有选手到指定页面 -->
+    <div v-if="pageSummonNotice" class="bb-broadcast-overlay" @click.self="pageSummonNotice = null">
+      <div class="bb-broadcast-modal">
+        <div class="bb-broadcast-icon">📢</div>
+        <div class="bb-broadcast-title">管理员召集</div>
+        <div class="bb-broadcast-msg">管理员召集大家前往「{{ pageSummonName }}」页面，已为你切换。</div>
+        <button class="bb-btn" @click="pageSummonNotice = null">知道了</button>
+      </div>
+    </div>
+
     <header class="bb-player-header">      <div class="header-content">
         <div class="logo-section">
           <span class="logo-icon">📹</span>
@@ -121,6 +131,24 @@ const summonNotice = ref<any>(null)
 watch(() => realtime.lastMinigameSummon, (s) => {
   if (!s || !s.path) return
   summonNotice.value = s
+  try { if (router.currentRoute.value.path !== s.path) router.push(s.path) } catch {}
+})
+
+// 管理员「召集到页面」
+const pageSummonNotice = ref<any>(null)
+const PAGE_NAME: Record<string, string> = {
+  home: '首页', profile: '我的资料', house: 'BB House', history: '历史记录', finale: '终局',
+  hoh: 'HOH 竞争', nomination: '提名仪式', 'veto-competition': '否决权竞争', 'veto-ceremony': '否决权会议',
+  'replacement-nom': '替换提名', bbbb: 'BBBB', 'eviction-vote': '淘汰投票', eviction: '淘汰结果'
+}
+const pageSummonName = computed(() => {
+  const p = pageSummonNotice.value?.path || ''
+  const seg = p.split('/').pop() || ''
+  return PAGE_NAME[seg] || seg || '指定'
+})
+watch(() => realtime.lastSummon, (s) => {
+  if (!s || !s.path) return
+  pageSummonNotice.value = s
   try { if (router.currentRoute.value.path !== s.path) router.push(s.path) } catch {}
 })
 

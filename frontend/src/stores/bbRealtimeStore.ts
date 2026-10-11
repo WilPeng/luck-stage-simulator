@@ -22,6 +22,7 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
   const lastVetoCard = ref<{ roundId: string; cardDraw: any } | null>(null)
   const lastEvictionNight = ref<any>(null)
   const lastMinigameSummon = ref<any>(null)
+  const lastSummon = ref<{ path: string; at: number; by?: string } | null>(null)
   const lastKeyCeremony = ref<{ roundId: string; keyCeremony: any; nomineeIds: string[]; nomineeNames: string[] } | null>(null)
 
   let socket: Socket | null = null
@@ -109,6 +110,10 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
       lastKeyCeremony.value = data
       bump()
     })
+    socket.on('bb:summon', (data: any) => {
+      lastSummon.value = data
+      bump()
+    })
   }
 
   function clearBroadcast() { lastBroadcast.value = null }
@@ -118,5 +123,5 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
     connected.value = false
   }
 
-  return { tick, stageTick, connected, lastBroadcast, lastEvictionAnnounce, lastVetoCard, lastEvictionNight, lastMinigameSummon, lastKeyCeremony, connect, disconnect, bump, clearBroadcast, vetoDeal, vetoDraw }
+  return { tick, stageTick, connected, lastBroadcast, lastEvictionAnnounce, lastVetoCard, lastEvictionNight, lastMinigameSummon, lastKeyCeremony, lastSummon, connect, disconnect, bump, clearBroadcast, vetoDeal, vetoDraw }
 })
