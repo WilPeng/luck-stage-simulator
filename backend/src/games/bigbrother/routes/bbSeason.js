@@ -369,6 +369,12 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
       if (h.role !== 'admin') {
         h.status = 'active'
         h.hasLogin = false
+        // 重置后清除睡眠/洗澡状态，避免新赛季房客无法移动/发言
+        h.isSleeping = false
+        h.sleepStartedAt = null
+        h.wakeAt = null
+        h.isShowering = false
+        h.showerStartedAt = null
         await h.save()
       }
     }
