@@ -967,8 +967,8 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
 
     const rooms = await BBHouseRoom.find({ gameId })
     const guests = await BBHouseguest.find({ gameId })
-    const nameById = {}
-    guests.forEach(g => { nameById[g.id] = g.name })
+    const guestById = {}
+    guests.forEach(g => { guestById[g.id] = { playerId: g.id, name: g.name, avatar: g.avatar || null } })
 
     // 位置历史按房间分组
     const history = await BBLocationHistory.find({ gameId })
@@ -985,9 +985,11 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
       for (const iv of ivs) {
         const from = new Date(iv.from).getTime()
         const to = iv.to ? new Date(iv.to).getTime() : Infinity
-        if (t >= from && t <= to) seen.add(nameById[iv.playerId] || iv.playerId)
+        // 仅统计仍存在的房客，过滤已删除/已不存在的历史记录
+        if (t >= from && t <= to && guestById[iv.playerId]) seen.add(iv.playerId)
       }
-      return { ...m.toObject(), seenBy: Array.from(seen) }
+      const seenBy = Array.from(seen).map(id => guestById[id])
+      return { ...m.toObject(), seenBy }
     })
 
     res.json({ success: true, data: { rooms: rooms.map(r => r.toObject()), messages: result } })

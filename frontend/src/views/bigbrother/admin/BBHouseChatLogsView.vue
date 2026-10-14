@@ -38,7 +38,12 @@
                   👁 {{ (m.seenBy || []).length }} 人看到 {{ expanded === m.id ? '▲' : '▼' }}
                 </div>
                 <div v-if="expanded === m.id" class="seen-detail">
-                  {{ (m.seenBy || []).join('、') || '（消息发出时无人在房间）' }}
+                  <div v-if="(m.seenBy || []).length" class="seen-avatars">
+                    <div v-for="v in m.seenBy" :key="v.playerId || v" class="seen-avatar" :title="v.name || v">
+                      <BBAvatar :name="v.name || String(v)" :avatar="v.avatar || null" size="sm" />
+                    </div>
+                  </div>
+                  <span v-else class="seen-empty">（消息发出时无人在房间）</span>
                 </div>
               </div>
             </div>
@@ -156,6 +161,9 @@ onUnmounted(() => {
 .bubble { display: inline-block; max-width: 80%; background: #16163a; border: 1px solid #ffffff12; border-radius: 4px 12px 12px 12px; padding: 9px 14px; color: #e6e6f5; font-size: 14px; line-height: 1.5; word-break: break-word; }
 .seen { font-size: 11px; color: #666; margin-top: 4px; cursor: pointer; }
 .seen:hover { color: #ffaa00; }
-.seen-detail { margin-top: 4px; font-size: 12px; color: #ffaa00; background: #ffaa0012; border-radius: 6px; padding: 5px 10px; display: inline-block; }
+.seen-detail { margin-top: 4px; font-size: 12px; color: #ffaa00; background: #ffaa0012; border-radius: 6px; padding: 6px 10px; display: inline-block; }
+.seen-avatars { display: flex; flex-wrap: wrap; gap: 6px; }
+.seen-avatar { display: inline-flex; }
+.seen-empty { color: #8a8aa5; }
 .empty { color: #666; padding: 40px; text-align: center; }
 </style>

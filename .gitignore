@@ -7,6 +7,9 @@ frontend/dist/
 *.zip
 .codebuddy/plans/
 
+# 运行时上传文件（头像/图片等），不入库
+backend/uploads/
+
 # 环境变量：本地用本地、云端用云端，不纳入版本管理
 .env
 .env.*

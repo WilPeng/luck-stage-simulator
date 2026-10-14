@@ -381,6 +381,9 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
 
     // 重置后全部房客移动到「初入屋」(prehouse)
     const BBPlayerLocation = require('../models/BBPlayerLocation')
+    const { getCollection: getCol } = require('../../../config/db')
+    // 清除位置历史，避免历史记录里的旧玩家影响“谁看过消息”等统计
+    await getCol('BBLocationHistory').deleteMany({ gameId: 'bigbrother' })
     await BBPlayerLocation.deleteMany({ gameId: 'bigbrother' })
     const nowIso = new Date().toISOString()
     for (const h of houseguests) {
