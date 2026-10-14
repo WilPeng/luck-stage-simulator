@@ -30,7 +30,7 @@
         <div class="phase-tip">👀 观察并记住图中各 emoji 的数量（{{ secondsLeft }}s）</div>
         <div class="emoji-viewport" ref="viewportRef">
           <div class="emoji-grid" ref="gridRef"
-            :style="{ transform: `translateY(${-scrollOffset}px)`, gridTemplateColumns: `repeat(${columns}, 1fr)` }">
+            :style="{ transform: `translateY(${-scrollOffset}px)`, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }">
             <span v-for="(e, i) in grid" :key="i" class="emoji-cell">{{ e }}</span>
           </div>
         </div>
@@ -212,10 +212,9 @@ p { color: #888; font-size: 14px; }
 .phase-block { margin-bottom: 14px; }
 .phase-tip { color: #d6e4ff; font-size: 15px; margin-bottom: 12px; }
 .target-emoji { font-size: 26px; }
-.emoji-viewport { height: min(340px, 46vh); overflow: hidden; background: #0b0b1c; border: 1px solid #00ff8822; border-radius: 8px; padding: 8px; box-sizing: border-box; }
-.emoji-grid { display: grid; gap: 2px; width: 100%; will-change: transform; }
-.emoji-cell { font-size: 16px; line-height: 22px; text-align: center; }
-.emoji-cell { font-size: 16px; line-height: 22px; text-align: center; }
+.emoji-viewport { width: 100%; height: min(340px, 46vh); overflow: hidden; background: #0b0b1c; border: 1px solid #00ff8822; border-radius: 8px; padding: 8px; box-sizing: border-box; }
+.emoji-grid { display: grid; gap: 2px; width: 100%; max-width: 100%; will-change: transform; }
+.emoji-cell { min-width: 0; overflow: hidden; font-size: clamp(10px, 2.4vw, 16px); line-height: 1.3; text-align: center; }
 .answer-area { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
 .ans-input { width: 180px; padding: 12px 14px; font-size: 16px; text-align: center; background: #0a1a10; border: 1px solid #00ff8844; border-radius: 8px; color: #e0e0e0; outline: none; }
 .ans-input:focus { border-color: #00ff88; }
@@ -246,6 +245,5 @@ p { color: #888; font-size: 14px; }
   .stay-or-fold { padding: 12px; }
   .countdown-big { font-size: 52px; }
   .game-icon { font-size: 48px; }
-  .emoji-grid { grid-template-columns: repeat(auto-fill, 20px); }
 }
 </style>

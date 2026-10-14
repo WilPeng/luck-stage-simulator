@@ -46,20 +46,27 @@ router.get('/map', auth, async (req, res) => {
 // GET /rooms - 获取所有房间（人数仅对管理员/当前 HOH 可见）
 router.get('/rooms', auth, async (req, res) => {
   try {
-    const rooms = await BBHouseRoom.find({ gameId: 'bigbrother' })
     const isAdmin = req.user.role === 'admin'
+    const [rooms, loc] = await Promise.all([
+      BBHouseRoom.find({ gameId: 'bigbrother' }),
+      BBPlayerLocation.findOne({ playerId: req.user.userId, gameId: 'bigbrother' })
+    ])
     // 身处 HOH 房的房客（含 HOH）可见人数
-    const loc = await BBPlayerLocation.findOne({ playerId: req.user.userId, gameId: 'bigbrother' })
     const inHohRoom = !!(loc && loc.currentRoomId === 'hoh_room')
     const showCounts = isAdmin || inHohRoom
 
-    const result = []
-    for (const room of rooms) {
-      const count = showCounts
-        ? await BBPlayerLocation.countDocuments({ currentRoomId: room.id, gameId: 'bigbrother' })
-        : null
-      result.push({ ...room.toObject(), currentCount: count })
+    // 一次聚合拿到各房间人数，避免逐房间 countDocuments 的 N+1 查询
+    let counts = {}
+    if (showCounts) {
+      const { getCollection } = require('../../../config/db')
+      const rows = await getCollection('BBPlayerLocation').aggregate([
+        { $match: { gameId: 'bigbrother' } },
+        { $group: { _id: '$currentRoomId', n: { $sum: 1 } } }
+      ]).toArray()
+      for (const r of rows) counts[r._id] = r.n
     }
+
+    const result = rooms.map(room => ({ ...room.toObject(), currentCount: showCounts ? (counts[room.id] || 0) : null }))
     res.json({ success: true, data: result })
   } catch (e) {
     console.error(e)
@@ -141,12 +148,21 @@ router.get('/my-location', auth, async (req, res) => {
 // GET /reachable - 获取从当前位置可达的房间
 router.get('/reachable', auth, async (req, res) => {
   try {
-    const loc = await BBPlayerLocation.findOne({ playerId: req.user.userId, gameId: 'bigbrother' })
+    const { getCollection } = require('../../../config/db')
+    const [loc, rooms, doors, hoh, countRows] = await Promise.all([
+      BBPlayerLocation.findOne({ playerId: req.user.userId, gameId: 'bigbrother' }),
+      BBHouseRoom.find({ gameId: 'bigbrother' }),
+      BBHouseDoor.find({ gameId: 'bigbrother' }),
+      getCurrentHoh(),
+      getCollection('BBPlayerLocation').aggregate([
+        { $match: { gameId: 'bigbrother' } },
+        { $group: { _id: '$currentRoomId', n: { $sum: 1 } } }
+      ]).toArray()
+    ])
     const currentRoomId = loc?.currentRoomId || 'living_room'
-    const reachableIds = await getReachableRooms(currentRoomId, { BBHousePassage, BBHouseDoor })
+    const counts = {}
+    for (const r of countRows) counts[r._id] = r.n
 
-    // 获取可达房间的详细信息（含权限检查）
-    const rooms = await BBHouseRoom.find({ gameId: 'bigbrother' })
     const roomMap = {}
     rooms.forEach(r => { roomMap[r.id] = r })
 
@@ -158,55 +174,52 @@ router.get('/reachable', auth, async (req, res) => {
       })
     }
 
-    const player = await BBHouseguest.findOne({ id: req.user.userId, gameId: 'bigbrother' })
-    const hoh = await getCurrentHoh()
     const hohId = hoh ? hoh.id : null
 
-    const reachable = await Promise.all(
-      reachableIds
-        .filter(id => roomMap[id] && roomMap[id].accessRule !== 'admin_only')
-        .map(async id => {
-          const room = roomMap[id]
-          let canEnter = true
-          let denyReason = ''
+    // 复用已取的 passages/doors 计算可达（避免重复查询）
+    const doorMap = {}
+    doors.forEach(d => { doorMap[d.id] = d })
+    const passages = await BBHousePassage.find({ gameId: 'bigbrother' })
+    const reachableIds = []
+    for (const p of passages) {
+      let target = null
+      if (p.from === currentRoomId) target = p.to
+      else if (p.to === currentRoomId) target = p.from
+      if (!target) continue
+      if (p.type === 'door' && p.doorId) {
+        const door = doorMap[p.doorId]
+        if (door && !door.isOpen) continue
+      }
+      reachableIds.push(target)
+    }
 
-          if (room.accessRule === 'hoh_only') {
-            if (hohId !== req.user.userId) {
-              canEnter = false
-              denyReason = '仅 HOH 可进入'
-            }
-          } else if (room.accessRule === 'hoh_or_invited') {
-            if (hohId !== req.user.userId) {
-              canEnter = false
-              denyReason = '需要 HOH 邀请'
-            }
-          } else if (room.accessRule === 'have_not_only') {
-            // 任何人（无论是否 Have-Not）都可进入贫民屋
-          } else if (room.accessRule === 'single') {
-            const count = await BBPlayerLocation.countDocuments({ currentRoomId: id, gameId: 'bigbrother' })
-            if (count >= 1) {
-              canEnter = false
-              denyReason = '已有人在内'
-            }
-          }
+    const reachable = reachableIds
+      .filter(id => roomMap[id] && roomMap[id].accessRule !== 'admin_only')
+      .map(id => {
+        const room = roomMap[id]
+        let canEnter = true
+        let denyReason = ''
+        if (room.accessRule === 'hoh_only') {
+          if (hohId !== req.user.userId) { canEnter = false; denyReason = '仅 HOH 可进入' }
+        } else if (room.accessRule === 'hoh_or_invited') {
+          if (hohId !== req.user.userId) { canEnter = false; denyReason = '需要 HOH 邀请' }
+        } else if (room.accessRule === 'have_not_only') {
+          // 任何人（无论是否 Have-Not）都可进入贫民屋
+        } else if (room.accessRule === 'single') {
+          if ((counts[id] || 0) >= 1) { canEnter = false; denyReason = '已有人在内' }
+        }
 
-          // 人数上限
-          if (canEnter && room.capacity) {
-            const cnt = await BBPlayerLocation.countDocuments({ currentRoomId: id, gameId: 'bigbrother' })
-            if (cnt >= room.capacity) {
-              canEnter = false
-              denyReason = '房间已满'
-            }
-          }
+        // 人数上限
+        if (canEnter && room.capacity) {
+          if ((counts[id] || 0) >= room.capacity) { canEnter = false; denyReason = '房间已满' }
+        }
 
-          return { ...room.toObject(), canEnter, denyReason }
-        })
-    )
+        return { ...room.toObject(), canEnter, denyReason }
+      })
 
     // 附带门状态，但仅在特定房间可见
-    const doors = await BBHouseDoor.find({ gameId: 'bigbrother' })
-    const doorMap = {}
-    doors.forEach(d => { doorMap[d.id] = d.isOpen })
+    const doorMap2 = {}
+    doors.forEach(d => { doorMap2[d.id] = d.isOpen })
 
     const canSeeBackyardDoor = currentRoomId === 'living_room' || currentRoomId === 'backyard'
     const canSeeHohDoor = currentRoomId === 'hoh_room' || currentRoomId === 'hoh_door'
@@ -216,8 +229,8 @@ router.get('/reachable', auth, async (req, res) => {
       data: {
         currentRoomId,
         rooms: reachable,
-        backyardDoorOpen: canSeeBackyardDoor ? (doorMap['backyard_door'] ?? true) : null,
-        hohDoorOpen: canSeeHohDoor ? (doorMap['hoh_door'] ?? false) : null
+        backyardDoorOpen: canSeeBackyardDoor ? (doorMap2['backyard_door'] ?? true) : null,
+        hohDoorOpen: canSeeHohDoor ? (doorMap2['hoh_door'] ?? false) : null
       }
     })
   } catch (e) {

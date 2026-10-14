@@ -209,8 +209,45 @@ async function initBBData() {
 
 const PORT = process.env.PORT || 3000
 
+// ===== 数据库索引：显著降低查询延迟（尤其是远程/跨区数据库） =====
+async function ensureBBIndexes() {
+  const { getCollection } = require('./config/db')
+  const specs = [
+    ['BBHouseguest', [{ gameId: 1 }, { id: 1 }, { username: 1 }, { status: 1 }]],
+    ['BBSeason', [{ gameId: 1 }]],
+    ['BBRound', [{ gameId: 1, roundId: 1 }]],
+    ['BBHohRecord', [{ gameId: 1, roundId: 1 }]],
+    ['BBNomination', [{ gameId: 1, roundId: 1 }]],
+    ['BBVetoRecord', [{ gameId: 1, roundId: 1 }]],
+    ['BBEvictionVote', [{ gameId: 1, roundId: 1 }, { gameId: 1, voterId: 1 }]],
+    ['BBEviction', [{ gameId: 1, roundId: 1 }]],
+    ['BBChatMessage', [{ gameId: 1, chatType: 1, roomId: 1, createdAt: 1 }, { gameId: 1, roomId: 1 }]],
+    ['BBPlayerLocation', [{ gameId: 1, currentRoomId: 1 }, { gameId: 1, playerId: 1 }]],
+    ['BBLocationHistory', [{ gameId: 1, playerId: 1 }]],
+    ['BBChampionVote', [{ gameId: 1 }, { gameId: 1, voterId: 1 }]],
+    ['BBJuryQA', [{ gameId: 1, roundId: 1 }]],
+    ['BBMinigameReplay', [{ gameId: 1, gameType: 1, startedAt: -1 }]],
+    ['BBOperationLog', [{ gameId: 1, createdAt: -1 }]],
+    ['BBCustomGame', [{ gameId: 1, enabled: 1 }]],
+    ['BBPowerChallenge', [{ gameId: 1 }]],
+    ['BBSerpentMark', [{ gameId: 1, roundIndex: 1 }]],
+    ['BBHouseRoom', [{ gameId: 1, id: 1 }]],
+    ['BBHouseDoor', [{ gameId: 1, id: 1 }]],
+    ['BBHousePassage', [{ gameId: 1 }]]
+  ]
+  let created = 0
+  for (const [name, idxs] of specs) {
+    try {
+      const col = getCollection(name)
+      for (const key of idxs) { await col.createIndex(key); created++ }
+    } catch (e) { /* ignore */ }
+  }
+  console.log(`[Big Brother] Indexes ensured (${created})`)
+}
+
 initStore().then(() => {
-  initBBData().then(() => {
+  initBBData().then(async () => {
+    try { await ensureBBIndexes() } catch (e) { console.error('[Big Brother] ensureBBIndexes failed', e) }
     // 创建 HTTP 服务器并绑定 socket.io
     const server = http.createServer(app)
     const io = new Server(server, {

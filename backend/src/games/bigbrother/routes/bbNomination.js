@@ -15,12 +15,15 @@ router.get('/current', async (req, res) => {
   try {
     const season = await getCurrentSeason()
     const { getCollection } = require('../../../config/db')
+    const roundId = `round-${season.currentRound}`
     const nominationCol = getCollection('BBNomination')
-    const doc = await nominationCol.findOne({ gameId: 'bigbrother', roundId: `round-${season.currentRound}` })
     const hohCol = getCollection('BBHohRecord')
     const vetoCol = getCollection('BBVetoRecord')
-    const currentHoh = await hohCol.findOne({ gameId: 'bigbrother', roundId: `round-${season.currentRound}` })
-    const vetoRecord = await vetoCol.findOne({ gameId: 'bigbrother', roundId: `round-${season.currentRound}` })
+    const [doc, currentHoh, vetoRecord] = await Promise.all([
+      nominationCol.findOne({ gameId: 'bigbrother', roundId }),
+      hohCol.findOne({ gameId: 'bigbrother', roundId }),
+      vetoCol.findOne({ gameId: 'bigbrother', roundId })
+    ])
 
     // Twist #27 匿名房主：HOH 姓名显示为"匿名"
     const roundConfigs = season.roundConfigs || []
