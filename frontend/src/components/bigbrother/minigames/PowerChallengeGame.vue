@@ -97,26 +97,26 @@ onMounted(() => connect())
 
 <style scoped>
 .power-challenge-game { max-width: 700px; margin: 0 auto; padding: 16px; }
-.pc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 12px 16px; background: #00ff8812; border: 1px solid #00ff8833; border-radius: 10px; }
-.pc-theme { font-size: 20px; font-weight: 700; color: #00ff88; }
+.pc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 12px 16px; background: #b39bff12; border: 1px solid #b39bff33; border-radius: 10px; }
+.pc-theme { font-size: 20px; font-weight: 700; color: #b39bff; }
 .pc-status { padding: 4px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
-.pc-status.finished { background: #88888822; color: #aaa; }
+.pc-status.finished { background: #88888822; color: #a99bd0; }
 .questions-list { display: flex; flex-direction: column; gap: 14px; }
-.question-card { background: #141430; border: 1px solid #ffffff12; border-radius: 12px; padding: 18px; }
-.question-card.answered { border-color: #00ff8833; }
-.question-card.won { border-color: #ffaa0055; background: #1a1500; }
+.question-card { background: #1e1436; border: 1px solid #ffffff12; border-radius: 12px; padding: 18px; }
+.question-card.answered { border-color: #b39bff33; }
+.question-card.won { border-color: #e6c98855; background: #1a1500; }
 .q-text { font-size: 15px; font-weight: 600; color: #e8e0e0; margin-bottom: 12px; }
 .q-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.q-option { padding: 10px 14px; border-radius: 8px; border: 1px solid #ffffff15; background: #0f0f2e; color: #ccc; font-size: 13px; cursor: pointer; transition: all 0.2s; }
-.q-option:hover:not(:disabled) { border-color: #00ff8855; color: #fff; }
-.q-option.mine:not(:disabled) { border-color: #00ff88; color: #00ff88; background: #00ff8810; }
-.q-option.correct { border-color: #ffaa00; color: #ffaa00; background: #ffaa0015; }
+.q-option { padding: 10px 14px; border-radius: 8px; border: 1px solid #ffffff15; background: #1b1130; color: #cfc4ea; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+.q-option:hover:not(:disabled) { border-color: #b39bff55; color: #fff; }
+.q-option.mine:not(:disabled) { border-color: #b39bff; color: #b39bff; background: #b39bff10; }
+.q-option.correct { border-color: #e6c988; color: #e6c988; background: #e6c98815; }
 .q-option.disabled { opacity: 0.5; cursor: default; }
-.q-winner { margin-top: 10px; font-size: 13px; color: #ffaa00; font-weight: 600; }
-.winners-summary { margin-top: 24px; padding: 20px; background: #0f0f2e; border: 1px solid #ffaa0033; border-radius: 12px; }
-.winners-title { font-size: 18px; font-weight: 700; color: #ffaa00; margin-bottom: 12px; }
-.winner-item { padding: 8px 16px; color: #e0e0e0; font-size: 15px; }
-.empty-state { text-align: center; color: #666; padding: 40px; font-size: 14px; }
+.q-winner { margin-top: 10px; font-size: 13px; color: #e6c988; font-weight: 600; }
+.winners-summary { margin-top: 24px; padding: 20px; background: #1b1130; border: 1px solid #e6c98833; border-radius: 12px; }
+.winners-title { font-size: 18px; font-weight: 700; color: #e6c988; margin-bottom: 12px; }
+.winner-item { padding: 8px 16px; color: #ece7fb; font-size: 15px; }
+.empty-state { text-align: center; color: #6b5f92; padding: 40px; font-size: 14px; }
 @media (max-width: 480px) {
   .power-challenge-game { padding: 10px; }
   .pc-header { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }

@@ -129,32 +129,32 @@ onMounted(() => {
 <style scoped>
 .bb-eviction-player { max-width: 600px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
-.history-tag { background: #88888822; color: #aaa; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
-.future-tag { background: #44444422; color: #666; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
+.history-tag { background: #88888822; color: #a99bd0; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
+.future-tag { background: #44444422; color: #6b5f92; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
 .result-section { margin-top: 16px; }
-.result-card { display: flex; align-items: center; gap: 16px; padding: 24px; background: #2e0f0f; border: 1px solid #ff4444; border-radius: 12px; }
+.result-card { display: flex; align-items: center; gap: 16px; padding: 24px; background: #2a0f22; border: 1px solid #ff4444; border-radius: 12px; }
 .result-icon { font-size: 48px; }
 .result-name { font-size: 22px; font-weight: 600; color: #ff4444; }
-.result-votes { font-size: 14px; color: #aaa; margin-top: 4px; }
+.result-votes { font-size: 14px; color: #a99bd0; margin-top: 4px; }
 .me-evicted { margin-top: 8px; font-size: 14px; color: #ff4444; font-weight: 600; }
-.empty-card { background: #0f0f2e; border: 1px solid #444; border-radius: 12px; padding: 40px; text-align: center; margin-top: 20px; }
-.empty-card p { color: #666; }
-.nomination-summary { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 20px; margin-top: 20px; }
-.nomination-summary h3 { margin: 0 0 12px; font-size: 16px; color: #e0e0e0; }
+.empty-card { background: #1b1130; border: 1px solid #4a3d6e; border-radius: 12px; padding: 40px; text-align: center; margin-top: 20px; }
+.empty-card p { color: #6b5f92; }
+.nomination-summary { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 20px; margin-top: 20px; }
+.nomination-summary h3 { margin: 0 0 12px; font-size: 16px; color: #ece7fb; }
 .nominees-list { display: flex; gap: 12px; flex-wrap: wrap; }
-.nominee-chip { background: #ffaa0015; border: 1px solid #ffaa0033; border-radius: 6px; padding: 8px 16px; font-size: 14px; color: #ffaa00; }
-.announce-stage { margin-top: 16px; background: #0f0f2e; border: 1px solid #ffaa0044; border-radius: 12px; padding: 28px 24px; text-align: center; }
-.announce-title { color: #ffaa00; font-size: 14px; margin-bottom: 18px; }
+.nominee-chip { background: #e6c98815; border: 1px solid #e6c98833; border-radius: 6px; padding: 8px 16px; font-size: 14px; color: #e6c988; }
+.announce-stage { margin-top: 16px; background: #1b1130; border: 1px solid #e6c98844; border-radius: 12px; padding: 28px 24px; text-align: center; }
+.announce-title { color: #e6c988; font-size: 14px; margin-bottom: 18px; }
 .announce-lines { display: flex; flex-direction: column; }
-.ann-line { min-height: 44px; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #e0e0e0; }
+.ann-line { min-height: 44px; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #ece7fb; }
 .ann-line.shown { animation: fadeIn 0.6s ease both; }
 .announce-enter-active { transition: all 0.5s ease; }
 .announce-enter-from { opacity: 0; transform: translateY(8px); }
 .door-stage { text-align: center; }
 .door-icon { font-size: 64px; margin-bottom: 12px; }
 .door-name { font-size: 30px; font-weight: 700; color: #ff4444; }
-.door-votes { margin-top: 8px; font-size: 18px; color: #aaa; }
+.door-votes { margin-top: 8px; font-size: 18px; color: #a99bd0; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 </style>

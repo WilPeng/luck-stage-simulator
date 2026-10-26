@@ -90,32 +90,32 @@ onUnmounted(() => { if (cooldownTimer) clearInterval(cooldownTimer) })
 <style scoped>
 .quick-math { text-align: center; padding: 20px; }
 .game-icon { font-size: 64px; margin-bottom: 16px; }
-.game-waiting h2 { font-size: 22px; color: #e0e0e0; margin-bottom: 8px; }
-.game-waiting p { color: #888; font-size: 14px; }
-.countdown-big { font-size: 72px; font-weight: 700; color: #00ff88; margin: 20px 0; animation: pulse 0.5s infinite; }
+.game-waiting h2 { font-size: 22px; color: #ece7fb; margin-bottom: 8px; }
+.game-waiting p { color: #8f83b8; font-size: 14px; }
+.countdown-big { font-size: 72px; font-weight: 700; color: #b39bff; margin: 20px 0; animation: pulse 0.5s infinite; }
 @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-.waiting-text { color: #666; margin-top: 12px; }
-.game-header { margin-bottom: 24px; color: #888; font-size: 14px; }
-.question { font-size: 36px; font-weight: 700; color: #e0e0e0; margin-bottom: 20px; }
+.waiting-text { color: #6b5f92; margin-top: 12px; }
+.game-header { margin-bottom: 24px; color: #8f83b8; font-size: 14px; }
+.question { font-size: 36px; font-weight: 700; color: #ece7fb; margin-bottom: 20px; }
 .answer-input { display: flex; gap: 12px; justify-content: center; align-items: center; }
 .math-input {
-  background: #0f0f2e; border: 2px solid #00ff8844; color: #e0e0e0; padding: 10px 16px;
+  background: #1b1130; border: 2px solid #b39bff44; color: #ece7fb; padding: 10px 16px;
   border-radius: 8px; font-size: 24px; width: 140px; text-align: center; outline: none;
 }
-.math-input:focus { border-color: #00ff88; }
+.math-input:focus { border-color: #b39bff; }
 .submit-btn {
-  background: #00ff8822; border: 1px solid #00ff88; color: #00ff88; padding: 10px 24px;
+  background: #b39bff22; border: 1px solid #b39bff; color: #b39bff; padding: 10px 24px;
   border-radius: 8px; font-size: 16px; cursor: pointer; transition: all 0.2s;
 }
-.submit-btn:hover { background: #00ff8833; }
+.submit-btn:hover { background: #b39bff33; }
 .result-feedback { margin-top: 12px; font-size: 16px; font-weight: 600; }
-.result-feedback.correct { color: #00ff88; }
+.result-feedback.correct { color: #b39bff; }
 .result-feedback.wrong { color: #ff4444; }
 .completed { margin-top: 40px; }
-.done-msg { font-size: 18px; color: #00ff88; }
-.game-finished h2 { font-size: 22px; color: #e0e0e0; margin-bottom: 16px; }
-.winner-name { font-size: 28px; font-weight: 700; color: #ffaa00; }
-.winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+.done-msg { font-size: 18px; color: #b39bff; }
+.game-finished h2 { font-size: 22px; color: #ece7fb; margin-bottom: 16px; }
+.winner-name { font-size: 28px; font-weight: 700; color: #e6c988; }
+.winner-label { display: block; font-size: 14px; color: #e6c988; margin-top: 4px; }
 @media (max-width: 480px) {
   .quick-math { padding: 12px; }
   .countdown-big { font-size: 52px; }

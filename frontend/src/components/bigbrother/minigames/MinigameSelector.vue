@@ -125,7 +125,7 @@ onMounted(async () => {
   gap: 8px;
   font-size: 15px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: #ece7fb;
 }
 
 .selector-icon {
@@ -146,7 +146,7 @@ onMounted(async () => {
   border-radius: 20px;
   border: 1px solid #ffffff12;
   background: #ffffff06;
-  color: #888;
+  color: #8f83b8;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -154,15 +154,15 @@ onMounted(async () => {
 }
 
 .cat-tab:hover {
-  border-color: #00ff8833;
-  color: #bbb;
-  background: #00ff8808;
+  border-color: #b39bff33;
+  color: #bdb3dd;
+  background: #b39bff08;
 }
 
 .cat-tab.active {
-  border-color: #00ff8866;
-  background: #00ff8815;
-  color: #00ff88;
+  border-color: #b39bff66;
+  background: #b39bff15;
+  color: #b39bff;
   font-weight: 500;
 }
 
@@ -180,15 +180,15 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   padding: 40px 20px;
-  color: #666;
+  color: #6b5f92;
   font-size: 13px;
 }
 
 .loading-spinner {
   width: 28px;
   height: 28px;
-  border: 2px solid #00ff8822;
-  border-top-color: #00ff88;
+  border: 2px solid #b39bff22;
+  border-top-color: #b39bff;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -203,7 +203,7 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   padding: 40px 20px;
-  color: #555;
+  color: #5c5182;
   font-size: 13px;
 }
 
@@ -231,7 +231,7 @@ onMounted(async () => {
 }
 
 .game-card:hover {
-  border-color: #00ff8855;
+  border-color: #b39bff55;
   transform: translateY(-2px);
 }
 
@@ -247,7 +247,7 @@ onMounted(async () => {
   position: absolute;
   inset: -1px;
   border-radius: 12px;
-  background: radial-gradient(ellipse at 50% 0%, #00ff8815 0%, transparent 70%);
+  background: radial-gradient(ellipse at 50% 0%, #b39bff15 0%, transparent 70%);
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
@@ -259,7 +259,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 10px;
   padding: 22px 20px 18px;
-  background: linear-gradient(165deg, #141430 0%, #0d0d24 100%);
+  background: linear-gradient(165deg, #1e1436 0%, #0d0d24 100%);
   border-radius: 11px;
   height: 100%;
   box-sizing: border-box;
@@ -274,14 +274,14 @@ onMounted(async () => {
 .card-icon {
   font-size: 38px;
   line-height: 1;
-  filter: drop-shadow(0 2px 8px rgba(0, 255, 136, 0.15));
+  filter: drop-shadow(0 2px 8px rgba(179, 155, 255, 0.15));
 }
 
 .card-category-badge {
   font-size: 10px;
-  color: #00ff8899;
-  background: #00ff8812;
-  border: 1px solid #00ff8822;
+  color: #b39bff99;
+  background: #b39bff12;
+  border: 1px solid #b39bff22;
   border-radius: 10px;
   padding: 2px 8px;
   font-weight: 500;
@@ -296,7 +296,7 @@ onMounted(async () => {
 
 .card-desc {
   font-size: 12.5px;
-  color: #777;
+  color: #7d6fa6;
   line-height: 1.55;
   flex: 1;
 }
@@ -320,7 +320,7 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: #555;
+  color: #5c5182;
 }
 
 .meta-icon {
@@ -334,8 +334,8 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: #00ff8818;
-  color: #00ff88;
+  background: #b39bff18;
+  color: #b39bff;
   font-size: 10px;
   opacity: 0;
   transform: scale(0.8);

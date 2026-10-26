@@ -56,18 +56,18 @@ onMounted(async () => {
 <style scoped>
 .bb-veto-player { max-width: 500px; margin: 0 auto; padding: 16px; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
-.history-tag { background: #88888822; color: #aaa; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
-.future-tag { background: #44444422; color: #666; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
-.veto-card { background: linear-gradient(135deg, #0f0f2e, #1a1a3e); border: 1px solid #ffaa00; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px; margin-top: 16px; }
-.veto-card.empty { border-color: #444; }
-.veto-card.empty p { text-align: center; color: #666; width: 100%; margin: 0; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
+.history-tag { background: #88888822; color: #a99bd0; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
+.future-tag { background: #44444422; color: #6b5f92; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
+.veto-card { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #e6c988; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px; margin-top: 16px; }
+.veto-card.empty { border-color: #4a3d6e; }
+.veto-card.empty p { text-align: center; color: #6b5f92; width: 100%; margin: 0; }
 .veto-icon { font-size: 48px; }
-.veto-label { font-size: 12px; color: #888; text-transform: uppercase; }
-.veto-winner { font-size: 20px; font-weight: 700; color: #ffaa00; }
-.veto-status { font-size: 13px; color: #aaa; margin-top: 4px; }
-.veto-saved { margin-top: 8px; font-size: 14px; color: #aaa; }
-.highlight { color: #00ff88; font-weight: 600; }
-.veto-removed { display: block; font-size: 12px; color: #00ff88; margin-top: 4px; }
+.veto-label { font-size: 12px; color: #8f83b8; text-transform: uppercase; }
+.veto-winner { font-size: 20px; font-weight: 700; color: #e6c988; }
+.veto-status { font-size: 13px; color: #a99bd0; margin-top: 4px; }
+.veto-saved { margin-top: 8px; font-size: 14px; color: #a99bd0; }
+.highlight { color: #b39bff; font-weight: 600; }
+.veto-removed { display: block; font-size: 12px; color: #b39bff; margin-top: 4px; }
 </style>

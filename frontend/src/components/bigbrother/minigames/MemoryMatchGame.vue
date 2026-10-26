@@ -80,13 +80,13 @@ onMounted(() => connect())
 <style scoped>
 .memory-match { text-align: center; padding: 20px; }
 .game-icon { font-size: 64px; margin-bottom: 16px; }
-.game-waiting h2 { font-size: 22px; color: #e0e0e0; margin-bottom: 8px; }
-.game-waiting p { color: #888; font-size: 14px; }
-.countdown-big { font-size: 72px; font-weight: 700; color: #00ff88; margin: 20px 0; animation: pulse 0.5s infinite; }
+.game-waiting h2 { font-size: 22px; color: #ece7fb; margin-bottom: 8px; }
+.game-waiting p { color: #8f83b8; font-size: 14px; }
+.countdown-big { font-size: 72px; font-weight: 700; color: #b39bff; margin: 20px 0; animation: pulse 0.5s infinite; }
 @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-.waiting-text { color: #666; margin-top: 12px; }
-.game-header { display: flex; justify-content: space-between; margin-bottom: 16px; color: #e0e0e0; font-size: 14px; }
-.done { color: #00ff88; font-weight: 600; }
+.waiting-text { color: #6b5f92; margin-top: 12px; }
+.game-header { display: flex; justify-content: space-between; margin-bottom: 16px; color: #ece7fb; font-size: 14px; }
+.done { color: #b39bff; font-weight: 600; }
 .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; max-width: 360px; margin: 0 auto; }
 .card { aspect-ratio: 1; perspective: 600px; cursor: pointer; }
 .card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.3s; transform-style: preserve-3d; }
@@ -95,12 +95,12 @@ onMounted(() => connect())
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   border-radius: 8px; font-size: 28px; backface-visibility: hidden;
 }
-.card-front { background: #1a1a3e; border: 2px solid #00ff8833; color: #00ff88; }
-.card-back { background: #0f2e0f; border: 2px solid #00ff88; color: #e0e0e0; transform: rotateY(180deg); }
-.card.matched .card-back { background: #0f2e0f; border-color: #00ff88; opacity: 0.7; }
-.game-finished h2 { font-size: 22px; color: #e0e0e0; margin-bottom: 16px; }
-.winner-name { font-size: 28px; font-weight: 700; color: #ffaa00; }
-.winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+.card-front { background: #2a1a4a; border: 2px solid #b39bff33; color: #b39bff; }
+.card-back { background: #1c1533; border: 2px solid #b39bff; color: #ece7fb; transform: rotateY(180deg); }
+.card.matched .card-back { background: #1c1533; border-color: #b39bff; opacity: 0.7; }
+.game-finished h2 { font-size: 22px; color: #ece7fb; margin-bottom: 16px; }
+.winner-name { font-size: 28px; font-weight: 700; color: #e6c988; }
+.winner-label { display: block; font-size: 14px; color: #e6c988; margin-top: 4px; }
 @media (max-width: 480px) {
   .countdown-big { font-size: 52px; }
   .game-icon { font-size: 48px; }

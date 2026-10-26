@@ -56,21 +56,21 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.mg-ready { background: #0f0f2e; border: 1px solid #ffaa0044; border-radius: 10px; padding: 14px 16px; margin-top: 12px; }
+.mg-ready { background: #1b1130; border: 1px solid #e6c98844; border-radius: 10px; padding: 14px 16px; margin-top: 12px; }
 .mr-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.mr-title { font-size: 14px; font-weight: 700; color: #ffaa00; }
-.mr-game { font-size: 13px; color: #ccc; }
-.mr-count { font-size: 12px; color: #8a8aa5; }
-.mr-count.all { color: #00ff88; font-weight: 600; }
-.bb-btn-summon { margin-left: auto; border-color: #ffaa0066; color: #ffaa00; padding: 6px 16px; font-size: 13px; }
-.bb-btn-summon:hover:not(:disabled) { background: #ffaa0022; }
+.mr-title { font-size: 14px; font-weight: 700; color: #e6c988; }
+.mr-game { font-size: 13px; color: #cfc4ea; }
+.mr-count { font-size: 12px; color: #b3a6d6; }
+.mr-count.all { color: #b39bff; font-weight: 600; }
+.bb-btn-summon { margin-left: auto; border-color: #e6c98866; color: #e6c988; padding: 6px 16px; font-size: 13px; }
+.bb-btn-summon:hover:not(:disabled) { background: #e6c98822; }
 .mr-players { display: flex; flex-wrap: wrap; gap: 8px; }
 .mr-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid #ffffff18; border-radius: 8px; background: #ffffff06; font-size: 13px; color: #ddd; }
-.mr-chip.ready { border-color: #00ff88; background: #00ff8812; }
+.mr-chip.ready { border-color: #b39bff; background: #b39bff12; }
 .mr-chip.offline { opacity: 0.5; }
 .mr-dot { font-size: 12px; }
-.mr-empty { color: #666; font-size: 13px; }
-.mr-hint { margin-top: 8px; font-size: 12px; color: #666; }
-.bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+.mr-empty { color: #6b5f92; font-size: 13px; }
+.mr-hint { margin-top: 8px; font-size: 12px; color: #6b5f92; }
+.bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
 .bb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

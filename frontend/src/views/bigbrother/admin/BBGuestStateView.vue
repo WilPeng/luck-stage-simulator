@@ -127,26 +127,26 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 <style scoped>
 .bb-guest-state { max-width: 1200px; margin: 0 auto; padding: 24px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.page-header h1 { font-size: 22px; color: #e0e0e0; margin: 0; }
-.today { color: #888; font-size: 13px; }
+.page-header h1 { font-size: 22px; color: #ece7fb; margin: 0; }
+.today { color: #8f83b8; font-size: 13px; }
 .table-wrapper { overflow-x: auto; }
 .state-table { width: 100%; border-collapse: collapse; }
 .state-table th, .state-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #ffffff12; font-size: 13px; color: #ddd; white-space: nowrap; }
-.state-table th { color: #888; font-size: 12px; }
+.state-table th { color: #8f83b8; font-size: 12px; }
 .name-cell { display: flex; align-items: center; gap: 8px; }
 .status-tag { padding: 1px 8px; border-radius: 6px; font-size: 11px; }
-.status-tag.active { background: #00ff8822; color: #00ff88; }
+.status-tag.active { background: #b39bff22; color: #b39bff; }
 .status-tag.evicted { background: #ff444422; color: #ff6666; }
-.status-tag.jury { background: #ffaa0022; color: #ffaa00; }
+.status-tag.jury { background: #e6c98822; color: #e6c988; }
 .badge { padding: 2px 10px; border-radius: 10px; font-size: 11px; }
-.badge.ok { background: #00ff8822; color: #00ff88; }
+.badge.ok { background: #b39bff22; color: #b39bff; }
 .badge.sleeping { background: #4488ff22; color: #7fb0ff; }
 .badge.showering { background: #00c8ff22; color: #7fd8ff; }
-.badge.none { background: #ffffff10; color: #888; }
+.badge.none { background: #ffffff10; color: #8f83b8; }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.bb-btn-xs { padding: 3px 10px; font-size: 11px; background: transparent; border: 1px solid #00ff8844; color: #00ff88; border-radius: 4px; cursor: pointer; }
-.bb-btn-xs:hover { background: #00ff8822; }
+.bb-btn-xs { padding: 3px 10px; font-size: 11px; background: transparent; border: 1px solid #b39bff44; color: #b39bff; border-radius: 4px; cursor: pointer; }
+.bb-btn-xs:hover { background: #b39bff22; }
 .bb-btn-xs.danger { border-color: #ff444466; color: #ff6666; }
 .bb-btn-xs.danger:hover { background: #ff444422; }
-.empty { text-align: center; color: #666; padding: 30px; }
+.empty { text-align: center; color: #6b5f92; padding: 30px; }
 </style>

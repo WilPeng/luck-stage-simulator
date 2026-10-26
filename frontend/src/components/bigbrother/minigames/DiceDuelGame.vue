@@ -108,37 +108,37 @@ onMounted(() => connect())
 <style scoped>
 .dice-duel { text-align: center; padding: 20px; }
 .game-icon { font-size: 64px; margin-bottom: 16px; }
-.game-waiting h2 { font-size: 22px; color: #e0e0e0; margin-bottom: 8px; }
-.game-waiting p { color: #888; font-size: 14px; }
-.countdown-big { font-size: 72px; font-weight: 700; color: #00ff88; margin: 20px 0; animation: pulse 0.5s infinite; }
+.game-waiting h2 { font-size: 22px; color: #ece7fb; margin-bottom: 8px; }
+.game-waiting p { color: #8f83b8; font-size: 14px; }
+.countdown-big { font-size: 72px; font-weight: 700; color: #b39bff; margin: 20px 0; animation: pulse 0.5s infinite; }
 @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-.waiting-text { color: #666; margin-top: 12px; }
-.game-header { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 18px; color: #e0e0e0; }
+.waiting-text { color: #6b5f92; margin-top: 12px; }
+.game-header { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 18px; color: #ece7fb; }
 .dice-select { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
 .dice-count-btn {
-  padding: 10px 20px; background: #ffffff08; border: 2px solid #00ff8833; color: #aaa;
+  padding: 10px 20px; background: #ffffff08; border: 2px solid #b39bff33; color: #a99bd0;
   border-radius: 8px; font-size: 16px; cursor: pointer; transition: all 0.2s;
 }
-.dice-count-btn.selected { border-color: #00ff88; color: #00ff88; background: #00ff8810; }
+.dice-count-btn.selected { border-color: #b39bff; color: #b39bff; background: #b39bff10; }
 .roll-btn {
-  background: linear-gradient(135deg, #00ff8833, #00ff8811); border: 2px solid #00ff88;
-  color: #00ff88; padding: 14px 40px; border-radius: 12px; font-size: 20px;
+  background: linear-gradient(135deg, #b39bff33, #b39bff11); border: 2px solid #b39bff;
+  color: #b39bff; padding: 14px 40px; border-radius: 12px; font-size: 20px;
   cursor: pointer; transition: all 0.2s; margin-bottom: 20px;
 }
-.roll-btn:hover { background: #00ff8844; transform: scale(1.05); }
-.last-roll { margin-bottom: 16px; font-size: 18px; color: #e0e0e0; }
-.roll-label { color: #888; margin-right: 8px; }
+.roll-btn:hover { background: #b39bff44; transform: scale(1.05); }
+.last-roll { margin-bottom: 16px; font-size: 18px; color: #ece7fb; }
+.roll-label { color: #8f83b8; margin-right: 8px; }
 .dice-face { font-size: 32px; margin: 0 4px; }
 .dice-face.small { font-size: 20px; }
-.roll-total { font-weight: 700; color: #ffaa00; margin-left: 8px; }
+.roll-total { font-weight: 700; color: #e6c988; margin-left: 8px; }
 .round-history { margin-top: 20px; text-align: left; max-width: 300px; margin-left: auto; margin-right: auto; }
-.history-row { padding: 6px 0; color: #aaa; font-size: 14px; display: flex; align-items: center; gap: 4px; }
-.history-total { color: #ffaa00; font-weight: 600; margin-left: 4px; }
+.history-row { padding: 6px 0; color: #a99bd0; font-size: 14px; display: flex; align-items: center; gap: 4px; }
+.history-total { color: #e6c988; font-weight: 600; margin-left: 4px; }
 .completed { margin-top: 24px; }
-.done-msg { font-size: 18px; color: #00ff88; }
-.game-finished h2 { font-size: 22px; color: #e0e0e0; margin-bottom: 16px; }
-.winner-name { font-size: 28px; font-weight: 700; color: #ffaa00; }
-.winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+.done-msg { font-size: 18px; color: #b39bff; }
+.game-finished h2 { font-size: 22px; color: #ece7fb; margin-bottom: 16px; }
+.winner-name { font-size: 28px; font-weight: 700; color: #e6c988; }
+.winner-label { display: block; font-size: 14px; color: #e6c988; margin-top: 4px; }
 @media (max-width: 480px) {
   .countdown-big { font-size: 52px; }
   .game-icon { font-size: 48px; }

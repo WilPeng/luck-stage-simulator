@@ -129,8 +129,8 @@ import { computed } from 'vue'
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #0f0f2e;
-  border: 1px solid #00ff8822;
+  background: #1b1130;
+  border: 1px solid #b39bff22;
   border-radius: 12px;
   overflow: hidden;
 }
@@ -141,7 +141,7 @@ import { computed } from 'vue'
   justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid #ffffff08;
-  background: #141430;
+  background: #1e1436;
 }
 .chat-room-info {
   display: flex;
@@ -149,21 +149,21 @@ import { computed } from 'vue'
   gap: 8px;
 }
 .chat-room-icon { font-size: 18px; }
-.chat-room-name { font-size: 15px; font-weight: 600; color: #e0e0e0; }
+.chat-room-name { font-size: 15px; font-weight: 600; color: #ece7fb; }
 .chat-presence {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #888;
+  color: #8f83b8;
 }
 .presence-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #666;
+  background: #6b5f92;
 }
-.presence-dot.online { background: #00ff88; }
+.presence-dot.online { background: #b39bff; }
 
 .presence-bar {
   display: flex;
@@ -179,20 +179,20 @@ import { computed } from 'vue'
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: #aaa;
+  color: #a99bd0;
 }
 .presence-player-dot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #00ff8888;
+  background: #b39bff88;
 }
 .presence-player-name {
-  color: #ccc;
+  color: #cfc4ea;
 }
 .presence-empty {
   font-size: 11px;
-  color: #555;
+  color: #5c5182;
 }
 
 .messages-container {
@@ -206,7 +206,7 @@ import { computed } from 'vue'
 
 .load-more {
   text-align: center;
-  color: #00ff88;
+  color: #b39bff;
   font-size: 12px;
   cursor: pointer;
   padding: 4px;
@@ -215,7 +215,7 @@ import { computed } from 'vue'
 
 .loading-more {
   text-align: center;
-  color: #666;
+  color: #6b5f92;
   font-size: 12px;
   padding: 4px;
 }
@@ -232,7 +232,7 @@ import { computed } from 'vue'
 }
 .system-text {
   font-size: 11px;
-  color: #666;
+  color: #6b5f92;
   background: #ffffff06;
   padding: 2px 10px;
   border-radius: 10px;
@@ -245,12 +245,12 @@ import { computed } from 'vue'
 .msg-sender {
   font-size: 12px;
   font-weight: 600;
-  color: #00ff88;
+  color: #b39bff;
 }
-.msg-sender.admin { color: #ffaa00; }
+.msg-sender.admin { color: #e6c988; }
 .msg-time {
   font-size: 10px;
-  color: #555;
+  color: #5c5182;
 }
 .msg-content {
   font-size: 14px;
@@ -267,7 +267,7 @@ import { computed } from 'vue'
   align-items: center;
   gap: 6px;
   padding: 32px 0;
-  color: #555;
+  color: #5c5182;
   font-size: 13px;
 }
 .empty-icon { font-size: 24px; opacity: 0.4; }
@@ -277,31 +277,31 @@ import { computed } from 'vue'
   gap: 8px;
   padding: 10px 16px;
   border-top: 1px solid #ffffff08;
-  background: #141430;
+  background: #1e1436;
 }
 .msg-input {
   flex: 1;
   padding: 8px 12px;
-  background: #0a0a1a;
+  background: #120a22;
   border: 1px solid #ffffff15;
   border-radius: 8px;
-  color: #e0e0e0;
+  color: #ece7fb;
   font-size: 13px;
   outline: none;
 }
-.msg-input:focus { border-color: #00ff8866; }
-.msg-input::placeholder { color: #555; }
+.msg-input:focus { border-color: #b39bff66; }
+.msg-input::placeholder { color: #5c5182; }
 
 .send-btn {
   padding: 8px 16px;
-  background: #00ff8822;
-  border: 1px solid #00ff8844;
+  background: #b39bff22;
+  border: 1px solid #b39bff44;
   border-radius: 8px;
-  color: #00ff88;
+  color: #b39bff;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
 }
-.send-btn:hover:not(:disabled) { background: #00ff8833; border-color: #00ff88; }
+.send-btn:hover:not(:disabled) { background: #b39bff33; border-color: #b39bff; }
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>

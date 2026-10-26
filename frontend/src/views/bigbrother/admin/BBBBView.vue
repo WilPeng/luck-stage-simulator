@@ -161,26 +161,26 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
 <style scoped>
 .bbbb-admin { max-width: 1000px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.page-header h1 { font-size: 22px; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; }
-.rule-bar { background: #ffaa0014; border: 1px solid #ffaa0044; color: #ffaa00; border-radius: 10px; padding: 12px 18px; margin-bottom: 16px; font-size: 13px; }
-.card { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; }
-.card-title { font-size: 15px; color: #e0e0e0; font-weight: 600; margin-bottom: 12px; }
+.page-header h1 { font-size: 22px; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; }
+.rule-bar { background: #e6c98814; border: 1px solid #e6c98844; color: #e6c988; border-radius: 10px; padding: 12px 18px; margin-bottom: 16px; font-size: 13px; }
+.card { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 16px 20px; margin-bottom: 16px; }
+.card-title { font-size: 15px; color: #ece7fb; font-weight: 600; margin-bottom: 12px; }
 .nominee-list { display: flex; flex-direction: column; gap: 8px; }
 .nominee { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #ffffff06; border-radius: 8px; }
-.nominee.safe { border: 1px solid #00ff88; }
+.nominee.safe { border: 1px solid #b39bff; }
 .nominee-name { flex: 1; color: #ddd; }
-.safe-badge { color: #00ff88; font-size: 12px; }
-.muted { color: #666; font-size: 13px; }
+.safe-badge { color: #b39bff; font-size: 12px; }
+.muted { color: #6b5f92; font-size: 13px; }
 .room-status { display: flex; align-items: center; gap: 12px; }
-.status-badge { font-size: 12px; color: #00ff88; background: #00ff8815; padding: 2px 10px; border-radius: 4px; }
-.status-info { flex: 1; color: #aaa; font-size: 13px; }
+.status-badge { font-size: 12px; color: #b39bff; background: #b39bff15; padding: 2px 10px; border-radius: 4px; }
+.status-info { flex: 1; color: #a99bd0; font-size: 13px; }
 .progress { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
-.progress-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #ccc; }
-.p-label { flex: 1; color: #888; }
-.bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; }
-.bb-btn:hover { background: #00ff8822; }
-.bb-btn-primary { border-color: #00ff88; background: #00ff8822; }
+.progress-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #cfc4ea; }
+.p-label { flex: 1; color: #8f83b8; }
+.bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+.bb-btn:hover { background: #b39bff22; }
+.bb-btn-primary { border-color: #b39bff; background: #b39bff22; }
 .bb-btn-danger { border-color: #ff444466; color: #ff6b6b; }
 .bb-btn-xs { padding: 3px 10px; font-size: 11px; }
 </style>

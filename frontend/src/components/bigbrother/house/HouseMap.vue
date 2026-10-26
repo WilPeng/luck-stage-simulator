@@ -115,15 +115,15 @@ function countOf(roomId: string) {
 
 <style scoped>
 .house-map {
-  background: #0f0f2e;
-  border: 1px solid #00ff8822;
+  background: #1b1130;
+  border: 1px solid #b39bff22;
   border-radius: 12px;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.map-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: #e0e0e0; }
+.map-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: #ece7fb; }
 .map-icon { font-size: 18px; }
 
 .current-card {
@@ -131,21 +131,21 @@ function countOf(roomId: string) {
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  background: linear-gradient(135deg, #0a2e1a, #0f0f2e);
-  border: 1px solid #00ff88;
+  background: linear-gradient(135deg, #1a1030, #1b1130);
+  border: 1px solid #b39bff;
   border-radius: 10px;
-  box-shadow: 0 0 14px #00ff8822;
+  box-shadow: 0 0 14px #b39bff22;
 }
 .cur-icon { font-size: 30px; }
 .cur-info { flex: 1; }
-.cur-label { font-size: 11px; color: #7fd8a0; }
-.cur-name { font-size: 18px; font-weight: 700; color: #00ff88; }
-.cur-count { font-size: 12px; color: #00ff88; background: #00ff8815; padding: 2px 10px; border-radius: 10px; }
+.cur-label { font-size: 11px; color: #9becc6; }
+.cur-name { font-size: 18px; font-weight: 700; color: #b39bff; }
+.cur-count { font-size: 12px; color: #b39bff; background: #b39bff15; padding: 2px 10px; border-radius: 10px; }
 
 .section { display: flex; flex-direction: column; gap: 8px; }
-.section-title { font-size: 12px; color: #8a8aa5; font-weight: 600; }
+.section-title { font-size: 12px; color: #b3a6d6; font-weight: 600; }
 .room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; }
-.empty { color: #666; font-size: 12px; padding: 8px 0; }
+.empty { color: #6b5f92; font-size: 12px; padding: 8px 0; }
 
 .room-node {
   display: flex;
@@ -153,7 +153,7 @@ function countOf(roomId: string) {
   align-items: center;
   gap: 4px;
   padding: 10px 6px;
-  background: #1a1a3e;
+  background: #2a1a4a;
   border: 1px solid #ffffff10;
   border-radius: 10px;
   min-width: 0;
@@ -162,37 +162,37 @@ function countOf(roomId: string) {
 }
 .room-node.enterable {
   cursor: pointer;
-  border-color: #00ff8844;
-  background: #00ff8808;
+  border-color: #b39bff44;
+  background: #b39bff08;
   transition: all 0.18s ease;
 }
 .room-node.enterable:hover {
-  border-color: #00ff88;
-  background: #00ff8818;
+  border-color: #b39bff;
+  background: #b39bff18;
   transform: translateY(-2px);
-  box-shadow: 0 4px 14px #00ff8822;
+  box-shadow: 0 4px 14px #b39bff22;
 }
-.room-node.denied { border-color: #ffaa0044; background: #ffaa0008; }
+.room-node.denied { border-color: #e6c98844; background: #e6c98808; }
 .room-node.far { opacity: 0.5; }
 .room-icon { font-size: 22px; }
-.room-name { font-size: 12px; color: #ccc; font-weight: 500; }
-.room-count { font-size: 10px; color: #00ff88; background: #00ff8815; padding: 1px 6px; border-radius: 8px; position: absolute; top: -6px; right: -6px; }
-.deny-reason { font-size: 10px; color: #ffaa00; }
+.room-name { font-size: 12px; color: #cfc4ea; font-weight: 500; }
+.room-count { font-size: 10px; color: #b39bff; background: #b39bff15; padding: 1px 6px; border-radius: 8px; position: absolute; top: -6px; right: -6px; }
+.deny-reason { font-size: 10px; color: #e6c988; }
 
 .door-indicator {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 12px; border-radius: 10px; font-size: 12px;
   background: #ff444415; border: 1px solid #ff444433;
 }
-.door-indicator.open { background: #00ff8815; border-color: #00ff8833; }
+.door-indicator.open { background: #b39bff15; border-color: #b39bff33; }
 .door-icon { font-size: 12px; }
-.door-label { color: #aaa; font-weight: 600; }
-.door-hint { color: #666; font-size: 11px; margin-left: auto; }
+.door-label { color: #a99bd0; font-weight: 600; }
+.door-hint { color: #6b5f92; font-size: 11px; margin-left: auto; }
 
-.legend { font-size: 11px; color: #666; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.legend { font-size: 11px; color: #6b5f92; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .lg { padding: 1px 8px; border-radius: 6px; }
-.lg.enterable { color: #00ff88; background: #00ff8815; }
-.lg.denied { color: #ffaa00; background: #ffaa0015; }
-.lg.far { color: #aaa; background: #ffffff10; }
-.lg-tip { color: #555; flex-basis: 100%; }
+.lg.enterable { color: #b39bff; background: #b39bff15; }
+.lg.denied { color: #e6c988; background: #e6c98815; }
+.lg.far { color: #a99bd0; background: #ffffff10; }
+.lg-tip { color: #5c5182; flex-basis: 100%; }
 </style>

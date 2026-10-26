@@ -609,9 +609,9 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   max-width: 1200px;
   margin: 0 auto;
 }
-.house-loading-overlay { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #1a1a2e; }
-.loading-spinner { width: 36px; height: 36px; border: 3px solid #00ff8822; border-top-color: #00ff88; border-radius: 50%; animation: hspin 0.8s linear infinite; }
-.loading-text { color: #9fb3d1; font-size: 14px; }
+.house-loading-overlay { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #221540; }
+.loading-spinner { width: 36px; height: 36px; border: 3px solid #b39bff22; border-top-color: #b39bff; border-radius: 50%; animation: hspin 0.8s linear infinite; }
+.loading-text { color: #b9c6e6; font-size: 14px; }
 @keyframes hspin { to { transform: rotate(360deg); } }
 .page-header {
   display: flex;
@@ -622,7 +622,7 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 .page-header h1 {
   font-size: 22px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: #ece7fb;
   margin: 0;
 }
 .header-meta {
@@ -631,18 +631,18 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   gap: 12px;
 }
 .location-tag {
-  background: #00ff8822;
-  color: #00ff88;
+  background: #b39bff22;
+  color: #b39bff;
   padding: 4px 14px;
   border-radius: 10px;
   font-size: 13px;
-  border: 1px solid #00ff8844;
+  border: 1px solid #b39bff44;
 }
 .ws-status {
   font-size: 12px;
-  color: #888;
+  color: #8f83b8;
 }
-.ws-status.connected { color: #00ff88; }
+.ws-status.connected { color: #b39bff; }
 
 .invite-banner {
   display: flex;
@@ -650,13 +650,13 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   gap: 16px;
   padding: 14px 20px;
   background: linear-gradient(135deg, #2e2a0f, #1a1a0f);
-  border: 1px solid #ffaa0066;
+  border: 1px solid #e6c98866;
   border-radius: 10px;
   margin-bottom: 16px;
 }
 .invite-icon { font-size: 32px; }
 .invite-info { flex: 1; }
-.invite-text { font-size: 14px; color: #ffaa00; font-weight: 500; margin-bottom: 8px; }
+.invite-text { font-size: 14px; color: #e6c988; font-weight: 500; margin-bottom: 8px; }
 .invite-actions { display: flex; gap: 8px; }
 
 .moving-banner {
@@ -664,12 +664,12 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   align-items: center;
   gap: 10px;
   padding: 10px 16px;
-  background: #00ff8815;
-  border: 1px solid #00ff8833;
+  background: #b39bff15;
+  border: 1px solid #b39bff33;
   border-radius: 8px;
   margin-bottom: 16px;
   font-size: 13px;
-  color: #00ff88;
+  color: #b39bff;
 }
 
 .doorbell-banner {
@@ -678,27 +678,27 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   gap: 12px;
   padding: 12px 18px;
   background: linear-gradient(135deg, #3a2e0f, #241a08);
-  border: 1px solid #ffaa0066;
+  border: 1px solid #e6c98866;
   border-radius: 10px;
   margin-bottom: 16px;
 }
 .doorbell-icon { font-size: 22px; }
-.doorbell-text { flex: 1; color: #ffaa00; font-size: 14px; }
+.doorbell-text { flex: 1; color: #e6c988; font-size: 14px; }
 
 .hoh-door-panel {
-  background: #0f0f2e;
-  border: 1px solid #ffaa0033;
+  background: #1b1130;
+  border: 1px solid #e6c98833;
   border-radius: 10px;
   padding: 14px;
 }
-.hoh-door-title { font-size: 14px; color: #e0e0e0; margin-bottom: 10px; font-weight: 600; }
-.hoh-door-title .open { color: #00ff88; }
+.hoh-door-title { font-size: 14px; color: #ece7fb; margin-bottom: 10px; font-weight: 600; }
+.hoh-door-title .open { color: #b39bff; }
 .hoh-door-title .closed { color: #ff6b6b; }
 .hoh-door-actions { display: flex; gap: 8px; }
-.bb-btn.btn-active { background: #00ff8822; border-color: #00ff88; }
+.bb-btn.btn-active { background: #b39bff22; border-color: #b39bff; }
 .doorbell-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-.doorbell-hint { font-size: 11px; color: #888; }
-.doorbell-sent { margin-top: 10px; font-size: 12px; color: #ffaa00; }
+.doorbell-hint { font-size: 11px; color: #8f83b8; }
+.doorbell-sent { margin-top: 10px; font-size: 12px; color: #e6c988; }
 
 .pending-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .bb-btn-xs { padding: 2px 8px; font-size: 11px; }
@@ -713,8 +713,8 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   z-index: 2000;
 }
 .broadcast-modal {
-  background: linear-gradient(135deg, #1a1a3e, #0f0f2e);
-  border: 1px solid #00ff8866;
+  background: linear-gradient(135deg, #2a1a4a, #1b1130);
+  border: 1px solid #b39bff66;
   border-radius: 14px;
   padding: 28px 32px;
   width: min(420px, 90vw);
@@ -722,27 +722,27 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   box-shadow: 0 12px 48px #000000aa;
 }
 .broadcast-icon { font-size: 44px; }
-.broadcast-title { color: #00ff88; font-weight: 700; margin: 10px 0 8px; font-size: 16px; }
-.broadcast-msg { color: #e0e0e0; font-size: 15px; line-height: 1.6; margin-bottom: 8px; }
-.broadcast-room { color: #00ff88; font-size: 13px; margin-bottom: 8px; }
-.broadcast-from { color: #777; font-size: 12px; margin-bottom: 16px; }
+.broadcast-title { color: #b39bff; font-weight: 700; margin: 10px 0 8px; font-size: 16px; }
+.broadcast-msg { color: #ece7fb; font-size: 15px; line-height: 1.6; margin-bottom: 8px; }
+.broadcast-room { color: #b39bff; font-size: 13px; margin-bottom: 8px; }
+.broadcast-from { color: #7d6fa6; font-size: 12px; margin-bottom: 16px; }
 .broadcast-actions { display: flex; gap: 10px; justify-content: center; }
 
 .action-panel {
   display: flex; gap: 10px; align-items: center;
-  background: #0f0f2e; border: 1px solid #00ff8833; border-radius: 10px; padding: 12px 14px;
+  background: #1b1130; border: 1px solid #b39bff33; border-radius: 10px; padding: 12px 14px;
 }
-.action-hint { font-size: 11px; color: #888; }
+.action-hint { font-size: 11px; color: #8f83b8; }
 
-.washroom-panel { background: #0f0f2e; border: 1px solid #4488ff33; border-radius: 10px; padding: 14px; }
+.washroom-panel { background: #1b1130; border: 1px solid #4488ff33; border-radius: 10px; padding: 14px; }
 .washroom-title { font-size: 14px; color: #7fb0ff; font-weight: 600; margin-bottom: 10px; }
 .washroom-list { display: flex; flex-direction: column; gap: 8px; }
-.washroom-player { display: flex; align-items: center; gap: 8px; color: #ccc; font-size: 13px; }
-.washroom-empty { color: #666; font-size: 12px; }
+.washroom-player { display: flex; align-items: center; gap: 8px; color: #cfc4ea; font-size: 13px; }
+.washroom-empty { color: #6b5f92; font-size: 12px; }
 
 .approve-list { display: flex; flex-direction: column; gap: 6px; }
-.approve-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #ccc; }
-.approve-empty { color: #666; font-size: 12px; }
+.approve-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #cfc4ea; }
+.approve-empty { color: #6b5f92; font-size: 12px; }
 
 .shower-banner {
   padding: 10px 16px; margin-bottom: 16px;
@@ -755,16 +755,16 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   background: rgba(4, 6, 20, 0.92);
   display: flex; align-items: center; justify-content: center;
 }
-.state-card { text-align: center; color: #e0e0e0; }
+.state-card { text-align: center; color: #ece7fb; }
 .state-icon { font-size: 72px; }
-.state-title { font-size: 24px; font-weight: 700; margin: 12px 0 6px; color: #00ff88; }
-.state-desc { color: #888; margin-bottom: 12px; }
-.state-timer { color: #ffaa00; margin-bottom: 16px; }
+.state-title { font-size: 24px; font-weight: 700; margin: 12px 0 6px; color: #b39bff; }
+.state-desc { color: #8f83b8; margin-bottom: 12px; }
+.state-timer { color: #e6c988; margin-bottom: 16px; }
 .moving-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid #00ff8833;
-  border-top-color: #00ff88;
+  border: 2px solid #b39bff33;
+  border-top-color: #b39bff;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -789,15 +789,15 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 }
 
 .hoh-panel {
-  background: #0f0f2e;
-  border: 1px solid #ffaa0033;
+  background: #1b1130;
+  border: 1px solid #e6c98833;
   border-radius: 10px;
   padding: 14px;
 }
 .hoh-panel-title {
   font-size: 14px;
   font-weight: 600;
-  color: #ffaa00;
+  color: #e6c988;
   margin-bottom: 10px;
 }
 .monitor-grid {
@@ -815,12 +815,12 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   font-size: 12px;
 }
 .monitor-icon { font-size: 14px; }
-.monitor-name { flex: 1; color: #aaa; }
-.monitor-count { color: #00ff88; font-weight: 600; }
+.monitor-name { flex: 1; color: #a99bd0; }
+.monitor-count { color: #b39bff; font-weight: 600; }
 
 .hoh-divider {
   height: 1px;
-  background: #ffaa0022;
+  background: #e6c98822;
   margin: 12px 0;
 }
 .invite-notice {
@@ -839,15 +839,15 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 .invite-select {
   flex: 1;
   padding: 6px 10px;
-  background: #1a1a3e;
+  background: #2a1a4a;
   border: 1px solid #ffffff20;
   border-radius: 6px;
-  color: #e0e0e0;
+  color: #ece7fb;
   font-size: 12px;
   outline: none;
 }
-.invite-select:focus { border-color: #ffaa00; }
-.invite-select option { background: #0f0f2e; color: #fff; }
+.invite-select:focus { border-color: #e6c988; }
+.invite-select option { background: #1b1130; color: #fff; }
 .pending-list {
   display: flex;
   flex-direction: column;
@@ -856,31 +856,31 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 }
 .pending-item {
   font-size: 12px;
-  color: #ffaa00;
-  background: #ffaa0010;
+  color: #e6c988;
+  background: #e6c98810;
   padding: 4px 10px;
   border-radius: 6px;
 }
 
 .bb-btn {
   background: transparent;
-  border: 1px solid #00ff8844;
-  color: #00ff88;
+  border: 1px solid #b39bff44;
+  color: #b39bff;
   padding: 6px 14px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
   transition: all 0.2s;
 }
-.bb-btn:hover { background: #00ff8822; }
+.bb-btn:hover { background: #b39bff22; }
 .bb-btn-sm { padding: 4px 12px; font-size: 11px; }
-.bb-btn-outline { border-color: #ffffff22; color: #888; }
-.bb-btn-outline:hover { background: #ffffff08; color: #aaa; border-color: #ffffff33; }
+.bb-btn-outline { border-color: #ffffff22; color: #8f83b8; }
+.bb-btn-outline:hover { background: #ffffff08; color: #a99bd0; border-color: #ffffff33; }
 
 @media (max-width: 768px) {
   .house-layout { flex-direction: column; }
   .house-left { width: 100%; }
 }
-.locked-banner { background: #ffaa0015; border: 1px solid #ffaa0044; color: #ffaa00; border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; text-align: center; }
+.locked-banner { background: #e6c98815; border: 1px solid #e6c98844; color: #e6c988; border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; text-align: center; }
 .photo-wall-top { margin-bottom: 14px; }
 </style>

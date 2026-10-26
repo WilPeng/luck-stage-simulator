@@ -18,6 +18,7 @@ require('./missingNumber')
 require('./abraca')
 require('./describeGuess')
 require('./stayOrFold')
+require('./catchMistress')
 
 const { getAllGames, getGame, GAME_REGISTRY } = require('./index')
 const { loadCustomGame, createCustomGameHandler, getCustomHandlerId, clearCustomGameCache } = require('./customGame')

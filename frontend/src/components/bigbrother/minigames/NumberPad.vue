@@ -53,15 +53,15 @@ function confirm() {
 
 <style scoped>
 .number-pad { display: flex; flex-direction: column; gap: 12px; }
-.np-total { font-size: 40px; font-weight: 700; color: #00ff88; text-align: center; background: #0a1a10; border: 1px solid #00ff8833; border-radius: 10px; padding: 10px; letter-spacing: 2px; }
+.np-total { font-size: 40px; font-weight: 700; color: #b39bff; text-align: center; background: #17112a; border: 1px solid #b39bff33; border-radius: 10px; padding: 10px; letter-spacing: 2px; }
 .np-total.zero { color: #556; }
 .np-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.np-btn { padding: 14px 0; font-size: 18px; font-weight: 600; border: 1px solid #00ff8844; border-radius: 8px; background: #0a1a1044; color: #00ff88; cursor: pointer; transition: all 0.15s; }
-.np-btn:hover { background: #00ff8822; }
-.np-reset { grid-column: span 1; border-color: #ffaa0044; color: #ffaa00; }
-.np-reset:hover { background: #ffaa0022; }
-.np-confirm { padding: 14px; font-size: 16px; font-weight: 700; border: 1px solid #00ff88; border-radius: 8px; background: #00ff8833; color: #00ff88; cursor: pointer; }
-.np-confirm:hover:not(:disabled) { background: #00ff8855; }
+.np-btn { padding: 14px 0; font-size: 18px; font-weight: 600; border: 1px solid #b39bff44; border-radius: 8px; background: #17112a44; color: #b39bff; cursor: pointer; transition: all 0.15s; }
+.np-btn:hover { background: #b39bff22; }
+.np-reset { grid-column: span 1; border-color: #e6c98844; color: #e6c988; }
+.np-reset:hover { background: #e6c98822; }
+.np-confirm { padding: 14px; font-size: 16px; font-weight: 700; border: 1px solid #b39bff; border-radius: 8px; background: #b39bff33; color: #b39bff; cursor: pointer; }
+.np-confirm:hover:not(:disabled) { background: #b39bff55; }
 .np-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
 @media (max-width: 480px) {
   .np-total { font-size: 32px; padding: 8px; }

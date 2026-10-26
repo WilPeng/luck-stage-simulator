@@ -189,57 +189,57 @@ onMounted(fetchData)
 <style scoped>
 .bb-eviction-admin { max-width: 1000px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
 .stats-row { display: flex; gap: 16px; margin-bottom: 20px; }
-.stat-card { flex: 1; background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 16px; text-align: center; }
+.stat-card { flex: 1; background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 16px; text-align: center; }
 .stat-value { font-size: 28px; font-weight: 700; color: #fff; }
-.stat-label { font-size: 12px; color: #888; margin-top: 4px; }
-.vote-manage-section { background: #0f0f2e; border: 1px solid #ffaa0022; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-.vote-manage-section h3 { margin: 0 0 16px; font-size: 16px; color: #e0e0e0; }
+.stat-label { font-size: 12px; color: #8f83b8; margin-top: 4px; }
+.vote-manage-section { background: #1b1130; border: 1px solid #e6c98822; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.vote-manage-section h3 { margin: 0 0 16px; font-size: 16px; color: #ece7fb; }
 .vote-grid { display: flex; flex-direction: column; gap: 8px; }
-.vote-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #1a1a3e; border-radius: 8px; border: 1px solid #00ff8811; }
-.vote-row.voted { border-color: #00ff8844; }
-.vote-row.isHoh { border-color: #ffaa0044; background: #2e2a0f; }
+.vote-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #2a1a4a; border-radius: 8px; border: 1px solid #b39bff11; }
+.vote-row.voted { border-color: #b39bff44; }
+.vote-row.isHoh { border-color: #e6c98844; background: #2e2a0f; }
 .vote-row.isNominee { border-color: #ff444466; background: #2a0f0f; }
 .voter-info { flex: 1; min-width: 0; }
 .voter-name { font-size: 14px; color: #fff; font-weight: 500; }
-.hoh-tag { display: inline-block; margin-left: 8px; font-size: 10px; color: #ffaa00; background: #ffaa0022; padding: 1px 8px; border-radius: 6px; }
+.hoh-tag { display: inline-block; margin-left: 8px; font-size: 10px; color: #e6c988; background: #e6c98822; padding: 1px 8px; border-radius: 6px; }
 .nominee-tag { display: inline-block; margin-left: 8px; font-size: 10px; color: #ff4444; background: #ff444422; padding: 1px 8px; border-radius: 6px; }
 .voter-vote { width: 120px; text-align: center; }
-.voted-target { color: #00ff88; font-size: 13px; }
-.not-voted { color: #666; font-size: 12px; }
+.voted-target { color: #b39bff; font-size: 13px; }
+.not-voted { color: #6b5f92; font-size: 12px; }
 .voter-action { width: 160px; }
-.bb-select-sm { width: 100%; padding: 6px 8px; background: #0f0f2e; border: 1px solid #444; border-radius: 6px; color: #fff; font-size: 12px; }
+.bb-select-sm { width: 100%; padding: 6px 8px; background: #1b1130; border: 1px solid #4a3d6e; border-radius: 6px; color: #fff; font-size: 12px; }
 .bb-select-sm:disabled { opacity: 0.4; cursor: not-allowed; background: #1a0f0f; }
-.bb-select-sm:focus { border-color: #ffaa00; outline: none; }
-.bb-select-sm option { background: #0f0f2e; color: #fff; }
+.bb-select-sm:focus { border-color: #e6c988; outline: none; }
+.bb-select-sm option { background: #1b1130; color: #fff; }
 .twist-action-hint { padding: 10px 14px; background: #e74c3c11; border: 1px solid #e74c3c33; border-radius: 8px; font-size: 13px; color: #e74c3c; margin-bottom: 12px; }
-.votes-section h3 { font-size: 16px; color: #e0e0e0; margin: 0 0 12px; }
+.votes-section h3 { font-size: 16px; color: #ece7fb; margin: 0 0 12px; }
 .bb-table { width: 100%; border-collapse: collapse; }
-.bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #00ff8811; font-size: 14px; color: #ccc; }
-.bb-table th { color: #888; font-size: 12px; text-transform: uppercase; }
-.highlight { color: #ffaa00; font-weight: 500; }
-.time { font-size: 12px; color: #666; }
-.tally-section { background: #0f0f2e; border: 1px solid #ffaa0033; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #b39bff11; font-size: 14px; color: #cfc4ea; }
+.bb-table th { color: #8f83b8; font-size: 12px; text-transform: uppercase; }
+.highlight { color: #e6c988; font-weight: 500; }
+.time { font-size: 12px; color: #6b5f92; }
+.tally-section { background: #1b1130; border: 1px solid #e6c98833; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
 .tally-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.tally-header h3 { margin: 0; font-size: 16px; color: #e0e0e0; }
-.tally-hint { font-size: 12px; color: #888; }
+.tally-header h3 { margin: 0; font-size: 16px; color: #ece7fb; }
+.tally-hint { font-size: 12px; color: #8f83b8; }
 .tally-grid { display: flex; flex-direction: column; gap: 10px; }
-.tally-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #1a1a3e; border: 1px solid #ffffff10; border-radius: 8px; transition: all 0.3s ease; }
+.tally-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #2a1a4a; border: 1px solid #ffffff10; border-radius: 8px; transition: all 0.3s ease; }
 .tally-card.leading { border-color: #ff444488; background: linear-gradient(90deg, #2a0f0f00, #ff444410); }
-.tally-rank { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; font-weight: 700; color: #888; background: #ffffff08; flex-shrink: 0; }
+.tally-rank { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; font-weight: 700; color: #8f83b8; background: #ffffff08; flex-shrink: 0; }
 .tally-card:nth-child(1) .tally-rank { background: #ff444433; color: #ff6b6b; }
-.tally-card:nth-child(2) .tally-rank { background: #ffaa0033; color: #ffaa00; }
-.tally-card:nth-child(3) .tally-rank { background: #00ff8833; color: #00ff88; }
+.tally-card:nth-child(2) .tally-rank { background: #e6c98833; color: #e6c988; }
+.tally-card:nth-child(3) .tally-rank { background: #b39bff33; color: #b39bff; }
 .tally-avatar { flex-shrink: 0; }
 .tally-info { min-width: 80px; }
-.tally-name { font-size: 14px; font-weight: 600; color: #e0e0e0; }
-.tally-votes-text { font-size: 12px; color: #888; margin-top: 2px; }
+.tally-name { font-size: 14px; font-weight: 600; color: #ece7fb; }
+.tally-votes-text { font-size: 12px; color: #8f83b8; margin-top: 2px; }
 .tally-bar-wrap { flex: 1; height: 6px; background: #ffffff08; border-radius: 3px; overflow: hidden; }
 .tally-bar { height: 100%; background: linear-gradient(90deg, #ff4444, #ff6b6b); border-radius: 3px; transition: width 0.5s ease; }
 .tally-card.leading .tally-bar { background: linear-gradient(90deg, #ff4444, #ff2222); }
 .tally-count { font-size: 20px; font-weight: 700; color: #ff6b6b; min-width: 32px; text-align: right; flex-shrink: 0; }
 .tally-card.leading .tally-count { color: #ff4444; text-shadow: 0 0 10px #ff444444; }
-.tally-empty { text-align: center; color: #555; font-size: 13px; padding: 16px; }
+.tally-empty { text-align: center; color: #5c5182; font-size: 13px; padding: 16px; }
 </style>

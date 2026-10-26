@@ -63,6 +63,7 @@ import MissingNumberGame from '../../../components/bigbrother/minigames/MissingN
 import AbracaGame from '../../../components/bigbrother/minigames/AbracaGame.vue'
 import DescribeGuessGame from '../../../components/bigbrother/minigames/DescribeGuessGame.vue'
 import StayOrFoldGame from '../../../components/bigbrother/minigames/StayOrFold.vue'
+import CatchMistressGame from '../../../components/bigbrother/minigames/CatchMistress.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 
 const route = useRoute()
@@ -101,7 +102,8 @@ const gameComponentMap: Record<string, Component> = {
   'missing-number': markRaw(MissingNumberGame),
   'abraca': markRaw(AbracaGame),
   'describe-guess': markRaw(DescribeGuessGame),
-  'stay-or-fold': markRaw(StayOrFoldGame)
+  'stay-or-fold': markRaw(StayOrFoldGame),
+  'catch-mistress': markRaw(CatchMistressGame)
 }
 
 async function fetchData() {
@@ -148,20 +150,20 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
 <style scoped>
 .bbbb-player { max-width: 800px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.page-header h1 { font-size: 22px; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; }
-.rule-bar { background: #ffaa0014; border: 1px solid #ffaa0044; color: #ffaa00; border-radius: 10px; padding: 12px 18px; margin-bottom: 16px; font-size: 13px; }
-.minigame-section { margin-bottom: 16px; background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 12px; overflow: hidden; }
-.card { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 16px 20px; }
-.card-title { font-size: 15px; color: #e0e0e0; font-weight: 600; margin-bottom: 12px; }
+.page-header h1 { font-size: 22px; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; }
+.rule-bar { background: #e6c98814; border: 1px solid #e6c98844; color: #e6c988; border-radius: 10px; padding: 12px 18px; margin-bottom: 16px; font-size: 13px; }
+.minigame-section { margin-bottom: 16px; background: #1b1130; border: 1px solid #b39bff22; border-radius: 12px; overflow: hidden; }
+.card { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 16px 20px; }
+.card-title { font-size: 15px; color: #ece7fb; font-weight: 600; margin-bottom: 12px; }
 .nominee-list { display: flex; flex-direction: column; gap: 8px; }
 .nominee { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #ffffff06; border-radius: 8px; }
-.nominee.safe { border: 1px solid #00ff88; }
-.nominee.me { background: #00ff8812; }
+.nominee.safe { border: 1px solid #b39bff; }
+.nominee.me { background: #b39bff12; }
 .nominee-name { flex: 1; color: #ddd; }
-.me-badge { background: #00ff88; color: #000; border-radius: 8px; font-size: 11px; padding: 1px 8px; margin-left: 6px; }
-.safe-badge { color: #00ff88; font-size: 12px; }
-.muted { color: #666; font-size: 13px; }
-.result-note { margin-top: 10px; color: #00ff88; font-size: 13px; }
-.waiting { text-align: center; color: #666; padding: 24px; }
+.me-badge { background: #b39bff; color: #000; border-radius: 8px; font-size: 11px; padding: 1px 8px; margin-left: 6px; }
+.safe-badge { color: #b39bff; font-size: 12px; }
+.muted { color: #6b5f92; font-size: 13px; }
+.result-note { margin-top: 10px; color: #b39bff; font-size: 13px; }
+.waiting { text-align: center; color: #6b5f92; padding: 24px; }
 </style>

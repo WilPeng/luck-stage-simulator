@@ -386,7 +386,7 @@ async function exportImage() {
     const canvas = await html2canvas(wrapEl, {
       scale: 2,
       useCORS: true,
-      backgroundColor: theme.value === 'white' ? '#ffffff' : '#0f0f2e',
+      backgroundColor: theme.value === 'white' ? '#ffffff' : '#1b1130',
       width,
       height,
       windowWidth: width,
@@ -488,39 +488,39 @@ onMounted(fetchData)
 <style scoped>
 /* 主题色变量 */
 .bb-season-result.theme-black {
-  --bg: #0f0f2e;
-  --bg2: #0a0a20;
-  --text: #ccc;
-  --text-strong: #e0e0e0;
-  --border: #00ff8815;
-  --head-bg: #0a0a20;
+  --bg: #1b1130;
+  --bg2: #120a22;
+  --text: #cfc4ea;
+  --text-strong: #ece7fb;
+  --border: #b39bff15;
+  --head-bg: #120a22;
   --hover: rgba(255, 255, 255, 0.03);
 }
 .bb-season-result.theme-white {
   --bg: #ffffff;
   --bg2: #f5f6fa;
-  --text: #555;
+  --text: #5c5182;
   --text-strong: #222;
   --border: #d5dbe6;
   --head-bg: #eef1f7;
   --hover: rgba(0, 0, 0, 0.03);
 }
-.bb-season-result { --bg:#0f0f2e; --bg2:#0a0a20; --text:#ccc; --text-strong:#e0e0e0; --border:#00ff8815; --head-bg:#0a0a20; --hover:rgba(255,255,255,.03); max-width: 1400px; margin: 0 auto; padding: 16px; background: transparent; color: var(--text-strong); }
+.bb-season-result { --bg:#1b1130; --bg2:#120a22; --text:#cfc4ea; --text-strong:#ece7fb; --border:#b39bff15; --head-bg:#120a22; --hover:rgba(255,255,255,.03); max-width: 1400px; margin: 0 auto; padding: 16px; background: transparent; color: var(--text-strong); }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .page-header h1 { font-size: 22px; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
 .header-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
 .bb-btn { background: transparent; border: 1px solid currentColor; color: var(--text); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 .bb-btn:hover:not(:disabled) { opacity: .85; }
 .bb-btn:disabled { opacity: .4; cursor: not-allowed; }
-.bb-btn.active { background: #00ff8822; color: #00ff88; }
-.bb-btn-primary { color: #00ff88; border-color: #00ff88; background: #00ff8811; }
+.bb-btn.active { background: #b39bff22; color: #b39bff; }
+.bb-btn-primary { color: #b39bff; border-color: #b39bff; background: #b39bff11; }
 .loading-hint { text-align: center; color: var(--text); padding: 60px; font-size: 14px; }
 .summary-bar { display: flex; gap: 16px; align-items: center; color: var(--text); font-size: 13px; margin-bottom: 12px; flex-wrap: wrap; }
 .edit-tip { color: #4488ff; font-size: 12px; }
-.done-badge { color: #00ff88; }
-.eg-chip { font-size: 12px; color: #888; padding: 2px 10px; background: #4488ff11; border: 1px solid #4488ff44; border-radius: 10px; }
-.eg-chip.gold { color: #ffaa00; border-color: #ffaa0055; background: #ffaa0011; }
+.done-badge { color: #b39bff; }
+.eg-chip { font-size: 12px; color: #8f83b8; padding: 2px 10px; background: #4488ff11; border: 1px solid #4488ff44; border-radius: 10px; }
+.eg-chip.gold { color: #e6c988; border-color: #e6c98855; background: #e6c98811; }
 
 .table-wrap { overflow-x: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; }
 .settle-table { border-collapse: collapse; width: 100%; min-width: 720px; }
@@ -528,8 +528,8 @@ onMounted(fetchData)
 .settle-table th { color: var(--text); }
 .label-col { background: var(--head-bg); text-align: left !important; min-width: 120px; position: sticky; left: 0; color: var(--text); font-weight: 500; }
 .round-col { font-weight: 600; }
-.cell-hoh { background: #00ff8818; color: #00ff88; font-weight: 600; }
-.cell-init-nom { background: #ffaa0015; color: #ffaa00; }
+.cell-hoh { background: #b39bff18; color: #b39bff; font-weight: 600; }
+.cell-init-nom { background: #e6c98815; color: #e6c988; }
 .cell-pov { background: #4488ff18; color: #4488ff; }
 .cell-final-nom { background: #ff660015; color: #ff6633; }
 .cell-ticket { color: var(--text); }
@@ -541,41 +541,41 @@ onMounted(fetchData)
 .player-row:hover td { background: var(--hover); }
 .player-cell { text-align: left; }
 .player-label { display: flex; align-items: center; gap: 6px; }
-.player-avatar { width: 20px; height: 20px; border-radius: 50%; background: #00ff8822; color: #00ff88; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+.player-avatar { width: 20px; height: 20px; border-radius: 50%; background: #b39bff22; color: #b39bff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
 .player-name { font-weight: 500; }
 .mini-tag { font-size: 9px; padding: 1px 5px; border-radius: 6px; }
-.mini-tag.f2 { background: #ffaa0022; color: #ffaa00; border: 1px solid #ffaa0055; }
+.mini-tag.f2 { background: #e6c98822; color: #e6c988; border: 1px solid #e6c98855; }
 .mini-tag.jury { background: #9b59b622; color: #9b59b6; border: 1px solid #9b59b644; }
 .mini-tag.evt { background: #88888822; border: 1px solid #88888844; }
 .vote-cell { color: var(--text); }
-.cell-is-hoh { background: #00ff8833; font-weight: 700; }
+.cell-is-hoh { background: #b39bff33; font-weight: 700; }
 .cell-is-nom { background: #ff880033; font-weight: 700; }
 .cell-voted { opacity: .9; }
 .cell-evicted-round { background: #ff444418; color: #ff5555; font-weight: 600; }
-.cell-champion { background: #ffaa0033; font-weight: 800; color: #ffaa00; }
+.cell-champion { background: #e6c98833; font-weight: 800; color: #e6c988; }
 .cell-runner { background: #4488ff22; font-weight: 700; color: #4488ff; }
 
 /* ===== 逐轮列块布局 ===== */
 .block-cell { vertical-align: top; padding: 0 !important; min-width: 110px; position: relative; }
 .block-cell.block-final3 { background: #4488ff08; }
-.block-cell.block-champion { background: #ffaa000a; }
+.block-cell.block-champion { background: #e6c9880a; }
 /* 冠军列：绝对定位铺满该 td，冠军/亚军两半各占 50%；
    不设固定高度 → 单元格高度由普通轮列自然撑起，前面部分不产生多余空行 */
 .champ-stack { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .champ-stack .mini-cell { flex: 1; display: flex; align-items: center; justify-content: center; border-bottom: none; overflow: hidden; }
 .mini-cell { padding: 6px 8px; font-size: 12px; border-bottom: 1px solid var(--border); text-align: center; white-space: nowrap; min-height: 22px; }
 .mini-cell:last-child { border-bottom: none; }
-.mini-cell.cell-hoh { background: #00ff8818; color: #00ff88; font-weight: 700; }
-.mini-cell.cell-init-nom { background: #ffaa0015; color: #ffaa00; }
+.mini-cell.cell-hoh { background: #b39bff18; color: #b39bff; font-weight: 700; }
+.mini-cell.cell-init-nom { background: #e6c98815; color: #e6c988; }
 .mini-cell.cell-pov { background: #4488ff18; color: #4488ff; }
 .mini-cell.cell-final-nom { background: #ff660015; color: #ff6633; }
 .mini-cell .struck, .struck { text-decoration: line-through; opacity: 0.6; }
 .mini-cell.cell-ticket { color: var(--text); font-weight: 600; }
 .mini-cell.cell-evicted { background: #88888818; color: var(--text); }
 .mini-cell.mini-f3w { background: #4488ff22; color: #4488ff; font-weight: 700; font-size: 11px; }
-.mini-cell.mini-f3-slot { background: #ffffff05; color: #ffaa00; font-weight: 600; }
+.mini-cell.mini-f3-slot { background: #ffffff05; color: #e6c988; font-weight: 600; }
 .mini-cell.mini-f3-elim { background: #ff444418; color: #ff5555; font-weight: 600; }
-.mini-cell.mini-champ { background: #ffaa0022; color: #ffaa00; font-weight: 800; font-size: 14px; }
+.mini-cell.mini-champ { background: #e6c98822; color: #e6c988; font-weight: 800; font-size: 14px; }
 .mini-cell.mini-runner { background: #4488ff18; color: #4488ff; font-weight: 700; }
 .champ-icon { margin-right: 4px; }
 .champ-icon.runner { font-size: 11px; }
@@ -584,7 +584,7 @@ onMounted(fetchData)
 .faint-cell { color: var(--text); opacity: .4; }
 
 /* 浮动编辑器 */
-.cell-editor { position: fixed; z-index: 999; display: flex; flex-direction: column; gap: 4px; background: var(--bg); border: 1px solid #00ff88; border-radius: 6px; padding: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+.cell-editor { position: fixed; z-index: 999; display: flex; flex-direction: column; gap: 4px; background: var(--bg); border: 1px solid #b39bff; border-radius: 6px; padding: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
 .cell-editor-input { background: var(--bg2); border: 1px solid var(--border); color: var(--text-strong); padding: 6px 8px; border-radius: 4px; font-size: 13px; min-width: 160px; outline: none; }
 .cell-editor-actions { display: flex; gap: 4px; }
 .bb-btn-sm { padding: 2px 8px; font-size: 12px; }

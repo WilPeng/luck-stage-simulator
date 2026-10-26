@@ -1,0 +1,235 @@
+/* =========================================================
+   Big Brother · 魔法学院主题
+   统一字体、配色、卡片与 TDesign 组件外观
+   ========================================================= */
+
+:root {
+  --bb-bg-deep: #120a22;
+  --bb-bg: #160d29;
+  --bb-panel: #1b1130;
+  --bb-panel-raised: #241738;
+  --bb-panel-soft: #2a1a4a;
+
+  --bb-accent: #b39bff;
+  --bb-accent-strong: #8b6bff;
+  --bb-accent-soft: rgba(179, 155, 255, 0.14);
+  --bb-gold: #e6c988;
+  --bb-gold-soft: rgba(230, 201, 136, 0.14);
+  --bb-text-primary: #ece7fb;
+  --bb-text-secondary: #b8a9dd;
+  --bb-text-muted: #8f83b8;
+  --bb-border: rgba(179, 155, 255, 0.22);
+  --bb-border-gold: rgba(230, 201, 136, 0.4);
+
+  --bb-font-body: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --bb-font-display: 'Cinzel', 'Noto Serif SC', 'Songti SC', Georgia, 'Times New Roman', serif;
+}
+
+/* ===== 全局基础 ===== */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(1100px 620px at 78% 0%, rgba(96, 58, 160, 0.32) 0%, transparent 60%),
+    radial-gradient(900px 520px at 8% 100%, rgba(64, 38, 128, 0.3) 0%, transparent 62%),
+    linear-gradient(160deg, #160d29 0%, #1e1236 48%, #120a22 100%);
+  background-attachment: fixed;
+  color: var(--bb-text-primary);
+  font-family: var(--bb-font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(179, 155, 255, 0.35);
+  color: #fff;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: rgba(18, 10, 34, 0.6); }
+::-webkit-scrollbar-thumb {
+  background: rgba(179, 155, 255, 0.28);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(179, 155, 255, 0.5); }
+
+/* ===== TDesign 主题变量 ===== */
+:root,
+.app-container,
+.app-container.dark,
+.app-container[data-theme='dark'] {
+  --td-brand-color: #9a7bff;
+  --td-brand-color-hover: #b39bff;
+  --td-brand-color-focus: #c8b6ff;
+  --td-brand-color-active: #7b5cff;
+  --td-brand-color-disabled: #5a4a86;
+  --td-brand-color-light: rgba(154, 123, 255, 0.12);
+  --td-brand-color-light-hover: rgba(154, 123, 255, 0.18);
+  --td-brand-color-light-active: rgba(154, 123, 255, 0.24);
+
+  --td-error-color: #ff6b8a;
+  --td-error-color-hover: #ff8aa2;
+  --td-error-color-active: #e2385e;
+  --td-warning-color: #e6c988;
+  --td-warning-color-hover: #efd7a4;
+  --td-success-color: #7ee0b0;
+  --td-success-color-hover: #9becc6;
+
+  --td-bg-color-page: #120a22;
+  --td-bg-color-container: #1e1436;
+  --td-bg-color-container-hover: #2a1a4a;
+  --td-bg-color-container-active: #33205a;
+  --td-bg-color-container-select: #33205a;
+  --td-bg-color-secondarycontainer: #241738;
+  --td-bg-color-secondarycontainer-hover: #2e1e4a;
+  --td-bg-color-secondarycontainer-active: #382657;
+  --td-bg-color-component: #2a1a4a;
+  --td-bg-color-component-hover: #33205a;
+  --td-bg-color-component-active: #3d2867;
+  --td-bg-color-component-disabled: #241738;
+  --td-bg-color-specialcomponent: #1b1130;
+  --td-bg-color-secondarycomponent: #241738;
+
+  --td-text-color-primary: #ece7fb;
+  --td-text-color-secondary: #b8a9dd;
+  --td-text-color-placeholder: #8f83b8;
+  --td-text-color-disabled: #6b5f92;
+  --td-text-color-anti: #ffffff;
+
+  --td-border-level-1-color: rgba(179, 155, 255, 0.22);
+  --td-border-level-2-color: rgba(179, 155, 255, 0.14);
+  --td-component-border: rgba(179, 155, 255, 0.22);
+  --td-component-stroke: rgba(179, 155, 255, 0.18);
+
+  --td-mask-active: rgba(8, 4, 18, 0.78);
+  --td-mask-disabled: rgba(8, 4, 18, 0.55);
+
+  --td-radius-small: 8px;
+  --td-radius-default: 10px;
+  --td-radius-medium: 12px;
+  --td-radius-large: 16px;
+
+  --td-font-family: var(--bb-font-body);
+  --td-font-family-medium: var(--bb-font-body);
+}
+
+/* ===== 卡片 / 弹窗 / 表格 ===== */
+.app-container .t-card {
+  background: linear-gradient(165deg, rgba(42, 26, 74, 0.72), rgba(24, 14, 42, 0.86)) !important;
+  border: 1px solid var(--bb-border) !important;
+  border-radius: 14px !important;
+  color: var(--bb-text-primary);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35), inset 0 0 40px rgba(120, 80, 220, 0.06);
+  backdrop-filter: blur(10px);
+}
+.app-container .t-card__title { color: var(--bb-text-primary); }
+
+.app-container .t-dialog,
+.app-container .t-drawer {
+  background: linear-gradient(165deg, #241738, #170e2a) !important;
+  border: 1px solid var(--bb-border) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6), 0 0 60px rgba(120, 80, 255, 0.18);
+  color: var(--bb-text-primary);
+}
+.app-container .t-dialog__header,
+.app-container .t-drawer__header { color: var(--bb-text-primary); }
+.app-container .t-dialog__body { color: var(--bb-text-primary); }
+
+.app-container .t-table {
+  background: transparent !important;
+  color: var(--bb-text-primary);
+}
+.app-container .t-table th {
+  background: rgba(42, 26, 74, 0.72) !important;
+  color: var(--bb-gold) !important;
+  font-weight: 600;
+}
+.app-container .t-table td {
+  background: transparent !important;
+  color: var(--bb-text-primary);
+  border-color: rgba(179, 155, 255, 0.12) !important;
+}
+.app-container .t-table tr:hover td { background: rgba(179, 155, 255, 0.06) !important; }
+
+.app-container .t-input,
+.app-container .t-textarea__inner,
+.app-container .t-select-input {
+  background: rgba(18, 10, 34, 0.55) !important;
+  border-color: var(--bb-border) !important;
+  color: var(--bb-text-primary) !important;
+  border-radius: 10px !important;
+}
+.app-container .t-input:hover,
+.app-container .t-textarea__inner:hover,
+.app-container .t-select-input:hover { border-color: rgba(179, 155, 255, 0.45) !important; }
+.app-container .t-input.t-is-focused,
+.app-container .t-textarea__inner:focus,
+.app-container .t-select-input.t-is-focused {
+  border-color: var(--bb-accent) !important;
+  box-shadow: 0 0 0 3px rgba(154, 123, 255, 0.18) !important;
+}
+.app-container .t-input__inner,
+.app-container .t-textarea__inner { color: var(--bb-text-primary) !important; }
+.app-container .t-input__inner::placeholder,
+.app-container .t-textarea__inner::placeholder { color: var(--bb-text-muted) !important; }
+
+.app-container .t-button--theme-primary {
+  background: linear-gradient(135deg, #a06bff 0%, #7b5cff 52%, #5b6bff 100%) !important;
+  border: none !important;
+  box-shadow: 0 8px 24px rgba(120, 90, 255, 0.4);
+}
+.app-container .t-button--theme-primary:hover {
+  box-shadow: 0 12px 30px rgba(120, 90, 255, 0.55);
+}
+.app-container .t-button--theme-default {
+  background: rgba(179, 155, 255, 0.1) !important;
+  border-color: var(--bb-border) !important;
+  color: var(--bb-text-primary) !important;
+}
+.app-container .t-button--theme-default:hover {
+  border-color: var(--bb-gold) !important;
+  color: var(--bb-gold) !important;
+}
+
+.app-container .t-tag { border-radius: 999px; }
+
+/* ===== 内容区排版 ===== */
+.bb-main {
+  color: var(--bb-text-primary);
+  font-family: var(--bb-font-body);
+}
+
+.bb-main h1,
+.bb-main .page-header h2,
+.bb-main .page-header .title {
+  font-family: var(--bb-font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px;
+  color: #f0e4c4 !important;
+  text-shadow: 0 2px 22px rgba(230, 201, 136, 0.18);
+}
+
+.bb-main .section-title,
+.bb-main .card-title,
+.bb-main .panel-title {
+  font-family: var(--bb-font-display) !important;
+  letter-spacing: 0.4px;
+  color: var(--bb-gold) !important;
+}
+
+.bb-main h2,
+.bb-main h3 {
+  font-family: var(--bb-font-display) !important;
+}
+
+/* 原生表格表头统一为金色衬线 */
+.bb-main table th {
+  color: var(--bb-gold) !important;
+  font-family: var(--bb-font-display) !important;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+

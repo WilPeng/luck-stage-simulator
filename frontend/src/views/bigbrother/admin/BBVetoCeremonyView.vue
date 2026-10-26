@@ -161,7 +161,7 @@
         <div class="bb-modal">
           <div class="bb-modal-header"><h3>使用否决权</h3><button class="close-btn" @click="showUseModal = false">✕</button></div>
           <div class="bb-modal-body">
-            <p style="color:#aaa;font-size:14px;margin-bottom:16px;">选择要拯救的被提名人</p>
+            <p style="color:#a99bd0;font-size:14px;margin-bottom:16px;">选择要拯救的被提名人</p>
             <div class="form-group">
               <label>拯救对象</label>
               <select v-model="savePlayerId" class="bb-select">
@@ -294,61 +294,61 @@ onMounted(fetchData)
 <style scoped>
 .bb-veto-admin { max-width: 1000px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
-.veto-card { background: linear-gradient(135deg, #0f0f2e, #1a1a3e); border: 1px solid #ffaa00; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
-.veto-card.empty { border-color: #444; }
-.veto-card.empty p { text-align: center; color: #666; width: 100%; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
+.veto-card { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #e6c988; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+.veto-card.empty { border-color: #4a3d6e; }
+.veto-card.empty p { text-align: center; color: #6b5f92; width: 100%; }
 .veto-icon { font-size: 48px; }
-.veto-label { font-size: 12px; color: #888; text-transform: uppercase; }
+.veto-label { font-size: 12px; color: #8f83b8; text-transform: uppercase; }
 .veto-winner-row { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
-.veto-winner { font-size: 20px; font-weight: 700; color: #ffaa00; }
-.veto-status { font-size: 13px; color: #aaa; margin-top: 4px; }
-.veto-saved { margin-top: 8px; font-size: 14px; color: #aaa; }
-.highlight { color: #00ff88; }
-.veto-boomerang { display: block; font-size: 12px; color: #00ff88; margin-top: 4px; font-weight: 600; }
-.twist-info-bar { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 6px; }
-.twist-item { font-size: 13px; color: #aaa; }
-.twist-item.boomerang { color: #00ff88; }
-.replacement-hint { background: #ffaa0022; border: 1px solid #ffaa00; border-radius: 10px; padding: 12px 16px; font-size: 14px; color: #ffaa00; margin-bottom: 20px; }
-.replacement-hint .link { color: #ffaa00; text-decoration: underline; }
-.final-nomination-confirmed { background: #00ff8810; border: 1px solid #00ff8844; border-radius: 10px; padding: 12px 16px; font-size: 14px; color: #00ff88; margin-bottom: 20px; }
-.final-nomination-confirmed strong { color: #00ff88; }
+.veto-winner { font-size: 20px; font-weight: 700; color: #e6c988; }
+.veto-status { font-size: 13px; color: #a99bd0; margin-top: 4px; }
+.veto-saved { margin-top: 8px; font-size: 14px; color: #a99bd0; }
+.highlight { color: #b39bff; }
+.veto-boomerang { display: block; font-size: 12px; color: #b39bff; margin-top: 4px; font-weight: 600; }
+.twist-info-bar { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 6px; }
+.twist-item { font-size: 13px; color: #a99bd0; }
+.twist-item.boomerang { color: #b39bff; }
+.replacement-hint { background: #e6c98822; border: 1px solid #e6c988; border-radius: 10px; padding: 12px 16px; font-size: 14px; color: #e6c988; margin-bottom: 20px; }
+.replacement-hint .link { color: #e6c988; text-decoration: underline; }
+.final-nomination-confirmed { background: #b39bff10; border: 1px solid #b39bff44; border-radius: 10px; padding: 12px 16px; font-size: 14px; color: #b39bff; margin-bottom: 20px; }
+.final-nomination-confirmed strong { color: #b39bff; }
 .final-names { font-size: 15px; }
-.status-panel { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; }
+.status-panel { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; }
 .status-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
-.status-row + .status-row { border-top: 1px solid #00ff8811; }
-.status-label { font-size: 13px; color: #888; min-width: 120px; }
-.status-value { font-size: 14px; font-weight: 600; color: #e0e0e0; }
-.status-value.no-data { color: #555; font-weight: 400; }
+.status-row + .status-row { border-top: 1px solid #b39bff11; }
+.status-label { font-size: 13px; color: #8f83b8; min-width: 120px; }
+.status-value { font-size: 14px; font-weight: 600; color: #ece7fb; }
+.status-value.no-data { color: #5c5182; font-weight: 400; }
 .hoh-row .status-value { color: #4488ff; }
 .nom-row .status-value { color: #ff4444; }
-.replacement-hint .link { color: #ffaa00; text-decoration: underline; }
-.action-section { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-.action-section h3 { margin: 0 0 12px; font-size: 16px; color: #e0e0e0; }
+.replacement-hint .link { color: #e6c988; text-decoration: underline; }
+.action-section { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.action-section h3 { margin: 0 0 12px; font-size: 16px; color: #ece7fb; }
 .action-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
-.bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
-.bb-btn:hover { background: #00ff8822; }
+.bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+.bb-btn:hover { background: #b39bff22; }
 .bb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.bb-btn-primary { background: #00ff8822; border-color: #00ff88; }
-.bb-btn-warning { border-color: #ffaa0044; color: #ffaa00; }
-.bb-btn-warning:hover { background: #ffaa0015; }
+.bb-btn-primary { background: #b39bff22; border-color: #b39bff; }
+.bb-btn-warning { border-color: #e6c98844; color: #e6c988; }
+.bb-btn-warning:hover { background: #e6c98815; }
 .bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; width: 400px; max-width: 90vw; }
+.bb-modal { background: #2a1a4a; border: 1px solid #b39bff44; border-radius: 12px; width: 400px; max-width: 90vw; }
 .skip-modal { width: 520px; max-width: 92vw; }
-.bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #00ff8822; }
-.bb-modal-header h3 { margin: 0; color: #00ff88; font-size: 16px; }
-.close-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 18px; }
+.bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #b39bff22; }
+.bb-modal-header h3 { margin: 0; color: #b39bff; font-size: 16px; }
+.close-btn { background: none; border: none; color: #8f83b8; cursor: pointer; font-size: 18px; }
 .bb-modal-body { padding: 20px; }
 .form-group { margin-bottom: 16px; }
-.form-group label { display: block; font-size: 13px; color: #aaa; margin-bottom: 6px; }
-.bb-select { background: #0f0f2e; border: 1px solid #00ff8822; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; font-size: 14px; outline: none; cursor: pointer; width: 100%; }
+.form-group label { display: block; font-size: 13px; color: #a99bd0; margin-bottom: 6px; }
+.bb-select { background: #1b1130; border: 1px solid #b39bff22; color: #ece7fb; padding: 8px 12px; border-radius: 6px; font-size: 14px; outline: none; cursor: pointer; width: 100%; }
 .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
 
 /* 提名对比面板 */
 .nomination-compare { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
 .compare-col { flex: 1; }
-.compare-title { font-size: 13px; font-weight: 600; color: #aaa; margin-bottom: 10px; }
+.compare-title { font-size: 13px; font-weight: 600; color: #a99bd0; margin-bottom: 10px; }
 .compare-title.final-title { color: #ff4444; }
 .compare-names { display: flex; flex-direction: column; gap: 6px; }
 .compare-tag {
@@ -360,30 +360,30 @@ onMounted(fetchData)
 .compare-tag.final {
   background: #ff444410; color: #ff4444; border: 1px solid #ff444433;
 }
-.no-nominees { font-size: 13px; color: #555; font-style: italic; }
+.no-nominees { font-size: 13px; color: #5c5182; font-style: italic; }
 .compare-arrow {
   display: flex; align-items: center; padding-top: 28px;
-  font-size: 20px; color: #888; font-weight: 700;
+  font-size: 20px; color: #8f83b8; font-weight: 700;
 }
-.skip-hint { font-size: 13px; color: #ffaa00; margin: 0; padding: 12px; background: #ffaa0008; border: 1px solid #ffaa0022; border-radius: 6px; }
+.skip-hint { font-size: 13px; color: #e6c988; margin: 0; padding: 12px; background: #e6c98808; border: 1px solid #e6c98822; border-radius: 6px; }
 
 /* 不使用否决权结果展示 */
 .skip-result { text-align: center; padding: 12px 0; }
 .skip-result-icon { font-size: 40px; margin-bottom: 12px; }
-.skip-result-text { font-size: 16px; color: #e0e0e0; margin-bottom: 8px; }
-.skip-result-text strong { color: #ffaa00; }
-.skip-result-detail { font-size: 13px; color: #888; }
-.skip-result-detail .highlight { color: #ffaa00; }
-.skip-result-hint { font-size: 13px; color: #00ff88; margin: 16px 0 0; padding: 12px; background: #00ff8808; border: 1px solid #00ff8822; border-radius: 6px; }
-.ceremony-panel { background: #0f0f2e; border: 1px solid #ffaa0044; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
-.cer-title { font-size: 15px; font-weight: 700; color: #ffaa00; margin-bottom: 10px; }
+.skip-result-text { font-size: 16px; color: #ece7fb; margin-bottom: 8px; }
+.skip-result-text strong { color: #e6c988; }
+.skip-result-detail { font-size: 13px; color: #8f83b8; }
+.skip-result-detail .highlight { color: #e6c988; }
+.skip-result-hint { font-size: 13px; color: #b39bff; margin: 16px 0 0; padding: 12px; background: #b39bff08; border: 1px solid #b39bff22; border-radius: 6px; }
+.ceremony-panel { background: #1b1130; border: 1px solid #e6c98844; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.cer-title { font-size: 15px; font-weight: 700; color: #e6c988; margin-bottom: 10px; }
 .cer-msgs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-.cer-msg { background: #16163a; border-radius: 8px; padding: 8px 12px; font-size: 14px; color: #ddd; border-left: 3px solid #ffaa0066; }
-.cer-sender { color: #ffaa00; font-weight: 600; margin-right: 6px; }
-.cer-empty { color: #666; font-size: 13px; }
+.cer-msg { background: #211640; border-radius: 8px; padding: 8px 12px; font-size: 14px; color: #ddd; border-left: 3px solid #e6c98866; }
+.cer-sender { color: #e6c988; font-weight: 600; margin-right: 6px; }
+.cer-empty { color: #6b5f92; font-size: 13px; }
 .cer-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.cer-input { flex: 1; min-width: 200px; background: #0a0a24; border: 1px solid #ffaa0044; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; outline: none; }
-.cer-done { color: #00ff88; font-size: 13px; }
+.cer-input { flex: 1; min-width: 200px; background: #0a0a24; border: 1px solid #e6c98844; color: #ece7fb; padding: 8px 12px; border-radius: 6px; outline: none; }
+.cer-done { color: #b39bff; font-size: 13px; }
 .bb-btn-danger { border-color: #ff444466; color: #ff4444; }
 .bb-btn-danger:hover { background: #ff444422; }
 </style>

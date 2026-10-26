@@ -687,59 +687,59 @@ onUnmounted(stopProgressPolling)
 .bb-veto-draw { max-width: 1000px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .header-undo { margin-left: auto; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
 
-.twist-info-bar { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; }
-.twist-item { font-size: 13px; color: #aaa; }
-.twist-item.no-pendant { color: #ffaa00; }
+.twist-info-bar { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; }
+.twist-item { font-size: 13px; color: #a99bd0; }
+.twist-item.no-pendant { color: #e6c988; }
 
 /* 获胜者横幅 */
 .veto-winner-banner {
   display: flex; align-items: center; gap: 16px;
-  background: linear-gradient(135deg, #ffaa0022, #ff880015);
-  border: 1px solid #ffaa00;
+  background: linear-gradient(135deg, #e6c98822, #ff880015);
+  border: 1px solid #e6c988;
   border-radius: 12px;
   padding: 18px 22px;
   margin-bottom: 16px;
 }
 .veto-winner-banner .banner-icon { font-size: 40px; }
 .veto-winner-banner .banner-text { flex: 1; }
-.veto-winner-banner .banner-title { font-size: 20px; font-weight: 700; color: #ffaa00; }
-.veto-winner-banner .banner-sub { font-size: 13px; color: #aaa; margin-top: 4px; }
+.veto-winner-banner .banner-title { font-size: 20px; font-weight: 700; color: #e6c988; }
+.veto-winner-banner .banner-sub { font-size: 13px; color: #a99bd0; margin-top: 4px; }
 
 /* 步骤说明 */
-.step-card { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-.step-title { font-size: 16px; font-weight: 600; color: #e0e0e0; margin-bottom: 12px; }
+.step-card { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.step-title { font-size: 16px; font-weight: 600; color: #ece7fb; margin-bottom: 12px; }
 .step-list { list-style: none; padding: 0; margin: 0; }
-.step-list li { font-size: 13px; color: #aaa; padding: 6px 0; padding-left: 20px; position: relative; }
-.step-list li::before { content: '•'; position: absolute; left: 6px; color: #00ff88; }
-.step-list strong { color: #00ff88; }
+.step-list li { font-size: 13px; color: #a99bd0; padding: 6px 0; padding-left: 20px; position: relative; }
+.step-list li::before { content: '•'; position: absolute; left: 6px; color: #b39bff; }
+.step-list strong { color: #b39bff; }
 
 /* 否决权卡片 */
-.veto-card { background: linear-gradient(135deg, #0f0f2e, #1a1a3e); border: 1px solid #444; border-radius: 12px; padding: 24px; display: flex; align-items: flex-start; gap: 20px; margin-bottom: 20px; }
-.veto-card.drawn { border-color: #00ff8844; }
+.veto-card { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #4a3d6e; border-radius: 12px; padding: 24px; display: flex; align-items: flex-start; gap: 20px; margin-bottom: 20px; }
+.veto-card.drawn { border-color: #b39bff44; }
 .veto-icon { font-size: 48px; flex-shrink: 0; }
 .veto-info { flex: 1; }
-.veto-label { font-size: 12px; color: #888; text-transform: uppercase; margin-bottom: 8px; }
-.no-draw p { color: #666; font-size: 14px; }
+.veto-label { font-size: 12px; color: #8f83b8; text-transform: uppercase; margin-bottom: 8px; }
+.no-draw p { color: #6b5f92; font-size: 14px; }
 
 .veto-participants { margin-top: 0; }
-.veto-subtitle { font-size: 13px; color: #aaa; margin-bottom: 12px; }
-.has-winner { color: #ffaa00; font-weight: 600; }
+.veto-subtitle { font-size: 13px; color: #a99bd0; margin-bottom: 12px; }
+.has-winner { color: #e6c988; font-weight: 600; }
 
 .participant-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .participant-tag {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 14px;
-  background: #0f0f2e;
-  border: 1px solid #00ff8822;
+  background: #1b1130;
+  border: 1px solid #b39bff22;
   border-radius: 8px;
-  font-size: 13px; color: #ccc;
+  font-size: 13px; color: #cfc4ea;
   transition: all 0.2s;
 }
 .participant-tag.winner {
-  border-color: #ffaa00; background: #ffaa0010; color: #ffaa00; font-weight: 600;
+  border-color: #e6c988; background: #e6c98810; color: #e6c988; font-weight: 600;
 }
 .participant-tag.picked {
   border-color: #aa44ff44; background: #aa44ff10;
@@ -750,25 +750,25 @@ onUnmounted(stopProgressPolling)
 }
 .hoh-badge { background: #4488ff22; color: #4488ff; border: 1px solid #4488ff33; }
 .nominee-badge { background: #ff444422; color: #ff4444; border: 1px solid #ff444433; }
-.winner-badge { background: #ffaa0022; color: #ffaa00; border: 1px solid #ffaa0033; font-size: 12px; padding: 0 4px; }
-.random-badge { background: #00ff8815; color: #00ff88; border: 1px solid #00ff8833; }
+.winner-badge { background: #e6c98822; color: #e6c988; border: 1px solid #e6c98833; font-size: 12px; padding: 0 4px; }
+.random-badge { background: #b39bff15; color: #b39bff; border: 1px solid #b39bff33; }
 .default-badge { background: #4488ff15; color: #4488ff; border: 1px solid #4488ff33; }
 .picked-badge { background: #aa44ff22; color: #aa44ff; border: 1px solid #aa44ff33; }
 .picked-badge small { color: #aa44ff88; font-size: 10px; }
 
 /* 自选区域 */
 .pick-section {
-  background: linear-gradient(135deg, #0f0f2e, #1a1a3e);
+  background: linear-gradient(135deg, #1b1130, #2a1a4a);
   border: 1px solid #aa44ff44;
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 20px;
 }
-.pick-section h3 { margin: 0 0 4px; font-size: 16px; color: #e0e0e0; }
-.pick-hint { font-size: 13px; color: #888; margin: 0 0 16px; }
+.pick-section h3 { margin: 0 0 4px; font-size: 16px; color: #ece7fb; }
+.pick-hint { font-size: 13px; color: #8f83b8; margin: 0 0 16px; }
 .pick-row {
-  background: #0f0f2e;
-  border: 1px solid #00ff8811;
+  background: #1b1130;
+  border: 1px solid #b39bff11;
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 10px;
@@ -778,21 +778,21 @@ onUnmounted(stopProgressPolling)
   display: flex; align-items: center; gap: 8px;
   margin-bottom: 10px;
 }
-.picker-name { font-size: 14px; font-weight: 600; color: #e0e0e0; }
+.picker-name { font-size: 14px; font-weight: 600; color: #ece7fb; }
 .picker-role {
   font-size: 10px; padding: 1px 8px; border-radius: 4px; font-weight: 500;
 }
 .picker-role.hoh { background: #4488ff22; color: #4488ff; border: 1px solid #4488ff33; }
 .picker-role.nominee { background: #ff444422; color: #ff4444; border: 1px solid #ff444433; }
-.pick-done-badge { font-size: 12px; color: #00ff88; margin-left: auto; }
+.pick-done-badge { font-size: 12px; color: #b39bff; margin-left: auto; }
 .pick-row-actions { display: flex; gap: 10px; align-items: center; }
 .pick-select {
   flex: 1;
-  background: #1a1a2e; border: 1px solid #00ff8822; color: #ccc;
+  background: #221540; border: 1px solid #b39bff22; color: #cfc4ea;
   padding: 8px 12px; border-radius: 6px; font-size: 13px; outline: none;
 }
 .pick-select:focus { border-color: #aa44ff44; }
-.pick-select option { background: #1a1a2e; color: #ccc; }
+.pick-select option { background: #221540; color: #cfc4ea; }
 
 .bb-btn-pick {
   border-color: #aa44ff44 !important; color: #aa44ff !important; white-space: nowrap;
@@ -800,18 +800,18 @@ onUnmounted(stopProgressPolling)
 .bb-btn-pick:hover:not(:disabled) { background: #aa44ff15 !important; }
 
 /* 操作区 */
-.action-section { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 20px; }
-.action-section h3 { margin: 0 0 12px; font-size: 16px; color: #e0e0e0; }
+.action-section { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 20px; }
+.action-section h3 { margin: 0 0 12px; font-size: 16px; color: #ece7fb; }
 .action-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
-.action-hint { font-size: 12px; color: #ffaa00; margin: 12px 0 0; }
+.action-hint { font-size: 12px; color: #e6c988; margin: 12px 0 0; }
 
-.bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
-.bb-btn:hover:not(:disabled) { background: #00ff8822; }
+.bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+.bb-btn:hover:not(:disabled) { background: #b39bff22; }
 .bb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .bb-btn-draw { border-color: #4488ff44; color: #4488ff; }
 .bb-btn-draw:hover:not(:disabled) { background: #4488ff15; }
-.bb-btn-compete { border-color: #ffaa0044; color: #ffaa00; }
-.bb-btn-compete:hover:not(:disabled) { background: #ffaa0015; }
+.bb-btn-compete { border-color: #e6c98844; color: #e6c988; }
+.bb-btn-compete:hover:not(:disabled) { background: #e6c98815; }
 
 /* 抽取动画 */
 .drawing-spin {
@@ -822,55 +822,55 @@ onUnmounted(stopProgressPolling)
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-.bb-btn-minigame { border-color: #ffaa0044; color: #ffaa00; }
-.bb-btn-minigame:hover:not(:disabled) { background: #ffaa0015; }
-.bb-btn-primary { background: #00ff8822; border-color: #00ff88; }
-.bb-btn-warn { border-color: #ffaa0066; color: #ffaa00; }
-.bb-btn-warn:hover { background: #ffaa0022; }
+.bb-btn-minigame { border-color: #e6c98844; color: #e6c988; }
+.bb-btn-minigame:hover:not(:disabled) { background: #e6c98815; }
+.bb-btn-primary { background: #b39bff22; border-color: #b39bff; }
+.bb-btn-warn { border-color: #e6c98866; color: #e6c988; }
+.bb-btn-warn:hover { background: #e6c98822; }
 .bb-btn-danger { border-color: #ff444466; color: #ff4444; }
 .bb-btn-danger:hover { background: #ff444422; }
-.room-status { margin-top: 14px; padding: 10px 16px; background: #ffffff05; border: 1px solid #00ff8822; border-radius: 8px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.room-status.playing { border-color: #00ff88; }
-.room-status.paused { border-color: #ffaa00; }
-.room-status.finished { border-color: #ffaa00; }
+.room-status { margin-top: 14px; padding: 10px 16px; background: #ffffff05; border: 1px solid #b39bff22; border-radius: 8px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.room-status.playing { border-color: #b39bff; }
+.room-status.paused { border-color: #e6c988; }
+.room-status.finished { border-color: #e6c988; }
 .room-actions { display: flex; gap: 8px; margin-left: auto; }
-.status-badge { font-size: 12px; font-weight: 600; color: #00ff88; padding: 2px 10px; background: #00ff8810; border-radius: 4px; }
-.status-info { flex: 1; font-size: 13px; color: #aaa; }
+.status-badge { font-size: 12px; font-weight: 600; color: #b39bff; padding: 2px 10px; background: #b39bff10; border-radius: 4px; }
+.status-info { flex: 1; font-size: 13px; color: #a99bd0; }
 .bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; width: 400px; max-width: 90vw; }
+.bb-modal { background: #2a1a4a; border: 1px solid #b39bff44; border-radius: 12px; width: 400px; max-width: 90vw; }
 .bb-modal-lg { width: 700px; max-width: 92vw; }
-.bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #00ff8822; }
-.bb-modal-header h3 { margin: 0; color: #00ff88; font-size: 16px; }
-.close-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 18px; }
+.bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #b39bff22; }
+.bb-modal-header h3 { margin: 0; color: #b39bff; font-size: 16px; }
+.close-btn { background: none; border: none; color: #8f83b8; cursor: pointer; font-size: 18px; }
 .bb-modal-body { padding: 20px; }
 
 /* 目标设置 */
 .target-setup { margin-top: 12px; padding: 12px 16px; background: #ffffff05; border: 1px solid #aa44ff44; border-radius: 8px; }
 .target-setup-title { font-size: 13px; color: #aa44ff; margin-bottom: 8px; }
 .target-setup-row { display: flex; gap: 10px; align-items: center; }
-.target-input { flex: 1; background: #1a1a2e; border: 1px solid #aa44ff44; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; font-size: 13px; outline: none; }
-.target-input::placeholder { color: #777; }
+.target-input { flex: 1; background: #221540; border: 1px solid #aa44ff44; color: #ece7fb; padding: 8px 12px; border-radius: 6px; font-size: 13px; outline: none; }
+.target-input::placeholder { color: #7d6fa6; }
 
 /* 实时进度 */
 .progress-panel { margin-top: 12px; padding: 12px 16px; background: #ffffff05; border: 1px solid #4488ff33; border-radius: 8px; }
 .progress-title { font-size: 13px; font-weight: 600; color: #4488ff; margin-bottom: 10px; }
 .progress-table { width: 100%; border-collapse: collapse; }
-.progress-table th, .progress-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #00ff8811; font-size: 13px; color: #ccc; }
-.progress-table th { color: #888; font-weight: 500; font-size: 11px; text-transform: uppercase; }
-.progress-table tr.winner { background: #ffaa0008; }
-.progress-table tr.winner td { color: #ffaa00; }
+.progress-table th, .progress-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #b39bff11; font-size: 13px; color: #cfc4ea; }
+.progress-table th { color: #8f83b8; font-weight: 500; font-size: 11px; text-transform: uppercase; }
+.progress-table tr.winner { background: #e6c98808; }
+.progress-table tr.winner td { color: #e6c988; }
 .sub-list { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
-.sub-item { font-size: 12px; color: #8fd8a8; background: #00ff8810; border-radius: 4px; padding: 2px 8px; }
-.p-avatar { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: #00ff8822; color: #00ff88; align-items: center; justify-content: center; margin-right: 8px; font-size: 12px; }
+.sub-item { font-size: 12px; color: #9becc6; background: #b39bff10; border-radius: 4px; padding: 2px 8px; }
+.p-avatar { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: #b39bff22; color: #b39bff; align-items: center; justify-content: center; margin-right: 8px; font-size: 12px; }
 .p-score { min-width: 120px; }
 .p-bar { width: 120px; height: 5px; background: #ffffff10; border-radius: 3px; margin-top: 4px; overflow: hidden; }
-.p-bar-fill { height: 100%; background: linear-gradient(90deg, #00ff88, #4488ff); border-radius: 3px; transition: width 0.4s; }
-.win-badge { color: #ffaa00; font-weight: 600; }
-.done-badge { color: #00ff88; }
-.playing-badge { color: #888; }
+.p-bar-fill { height: 100%; background: linear-gradient(90deg, #b39bff, #4488ff); border-radius: 3px; transition: width 0.4s; }
+.win-badge { color: #e6c988; font-weight: 600; }
+.done-badge { color: #b39bff; }
+.playing-badge { color: #8f83b8; }
 
 /* 手动指定胜者 */
-.manual-winner { margin-top: 12px; padding: 12px 16px; background: #ffffff05; border: 1px solid #ffaa0044; border-radius: 8px; }
-.manual-winner-title { font-size: 13px; font-weight: 600; color: #ffaa00; margin-bottom: 8px; }
+.manual-winner { margin-top: 12px; padding: 12px 16px; background: #ffffff05; border: 1px solid #e6c98844; border-radius: 8px; }
+.manual-winner-title { font-size: 13px; font-weight: 600; color: #e6c988; margin-bottom: 8px; }
 .manual-winner-row { display: flex; gap: 10px; align-items: center; }
 </style>

@@ -76,7 +76,7 @@
         <div class="bb-modal">
           <div class="bb-modal-header"><h3>使用否决权</h3><button class="close-btn" @click="showUseModal = false">✕</button></div>
           <div class="bb-modal-body">
-            <p style="color:#aaa;font-size:14px;margin-bottom:16px;">选择要拯救的被提名人</p>
+            <p style="color:#a99bd0;font-size:14px;margin-bottom:16px;">选择要拯救的被提名人</p>
             <div class="form-group">
               <label>拯救对象</label>
               <select v-model="savePlayerId" class="bb-select">
@@ -159,51 +159,51 @@ onMounted(fetchData)
 <style scoped>
 .bb-veto-admin { max-width: 1000px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
-.veto-card { background: linear-gradient(135deg, #0f0f2e, #1a1a3e); border: 1px solid #ffaa00; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
-.veto-card.empty { border-color: #444; }
-.veto-card.empty p { text-align: center; color: #666; width: 100%; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
+.veto-card { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #e6c988; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+.veto-card.empty { border-color: #4a3d6e; }
+.veto-card.empty p { text-align: center; color: #6b5f92; width: 100%; }
 .veto-icon { font-size: 48px; }
-.veto-label { font-size: 12px; color: #888; text-transform: uppercase; }
-.veto-winner { font-size: 20px; font-weight: 700; color: #ffaa00; }
-.veto-status { font-size: 13px; color: #aaa; margin-top: 4px; }
-.veto-saved { margin-top: 8px; font-size: 14px; color: #aaa; }
-.highlight { color: #00ff88; }
-.veto-removed { display: block; font-size: 12px; color: #ffaa00; margin-top: 4px; }
-.veto-boomerang { display: block; font-size: 12px; color: #00ff88; margin-top: 4px; font-weight: 600; }
-.twist-info-bar { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 6px; }
-.twist-item { font-size: 13px; color: #aaa; }
-.twist-item.boomerang { color: #00ff88; }
-.twist-item.no-pendant { color: #ffaa00; }
-.veto-participants { margin-top: 16px; padding-top: 16px; border-top: 1px solid #00ff8811; }
-.veto-subtitle { font-size: 12px; color: #888; margin-bottom: 8px; }
+.veto-label { font-size: 12px; color: #8f83b8; text-transform: uppercase; }
+.veto-winner { font-size: 20px; font-weight: 700; color: #e6c988; }
+.veto-status { font-size: 13px; color: #a99bd0; margin-top: 4px; }
+.veto-saved { margin-top: 8px; font-size: 14px; color: #a99bd0; }
+.highlight { color: #b39bff; }
+.veto-removed { display: block; font-size: 12px; color: #e6c988; margin-top: 4px; }
+.veto-boomerang { display: block; font-size: 12px; color: #b39bff; margin-top: 4px; font-weight: 600; }
+.twist-info-bar { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 6px; }
+.twist-item { font-size: 13px; color: #a99bd0; }
+.twist-item.boomerang { color: #b39bff; }
+.twist-item.no-pendant { color: #e6c988; }
+.veto-participants { margin-top: 16px; padding-top: 16px; border-top: 1px solid #b39bff11; }
+.veto-subtitle { font-size: 12px; color: #8f83b8; margin-bottom: 8px; }
 .participant-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.participant-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 6px; font-size: 12px; color: #ccc; }
-.participant-tag.winner { border-color: #ffaa00; background: #ffaa0008; color: #ffaa00; font-weight: 600; }
+.participant-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #1b1130; border: 1px solid #b39bff22; border-radius: 6px; font-size: 12px; color: #cfc4ea; }
+.participant-tag.winner { border-color: #e6c988; background: #e6c98808; color: #e6c988; font-weight: 600; }
 .winner-badge { font-size: 12px; }
-.replacement-hint { background: #ffaa0022; border: 1px solid #ffaa00; border-radius: 10px; padding: 12px 16px; font-size: 14px; color: #ffaa00; margin-bottom: 20px; }
-.replacement-hint .link { color: #ffaa00; text-decoration: underline; }
-.action-section { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-.action-section h3 { margin: 0 0 12px; font-size: 16px; color: #e0e0e0; }
+.replacement-hint { background: #e6c98822; border: 1px solid #e6c988; border-radius: 10px; padding: 12px 16px; font-size: 14px; color: #e6c988; margin-bottom: 20px; }
+.replacement-hint .link { color: #e6c988; text-decoration: underline; }
+.action-section { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.action-section h3 { margin: 0 0 12px; font-size: 16px; color: #ece7fb; }
 .action-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
-.bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
-.bb-btn:hover { background: #00ff8822; }
+.bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+.bb-btn:hover { background: #b39bff22; }
 .bb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.bb-btn-primary { background: #00ff8822; border-color: #00ff88; }
-.history-section h3 { font-size: 16px; color: #e0e0e0; margin: 0 0 12px; }
+.bb-btn-primary { background: #b39bff22; border-color: #b39bff; }
+.history-section h3 { font-size: 16px; color: #ece7fb; margin: 0 0 12px; }
 .bb-table { width: 100%; border-collapse: collapse; }
-.bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #00ff8811; font-size: 14px; color: #ccc; }
-.bb-table th { color: #888; font-size: 12px; text-transform: uppercase; }
-.empty-cell { text-align: center; color: #666; padding: 32px; }
+.bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #b39bff11; font-size: 14px; color: #cfc4ea; }
+.bb-table th { color: #8f83b8; font-size: 12px; text-transform: uppercase; }
+.empty-cell { text-align: center; color: #6b5f92; padding: 32px; }
 .bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; width: 400px; max-width: 90vw; }
-.bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #00ff8822; }
-.bb-modal-header h3 { margin: 0; color: #00ff88; font-size: 16px; }
-.close-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 18px; }
+.bb-modal { background: #2a1a4a; border: 1px solid #b39bff44; border-radius: 12px; width: 400px; max-width: 90vw; }
+.bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #b39bff22; }
+.bb-modal-header h3 { margin: 0; color: #b39bff; font-size: 16px; }
+.close-btn { background: none; border: none; color: #8f83b8; cursor: pointer; font-size: 18px; }
 .bb-modal-body { padding: 20px; }
 .form-group { margin-bottom: 16px; }
-.form-group label { display: block; font-size: 13px; color: #aaa; margin-bottom: 6px; }
-.bb-select { background: #0f0f2e; border: 1px solid #00ff8822; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; font-size: 14px; outline: none; cursor: pointer; width: 100%; }
+.form-group label { display: block; font-size: 13px; color: #a99bd0; margin-bottom: 6px; }
+.bb-select { background: #1b1130; border: 1px solid #b39bff22; color: #ece7fb; padding: 8px 12px; border-radius: 6px; font-size: 14px; outline: none; cursor: pointer; width: 100%; }
 .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
 </style>

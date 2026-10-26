@@ -88,6 +88,7 @@ import MissingNumberGame from '../../../components/bigbrother/minigames/MissingN
 import AbracaGame from '../../../components/bigbrother/minigames/AbracaGame.vue'
 import DescribeGuessGame from '../../../components/bigbrother/minigames/DescribeGuessGame.vue'
 import StayOrFoldGame from '../../../components/bigbrother/minigames/StayOrFold.vue'
+import CatchMistressGame from '../../../components/bigbrother/minigames/CatchMistress.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import type { BBHohRecord, MinigameRoom } from '../../../types/bigbrother'
 
@@ -134,6 +135,7 @@ const gameComponentMap: Record<string, Component> = {
   'abraca': markRaw(AbracaGame),
   'describe-guess': markRaw(DescribeGuessGame),
   'stay-or-fold': markRaw(StayOrFoldGame),
+  'catch-mistress': markRaw(CatchMistressGame),
   'power-challenge': markRaw(PowerChallengeGame)
 }
 
@@ -249,29 +251,29 @@ onUnmounted(() => {
 <style scoped>
 .bb-hoh-player { max-width: 600px; margin: 0 auto; padding: 16px; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
-.history-tag { background: #88888822; color: #aaa; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
-.future-tag { background: #44444422; color: #666; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
-.minigame-section { margin-bottom: 20px; background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 12px; overflow: hidden; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
+.history-tag { background: #88888822; color: #a99bd0; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
+.future-tag { background: #44444422; color: #6b5f92; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
+.minigame-section { margin-bottom: 20px; background: #1b1130; border: 1px solid #b39bff22; border-radius: 12px; overflow: hidden; }
 .hoh-announcement { animation: fadeIn 0.4s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.hoh-card { background: linear-gradient(135deg, #0f0f2e, #1a1a3e); border: 1px solid #444; border-radius: 16px; padding: 32px 24px; display: flex; align-items: center; gap: 20px; }
-.hoh-card.is-me { border-color: #00ff88; background: linear-gradient(135deg, #0a1a0a, #0f2e1a); box-shadow: 0 0 20px rgba(0, 255, 136, 0.1); }
-.hoh-card.pending { border-color: #444; }
-.hoh-card.prev-hoh { border-color: #ffaa0044; opacity: 0.8; }
+.hoh-card { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #4a3d6e; border-radius: 16px; padding: 32px 24px; display: flex; align-items: center; gap: 20px; }
+.hoh-card.is-me { border-color: #b39bff; background: linear-gradient(135deg, #0a1a0a, #1e1636); box-shadow: 0 0 20px rgba(179, 155, 255, 0.1); }
+.hoh-card.pending { border-color: #4a3d6e; }
+.hoh-card.prev-hoh { border-color: #e6c98844; opacity: 0.8; }
 .hoh-crown { font-size: 56px; flex-shrink: 0; }
 .hoh-body { flex: 1; }
-.hoh-label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.hoh-label { font-size: 12px; color: #8f83b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
 .hoh-name { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
-.hoh-card:not(.is-me) .hoh-name { color: #ffaa00; }
-.hoh-card.is-me .hoh-name { color: #00ff88; }
-.me-badge { background: #00ff88; color: #000; padding: 2px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; margin-left: 8px; vertical-align: middle; }
+.hoh-card:not(.is-me) .hoh-name { color: #e6c988; }
+.hoh-card.is-me .hoh-name { color: #b39bff; }
+.me-badge { background: #b39bff; color: #000; padding: 2px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; margin-left: 8px; vertical-align: middle; }
 .hoh-desc { font-size: 14px; line-height: 1.6; }
-.hoh-card:not(.is-me) .hoh-desc { color: #aaa; }
-.hoh-card.is-me .hoh-desc { color: #00ff88cc; }
-.hoh-hint { color: #666; font-size: 14px; margin-top: 8px; }
-.loading-state { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 60px 20px; color: #888; font-size: 14px; }
-.loading-spinner { width: 32px; height: 32px; border: 3px solid #00ff8822; border-top-color: #00ff88; border-radius: 50%; animation: spin 0.8s linear infinite; }
+.hoh-card:not(.is-me) .hoh-desc { color: #a99bd0; }
+.hoh-card.is-me .hoh-desc { color: #b39bffcc; }
+.hoh-hint { color: #6b5f92; font-size: 14px; margin-top: 8px; }
+.loading-state { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 60px 20px; color: #8f83b8; font-size: 14px; }
+.loading-spinner { width: 32px; height: 32px; border: 3px solid #b39bff22; border-top-color: #b39bff; border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 </style>

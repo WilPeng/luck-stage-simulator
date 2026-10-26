@@ -26,11 +26,15 @@ html, body {
 }
 
 body {
-  font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: var(--bb-font-body, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #1a1a2e;
-  color: #fff;
+  background:
+    radial-gradient(1100px 620px at 78% 0%, rgba(96, 58, 160, 0.32) 0%, transparent 60%),
+    radial-gradient(900px 520px at 8% 100%, rgba(64, 38, 128, 0.3) 0%, transparent 62%),
+    linear-gradient(160deg, #160d29 0%, #1e1236 48%, #120a22 100%);
+  background-attachment: fixed;
+  color: var(--bb-text-primary, #ece7fb);
 }
 
 #app {

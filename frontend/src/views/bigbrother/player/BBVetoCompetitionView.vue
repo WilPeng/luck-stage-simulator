@@ -145,6 +145,7 @@ import MissingNumberGame from '../../../components/bigbrother/minigames/MissingN
 import AbracaGame from '../../../components/bigbrother/minigames/AbracaGame.vue'
 import DescribeGuessGame from '../../../components/bigbrother/minigames/DescribeGuessGame.vue'
 import StayOrFoldGame from '../../../components/bigbrother/minigames/StayOrFold.vue'
+import CatchMistressGame from '../../../components/bigbrother/minigames/CatchMistress.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import type { BBVetoRecord, MinigameRoom } from '../../../types/bigbrother'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
@@ -221,7 +222,8 @@ const gameComponentMap: Record<string, Component> = {
   'missing-number': markRaw(MissingNumberGame),
   'abraca': markRaw(AbracaGame),
   'describe-guess': markRaw(DescribeGuessGame),
-  'stay-or-fold': markRaw(StayOrFoldGame)
+  'stay-or-fold': markRaw(StayOrFoldGame),
+  'catch-mistress': markRaw(CatchMistressGame)
 }
 
 function isMe(name: string): boolean { return name === myName.value }
@@ -408,29 +410,29 @@ onMounted(async () => {
 <style scoped>
 .bb-veto-player { max-width: 700px; margin: 0 auto; padding: 16px; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
-.history-tag { background: #88888822; color: #aaa; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
-.future-tag { background: #44444422; color: #666; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
-.loading-state { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 60px 20px; color: #888; font-size: 14px; }
-.loading-spinner { width: 32px; height: 32px; border: 3px solid #00ff8822; border-top-color: #00ff88; border-radius: 50%; animation: spin 0.8s linear infinite; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
+.history-tag { background: #88888822; color: #a99bd0; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
+.future-tag { background: #44444422; color: #6b5f92; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
+.loading-state { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 60px 20px; color: #8f83b8; font-size: 14px; }
+.loading-spinner { width: 32px; height: 32px; border: 3px solid #b39bff22; border-top-color: #b39bff; border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.minigame-section { margin-bottom: 20px; background: #0f0f2e; border: 1px solid #ffaa0033; border-radius: 12px; overflow: hidden; }
+.minigame-section { margin-bottom: 20px; background: #1b1130; border: 1px solid #e6c98833; border-radius: 12px; overflow: hidden; }
 
 /* 参与者展示区 */
 .participants-section {
-  background: linear-gradient(135deg, #0f0f2e, #1a1a3e);
-  border: 1px solid #00ff8822;
+  background: linear-gradient(135deg, #1b1130, #2a1a4a);
+  border: 1px solid #b39bff22;
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 16px;
 }
 .section-title {
   display: flex; align-items: center; gap: 8px;
-  font-size: 15px; font-weight: 600; color: #e0e0e0; margin-bottom: 16px;
+  font-size: 15px; font-weight: 600; color: #ece7fb; margin-bottom: 16px;
 }
 .section-icon { font-size: 18px; }
-.has-winner-tag { margin-left: auto; font-size: 11px; color: #ffaa00; background: #ffaa0015; padding: 2px 10px; border-radius: 8px; }
+.has-winner-tag { margin-left: auto; font-size: 11px; color: #e6c988; background: #e6c98815; padding: 2px 10px; border-radius: 8px; }
 
 .participant-grid {
   display: grid;
@@ -440,59 +442,59 @@ onMounted(async () => {
 .participant-card {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 12px 8px;
-  background: #0a0a1a;
+  background: #120a22;
   border: 1px solid #ffffff0a;
   border-radius: 10px;
   transition: all 0.2s;
 }
-.participant-card.winner { border-color: #ffaa00; background: #ffaa0008; }
+.participant-card.winner { border-color: #e6c988; background: #e6c98808; }
 .participant-card.hoh { border-color: #4488ff33; }
 .participant-card.nominee { border-color: #ff444433; }
 .participant-card.picked { border-color: #aa44ff33; }
-.participant-card.self { border-color: #00ff8844; }
+.participant-card.self { border-color: #b39bff44; }
 
 .p-avatar-wrap { position: relative; }
 .p-avatar {
   width: 40px; height: 40px; border-radius: 50%;
-  background: linear-gradient(135deg, #00ff88, #00cc66);
+  background: linear-gradient(135deg, #b39bff, #8b6bff);
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px; font-weight: 600; color: #0f0f2e;
+  font-size: 16px; font-weight: 600; color: #1b1130;
 }
-.winner .p-avatar { background: linear-gradient(135deg, #ffaa00, #ff8800); }
+.winner .p-avatar { background: linear-gradient(135deg, #e6c988, #ff8800); }
 .hoh .p-avatar { background: linear-gradient(135deg, #4488ff, #3366cc); }
 .nominee .p-avatar { background: linear-gradient(135deg, #ff4444, #cc2222); }
 .p-crown { position: absolute; top: -4px; right: -4px; font-size: 14px; }
 
-.p-name { font-size: 12px; color: #ccc; font-weight: 500; text-align: center; }
-.winner .p-name { color: #ffaa00; font-weight: 700; }
+.p-name { font-size: 12px; color: #cfc4ea; font-weight: 500; text-align: center; }
+.winner .p-name { color: #e6c988; font-weight: 700; }
 
 .p-tags { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
 .p-tag { font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 500; }
 .hoh-tag { background: #4488ff22; color: #4488ff; }
 .nom-tag { background: #ff444422; color: #ff4444; }
-.drawn-tag { background: #00ff8815; color: #00ff88; }
+.drawn-tag { background: #b39bff15; color: #b39bff; }
 .picked-tag { background: #aa44ff22; color: #aa44ff; }
 .default-tag { background: #4488ff15; color: #4488ff; }
-.winner-tag { background: #ffaa0022; color: #ffaa00; }
-.self-tag { background: #00ff8822; color: #00ff88; }
+.winner-tag { background: #e6c98822; color: #e6c988; }
+.self-tag { background: #b39bff22; color: #b39bff; }
 
 /* 获胜者卡片 */
 .veto-card {
-  background: linear-gradient(135deg, #0f0f2e, #1a1a3e);
-  border: 1px solid #ffaa00; border-radius: 12px;
+  background: linear-gradient(135deg, #1b1130, #2a1a4a);
+  border: 1px solid #e6c988; border-radius: 12px;
   padding: 24px; display: flex; align-items: center; gap: 20px;
   margin-bottom: 16px;
 }
-.veto-card.empty { border-color: #444; }
-.veto-card.empty p { text-align: center; color: #666; width: 100%; margin: 0; }
+.veto-card.empty { border-color: #4a3d6e; }
+.veto-card.empty p { text-align: center; color: #6b5f92; width: 100%; margin: 0; }
 .veto-icon { font-size: 48px; }
-.veto-label { font-size: 12px; color: #888; text-transform: uppercase; }
-.veto-winner { font-size: 20px; font-weight: 700; color: #ffaa00; }
-.me-badge { display: inline-block; margin-top: 8px; background: #00ff88; color: #000; padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; }
+.veto-label { font-size: 12px; color: #8f83b8; text-transform: uppercase; }
+.veto-winner { font-size: 20px; font-weight: 700; color: #e6c988; }
+.me-badge { display: inline-block; margin-top: 8px; background: #b39bff; color: #000; padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; }
 
 /* 自选区域 */
 .pick-section {
-  background: linear-gradient(135deg, #1a1a0f, #1a1a2e);
+  background: linear-gradient(135deg, #1a1a0f, #221540);
   border: 1px solid #aa44ff44;
   border-radius: 12px;
   padding: 20px;
@@ -503,14 +505,14 @@ onMounted(async () => {
 }
 .pick-icon { font-size: 28px; }
 .pick-header-text { flex: 1; }
-.pick-title { font-size: 15px; font-weight: 600; color: #e0e0e0; }
-.pick-subtitle { font-size: 12px; color: #888; margin-top: 4px; }
+.pick-title { font-size: 15px; font-weight: 600; color: #ece7fb; }
+.pick-subtitle { font-size: 12px; color: #8f83b8; margin-top: 4px; }
 
 .pick-done {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 16px;
-  background: #00ff8810; border: 1px solid #00ff8833; border-radius: 8px;
-  font-size: 14px; color: #00ff88;
+  background: #b39bff10; border: 1px solid #b39bff33; border-radius: 8px;
+  font-size: 14px; color: #b39bff;
 }
 .pick-done-icon { font-size: 16px; }
 .pick-done strong { font-weight: 600; }
@@ -519,21 +521,21 @@ onMounted(async () => {
   display: flex; flex-direction: column; gap: 12px;
 }
 .pick-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-.pick-option { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #0f0f2e; border: 1px solid #aa44ff33; border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+.pick-option { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #1b1130; border: 1px solid #aa44ff33; border-radius: 8px; cursor: pointer; transition: all 0.15s; }
 .pick-option:hover { border-color: #aa44ff; background: #aa44ff10; }
 .pick-option.selected { border-color: #aa44ff; background: #aa44ff22; }
-.pick-option-name { flex: 1; font-size: 14px; color: #e0e0e0; }
+.pick-option-name { flex: 1; font-size: 14px; color: #ece7fb; }
 .pick-check { color: #aa44ff; font-weight: 700; }
 .pick-select {
   flex: 1;
-  background: #0f0f2e; border: 1px solid #aa44ff44; color: #e0e0e0;
+  background: #1b1130; border: 1px solid #aa44ff44; color: #ece7fb;
   padding: 10px 14px; border-radius: 6px; font-size: 13px; outline: none;
 }
 .pick-select:focus { border-color: #aa44ff; }
-.pick-select option { background: #0f0f2e; color: #e0e0e0; }
+.pick-select option { background: #1b1130; color: #ece7fb; }
 
-.bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
-.bb-btn:hover:not(:disabled) { background: #00ff8822; }
+.bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+.bb-btn:hover:not(:disabled) { background: #b39bff22; }
 .bb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .bb-btn-pick { border-color: #aa44ff44; color: #aa44ff; white-space: nowrap; }
 .bb-btn-pick:hover:not(:disabled) { background: #aa44ff15; }

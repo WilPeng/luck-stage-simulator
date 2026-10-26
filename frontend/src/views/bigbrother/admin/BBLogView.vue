@@ -53,18 +53,18 @@ onMounted(fetchData)
 <style scoped>
 .bb-logs { max-width: 1200px; margin: 0 auto; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
-.bb-btn:hover { background: #00ff8822; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+.bb-btn:hover { background: #b39bff22; }
 .bb-btn-xs { padding: 4px 12px; font-size: 12px; }
 .bb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .bb-table { width: 100%; border-collapse: collapse; }
-.bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #00ff8811; font-size: 14px; color: #ccc; }
-.bb-table th { color: #888; font-size: 12px; text-transform: uppercase; }
-.time { font-size: 12px; color: #666; white-space: nowrap; }
-.log-type { background: #00ff8815; color: #00ff88; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+.bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #b39bff11; font-size: 14px; color: #cfc4ea; }
+.bb-table th { color: #8f83b8; font-size: 12px; text-transform: uppercase; }
+.time { font-size: 12px; color: #6b5f92; white-space: nowrap; }
+.log-type { background: #b39bff15; color: #b39bff; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
 .detail { max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.empty-cell { text-align: center; color: #666; padding: 40px; }
+.empty-cell { text-align: center; color: #6b5f92; padding: 40px; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
-.page-info { font-size: 13px; color: #888; }
+.page-info { font-size: 13px; color: #8f83b8; }
 </style>

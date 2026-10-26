@@ -61,17 +61,17 @@ function onDrop(e: DragEvent) {
   justify-content: center;
   gap: 6px;
   padding: 22px 16px;
-  border: 2px dashed #00ff8855;
+  border: 2px dashed #b39bff55;
   border-radius: 12px;
-  background: #0a1a10;
-  color: #cfe3ff;
+  background: #17112a;
+  color: #e0d7ff;
   cursor: pointer;
   transition: all 0.2s;
   text-align: center;
 }
-.bb-upload-box:hover, .bb-upload-box.dragging { border-color: #00ff88; background: #00ff8810; }
+.bb-upload-box:hover, .bb-upload-box.dragging { border-color: #b39bff; background: #b39bff10; }
 .bb-upload-box.busy { opacity: 0.7; cursor: progress; }
 .ub-icon { font-size: 28px; }
-.ub-label { font-size: 14px; font-weight: 600; color: #00ff88; }
-.ub-hint { font-size: 12px; color: #8a8aa5; }
+.ub-label { font-size: 14px; font-weight: 600; color: #b39bff; }
+.ub-hint { font-size: 12px; color: #b3a6d6; }
 </style>

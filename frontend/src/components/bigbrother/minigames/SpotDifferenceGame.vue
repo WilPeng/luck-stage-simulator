@@ -78,7 +78,7 @@ const roomPlaying = computed(() => (gameState.value as any)?.status === 'playing
 const gameStarted = computed(() => (gameState.value as any)?.started === true)
 
 const COLOR_HEX: Record<string, string> = {
-  red: '#e74c3c', orange: '#e67e22', yellow: '#f1c40f', green: '#2ecc71',
+  red: '#e74c3c', orange: '#e67e22', yellow: '#f1c40f', green: '#7ee0b0',
   blue: '#3498db', purple: '#9b59b6', black: '#1a1a1a', white: '#f5f5f5',
   gray: '#95a5a6', pink: '#ff7eb3'
 }
@@ -128,26 +128,26 @@ onUnmounted(() => {
 .spot-difference { max-width: 720px; margin: 0 auto; text-align: center; padding: 20px; }
 .game-waiting, .game-finished { padding: 40px 20px; }
 .game-icon { font-size: 64px; margin-bottom: 16px; }
-h2 { color: #e0e0e0; margin: 0 0 8px; }
-p { color: #888; font-size: 14px; }
-.countdown-big { font-size: 72px; font-weight: 700; color: #00ff88; margin: 20px 0; animation: pulse 0.5s infinite; }
+h2 { color: #ece7fb; margin: 0 0 8px; }
+p { color: #8f83b8; font-size: 14px; }
+.countdown-big { font-size: 72px; font-weight: 700; color: #b39bff; margin: 20px 0; animation: pulse 0.5s infinite; }
 @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-.waiting-text { color: #666; margin-top: 12px; }
-.game-header { color: #aaa; font-size: 14px; margin-bottom: 12px; }
+.waiting-text { color: #6b5f92; margin-top: 12px; }
+.game-header { color: #a99bd0; font-size: 14px; margin-bottom: 12px; }
 .boards { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
-.board-title { color: #8a8aa5; font-size: 13px; margin-bottom: 6px; }
+.board-title { color: #b3a6d6; font-size: 13px; margin-bottom: 6px; }
 .grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; width: min(320px, 88vw); }
 .cell { aspect-ratio: 1/1; border-radius: 3px; border: 1px solid #00000033; }
 .cell.clickable { cursor: pointer; }
-.cell.marked { outline: 3px solid #00ff88; outline-offset: -2px; box-shadow: 0 0 8px #00ff88; }
-.submit-btn { margin-top: 18px; padding: 12px 40px; font-size: 16px; font-weight: 700; color: #00ff88; background: #00ff8822; border: 2px solid #00ff88; border-radius: 10px; cursor: pointer; }
-.submit-btn:hover { background: #00ff8833; }
+.cell.marked { outline: 3px solid #b39bff; outline-offset: -2px; box-shadow: 0 0 8px #b39bff; }
+.submit-btn { margin-top: 18px; padding: 12px 40px; font-size: 16px; font-weight: 700; color: #b39bff; background: #b39bff22; border: 2px solid #b39bff; border-radius: 10px; cursor: pointer; }
+.submit-btn:hover { background: #b39bff33; }
 .cooldown-panel { padding: 60px 20px; }
 .cool-icon { font-size: 56px; }
 .cool-title { color: #ff6b6b; font-size: 18px; margin: 12px 0 6px; }
-.cool-timer { color: #ffaa00; font-size: 20px; font-weight: 700; }
-.winner-name { font-size: 26px; font-weight: 700; color: #ffaa00; }
-.winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+.cool-timer { color: #e6c988; font-size: 20px; font-weight: 700; }
+.winner-name { font-size: 26px; font-weight: 700; color: #e6c988; }
+.winner-label { display: block; font-size: 14px; color: #e6c988; margin-top: 4px; }
 @media (max-width: 480px) {
   .spot-difference { padding: 12px; }
   .countdown-big { font-size: 52px; }

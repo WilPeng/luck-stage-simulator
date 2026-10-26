@@ -208,57 +208,57 @@ onMounted(fetchData)
 <style scoped>
 .bb-eviction-admin { max-width: 1000px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
 .stats-row { display: flex; gap: 16px; margin-bottom: 20px; }
-.stat-card { flex: 1; background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 16px; text-align: center; }
+.stat-card { flex: 1; background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 16px; text-align: center; }
 .stat-value { font-size: 28px; font-weight: 700; color: #fff; }
-.stat-label { font-size: 12px; color: #888; margin-top: 4px; }
+.stat-label { font-size: 12px; color: #8f83b8; margin-top: 4px; }
 
-.vote-manage-section { background: #0f0f2e; border: 1px solid #ffaa0022; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-.vote-manage-section h3 { margin: 0 0 16px; font-size: 16px; color: #e0e0e0; }
+.vote-manage-section { background: #1b1130; border: 1px solid #e6c98822; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.vote-manage-section h3 { margin: 0 0 16px; font-size: 16px; color: #ece7fb; }
 .vote-grid { display: flex; flex-direction: column; gap: 8px; }
-.vote-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #1a1a3e; border-radius: 8px; border: 1px solid #00ff8811; }
-.vote-row.voted { border-color: #00ff8844; }
-.vote-row.isHoh { border-color: #ffaa0044; background: #2e2a0f; }
-.vote-row.isNominee { border-color: #ff444444; background: #2e0f0f; opacity: 0.85; }
+.vote-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #2a1a4a; border-radius: 8px; border: 1px solid #b39bff11; }
+.vote-row.voted { border-color: #b39bff44; }
+.vote-row.isHoh { border-color: #e6c98844; background: #2e2a0f; }
+.vote-row.isNominee { border-color: #ff444444; background: #2a0f22; opacity: 0.85; }
 .voter-info { flex: 1; min-width: 0; }
 .voter-name { font-size: 14px; color: #fff; font-weight: 500; }
-.hoh-tag { display: inline-block; margin-left: 8px; font-size: 10px; color: #ffaa00; background: #ffaa0022; padding: 1px 8px; border-radius: 6px; }
+.hoh-tag { display: inline-block; margin-left: 8px; font-size: 10px; color: #e6c988; background: #e6c98822; padding: 1px 8px; border-radius: 6px; }
 .nominee-tag { display: inline-block; margin-left: 8px; font-size: 10px; color: #ff4444; background: #ff444422; padding: 1px 8px; border-radius: 6px; }
 .voter-vote { width: 120px; text-align: center; }
-.voted-target { color: #00ff88; font-size: 13px; }
-.not-voted { color: #666; font-size: 12px; }
+.voted-target { color: #b39bff; font-size: 13px; }
+.not-voted { color: #6b5f92; font-size: 12px; }
 .nominee-skip { color: #ff4444; }
 .voter-action { width: 160px; }
-.bb-select-sm { width: 100%; padding: 6px 8px; background: #0f0f2e; border: 1px solid #444; border-radius: 6px; color: #fff; font-size: 12px; }
-.bb-select-sm:focus { border-color: #ffaa00; outline: none; }
-.bb-select-sm option { background: #0f0f2e; color: #fff; }
+.bb-select-sm { width: 100%; padding: 6px 8px; background: #1b1130; border: 1px solid #4a3d6e; border-radius: 6px; color: #fff; font-size: 12px; }
+.bb-select-sm:focus { border-color: #e6c988; outline: none; }
+.bb-select-sm option { background: #1b1130; color: #fff; }
 
-.twist-info-bar { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 6px; }
-.twist-item { font-size: 13px; color: #aaa; }
+.twist-info-bar { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 6px; }
+.twist-item { font-size: 13px; color: #a99bd0; }
 .twist-item.triple { color: #e74c3c; }
-.twist-item.karmic { color: #00ff88; }
+.twist-item.karmic { color: #b39bff; }
 .twist-action-hint { padding: 10px 14px; background: #e74c3c11; border: 1px solid #e74c3c33; border-radius: 8px; font-size: 13px; color: #e74c3c; margin-bottom: 12px; }
-.eviction-result-card { background: linear-gradient(135deg, #2e0f0f, #3e1a1a); border: 1px solid #ff4444; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+.eviction-result-card { background: linear-gradient(135deg, #2a0f22, #3e1a1a); border: 1px solid #ff4444; border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
 .result-icon { font-size: 48px; }
-.result-label { font-size: 12px; color: #888; text-transform: uppercase; }
+.result-label { font-size: 12px; color: #8f83b8; text-transform: uppercase; }
 .result-name { font-size: 22px; font-weight: 700; color: #ff4444; }
-.result-votes { font-size: 14px; color: #aaa; margin-top: 4px; }
-.action-section { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-.action-section h3 { margin: 0 0 12px; font-size: 16px; color: #e0e0e0; }
+.result-votes { font-size: 14px; color: #a99bd0; margin-top: 4px; }
+.action-section { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.action-section h3 { margin: 0 0 12px; font-size: 16px; color: #ece7fb; }
 .action-buttons { display: flex; gap: 12px; }
-.bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
-.bb-btn:hover { background: #00ff8822; }
+.bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+.bb-btn:hover { background: #b39bff22; }
 .bb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .bb-btn-danger { border-color: #ff4444; color: #ff4444; }
 .bb-btn-danger:hover { background: #ff444422; }
-.votes-section h3, .history-section h3 { font-size: 16px; color: #e0e0e0; margin: 0 0 12px; }
+.votes-section h3, .history-section h3 { font-size: 16px; color: #ece7fb; margin: 0 0 12px; }
 .votes-section { margin-bottom: 20px; }
 .bb-table { width: 100%; border-collapse: collapse; }
-.bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #00ff8811; font-size: 14px; color: #ccc; }
-.bb-table th { color: #888; font-size: 12px; text-transform: uppercase; }
-.highlight { color: #ffaa00; font-weight: 500; }
-.time { font-size: 12px; color: #666; }
-.empty-cell { text-align: center; color: #666; padding: 32px; }
+.bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #b39bff11; font-size: 14px; color: #cfc4ea; }
+.bb-table th { color: #8f83b8; font-size: 12px; text-transform: uppercase; }
+.highlight { color: #e6c988; font-weight: 500; }
+.time { font-size: 12px; color: #6b5f92; }
+.empty-cell { text-align: center; color: #6b5f92; padding: 32px; }
 </style>

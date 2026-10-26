@@ -88,13 +88,13 @@ watch(() => props.modelValue, (v) => {
 </script>
 
 <style scoped>
-.rt-editor { border: 1px solid #00ff8833; border-radius: 8px; overflow: hidden; background: #0a1a10; }
-.rt-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid #00ff8822; flex-wrap: wrap; }
-.rt-toolbar button { background: transparent; border: 1px solid #00ff8833; border-radius: 4px; color: #bdbdd8; padding: 3px 10px; cursor: pointer; font-size: 13px; }
-.rt-toolbar button:hover { border-color: #00ff8866; color: #00ff88; }
+.rt-editor { border: 1px solid #b39bff33; border-radius: 8px; overflow: hidden; background: #17112a; }
+.rt-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid #b39bff22; flex-wrap: wrap; }
+.rt-toolbar button { background: transparent; border: 1px solid #b39bff33; border-radius: 4px; color: #cfc4ea; padding: 3px 10px; cursor: pointer; font-size: 13px; }
+.rt-toolbar button:hover { border-color: #b39bff66; color: #b39bff; }
 .rt-file { display: none; }
-.rt-uploading { color: #00ff88; font-size: 12px; }
-.rt-content { min-height: 70px; max-height: 220px; overflow-y: auto; padding: 10px 12px; color: #e0e0e0; font-size: 14px; line-height: 1.5; outline: none; }
+.rt-uploading { color: #b39bff; font-size: 12px; }
+.rt-content { min-height: 70px; max-height: 220px; overflow-y: auto; padding: 10px 12px; color: #ece7fb; font-size: 14px; line-height: 1.5; outline: none; }
 .rt-content:empty::before { content: attr(data-placeholder); color: #557; }
 .rt-content :deep(img) { max-width: 100%; border-radius: 6px; margin: 6px 0; }
 .rt-content :deep(a) { color: #4ea1ff; }

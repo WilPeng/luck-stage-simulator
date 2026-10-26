@@ -78,6 +78,19 @@
                 </label>
               </template>
 
+              <!-- 抓小三：选点时长 / 每回合时长 -->
+              <template v-if="pendingGame.id === 'catch-mistress'">
+                <p class="opt-hint">40 个藏身地点，每位选手秘密选择 1 个；随机顺序逐一揭开，被揭中者淘汰，躲到最后的人获胜。若多人选择同一地点且它是最后唯一未揭开的地点，则最先揭开该地点的选手获胜。</p>
+                <div class="opt-row">
+                  <label class="opt-label">选点时长(秒)
+                    <input v-model.number="options.hideTime" type="number" min="5" max="120" class="opt-number" />
+                  </label>
+                  <label class="opt-label">每次揭开限时(秒)
+                    <input v-model.number="options.turnTime" type="number" min="5" max="120" class="opt-number" />
+                  </label>
+                </div>
+              </template>
+
               <!-- 限时设置：所有游戏通用，可选无限时 -->
               <div class="opt-block">
                 <label class="opt-check">
@@ -155,6 +168,8 @@ function onSelect(id: string, game?: MinigameDef) {
     options.decisionWindow = 15
     options.targetPoints = 3
     options.gridSize = 400
+    options.hideTime = 30
+    options.turnTime = 20
     uploadError.value = ''
     return
   }
@@ -230,9 +245,9 @@ function parseCounts(text: string): number[] {
   display: flex;
   flex-direction: column;
   background: linear-gradient(165deg, #17173a 0%, #0d0d24 100%);
-  border: 1px solid #00ff8833;
+  border: 1px solid #b39bff33;
   border-radius: 18px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65), 0 0 50px rgba(0, 255, 136, 0.06);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65), 0 0 50px rgba(179, 155, 255, 0.06);
   overflow: hidden;
   animation: mgs-pop 0.22s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
@@ -305,11 +320,11 @@ function parseCounts(text: string): number[] {
   background: transparent;
 }
 .mgs-body::-webkit-scrollbar-thumb {
-  background: #00ff8833;
+  background: #b39bff33;
   border-radius: 4px;
 }
 .mgs-body::-webkit-scrollbar-thumb:hover {
-  background: #00ff8855;
+  background: #b39bff55;
 }
 
 .mgs-fade-enter-active,
@@ -323,27 +338,27 @@ function parseCounts(text: string): number[] {
 
 .mgs-options { display: flex; flex-direction: column; gap: 14px; max-width: 560px; margin: 0 auto; }
 .opt-title { font-size: 16px; font-weight: 700; color: #eaeaff; }
-.opt-hint { font-size: 13px; color: #8a8aa5; line-height: 1.6; margin: 0; }
-.opt-file { color: #bdbdd8; font-size: 13px; }
-.opt-loading { color: #00ff88; font-size: 13px; }
+.opt-hint { font-size: 13px; color: #b3a6d6; line-height: 1.6; margin: 0; }
+.opt-file { color: #cfc4ea; font-size: 13px; }
+.opt-loading { color: #b39bff; font-size: 13px; }
 .opt-error { color: #ff6b6b; font-size: 13px; margin: 0; }
 .opt-preview { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.opt-preview img { width: 220px; height: 220px; object-fit: cover; border-radius: 10px; border: 1px solid #00ff8855; }
-.opt-reupload { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 6px 14px; border-radius: 6px; cursor: pointer; }
-.opt-label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #bbb; }
-.opt-block { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; background: #ffffff08; border: 1px solid #00ff8833; border-radius: 10px; }
+.opt-preview img { width: 220px; height: 220px; object-fit: cover; border-radius: 10px; border: 1px solid #b39bff55; }
+.opt-reupload { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 6px 14px; border-radius: 6px; cursor: pointer; }
+.opt-label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #bdb3dd; }
+.opt-block { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; background: #ffffff08; border: 1px solid #b39bff33; border-radius: 10px; }
 .opt-check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #ddd; cursor: pointer; user-select: none; }
-.opt-check input { width: 16px; height: 16px; accent-color: #00ff88; }
-.opt-subtitle { font-size: 13px; color: #bbb; font-weight: 600; }
-.opt-media-preview { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #0a1a10; border: 1px solid #00ff8844; border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #cfe3ff; word-break: break-all; }
+.opt-check input { width: 16px; height: 16px; accent-color: #b39bff; }
+.opt-subtitle { font-size: 13px; color: #bdb3dd; font-weight: 600; }
+.opt-media-preview { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #17112a; border: 1px solid #b39bff44; border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #e0d7ff; word-break: break-all; }
 .opt-radio-row { display: flex; gap: 18px; flex-wrap: wrap; }
 .opt-row { display: flex; flex-wrap: wrap; gap: 16px; }
-.opt-number { width: 140px; padding: 8px 12px; background: #0a1a10; border: 1px solid #00ff8844; border-radius: 6px; color: #e0e0e0; }
-.opt-textarea { width: 100%; padding: 8px 12px; background: #0a1a10; border: 1px solid #00ff8844; border-radius: 6px; color: #e0e0e0; font-family: inherit; font-size: 13px; resize: vertical; box-sizing: border-box; }
+.opt-number { width: 140px; padding: 8px 12px; background: #17112a; border: 1px solid #b39bff44; border-radius: 6px; color: #ece7fb; }
+.opt-textarea { width: 100%; padding: 8px 12px; background: #17112a; border: 1px solid #b39bff44; border-radius: 6px; color: #ece7fb; font-family: inherit; font-size: 13px; resize: vertical; box-sizing: border-box; }
 .opt-actions { display: flex; gap: 12px; margin-top: 8px; }
-.opt-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 8px 20px; border-radius: 6px; cursor: pointer; }
+.opt-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 20px; border-radius: 6px; cursor: pointer; }
 .opt-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.opt-primary { border-color: #00ff88; background: #00ff8822; }
+.opt-primary { border-color: #b39bff; background: #b39bff22; }
 
 @media (max-width: 640px) {
   .mgs-overlay { padding: 0; }

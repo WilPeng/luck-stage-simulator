@@ -35,7 +35,7 @@ function onError() {
 .bb-avatar {
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 50%; overflow: hidden; flex-shrink: 0;
-  background: linear-gradient(135deg, #00ff88, #00cc66);
+  background: linear-gradient(135deg, #b39bff, #8b6bff);
 }
 .bb-avatar.clickable { cursor: pointer; }
 .bb-avatar.size-sm { width: 28px; height: 28px; min-width: 28px; }
@@ -45,5 +45,5 @@ function onError() {
 .bb-avatar.size-lg { width: 48px; height: 48px; min-width: 48px; }
 .bb-avatar.size-lg .avatar-fallback { font-size: 18px; }
 .avatar-img { width: 100%; height: 100%; object-fit: cover; }
-.avatar-fallback { color: #1a1a3e; font-weight: 600; user-select: none; }
+.avatar-fallback { color: #2a1a4a; font-weight: 600; user-select: none; }
 </style>

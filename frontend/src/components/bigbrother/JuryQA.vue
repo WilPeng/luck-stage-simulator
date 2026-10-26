@@ -76,24 +76,24 @@ onMounted(load)
 </script>
 
 <style scoped>
-.jury-qa { background: #0f0f2e; border: 1px solid #aa44ff44; border-radius: 12px; padding: 18px; margin-bottom: 18px; }
+.jury-qa { background: #1b1130; border: 1px solid #aa44ff44; border-radius: 12px; padding: 18px; margin-bottom: 18px; }
 .jq-title { font-size: 16px; font-weight: 700; color: #aa44ff; margin-bottom: 4px; }
-.jq-sub { font-size: 13px; color: #8a8aa5; margin: 0 0 14px; }
+.jq-sub { font-size: 13px; color: #b3a6d6; margin: 0 0 14px; }
 .jq-ask { display: flex; gap: 8px; margin-bottom: 14px; }
-.bb-input { flex: 1; padding: 10px 14px; background: #0a0a1a; border: 1px solid #aa44ff44; border-radius: 8px; color: #e0e0e0; font-size: 14px; outline: none; }
+.bb-input { flex: 1; padding: 10px 14px; background: #120a22; border: 1px solid #aa44ff44; border-radius: 8px; color: #ece7fb; font-size: 14px; outline: none; }
 .jq-list { display: flex; flex-direction: column; gap: 12px; }
 .jq-item { background: #ffffff06; border: 1px solid #ffffff12; border-radius: 10px; padding: 12px 14px; }
 .jq-q { display: flex; gap: 10px; }
 .jq-q-body { flex: 1; }
 .jq-meta { display: flex; gap: 8px; font-size: 12px; margin-bottom: 4px; }
 .jq-jury { color: #aa44ff; font-weight: 600; }
-.jq-time { color: #666; margin-left: auto; }
-.jq-question { color: #e6e6f5; font-size: 14px; line-height: 1.5; }
-.jq-a { margin-top: 10px; margin-left: 40px; padding: 8px 12px; background: #00ff8812; border-left: 3px solid #00ff88; border-radius: 4px; color: #cfe; font-size: 14px; }
-.jq-a-label { color: #00ff88; font-weight: 600; margin-right: 6px; }
+.jq-time { color: #6b5f92; margin-left: auto; }
+.jq-question { color: #f0ebff; font-size: 14px; line-height: 1.5; }
+.jq-a { margin-top: 10px; margin-left: 40px; padding: 8px 12px; background: #b39bff12; border-left: 3px solid #b39bff; border-radius: 4px; color: #cfe; font-size: 14px; }
+.jq-a-label { color: #b39bff; font-weight: 600; margin-right: 6px; }
 .jq-answer-form { display: flex; gap: 8px; margin-top: 10px; margin-left: 40px; }
-.jq-pending { margin-top: 8px; margin-left: 40px; font-size: 12px; color: #666; }
-.jq-empty { color: #666; font-size: 13px; padding: 16px; text-align: center; }
+.jq-pending { margin-top: 8px; margin-left: 40px; font-size: 12px; color: #6b5f92; }
+.jq-empty { color: #6b5f92; font-size: 13px; padding: 16px; text-align: center; }
 .bb-btn { background: transparent; border: 1px solid #aa44ff66; color: #aa44ff; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; }
 .bb-btn:hover:not(:disabled) { background: #aa44ff22; }
 .bb-btn:disabled { opacity: 0.4; cursor: not-allowed; }

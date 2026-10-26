@@ -110,37 +110,37 @@ onUnmounted(() => {
 <style scoped>
 .balance-bar { text-align: center; padding: 20px; }
 .game-icon { font-size: 64px; margin-bottom: 16px; }
-.game-waiting h2 { font-size: 22px; color: #e0e0e0; margin-bottom: 8px; }
-.game-waiting p { color: #888; font-size: 14px; }
-.countdown-big { font-size: 72px; font-weight: 700; color: #00ff88; margin: 20px 0; animation: pulse 0.5s infinite; }
+.game-waiting h2 { font-size: 22px; color: #ece7fb; margin-bottom: 8px; }
+.game-waiting p { color: #8f83b8; font-size: 14px; }
+.countdown-big { font-size: 72px; font-weight: 700; color: #b39bff; margin: 20px 0; animation: pulse 0.5s infinite; }
 @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-.waiting-text { color: #666; margin-top: 12px; }
-.game-header { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 18px; color: #e0e0e0; }
-.zone-time { color: #00ff88; font-weight: 600; }
+.waiting-text { color: #6b5f92; margin-top: 12px; }
+.game-header { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 18px; color: #ece7fb; }
+.zone-time { color: #b39bff; font-weight: 600; }
 .bar-container { margin: 20px 0 30px; }
 .bar-track {
-  position: relative; height: 40px; background: linear-gradient(90deg, #ff4444 0%, #ffaa00 30%, #00ff88 45%, #00ff88 55%, #ffaa00 70%, #ff4444 100%);
-  border-radius: 20px; overflow: hidden; border: 2px solid #333;
+  position: relative; height: 40px; background: linear-gradient(90deg, #ff4444 0%, #e6c988 30%, #b39bff 45%, #b39bff 55%, #e6c988 70%, #ff4444 100%);
+  border-radius: 20px; overflow: hidden; border: 2px solid #3a2f5c;
 }
 .target-zone {
   position: absolute; left: 35%; width: 30%; height: 100%;
-  background: transparent; border-left: 2px dashed #00ff88; border-right: 2px dashed #00ff88;
+  background: transparent; border-left: 2px dashed #b39bff; border-right: 2px dashed #b39bff;
 }
 .bar-pointer {
   position: absolute; top: -4px; width: 8px; height: 48px; background: #fff;
-  border-radius: 4px; box-shadow: 0 0 10px #00ff88; transform: translateX(-50%); transition: left 0.05s linear;
+  border-radius: 4px; box-shadow: 0 0 10px #b39bff; transform: translateX(-50%); transition: left 0.05s linear;
 }
 .controls { margin-top: 24px; }
 .hold-btn {
-  width: 160px; height: 160px; border-radius: 50%; border: 3px solid #00ff88;
-  background: #00ff8811; color: #00ff88; font-size: 20px; font-weight: 700;
+  width: 160px; height: 160px; border-radius: 50%; border: 3px solid #b39bff;
+  background: #b39bff11; color: #b39bff; font-size: 20px; font-weight: 700;
   cursor: pointer; user-select: none; transition: all 0.15s;
 }
-.hold-btn.holding { background: #00ff8833; transform: scale(0.95); border-color: #ffaa00; color: #ffaa00; }
-.hint { color: #666; font-size: 13px; margin-top: 12px; }
-.game-finished h2 { font-size: 22px; color: #e0e0e0; margin-bottom: 16px; }
-.winner-name { font-size: 28px; font-weight: 700; color: #ffaa00; }
-.winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+.hold-btn.holding { background: #b39bff33; transform: scale(0.95); border-color: #e6c988; color: #e6c988; }
+.hint { color: #6b5f92; font-size: 13px; margin-top: 12px; }
+.game-finished h2 { font-size: 22px; color: #ece7fb; margin-bottom: 16px; }
+.winner-name { font-size: 28px; font-weight: 700; color: #e6c988; }
+.winner-label { display: block; font-size: 14px; color: #e6c988; margin-top: 4px; }
 @media (max-width: 480px) {
   .countdown-big { font-size: 52px; }
   .game-icon { font-size: 48px; }

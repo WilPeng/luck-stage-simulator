@@ -64,20 +64,20 @@ onMounted(() => {
 .mg-lobby { text-align: center; padding: 36px 24px; }
 .lobby-icon { font-size: 56px; margin-bottom: 10px; animation: lobbyPulse 1.2s ease-in-out infinite; }
 @keyframes lobbyPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
-.lobby-title { font-size: 24px; color: #e0e0e0; margin: 0 0 8px; }
-.lobby-sub { color: #8a8aa5; font-size: 14px; margin: 0 0 22px; }
+.lobby-title { font-size: 24px; color: #ece7fb; margin: 0 0 8px; }
+.lobby-sub { color: #b3a6d6; font-size: 14px; margin: 0 0 22px; }
 .lobby-players { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; max-width: 640px; margin: 0 auto 22px; }
 .lp { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #ffffff14; border-radius: 8px; background: #ffffff06; font-size: 13px; color: #ddd; }
-.lp.me { border-color: #00ff8866; }
-.lp.ready { border-color: #00ff88; background: #00ff8812; }
+.lp.me { border-color: #b39bff66; }
+.lp.ready { border-color: #b39bff; background: #b39bff12; }
 .lp-name { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lp-me { color: #00ff88; font-size: 11px; margin-left: 4px; }
-.lp-status { font-size: 12px; color: #888; }
-.lp-status.ready { color: #00ff88; }
-.lp-empty { grid-column: 1 / -1; color: #666; font-size: 13px; padding: 16px; }
-.lobby-btn { padding: 14px 48px; font-size: 18px; font-weight: 700; border: 1px solid #00ff88; border-radius: 10px; background: #00ff8822; color: #00ff88; cursor: pointer; transition: all 0.15s; }
-.lobby-btn:hover { background: #00ff8833; }
-.lobby-btn.ready { background: #00ff8844; }
-.lobby-hint { margin-top: 14px; color: #8a8aa5; font-size: 13px; }
-.lobby-conn { margin-top: 6px; color: #666; font-size: 12px; }
+.lp-me { color: #b39bff; font-size: 11px; margin-left: 4px; }
+.lp-status { font-size: 12px; color: #8f83b8; }
+.lp-status.ready { color: #b39bff; }
+.lp-empty { grid-column: 1 / -1; color: #6b5f92; font-size: 13px; padding: 16px; }
+.lobby-btn { padding: 14px 48px; font-size: 18px; font-weight: 700; border: 1px solid #b39bff; border-radius: 10px; background: #b39bff22; color: #b39bff; cursor: pointer; transition: all 0.15s; }
+.lobby-btn:hover { background: #b39bff33; }
+.lobby-btn.ready { background: #b39bff44; }
+.lobby-hint { margin-top: 14px; color: #b3a6d6; font-size: 13px; }
+.lobby-conn { margin-top: 6px; color: #6b5f92; font-size: 12px; }
 </style>

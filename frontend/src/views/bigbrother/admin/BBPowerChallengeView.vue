@@ -117,20 +117,20 @@ onMounted(loadPools)
 <style scoped>
 .bb-power-challenge { max-width: 800px; margin: 0 auto; padding: 16px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.page-header h1 { font-size: 24px; color: #e0e0e0; margin: 0; }
+.page-header h1 { font-size: 24px; color: #ece7fb; margin: 0; }
 .pool-list { display: flex; flex-direction: column; gap: 12px; }
-.pool-card { background: #141430; border: 1px solid #ffffff12; border-radius: 12px; padding: 18px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.pool-card { background: #1e1436; border: 1px solid #ffffff12; border-radius: 12px; padding: 18px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .pool-info { flex: 1; }
-.pool-name { font-size: 16px; font-weight: 600; color: #e0e0e0; margin-bottom: 4px; }
-.pool-theme { color: #00ff88; font-size: 14px; margin-bottom: 8px; }
+.pool-name { font-size: 16px; font-weight: 600; color: #ece7fb; margin-bottom: 4px; }
+.pool-theme { color: #b39bff; font-size: 14px; margin-bottom: 8px; }
 .pool-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.tag { padding: 2px 8px; border-radius: 6px; font-size: 11px; background: #ffffff12; color: #aaa; }
-.tag-ok { background: #00ff8822; color: #00ff88; }
+.tag { padding: 2px 8px; border-radius: 6px; font-size: 11px; background: #ffffff12; color: #a99bd0; }
+.tag-ok { background: #b39bff22; color: #b39bff; }
 .tag-off { background: #ff444422; color: #ff4444; }
-.meta-text { color: #666; font-size: 11px; }
+.meta-text { color: #6b5f92; font-size: 11px; }
 .pool-actions { display: flex; gap: 6px; flex-shrink: 0; }
-.loading-state, .empty-state { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 60px 20px; color: #666; font-size: 14px; }
+.loading-state, .empty-state { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 60px 20px; color: #6b5f92; font-size: 14px; }
 .empty-icon { font-size: 48px; opacity: 0.5; }
-.loading-spinner { width: 32px; height: 32px; border: 3px solid #00ff8822; border-top-color: #00ff88; border-radius: 50%; animation: spin 0.8s linear infinite; }
+.loading-spinner { width: 32px; height: 32px; border: 3px solid #b39bff22; border-top-color: #b39bff; border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 </style>

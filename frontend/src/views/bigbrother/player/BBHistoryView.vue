@@ -51,14 +51,14 @@ onMounted(async () => {
 <style scoped>
 .bb-history { max-width: 800px; margin: 0 auto; }
 .page-header { margin-bottom: 24px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.section { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-.section h3 { margin: 0 0 12px; font-size: 16px; color: #e0e0e0; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.section { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.section h3 { margin: 0 0 12px; font-size: 16px; color: #ece7fb; }
 .list { display: flex; flex-direction: column; gap: 8px; }
-.list-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #00ff8805; border-radius: 8px; }
+.list-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #b39bff05; border-radius: 8px; }
 .list-item.evicted { background: #ff444405; }
 .item-icon { font-size: 18px; }
-.item-text { flex: 1; font-size: 14px; color: #ccc; }
-.item-time { font-size: 12px; color: #666; white-space: nowrap; }
-.empty { text-align: center; color: #666; padding: 24px; }
+.item-text { flex: 1; font-size: 14px; color: #cfc4ea; }
+.item-time { font-size: 12px; color: #6b5f92; white-space: nowrap; }
+.empty { text-align: center; color: #6b5f92; padding: 24px; }
 </style>

@@ -137,33 +137,33 @@ onUnmounted(() => {
 <style scoped>
 .bb-chat-logs { max-width: 1200px; margin: 0 auto; padding: 24px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
-.page-header h1 { font-size: 22px; color: #e0e0e0; margin: 0; }
+.page-header h1 { font-size: 22px; color: #ece7fb; margin: 0; }
 .filters { display: flex; gap: 8px; align-items: center; }
-.bb-input, .bb-select { padding: 8px 12px; background: #0a0a1a; border: 1px solid #00ff8833; border-radius: 6px; color: #e0e0e0; font-size: 13px; outline: none; }
+.bb-input, .bb-select { padding: 8px 12px; background: #120a22; border: 1px solid #b39bff33; border-radius: 6px; color: #ece7fb; font-size: 13px; outline: none; }
 .bb-input { width: 200px; }
-.bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 .chat-layout { display: grid; grid-template-columns: 220px 1fr; gap: 14px; }
-.room-list { background: #0f0f2e; border: 1px solid #ffffff12; border-radius: 10px; padding: 10px; height: 72vh; overflow-y: auto; }
-.rl-item { display: flex; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 8px; font-size: 13px; color: #ccc; cursor: pointer; margin-bottom: 4px; }
+.room-list { background: #1b1130; border: 1px solid #ffffff12; border-radius: 10px; padding: 10px; height: 72vh; overflow-y: auto; }
+.rl-item { display: flex; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 8px; font-size: 13px; color: #cfc4ea; cursor: pointer; margin-bottom: 4px; }
 .rl-item:hover { background: #ffffff08; }
-.rl-item.active { background: #00ff8822; color: #00ff88; }
-.rl-count { margin-left: auto; font-size: 11px; color: #8a8aa5; }
+.rl-item.active { background: #b39bff22; color: #b39bff; }
+.rl-count { margin-left: auto; font-size: 11px; color: #b3a6d6; }
 .chat-panel { background: #0b0b1c; border: 1px solid #ffffff12; border-radius: 10px; overflow: hidden; }
 .chat-scroll { height: 72vh; overflow-y: auto; padding: 18px; }
 .day-sep { text-align: center; margin: 14px 0; }
-.day-sep span { background: #ffffff10; color: #8a8aa5; font-size: 12px; padding: 3px 12px; border-radius: 10px; }
+.day-sep span { background: #ffffff10; color: #b3a6d6; font-size: 12px; padding: 3px 12px; border-radius: 10px; }
 .msg { display: flex; gap: 10px; margin-bottom: 14px; }
 .bubble-wrap { flex: 1; min-width: 0; }
 .msg-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 4px; }
-.sender { color: #00ff88; font-weight: 600; }
+.sender { color: #b39bff; font-weight: 600; }
 .room-tag { color: #7fb0ff; background: #7fb0ff14; border-radius: 4px; padding: 0 6px; font-size: 11px; }
-.time { color: #666; margin-left: auto; }
-.bubble { display: inline-block; max-width: 80%; background: #16163a; border: 1px solid #ffffff12; border-radius: 4px 12px 12px 12px; padding: 9px 14px; color: #e6e6f5; font-size: 14px; line-height: 1.5; word-break: break-word; }
-.seen { font-size: 11px; color: #666; margin-top: 4px; cursor: pointer; }
-.seen:hover { color: #ffaa00; }
-.seen-detail { margin-top: 4px; font-size: 12px; color: #ffaa00; background: #ffaa0012; border-radius: 6px; padding: 6px 10px; display: inline-block; }
+.time { color: #6b5f92; margin-left: auto; }
+.bubble { display: inline-block; max-width: 80%; background: #211640; border: 1px solid #ffffff12; border-radius: 4px 12px 12px 12px; padding: 9px 14px; color: #f0ebff; font-size: 14px; line-height: 1.5; word-break: break-word; }
+.seen { font-size: 11px; color: #6b5f92; margin-top: 4px; cursor: pointer; }
+.seen:hover { color: #e6c988; }
+.seen-detail { margin-top: 4px; font-size: 12px; color: #e6c988; background: #e6c98812; border-radius: 6px; padding: 6px 10px; display: inline-block; }
 .seen-avatars { display: flex; flex-wrap: wrap; gap: 6px; }
 .seen-avatar { display: inline-flex; }
-.seen-empty { color: #8a8aa5; }
-.empty { color: #666; padding: 40px; text-align: center; }
+.seen-empty { color: #b3a6d6; }
+.empty { color: #6b5f92; padding: 40px; text-align: center; }
 </style>

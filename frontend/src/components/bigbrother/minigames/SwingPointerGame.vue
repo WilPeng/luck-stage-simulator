@@ -108,27 +108,27 @@ onUnmounted(() => {
 .swing-pointer { max-width: 460px; margin: 0 auto; text-align: center; padding: 20px; }
 .game-waiting, .game-finished { padding: 40px 20px; }
 .game-icon { font-size: 64px; margin-bottom: 16px; }
-h2 { color: #e0e0e0; margin: 0 0 8px; }
-p { color: #888; font-size: 14px; }
-.countdown-big { font-size: 72px; font-weight: 700; color: #00ff88; margin: 20px 0; animation: pulse 0.5s infinite; }
+h2 { color: #ece7fb; margin: 0 0 8px; }
+p { color: #8f83b8; font-size: 14px; }
+.countdown-big { font-size: 72px; font-weight: 700; color: #b39bff; margin: 20px 0; animation: pulse 0.5s infinite; }
 @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-.waiting-text { color: #666; margin-top: 12px; }
-.game-header { display: flex; justify-content: space-between; color: #aaa; font-size: 14px; margin-bottom: 14px; }
-.game-header strong { color: #00ff88; }
+.waiting-text { color: #6b5f92; margin-top: 12px; }
+.game-header { display: flex; justify-content: space-between; color: #a99bd0; font-size: 14px; margin-bottom: 14px; }
+.game-header strong { color: #b39bff; }
 .gauge { position: relative; width: 280px; height: 150px; margin: 0 auto; overflow: hidden; }
-.gauge-arc { position: absolute; inset: 0 0 -140px 0; border-radius: 50%; border: 6px solid #00ff8844; border-bottom-color: transparent; }
-.needle { position: absolute; left: 50%; bottom: 0; width: 4px; height: 130px; background: linear-gradient(#ff6b6b, #ffaa00); transform-origin: bottom center; border-radius: 2px; transition: transform 0.04s linear; }
-.gauge-hub { position: absolute; left: 50%; bottom: -10px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: #ffaa00; }
-.gauge-value { font-size: 34px; font-weight: 800; color: #00ff88; margin: 6px 0 14px; }
-.check-btn { padding: 14px 44px; font-size: 20px; font-weight: 700; color: #00ff88; background: #00ff8822; border: 2px solid #00ff88; border-radius: 12px; cursor: pointer; }
-.check-btn:hover:not(:disabled) { background: #00ff8833; }
+.gauge-arc { position: absolute; inset: 0 0 -140px 0; border-radius: 50%; border: 6px solid #b39bff44; border-bottom-color: transparent; }
+.needle { position: absolute; left: 50%; bottom: 0; width: 4px; height: 130px; background: linear-gradient(#ff6b6b, #e6c988); transform-origin: bottom center; border-radius: 2px; transition: transform 0.04s linear; }
+.gauge-hub { position: absolute; left: 50%; bottom: -10px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: #e6c988; }
+.gauge-value { font-size: 34px; font-weight: 800; color: #b39bff; margin: 6px 0 14px; }
+.check-btn { padding: 14px 44px; font-size: 20px; font-weight: 700; color: #b39bff; background: #b39bff22; border: 2px solid #b39bff; border-radius: 12px; cursor: pointer; }
+.check-btn:hover:not(:disabled) { background: #b39bff33; }
 .check-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .checks { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
-.check-chip { background: #1c1c46; color: #cfcff0; border-radius: 8px; padding: 4px 12px; font-size: 14px; }
-.total { margin-top: 14px; color: #aaa; font-size: 15px; }
-.total strong { color: #ffaa00; font-size: 20px; }
-.winner-name { font-size: 26px; font-weight: 700; color: #ffaa00; }
-.winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+.check-chip { background: #2e1e52; color: #e2d9ff; border-radius: 8px; padding: 4px 12px; font-size: 14px; }
+.total { margin-top: 14px; color: #a99bd0; font-size: 15px; }
+.total strong { color: #e6c988; font-size: 20px; }
+.winner-name { font-size: 26px; font-weight: 700; color: #e6c988; }
+.winner-label { display: block; font-size: 14px; color: #e6c988; margin-top: 4px; }
 @media (max-width: 400px) {
   .swing-pointer { padding: 12px; }
   .countdown-big { font-size: 52px; }

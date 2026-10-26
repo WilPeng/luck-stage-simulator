@@ -158,43 +158,43 @@ onMounted(async () => {
 <style scoped>
 .bb-dashboard { max-width: 1200px; margin: 0 auto; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
 .bb-btn {
-  background: transparent; border: 1px solid #00ff8844; color: #00ff88;
+  background: transparent; border: 1px solid #b39bff44; color: #b39bff;
   padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s;
 }
-.bb-btn:hover { background: #00ff8822; }
+.bb-btn:hover { background: #b39bff22; }
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
 .stat-card {
-  background: linear-gradient(135deg, #0f0f2e, #1a1a3e);
-  border: 1px solid #00ff8822; border-radius: 12px;
+  background: linear-gradient(135deg, #1b1130, #2a1a4a);
+  border: 1px solid #b39bff22; border-radius: 12px;
   padding: 20px; display: flex; align-items: center; gap: 16px;
   transition: all 0.3s;
 }
-.stat-card:hover { border-color: #00ff88; transform: translateY(-2px); }
-.stat-card.active { border-left: 3px solid #00ff88; }
+.stat-card:hover { border-color: #b39bff; transform: translateY(-2px); }
+.stat-card.active { border-left: 3px solid #b39bff; }
 .stat-card.evicted { border-left: 3px solid #ff4444; }
-.stat-card.jury { border-left: 3px solid #ffaa00; }
+.stat-card.jury { border-left: 3px solid #e6c988; }
 .stat-card.current-round { border-left: 3px solid #4488ff; }
-.stat-card.stage-info { border-left: 3px solid #00ff88; }
+.stat-card.stage-info { border-left: 3px solid #b39bff; }
 .stat-icon { font-size: 28px; }
 .stat-info .stat-value { font-size: 24px; font-weight: 700; color: #fff; }
 .stat-info .stat-value.stage-name { font-size: 16px; }
-.stat-info .stat-label { font-size: 12px; color: #888; margin-top: 2px; }
+.stat-info .stat-label { font-size: 12px; color: #8f83b8; margin-top: 2px; }
 .progress-section { margin-bottom: 24px; }
-.progress-section h2 { font-size: 18px; font-weight: 600; color: #e0e0e0; margin: 0 0 12px; }
+.progress-section h2 { font-size: 18px; font-weight: 600; color: #ece7fb; margin: 0 0 12px; }
 .progress-bar-container { display: flex; align-items: center; gap: 12px; }
-.progress-bar { flex: 1; height: 12px; background: #1a1a3e; border-radius: 6px; overflow: hidden; }
-.progress-fill { height: 100%; background: linear-gradient(90deg, #00ff88, #00cc66); border-radius: 6px; transition: width 0.5s; }
-.progress-label { font-size: 13px; color: #00ff88; white-space: nowrap; }
-.quick-actions h2 { font-size: 18px; font-weight: 600; color: #e0e0e0; margin: 0 0 12px; }
+.progress-bar { flex: 1; height: 12px; background: #2a1a4a; border-radius: 6px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, #b39bff, #8b6bff); border-radius: 6px; transition: width 0.5s; }
+.progress-label { font-size: 13px; color: #b39bff; white-space: nowrap; }
+.quick-actions h2 { font-size: 18px; font-weight: 600; color: #ece7fb; margin: 0 0 12px; }
 .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
 .action-card {
-  background: #0f0f2e; border: 1px solid #00ff8822;
+  background: #1b1130; border: 1px solid #b39bff22;
   border-radius: 10px; padding: 20px; text-align: center;
   cursor: pointer; transition: all 0.3s;
 }
-.action-card:hover { border-color: #00ff88; transform: translateY(-2px); background: #1a1a3e; }
+.action-card:hover { border-color: #b39bff; transform: translateY(-2px); background: #2a1a4a; }
 .action-icon { display: block; font-size: 32px; margin-bottom: 8px; }
-.action-text { font-size: 13px; color: #aaa; }
+.action-text { font-size: 13px; color: #a99bd0; }
 </style>

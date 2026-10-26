@@ -148,27 +148,27 @@ onUnmounted(() => {
 .jigsaw { max-width: 560px; margin: 0 auto; text-align: center; padding: 20px; }
 .game-waiting, .game-finished { padding: 40px 20px; }
 .game-icon { font-size: 64px; margin-bottom: 16px; }
-h2 { color: #e0e0e0; margin: 0 0 8px; }
-p { color: #888; font-size: 14px; }
-.countdown-big { font-size: 72px; font-weight: 700; color: #00ff88; margin: 20px 0; animation: pulse 0.5s infinite; }
+h2 { color: #ece7fb; margin: 0 0 8px; }
+p { color: #8f83b8; font-size: 14px; }
+.countdown-big { font-size: 72px; font-weight: 700; color: #b39bff; margin: 20px 0; animation: pulse 0.5s infinite; }
 @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-.waiting-text { color: #666; margin-top: 12px; }
-.game-header { display: flex; justify-content: space-between; color: #aaa; font-size: 14px; margin-bottom: 12px; }
-.game-header .hint { color: #ffaa00; }
+.waiting-text { color: #6b5f92; margin-top: 12px; }
+.game-header { display: flex; justify-content: space-between; color: #a99bd0; font-size: 14px; margin-bottom: 12px; }
+.game-header .hint { color: #e6c988; }
 .board-wrap { position: relative; display: inline-block; }
 .board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; width: min(420px, 82vw); aspect-ratio: 1/1; background: #000; border-radius: 8px; overflow: hidden; }
-.cell { position: relative; aspect-ratio: 1/1; background-repeat: no-repeat; cursor: pointer; outline: 0 solid #00ff88; transition: outline-width 0.1s; display: flex; align-items: center; justify-content: center; }
-.cell.selected { outline: 3px solid #ffaa00; outline-offset: -3px; z-index: 2; }
-.cell.correct { box-shadow: inset 0 0 0 1px #00ff8855; }
+.cell { position: relative; aspect-ratio: 1/1; background-repeat: no-repeat; cursor: pointer; outline: 0 solid #b39bff; transition: outline-width 0.1s; display: flex; align-items: center; justify-content: center; }
+.cell.selected { outline: 3px solid #e6c988; outline-offset: -3px; z-index: 2; }
+.cell.correct { box-shadow: inset 0 0 0 1px #b39bff55; }
 .cell-num { color: #ffffffcc; font-weight: 700; font-size: 18px; }
 .cooldown-panel { position: absolute; inset: 0; background: #000000cc; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .cool-icon { font-size: 52px; }
 .cool-title { color: #ff6b6b; font-size: 18px; margin: 12px 0 6px; }
-.cool-timer { color: #ffaa00; font-size: 20px; font-weight: 700; }
-.submit-btn { margin-top: 18px; padding: 12px 40px; font-size: 16px; font-weight: 700; color: #00ff88; background: #00ff8822; border: 2px solid #00ff88; border-radius: 10px; cursor: pointer; }
+.cool-timer { color: #e6c988; font-size: 20px; font-weight: 700; }
+.submit-btn { margin-top: 18px; padding: 12px 40px; font-size: 16px; font-weight: 700; color: #b39bff; background: #b39bff22; border: 2px solid #b39bff; border-radius: 10px; cursor: pointer; }
 .submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.winner-name { font-size: 26px; font-weight: 700; color: #ffaa00; }
-.winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+.winner-name { font-size: 26px; font-weight: 700; color: #e6c988; }
+.winner-label { display: block; font-size: 14px; color: #e6c988; margin-top: 4px; }
 @media (max-width: 480px) {
   .jigsaw { padding: 12px; }
   .countdown-big { font-size: 52px; }

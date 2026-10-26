@@ -272,45 +272,45 @@ onMounted(async () => {
 <style scoped>
 .bb-veto-player { max-width: 600px; margin: 0 auto; padding: 16px; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
-.history-tag { background: #88888822; color: #aaa; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
-.future-tag { background: #44444422; color: #666; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
+.history-tag { background: #88888822; color: #a99bd0; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
+.future-tag { background: #44444422; color: #6b5f92; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
 
 .veto-card {
-  background: linear-gradient(135deg, #0f0f2e, #1a1a3e);
-  border: 1px solid #ffaa00; border-radius: 12px;
+  background: linear-gradient(135deg, #1b1130, #2a1a4a);
+  border: 1px solid #e6c988; border-radius: 12px;
   padding: 24px; display: flex; align-items: center; gap: 20px;
   margin-bottom: 16px;
 }
-.veto-card.no-winner { border-color: #444; }
-.veto-card.empty { border-color: #333; }
-.veto-card.empty p { text-align: center; color: #666; width: 100%; margin: 0; }
+.veto-card.no-winner { border-color: #4a3d6e; }
+.veto-card.empty { border-color: #3a2f5c; }
+.veto-card.empty p { text-align: center; color: #6b5f92; width: 100%; margin: 0; }
 .veto-icon { font-size: 48px; }
-.veto-label { font-size: 12px; color: #888; text-transform: uppercase; }
-.veto-winner { font-size: 20px; font-weight: 700; color: #ffaa00; }
-.veto-status { font-size: 13px; color: #aaa; margin-top: 4px; }
-.veto-saved { margin-top: 8px; font-size: 14px; color: #aaa; }
-.highlight { color: #00ff88; font-weight: 600; }
-.veto-removed { display: block; font-size: 12px; color: #00ff88; margin-top: 4px; }
+.veto-label { font-size: 12px; color: #8f83b8; text-transform: uppercase; }
+.veto-winner { font-size: 20px; font-weight: 700; color: #e6c988; }
+.veto-status { font-size: 13px; color: #a99bd0; margin-top: 4px; }
+.veto-saved { margin-top: 8px; font-size: 14px; color: #a99bd0; }
+.highlight { color: #b39bff; font-weight: 600; }
+.veto-removed { display: block; font-size: 12px; color: #b39bff; margin-top: 4px; }
 
 /* 提名信息 */
 .nomination-panel {
-  background: #0f0f2e; border: 1px solid #ff444433; border-radius: 10px;
+  background: #1b1130; border: 1px solid #ff444433; border-radius: 10px;
   padding: 16px 20px; margin-bottom: 16px;
 }
-.nom-title { font-size: 14px; font-weight: 600; color: #e0e0e0; margin-bottom: 10px; }
+.nom-title { font-size: 14px; font-weight: 600; color: #ece7fb; margin-bottom: 10px; }
 .nom-names { display: flex; flex-wrap: wrap; gap: 8px; }
 .nom-tag {
   padding: 6px 14px; border-radius: 8px; font-size: 14px; font-weight: 600;
   background: #ff444415; color: #ff4444; border: 1px solid #ff444433;
 }
-.nom-empty { font-size: 13px; color: #555; }
+.nom-empty { font-size: 13px; color: #5c5182; }
 
 /* 操作区 */
 .action-section {
-  background: linear-gradient(135deg, #1a1a0f, #1a1a2e);
-  border: 1px solid #ffaa0044; border-radius: 12px;
+  background: linear-gradient(135deg, #1a1a0f, #221540);
+  border: 1px solid #e6c98844; border-radius: 12px;
   padding: 20px; margin-bottom: 16px;
 }
 .action-header {
@@ -318,8 +318,8 @@ onMounted(async () => {
 }
 .action-icon { font-size: 24px; }
 .action-header-text { flex: 1; }
-.action-title { font-size: 15px; font-weight: 600; color: #e0e0e0; }
-.action-subtitle { font-size: 12px; color: #888; margin-top: 4px; }
+.action-title { font-size: 15px; font-weight: 600; color: #ece7fb; }
+.action-subtitle { font-size: 12px; color: #8f83b8; margin-top: 4px; }
 .action-buttons { display: flex; gap: 12px; }
 
 /* 结果提示 */
@@ -328,36 +328,36 @@ onMounted(async () => {
   padding: 12px 18px; border-radius: 10px;
   font-size: 14px; margin-bottom: 16px;
 }
-.result-banner.used { background: #00ff8810; border: 1px solid #00ff8844; color: #00ff88; }
-.result-banner.skipped { background: #ffaa0010; border: 1px solid #ffaa0044; color: #ffaa00; }
+.result-banner.used { background: #b39bff10; border: 1px solid #b39bff44; color: #b39bff; }
+.result-banner.skipped { background: #e6c98810; border: 1px solid #e6c98844; color: #e6c988; }
 .result-icon { font-size: 18px; }
 
 /* 按钮 */
 .bb-btn {
-  background: transparent; border: 1px solid #00ff8844; color: #00ff88;
+  background: transparent; border: 1px solid #b39bff44; color: #b39bff;
   padding: 10px 24px; border-radius: 6px; cursor: pointer; font-size: 14px;
   transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
 }
-.bb-btn:hover:not(:disabled) { background: #00ff8822; }
+.bb-btn:hover:not(:disabled) { background: #b39bff22; }
 .bb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.bb-btn-primary { background: #00ff8822; border-color: #00ff88; }
-.bb-btn-use { border-color: #00ff8844; color: #00ff88; }
-.bb-btn-use:hover { background: #00ff8822; }
-.bb-btn-skip { border-color: #ffaa0044; color: #ffaa00; }
-.bb-btn-skip:hover { background: #ffaa0015; }
-.bb-btn-warning { border-color: #ffaa0044; color: #ffaa00; }
-.bb-btn-warning:hover { background: #ffaa0015; }
+.bb-btn-primary { background: #b39bff22; border-color: #b39bff; }
+.bb-btn-use { border-color: #b39bff44; color: #b39bff; }
+.bb-btn-use:hover { background: #b39bff22; }
+.bb-btn-skip { border-color: #e6c98844; color: #e6c988; }
+.bb-btn-skip:hover { background: #e6c98815; }
+.bb-btn-warning { border-color: #e6c98844; color: #e6c988; }
+.bb-btn-warning:hover { background: #e6c98815; }
 
 /* 弹窗 */
 .bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; width: 400px; max-width: 90vw; }
+.bb-modal { background: #2a1a4a; border: 1px solid #b39bff44; border-radius: 12px; width: 400px; max-width: 90vw; }
 .skip-modal { width: 440px; max-width: 92vw; }
-.bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #00ff8822; }
-.bb-modal-header h3 { margin: 0; color: #00ff88; font-size: 16px; }
-.close-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 18px; }
+.bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #b39bff22; }
+.bb-modal-header h3 { margin: 0; color: #b39bff; font-size: 16px; }
+.close-btn { background: none; border: none; color: #8f83b8; cursor: pointer; font-size: 18px; }
 .bb-modal-body { padding: 20px; }
-.use-hint { color: #aaa; font-size: 14px; margin-bottom: 16px; }
-.skip-confirm-text { font-size: 14px; color: #ffaa00; padding: 12px; background: #ffaa0008; border: 1px solid #ffaa0022; border-radius: 6px; }
+.use-hint { color: #a99bd0; font-size: 14px; margin-bottom: 16px; }
+.skip-confirm-text { font-size: 14px; color: #e6c988; padding: 12px; background: #e6c98808; border: 1px solid #e6c98822; border-radius: 6px; }
 .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
 
 /* 被提名者选择 */
@@ -367,18 +367,18 @@ onMounted(async () => {
   padding: 12px 16px; border: 1px solid #ffffff10; border-radius: 8px;
   cursor: pointer; transition: all 0.2s;
 }
-.nominee-option:hover { background: #ffffff08; border-color: #00ff8833; }
-.nominee-option.selected { background: #00ff8815; border-color: #00ff88; }
-.nominee-radio { accent-color: #00ff88; }
-.nominee-name { font-size: 14px; color: #e0e0e0; font-weight: 500; }
-.no-nominees { text-align: center; color: #666; font-size: 13px; padding: 16px; }
-.ceremony-panel { background: #0f0f2e; border: 1px solid #ffaa0044; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
-.cer-title { font-size: 15px; font-weight: 700; color: #ffaa00; margin-bottom: 10px; }
+.nominee-option:hover { background: #ffffff08; border-color: #b39bff33; }
+.nominee-option.selected { background: #b39bff15; border-color: #b39bff; }
+.nominee-radio { accent-color: #b39bff; }
+.nominee-name { font-size: 14px; color: #ece7fb; font-weight: 500; }
+.no-nominees { text-align: center; color: #6b5f92; font-size: 13px; padding: 16px; }
+.ceremony-panel { background: #1b1130; border: 1px solid #e6c98844; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.cer-title { font-size: 15px; font-weight: 700; color: #e6c988; margin-bottom: 10px; }
 .cer-msgs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-.cer-msg { background: #16163a; border-radius: 8px; padding: 8px 12px; font-size: 14px; color: #ddd; border-left: 3px solid #ffaa0066; }
-.cer-sender { color: #ffaa00; font-weight: 600; margin-right: 6px; }
-.cer-empty { color: #666; font-size: 13px; }
+.cer-msg { background: #211640; border-radius: 8px; padding: 8px 12px; font-size: 14px; color: #ddd; border-left: 3px solid #e6c98866; }
+.cer-sender { color: #e6c988; font-weight: 600; margin-right: 6px; }
+.cer-empty { color: #6b5f92; font-size: 13px; }
 .cer-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.cer-actions .bb-input { flex: 1; min-width: 180px; background: #0a0a24; border: 1px solid #ffaa0044; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; outline: none; }
-.cer-done { color: #00ff88; font-size: 13px; }
+.cer-actions .bb-input { flex: 1; min-width: 180px; background: #0a0a24; border: 1px solid #e6c98844; color: #ece7fb; padding: 8px 12px; border-radius: 6px; outline: none; }
+.cer-done { color: #b39bff; font-size: 13px; }
 </style>

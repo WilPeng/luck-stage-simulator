@@ -22,7 +22,8 @@ html, body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--bb-font-body, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif);
+  color: var(--bb-text-primary, #ece7fb);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -63,7 +64,7 @@ body {
 
 /* 保留彩色元素 */
 .player-layout .player-main .up,
-.player-layout .player-main [class*="positive"] { color: #2ecc71; }
+.player-layout .player-main [class*="positive"] { color: #7ee0b0; }
 .player-layout .player-main .down,
 .player-layout .player-main [class*="negative"] { color: #e74c3c; }
 .player-layout .player-main .rank-gold,
@@ -71,8 +72,8 @@ body {
 .player-layout .player-main .rank-silver { color: #c0c0c0; }
 .player-layout .player-main .rank-bronze { color: #cd7f32; }
 .player-layout .player-main .rank-top { color: #ff6b6b; }
-.player-layout .player-main .stage-badge.completed { color: #52c41a; }
-.player-layout .player-main .stage-badge.current { color: #667eea; }
-.player-layout .player-main .section-title-bar { color: #667eea; }
-.player-layout .player-main a { color: #667eea; }
-.player-layout .player-main .voted-count { color: #2ecc71; }
+.player-layout .player-main .stage-badge.completed { color: #7ee0b0; }
+.player-layout .player-main .stage-badge.current { color: #9a86ff; }
+.player-layout .player-main .section-title-bar { color: #9a86ff; }
+.player-layout .player-main a { color: #9a86ff; }
+.player-layout .player-main .voted-count { color: #7ee0b0; }

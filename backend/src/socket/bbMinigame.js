@@ -219,12 +219,13 @@ const initBBMinigameSocket = (io) => {
           else if (typeof d === 'string') text = d
         } catch (e) { /* ignore */ }
         if (!text) text = defaultDescribe(pname, data.action)
+        const isPrivateAction = Array.isArray(handler.privateActions) && handler.privateActions.includes(data.action.type)
         recordAndBroadcast(minigameNs, room, {
           playerId: userId,
           playerName: pname,
           type: data.action.type,
           text,
-          data: { action: data.action, result: result.result || null, extra }
+          data: { action: isPrivateAction ? null : data.action, result: result.result || null, extra }
         })
       }
       // 处理器内部事件（回合结算/淘汰等）

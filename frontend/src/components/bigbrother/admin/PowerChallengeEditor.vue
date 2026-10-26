@@ -94,22 +94,22 @@ async function save() {
 </script>
 
 <style scoped>
-.pc-editor { background: #141430; border: 1px solid #ffffff15; border-radius: 12px; padding: 20px; }
+.pc-editor { background: #1e1436; border: 1px solid #ffffff15; border-radius: 12px; padding: 20px; }
 .editor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.editor-header h3 { color: #e0e0e0; margin: 0; font-size: 16px; }
+.editor-header h3 { color: #ece7fb; margin: 0; font-size: 16px; }
 .form-group { margin-bottom: 14px; }
-.form-group label { display: block; color: #888; font-size: 12px; margin-bottom: 6px; }
-.form-input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #ffffff15; background: #0f0f2e; color: #e0e0e0; font-size: 13px; box-sizing: border-box; }
-.form-select { padding: 6px 10px; border-radius: 8px; border: 1px solid #ffffff15; background: #0f0f2e; color: #e0e0e0; font-size: 13px; }
+.form-group label { display: block; color: #8f83b8; font-size: 12px; margin-bottom: 6px; }
+.form-input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #ffffff15; background: #1b1130; color: #ece7fb; font-size: 13px; box-sizing: border-box; }
+.form-select { padding: 6px 10px; border-radius: 8px; border: 1px solid #ffffff15; background: #1b1130; color: #ece7fb; font-size: 13px; }
 .questions-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.questions-header label { color: #888; font-size: 12px; }
-.question-editor { background: #0f0f2e; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+.questions-header label { color: #8f83b8; font-size: 12px; }
+.question-editor { background: #1b1130; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
 .q-field { display: flex; gap: 8px; margin-bottom: 8px; }
 .q-field .form-input { flex: 1; }
 .options-editor { margin-bottom: 6px; }
 .option-row { display: flex; gap: 6px; margin-bottom: 4px; }
 .option-row .form-input { flex: 1; }
 .answer-field { display: flex; align-items: center; gap: 8px; }
-.answer-label { color: #888; font-size: 11px; }
+.answer-label { color: #8f83b8; font-size: 11px; }
 .editor-footer { margin-top: 16px; text-align: right; }
 </style>

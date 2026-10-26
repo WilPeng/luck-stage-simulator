@@ -300,63 +300,63 @@ onMounted(fetchData)
 <style scoped>
 .bb-nomination-admin { max-width: 1000px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
-.nomination-card { background: linear-gradient(135deg, #0f0f2e, #1a1a3e); border: 1px solid #00ff88; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
-.nomination-card.empty { border-color: #444; }
-.nomination-card.empty p { text-align: center; color: #666; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
+.nomination-card { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #b39bff; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+.nomination-card.empty { border-color: #4a3d6e; }
+.nomination-card.empty p { text-align: center; color: #6b5f92; }
 .nomination-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.hoh-info { color: #aaa; font-size: 14px; }
+.hoh-info { color: #a99bd0; font-size: 14px; }
 .header-badges { display: flex; gap: 6px; flex-wrap: wrap; }
 .twist-badge { padding: 2px 8px; border-radius: 8px; font-size: 11px; }
 .twist-badge.secret { background: #9b59b622; color: #9b59b6; border: 1px solid #9b59b644; }
 .twist-badge.democracy { background: #3498db22; color: #3498db; border: 1px solid #3498db44; }
 .twist-badge.triple { background: #e74c3c22; color: #e74c3c; border: 1px solid #e74c3c44; }
-.twist-info-bar { margin-top: 12px; padding: 10px; background: #1a1a3e; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
-.twist-info-item { font-size: 13px; color: #aaa; }
+.twist-info-bar { margin-top: 12px; padding: 10px; background: #2a1a4a; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
+.twist-info-item { font-size: 13px; color: #a99bd0; }
 .democracy-vote-section { margin-top: 12px; }
 .democracy-vote-section h4 { font-size: 14px; color: #3498db; margin: 0 0 12px; }
 .democracy-grid { display: flex; flex-direction: column; gap: 8px; }
-.democracy-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #1a1a3e; border-radius: 6px; }
-.democracy-voter { flex: 1; font-size: 14px; color: #ccc; }
-.bb-select-sm { padding: 6px 10px; background: #0f0f2e; border: 1px solid #444; border-radius: 6px; color: #fff; font-size: 12px; width: 180px; }
+.democracy-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #2a1a4a; border-radius: 6px; }
+.democracy-voter { flex: 1; font-size: 14px; color: #cfc4ea; }
+.bb-select-sm { padding: 6px 10px; background: #1b1130; border: 1px solid #4a3d6e; border-radius: 6px; color: #fff; font-size: 12px; width: 180px; }
 .bb-select-sm:focus { border-color: #3498db; outline: none; }
-.bb-select-sm option { background: #0f0f2e; color: #fff; }
+.bb-select-sm option { background: #1b1130; color: #fff; }
 .twist-action-hint { padding: 12px; background: #3498db11; border: 1px solid #3498db33; border-radius: 8px; font-size: 13px; color: #3498db; margin-bottom: 12px; }
-.empty-hint { text-align: center; color: #666; font-size: 14px; padding: 20px; }
+.empty-hint { text-align: center; color: #6b5f92; font-size: 14px; padding: 20px; }
 .nominees { display: flex; gap: 16px; }
-.nominee-item { flex: 1; background: #00ff8808; border: 1px solid #00ff8822; border-radius: 8px; padding: 16px; text-align: center; }
+.nominee-item { flex: 1; background: #b39bff08; border: 1px solid #b39bff22; border-radius: 8px; padding: 16px; text-align: center; }
 .nominee-icon { display: block; font-size: 24px; margin-bottom: 8px; }
 .nominee-name { display: block; font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 4px; }
-.nominee-order { font-size: 12px; color: #888; }
-.action-section { background: #0f0f2e; border: 1px solid #00ff8822; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-.action-section h3 { margin: 0 0 12px; font-size: 16px; color: #e0e0e0; }
-.key-ceremony-admin { background: #0f0f2e; border: 1px solid #ffaa0044; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
-.kc-title { font-size: 14px; color: #ffaa00; margin-bottom: 10px; }
+.nominee-order { font-size: 12px; color: #8f83b8; }
+.action-section { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.action-section h3 { margin: 0 0 12px; font-size: 16px; color: #ece7fb; }
+.key-ceremony-admin { background: #1b1130; border: 1px solid #e6c98844; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+.kc-title { font-size: 14px; color: #e6c988; margin-bottom: 10px; }
 .kc-keys { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.kc-key { padding: 8px 14px; border-radius: 8px; background: #ffffff08; border: 1px solid #ffffff18; color: #666; font-size: 13px; }
-.kc-key.drawn { background: #00ff8822; border-color: #00ff88; color: #00ff88; font-weight: 600; }
+.kc-key { padding: 8px 14px; border-radius: 8px; background: #ffffff08; border: 1px solid #ffffff18; color: #6b5f92; font-size: 13px; }
+.kc-key.drawn { background: #b39bff22; border-color: #b39bff; color: #b39bff; font-weight: 600; }
 .kc-nominees { margin-top: 10px; font-size: 14px; color: #ff6666; }
 .action-buttons { display: flex; gap: 12px; }
-.bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
-.bb-btn:hover { background: #00ff8822; }
+.bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+.bb-btn:hover { background: #b39bff22; }
 .bb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.bb-btn-primary { background: #00ff8822; border-color: #00ff88; }
+.bb-btn-primary { background: #b39bff22; border-color: #b39bff; }
 .bb-btn-danger { border-color: #ff444466; color: #ff4444; }
 .bb-btn-danger:hover { background: #ff444422; }
-.history-section h3 { font-size: 16px; color: #e0e0e0; margin: 0 0 12px; }
+.history-section h3 { font-size: 16px; color: #ece7fb; margin: 0 0 12px; }
 .bb-table { width: 100%; border-collapse: collapse; }
-.bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #00ff8811; font-size: 14px; color: #ccc; }
-.bb-table th { color: #888; font-size: 12px; text-transform: uppercase; }
-.empty-cell { text-align: center; color: #666; padding: 32px; }
+.bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #b39bff11; font-size: 14px; color: #cfc4ea; }
+.bb-table th { color: #8f83b8; font-size: 12px; text-transform: uppercase; }
+.empty-cell { text-align: center; color: #6b5f92; padding: 32px; }
 .bb-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.bb-modal { background: #1a1a3e; border: 1px solid #00ff8844; border-radius: 12px; width: 400px; max-width: 90vw; }
-.bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #00ff8822; }
-.bb-modal-header h3 { margin: 0; color: #00ff88; font-size: 16px; }
-.close-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 18px; }
+.bb-modal { background: #2a1a4a; border: 1px solid #b39bff44; border-radius: 12px; width: 400px; max-width: 90vw; }
+.bb-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #b39bff22; }
+.bb-modal-header h3 { margin: 0; color: #b39bff; font-size: 16px; }
+.close-btn { background: none; border: none; color: #8f83b8; cursor: pointer; font-size: 18px; }
 .bb-modal-body { padding: 20px; }
 .form-group { margin-bottom: 16px; }
-.form-group label { display: block; font-size: 13px; color: #aaa; margin-bottom: 6px; }
-.bb-select { background: #0f0f2e; border: 1px solid #00ff8822; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; font-size: 14px; outline: none; cursor: pointer; width: 100%; }
+.form-group label { display: block; font-size: 13px; color: #a99bd0; margin-bottom: 6px; }
+.bb-select { background: #1b1130; border: 1px solid #b39bff22; color: #ece7fb; padding: 8px 12px; border-radius: 6px; font-size: 14px; outline: none; cursor: pointer; width: 100%; }
 .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
 </style>

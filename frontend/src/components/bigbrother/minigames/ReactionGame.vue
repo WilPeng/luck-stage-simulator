@@ -97,22 +97,22 @@ onUnmounted(() => {
 .reaction { max-width: 520px; margin: 0 auto; text-align: center; padding: 20px; }
 .game-waiting, .game-finished { padding: 40px 20px; }
 .game-icon { font-size: 64px; margin-bottom: 16px; }
-h2 { color: #e0e0e0; margin: 0 0 8px; }
-p { color: #888; font-size: 14px; }
-.countdown-big { font-size: 72px; font-weight: 700; color: #00ff88; margin: 20px 0; animation: pulse 0.5s infinite; }
+h2 { color: #ece7fb; margin: 0 0 8px; }
+p { color: #8f83b8; font-size: 14px; }
+.countdown-big { font-size: 72px; font-weight: 700; color: #b39bff; margin: 20px 0; animation: pulse 0.5s infinite; }
 @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-.waiting-text { color: #666; margin-top: 12px; }
-.game-header { display: flex; justify-content: space-between; color: #aaa; font-size: 14px; margin-bottom: 16px; }
-.game-header strong { color: #00ff88; }
+.waiting-text { color: #6b5f92; margin-top: 12px; }
+.game-header { display: flex; justify-content: space-between; color: #a99bd0; font-size: 14px; margin-bottom: 16px; }
+.game-header strong { color: #b39bff; }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.panel { aspect-ratio: 1/1; border-radius: 12px; border: 2px solid #ffffff14; background: #1a1a3e; color: #e0e0ff; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.08s, border-color 0.08s; }
+.panel { aspect-ratio: 1/1; border-radius: 12px; border: 2px solid #ffffff14; background: #2a1a4a; color: #e0e0ff; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.08s, border-color 0.08s; }
 .panel.waiting { background: #23234d; }
-.panel.green { background: #00ff88; border-color: #00ff88; color: #003018; box-shadow: 0 0 18px #00ff8866; }
+.panel.green { background: #b39bff; border-color: #b39bff; color: #1a0f2e; box-shadow: 0 0 18px #b39bff66; }
 .panel.early { background: #ff444433; border-color: #ff4444; color: #ff8888; cursor: default; }
-.panel.done { background: #1c1c46; border-color: #00ff8844; color: #00ff88; cursor: default; }
-.hint { color: #666; font-size: 12px; margin-top: 14px; }
-.winner-name { font-size: 26px; font-weight: 700; color: #ffaa00; }
-.winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+.panel.done { background: #2e1e52; border-color: #b39bff44; color: #b39bff; cursor: default; }
+.hint { color: #6b5f92; font-size: 12px; margin-top: 14px; }
+.winner-name { font-size: 26px; font-weight: 700; color: #e6c988; }
+.winner-label { display: block; font-size: 14px; color: #e6c988; margin-top: 4px; }
 @media (max-width: 480px) {
   .reaction { padding: 12px; }
   .countdown-big { font-size: 52px; }

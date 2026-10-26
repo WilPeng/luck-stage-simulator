@@ -106,25 +106,25 @@ onUnmounted(() => {
 .missing-number { max-width: 620px; margin: 0 auto; text-align: center; padding: 20px; }
 .game-waiting, .game-finished { padding: 40px 20px; }
 .game-icon { font-size: 64px; margin-bottom: 16px; }
-h2 { color: #e0e0e0; margin: 0 0 8px; }
-p { color: #888; font-size: 14px; }
-.countdown-big { font-size: 72px; font-weight: 700; color: #00ff88; margin: 20px 0; animation: pulse 0.5s infinite; }
+h2 { color: #ece7fb; margin: 0 0 8px; }
+p { color: #8f83b8; font-size: 14px; }
+.countdown-big { font-size: 72px; font-weight: 700; color: #b39bff; margin: 20px 0; animation: pulse 0.5s infinite; }
 @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-.waiting-text { color: #666; margin-top: 12px; }
-.game-header { color: #aaa; font-size: 15px; margin-bottom: 14px; font-weight: 600; }
+.waiting-text { color: #6b5f92; margin-top: 12px; }
+.game-header { color: #a99bd0; font-size: 15px; margin-bottom: 14px; font-weight: 600; }
 .matrix { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; width: min(420px, 86vw); margin: 0 auto 20px; }
-.mcell { aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center; background: #14213a; border: 1px solid #00ff8822; border-radius: 6px; color: #cfe3ff; font-size: clamp(12px, 3vw, 18px); font-weight: 600; }
+.mcell { aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center; background: #14213a; border: 1px solid #b39bff22; border-radius: 6px; color: #e0d7ff; font-size: clamp(12px, 3vw, 18px); font-weight: 600; }
 .answer-area { display: flex; gap: 10px; justify-content: center; align-items: center; }
-.ans-input { width: 150px; padding: 12px 14px; font-size: 18px; text-align: center; background: #0a1a10; border: 1px solid #00ff8844; border-radius: 8px; color: #e0e0e0; outline: none; }
-.ans-input:focus { border-color: #00ff88; }
-.submit-btn { padding: 12px 28px; font-size: 16px; font-weight: 700; color: #00ff88; background: #00ff8822; border: 2px solid #00ff88; border-radius: 10px; cursor: pointer; }
+.ans-input { width: 150px; padding: 12px 14px; font-size: 18px; text-align: center; background: #17112a; border: 1px solid #b39bff44; border-radius: 8px; color: #ece7fb; outline: none; }
+.ans-input:focus { border-color: #b39bff; }
+.submit-btn { padding: 12px 28px; font-size: 16px; font-weight: 700; color: #b39bff; background: #b39bff22; border: 2px solid #b39bff; border-radius: 10px; cursor: pointer; }
 .submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.submitted { color: #00ff88; }
+.submitted { color: #b39bff; }
 .submitted-title { margin: 0 0 6px; }
-.submitted-hint { color: #888; margin: 0; }
+.submitted-hint { color: #8f83b8; margin: 0; }
 .cool-hint { color: #ff6b6b; margin-top: 10px; font-size: 14px; }
-.winner-name { font-size: 26px; font-weight: 700; color: #ffaa00; }
-.winner-label { display: block; font-size: 14px; color: #ffaa00; margin-top: 4px; }
+.winner-name { font-size: 26px; font-weight: 700; color: #e6c988; }
+.winner-label { display: block; font-size: 14px; color: #e6c988; margin-top: 4px; }
 @media (max-width: 480px) {
   .missing-number { padding: 12px; }
   .countdown-big { font-size: 52px; }

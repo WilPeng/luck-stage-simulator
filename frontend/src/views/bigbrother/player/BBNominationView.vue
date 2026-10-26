@@ -282,57 +282,57 @@ onMounted(async () => {
 <style scoped>
 .bb-nomination-player { max-width: 600px; margin: 0 auto; padding: 16px; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.round-tag { background: #00ff8822; color: #00ff88; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #00ff8844; }
-.history-tag { background: #88888822; color: #aaa; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
-.future-tag { background: #44444422; color: #666; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
+.history-tag { background: #88888822; color: #a99bd0; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
+.future-tag { background: #44444422; color: #6b5f92; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
 
-.hoh-banner { background: linear-gradient(135deg, #ffaa0022, #ff880022); border: 1px solid #ffaa00; border-radius: 8px; padding: 12px; text-align: center; font-size: 15px; color: #ffaa00; margin-bottom: 20px; }
+.hoh-banner { background: linear-gradient(135deg, #e6c98822, #ff880022); border: 1px solid #e6c988; border-radius: 8px; padding: 12px; text-align: center; font-size: 15px; color: #e6c988; margin-bottom: 20px; }
 
-.nomination-form { background: linear-gradient(135deg, #0f0f2e, #1a1a3e); border: 1px solid #444; border-radius: 12px; padding: 20px; }
+.nomination-form { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #4a3d6e; border-radius: 12px; padding: 20px; }
 .form-group { margin-bottom: 16px; }
-.form-group label { display: block; font-size: 14px; color: #aaa; margin-bottom: 6px; }
-.bb-select { width: 100%; padding: 10px; background: #1a1a3e; border: 1px solid #444; border-radius: 8px; color: #fff; font-size: 14px; }
-.bb-select:focus { border-color: #ffaa00; outline: none; }
-.bb-select option { background: #1a1a3e; color: #fff; }
-.bb-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #ffaa00, #ff8800); border: none; border-radius: 8px; color: #000; font-size: 16px; font-weight: 600; cursor: pointer; }
+.form-group label { display: block; font-size: 14px; color: #a99bd0; margin-bottom: 6px; }
+.bb-select { width: 100%; padding: 10px; background: #2a1a4a; border: 1px solid #4a3d6e; border-radius: 8px; color: #fff; font-size: 14px; }
+.bb-select:focus { border-color: #e6c988; outline: none; }
+.bb-select option { background: #2a1a4a; color: #fff; }
+.bb-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #e6c988, #ff8800); border: none; border-radius: 8px; color: #000; font-size: 16px; font-weight: 600; cursor: pointer; }
 .bb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.nomination-card { background: linear-gradient(135deg, #0f0f2e, #1a1a3e); border: 1px solid #ffaa00; border-radius: 12px; padding: 24px; margin-top: 20px; }
-.hoh-info { font-size: 14px; color: #aaa; margin-bottom: 16px; }
+.nomination-card { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #e6c988; border-radius: 12px; padding: 24px; margin-top: 20px; }
+.hoh-info { font-size: 14px; color: #a99bd0; margin-bottom: 16px; }
 .nominees { display: flex; gap: 16px; }
-.nominee-item { flex: 1; background: #ffaa0008; border: 1px solid #ffaa0022; border-radius: 8px; padding: 16px; text-align: center; position: relative; }
+.nominee-item { flex: 1; background: #e6c98808; border: 1px solid #e6c98822; border-radius: 8px; padding: 16px; text-align: center; position: relative; }
 .nominee-item.warned { border-color: #ff4444; background: #ff444408; }
 .nominee-icon { display: block; font-size: 24px; margin-bottom: 8px; }
 .nominee-name { display: block; font-size: 18px; font-weight: 600; color: #fff; }
 .me-badge { position: absolute; top: 8px; right: 8px; background: #ff4444; color: #fff; padding: 1px 8px; border-radius: 8px; font-size: 10px; }
-.nominee-order { display: block; font-size: 12px; color: #888; margin-top: 4px; }
-.replacement { margin-top: 16px; padding: 12px; background: #ffaa0008; border-radius: 8px; font-size: 14px; color: #ffaa00; }
-.veto-note { margin-top: 12px; color: #00ff88; font-size: 13px; }
-.empty-card { background: #0f0f2e; border: 1px solid #444; border-radius: 12px; padding: 40px; text-align: center; margin-top: 20px; }
-.empty-card p { color: #666; }
+.nominee-order { display: block; font-size: 12px; color: #8f83b8; margin-top: 4px; }
+.replacement { margin-top: 16px; padding: 12px; background: #e6c98808; border-radius: 8px; font-size: 14px; color: #e6c988; }
+.veto-note { margin-top: 12px; color: #b39bff; font-size: 13px; }
+.empty-card { background: #1b1130; border: 1px solid #4a3d6e; border-radius: 12px; padding: 40px; text-align: center; margin-top: 20px; }
+.empty-card p { color: #6b5f92; }
 
-.success-toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #00ff88; color: #000; padding: 12px 24px; border-radius: 8px; font-weight: 600; }
+.success-toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #b39bff; color: #000; padding: 12px 24px; border-radius: 8px; font-weight: 600; }
 
 /* 直接民主样式 */
 .democracy-action { margin-bottom: 20px; }
 .democracy-banner { background: linear-gradient(135deg, #3498db22, #2980b922); border: 1px solid #3498db; border-radius: 8px; padding: 12px; text-align: center; font-size: 14px; color: #3498db; margin-bottom: 16px; line-height: 1.6; }
-.democracy-vote-section { background: linear-gradient(135deg, #0f0f2e, #1a1a3e); border: 1px solid #3498db44; border-radius: 12px; padding: 20px; }
+.democracy-vote-section { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #3498db44; border-radius: 12px; padding: 20px; }
 .democracy-grid { display: flex; flex-direction: column; gap: 8px; }
-.democracy-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #1a1a3e; border-radius: 6px; }
-.democracy-voter { flex: 1; font-size: 14px; color: #ccc; }
-.bb-select-sm { padding: 6px 10px; background: #0f0f2e; border: 1px solid #444; border-radius: 6px; color: #fff; font-size: 12px; width: 180px; }
+.democracy-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #2a1a4a; border-radius: 6px; }
+.democracy-voter { flex: 1; font-size: 14px; color: #cfc4ea; }
+.bb-select-sm { padding: 6px 10px; background: #1b1130; border: 1px solid #4a3d6e; border-radius: 6px; color: #fff; font-size: 12px; width: 180px; }
 .bb-select-sm:focus { border-color: #3498db; outline: none; }
-.bb-select-sm option { background: #0f0f2e; color: #fff; }
-.empty-hint { text-align: center; color: #666; font-size: 14px; padding: 20px; }
-.key-ceremony-panel, .key-setup-panel { background: #0f0f2e; border: 1px solid #ffaa0044; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
-.kc-title { font-size: 14px; color: #ffaa00; margin-bottom: 10px; }
+.bb-select-sm option { background: #1b1130; color: #fff; }
+.empty-hint { text-align: center; color: #6b5f92; font-size: 14px; padding: 20px; }
+.key-ceremony-panel, .key-setup-panel { background: #1b1130; border: 1px solid #e6c98844; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+.kc-title { font-size: 14px; color: #e6c988; margin-bottom: 10px; }
 .kc-keys { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-.kc-key { padding: 8px 14px; border-radius: 8px; background: #ffffff08; border: 1px solid #ffffff18; color: #666; font-size: 13px; }
-.kc-key.drawn { background: #00ff8822; border-color: #00ff88; color: #00ff88; font-weight: 600; }
+.kc-key { padding: 8px 14px; border-radius: 8px; background: #ffffff08; border: 1px solid #ffffff18; color: #6b5f92; font-size: 13px; }
+.kc-key.drawn { background: #b39bff22; border-color: #b39bff; color: #b39bff; font-weight: 600; }
 .kc-nominees { font-size: 14px; color: #ff6666; }
 .kc-eligible { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-.kc-pick { padding: 8px 14px; border: 1px solid #ffffff22; background: #ffffff08; color: #ccc; border-radius: 8px; cursor: pointer; font-size: 13px; }
-.kc-pick.chosen { background: #ffaa0022; border-color: #ffaa00; color: #ffaa00; }
-.kc-order-line { font-size: 13px; color: #8a8aa5; margin-bottom: 12px; }
+.kc-pick { padding: 8px 14px; border: 1px solid #ffffff22; background: #ffffff08; color: #cfc4ea; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.kc-pick.chosen { background: #e6c98822; border-color: #e6c988; color: #e6c988; }
+.kc-order-line { font-size: 13px; color: #b3a6d6; margin-bottom: 12px; }
 </style>

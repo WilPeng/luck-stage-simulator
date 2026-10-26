@@ -133,37 +133,37 @@ onMounted(fetchData)
 <style scoped>
 .bb-game-library { max-width: 1200px; margin: 0 auto; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #e0e0e0; margin: 0; }
-.bb-btn { background: transparent; border: 1px solid #00ff8844; color: #00ff88; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
-.bb-btn:hover { background: #00ff8822; }
-.bb-btn-primary { border-color: #00ff88; background: #00ff8822; }
-.bb-btn-xs { padding: 4px 12px; font-size: 12px; border-radius: 4px; border: 1px solid #00ff8833; background: transparent; color: #00ff88; cursor: pointer; transition: all 0.2s; }
-.bb-btn-xs:hover { background: #00ff8822; }
-.btn-warn { border-color: #ffaa0066; color: #ffaa00; }
-.btn-warn:hover { background: #ffaa0022; }
-.btn-success { border-color: #00ff8866; color: #00ff88; }
-.btn-success:hover { background: #00ff8822; }
+.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
+.bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+.bb-btn:hover { background: #b39bff22; }
+.bb-btn-primary { border-color: #b39bff; background: #b39bff22; }
+.bb-btn-xs { padding: 4px 12px; font-size: 12px; border-radius: 4px; border: 1px solid #b39bff33; background: transparent; color: #b39bff; cursor: pointer; transition: all 0.2s; }
+.bb-btn-xs:hover { background: #b39bff22; }
+.btn-warn { border-color: #e6c98866; color: #e6c988; }
+.btn-warn:hover { background: #e6c98822; }
+.btn-success { border-color: #b39bff66; color: #b39bff; }
+.btn-success:hover { background: #b39bff22; }
 .btn-edit { border-color: #4488ff66; color: #4488ff; }
 .btn-edit:hover { background: #4488ff22; }
 .btn-danger { border-color: #ff444466; color: #ff4444; }
 .btn-danger:hover { background: #ff444422; }
 .game-section { margin-bottom: 32px; }
-.game-section h2 { font-size: 18px; color: #aaa; margin: 0 0 16px 0; font-weight: 500; }
-.empty-state { color: #666; font-size: 14px; padding: 20px 0; }
+.game-section h2 { font-size: 18px; color: #a99bd0; margin: 0 0 16px 0; font-weight: 500; }
+.empty-state { color: #6b5f92; font-size: 14px; padding: 20px 0; }
 .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
-.game-card { display: flex; align-items: flex-start; gap: 16px; padding: 16px; border: 1px solid #00ff8822; border-radius: 10px; background: #0a1a1044; transition: all 0.2s; position: relative; }
-.game-card:hover { border-color: #00ff8844; background: #0a1a1066; }
+.game-card { display: flex; align-items: flex-start; gap: 16px; padding: 16px; border: 1px solid #b39bff22; border-radius: 10px; background: #17112a44; transition: all 0.2s; position: relative; }
+.game-card:hover { border-color: #b39bff44; background: #17112a66; }
 .game-card.builtin { opacity: 0.7; }
 .game-card.disabled { opacity: 0.5; }
 .game-icon { font-size: 36px; line-height: 1; flex-shrink: 0; }
 .game-info { flex: 1; min-width: 0; }
-.game-name { font-size: 16px; font-weight: 600; color: #e0e0e0; margin-bottom: 4px; }
-.game-desc { font-size: 13px; color: #888; margin-bottom: 8px; line-height: 1.4; }
+.game-name { font-size: 16px; font-weight: 600; color: #ece7fb; margin-bottom: 4px; }
+.game-desc { font-size: 13px; color: #8f83b8; margin-bottom: 8px; line-height: 1.4; }
 .game-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #00ff8815; color: #00ff88; }
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #b39bff15; color: #b39bff; }
 .tag-quiz { background: #4488ff15; color: #4488ff; }
-.tag-score { background: #ffaa0015; color: #ffaa00; }
-.meta-text { font-size: 12px; color: #666; }
-.game-badge { position: absolute; top: 8px; right: 8px; font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #00ff8815; color: #00ff88; }
+.tag-score { background: #e6c98815; color: #e6c988; }
+.meta-text { font-size: 12px; color: #6b5f92; }
+.game-badge { position: absolute; top: 8px; right: 8px; font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #b39bff15; color: #b39bff; }
 .game-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: flex-start; }
 </style>
