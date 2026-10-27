@@ -375,6 +375,7 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
         h.wakeAt = null
         h.isShowering = false
         h.showerStartedAt = null
+        h.showerCooldownUntil = null
         await h.save()
       }
     }

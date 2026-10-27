@@ -100,8 +100,9 @@ defineEmits<{
 const currentRoom = computed(() => props.rooms.find(r => r.id === props.currentRoomId))
 const currentCount = computed(() => currentRoom.value?.currentCount ?? null)
 
-const reachableEnterable = computed(() => (props.reachableRooms || []).filter(r => r.canEnter))
-const reachableDenied = computed(() => (props.reachableRooms || []).filter(r => !r.canEnter))
+// 房间人数已满时仍显示为可点击，由服务端在进入时返回提示
+const reachableEnterable = computed(() => (props.reachableRooms || []).filter(r => r.canEnter || r.isFull))
+const reachableDenied = computed(() => (props.reachableRooms || []).filter(r => !r.canEnter && !r.isFull))
 const otherRooms = computed(() => {
   const reachableSet = new Set((props.reachableRooms || []).map(r => r.id))
   return props.rooms.filter(r => r.id !== props.currentRoomId && !reachableSet.has(r.id))

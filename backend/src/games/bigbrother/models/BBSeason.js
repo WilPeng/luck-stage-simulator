@@ -40,7 +40,14 @@ class BBSeason extends BaseModel {
     this.championReveal = data?.championReveal || null
     // House 状态
     this.backyardDoorOpen = data?.backyardDoorOpen ?? true
-    this.autoSleepHour = data?.autoSleepHour ?? 18   // 每天 N 点未完成睡觉则自动进入睡眠
+    // 睡眠规则：单次时长 + 可主动睡觉的时间窗（支持跨日期，如 22:00 - 02:00）
+    this.sleepDurationMinutes = data?.sleepDurationMinutes ?? 360
+    this.sleepWindowStart = data?.sleepWindowStart || (data?.autoSleepHour != null ? `${String(data.autoSleepHour).padStart(2, '0')}:00` : '22:00')
+    this.sleepWindowEnd = data?.sleepWindowEnd || '02:00'
+    // 兼容旧字段（仅用于迁移旧的自动睡眠小时配置）
+    this.autoSleepHour = data?.autoSleepHour ?? null
+    // 洗澡后冷却时长（分钟）
+    this.showerCooldownMinutes = data?.showerCooldownMinutes ?? 30
     this.hohSleepAllowed = data?.hohSleepAllowed ?? true // 是否允许在 HOH 房睡觉（淘汰公布后重置）
     // 淘汰结果分段宣布：{ round, segments:[{type,text}], released }
     this.evictionAnnouncement = data?.evictionAnnouncement || null

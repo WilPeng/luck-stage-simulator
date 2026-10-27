@@ -20,13 +20,14 @@ class BBHouseguest extends BaseModel {
     // 睡眠状态
     this.isSleeping = data?.isSleeping || false
     this.sleepStartedAt = data?.sleepStartedAt || null
-    this.wakeAt = data?.wakeAt || null                 // 可醒来时间（现实 6 小时后）
+    this.wakeAt = data?.wakeAt || null                 // 可醒来时间（按管理员设置的睡眠时长）
     this.lastSleepDate = data?.lastSleepDate || null   // YYYY-MM-DD（本地日期）
     this.hohSleepApproved = data?.hohSleepApproved || false // 是否获准在 HOH 房睡觉
     // 洗澡状态
     this.isShowering = data?.isShowering || false
     this.showerStartedAt = data?.showerStartedAt || null
     this.lastShowerDate = data?.lastShowerDate || null
+    this.showerCooldownUntil = data?.showerCooldownUntil || null // 冷却结束前不能再次洗澡
     this.gameId = data?.gameId || 'bigbrother'
     this.createdAt = data?.createdAt || new Date().toISOString()
     this.updatedAt = data?.updatedAt || new Date().toISOString()

@@ -2,7 +2,10 @@
   <div class="bb-guest-state">
     <div class="page-header">
       <h1>😴🚿 房客睡眠 / 洗澡记录</h1>
-      <span class="today">今天：{{ today }}</span>
+      <span class="today">
+        今天：{{ today }}
+        <template v-if="sleepWindowStart && sleepWindowEnd"> · 睡觉窗口 {{ sleepWindowStart }} - {{ sleepWindowEnd }}</template>
+      </span>
     </div>
 
     <div class="table-wrapper">
@@ -12,9 +15,9 @@
             <th>房客</th>
             <th>状态</th>
             <th>位置</th>
-            <th>今天已睡</th>
+            <th>本轮已睡</th>
             <th>在睡觉</th>
-            <th>今天已洗</th>
+            <th>洗澡冷却</th>
             <th>在洗澡</th>
             <th>操作</th>
           </tr>
@@ -30,8 +33,8 @@
             </td>
             <td>{{ roomName(g.currentRoomId) }}</td>
             <td>
-              <span class="badge" :class="g.lastSleepDate === today ? 'ok' : 'none'">
-                {{ g.lastSleepDate === today ? '已睡' : '未睡' }}
+              <span class="badge" :class="g.sleepCompleted ? 'ok' : 'none'" :title="g.sleepCycleDate ? '睡眠周期：' + g.sleepCycleDate : ''">
+                {{ g.sleepCompleted ? '已完成' : '未完成' }}
               </span>
             </td>
             <td>
@@ -39,24 +42,24 @@
               <span v-else class="badge none">清醒</span>
             </td>
             <td>
-              <span class="badge" :class="g.lastShowerDate === today ? 'ok' : 'none'">
-                {{ g.lastShowerDate === today ? '已洗' : '未洗' }}
+              <span v-if="cooldownActive(g)" class="badge cooling" :title="'可再次洗澡：' + formatTime(g.showerCooldownUntil)">
+                冷却 {{ cooldownText(g) }}
               </span>
+              <span v-else class="badge none">可洗</span>
             </td>
             <td>
               <span v-if="g.isShowering" class="badge showering" :title="g.showerStartedAt ? '开始：' + formatTime(g.showerStartedAt) : ''">洗澡中</span>
-              <span v-else class="badge none">未洗</span>
+              <span v-else class="badge none">空闲</span>
             </td>
             <td class="actions">
               <button v-if="g.isSleeping" class="bb-btn-xs danger" @click="sleep(g, 'end')">立即结束睡觉</button>
               <button v-else class="bb-btn-xs" @click="sleep(g, 'start')">立即开始睡觉</button>
-              <button v-if="g.lastSleepDate === today" class="bb-btn-xs" @click="sleep(g, 'clear')">清除已睡</button>
-              <button v-else class="bb-btn-xs" @click="sleep(g, 'mark')">标记已睡</button>
+              <button v-if="g.sleepCompleted" class="bb-btn-xs" @click="sleep(g, 'clear')">清除本轮已睡</button>
+              <button v-else class="bb-btn-xs" @click="sleep(g, 'mark')">标记本轮已睡</button>
 
               <button v-if="g.isShowering" class="bb-btn-xs danger" @click="shower(g, 'end')">立即结束洗澡</button>
               <button v-else class="bb-btn-xs" @click="shower(g, 'start')">立即开始洗澡</button>
-              <button v-if="g.lastShowerDate === today" class="bb-btn-xs" @click="shower(g, 'clear')">清除已洗</button>
-              <button v-else class="bb-btn-xs" @click="shower(g, 'mark')">标记已洗</button>
+              <button v-if="cooldownActive(g)" class="bb-btn-xs" @click="shower(g, 'clear')">清除洗澡冷却</button>
             </td>
           </tr>
           <tr v-if="!houseguests.length"><td colspan="8" class="empty">暂无房客</td></tr>
@@ -74,6 +77,8 @@ import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 const guests = ref<any[]>([])
 const rooms = ref<any[]>([])
 const today = ref('')
+const sleepWindowStart = ref('')
+const sleepWindowEnd = ref('')
 let timer: ReturnType<typeof setInterval> | null = null
 
 const houseguests = computed(() => guests.value.filter(g => g.role !== 'admin'))
@@ -100,8 +105,23 @@ async function load() {
     } else {
       guests.value = res?.guests || []
       today.value = res?.today || localToday()
+      sleepWindowStart.value = res?.sleepWindowStart || ''
+      sleepWindowEnd.value = res?.sleepWindowEnd || ''
     }
   } catch {}
+}
+
+function cooldownActive(g: any) {
+  return !!(g.showerCooldownUntil && new Date(g.showerCooldownUntil).getTime() > Date.now())
+}
+
+function cooldownText(g: any) {
+  if (!g.showerCooldownUntil) return ''
+  const ms = new Date(g.showerCooldownUntil).getTime() - Date.now()
+  if (ms <= 0) return ''
+  const mins = Math.ceil(ms / 60000)
+  if (mins < 60) return `${mins}分钟`
+  return `${Math.floor(mins / 60)}小时${mins % 60}分`
 }
 function localToday() {
   const d = new Date()
@@ -142,6 +162,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 .badge.ok { background: #b39bff22; color: #b39bff; }
 .badge.sleeping { background: #4488ff22; color: #7fb0ff; }
 .badge.showering { background: #00c8ff22; color: #7fd8ff; }
+.badge.cooling { background: #e6c98822; color: #e6c988; }
 .badge.none { background: #ffffff10; color: #8f83b8; }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .bb-btn-xs { padding: 3px 10px; font-size: 11px; background: transparent; border: 1px solid #b39bff44; color: #b39bff; border-radius: 4px; cursor: pointer; }

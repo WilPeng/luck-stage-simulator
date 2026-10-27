@@ -61,7 +61,7 @@ export function useHouseSocket() {
   const onInviteDeclined = ref<((data: { playerId: string; playerName: string }) => void) | null>(null)
   const onInviteCancelled = ref<((data: { playerId?: string; hohId?: string }) => void) | null>(null)
   const onBroadcast = ref<((data: { type: string; roomId: string | null; message: string; from: string; at: string }) => void) | null>(null)
-  const onSleepForced = ref<((data: { wakeAt: string }) => void) | null>(null)
+  const onSleepForced = ref<((data: { wakeAt: string; sleepCycleDate?: string; sleepDurationMinutes?: number }) => void) | null>(null)
   const onForceMoved = ref<((data: { targetRoomId: string; reason: string }) => void) | null>(null)
   const onMonitorUpdate = ref<((data: HohMonitorRoom[]) => void) | null>(null)
   const onHohDoorbell = ref<((data: { playerId: string; playerName: string }) => void) | null>(null)

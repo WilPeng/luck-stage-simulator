@@ -628,6 +628,7 @@ export interface BBHouseRoomDetail {
 export interface BBReachableRoom extends BBHouseRoomDef {
   canEnter: boolean
   denyReason: string
+  isFull?: boolean
 }
 
 export interface BBHohMonitorRoom {

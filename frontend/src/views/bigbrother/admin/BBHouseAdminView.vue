@@ -52,17 +52,35 @@
       </div>
     </div>
 
-    <!-- 房间人数/床位/睡觉 & 自动睡眠时间 -->
+    <!-- 房间人数/床位/睡觉 & 作息规则 -->
     <div class="control-card">
       <div class="control-header">
         <h3>🛏️ 房间人数 / 床位 / 睡觉</h3>
-        <div class="sleep-setting">
-          <label>自动睡眠时间</label>
-          <input type="number" min="0" max="23" v-model.number="autoSleepHour" class="bb-input" style="max-width: 80px;" />
-          <span>点</span>
-          <button class="bb-btn" @click="saveSeason">保存</button>
+      </div>
+
+      <div class="house-rules">
+        <div class="rule-row">
+          <label>单次睡觉时长</label>
+          <input type="number" min="1" max="1440" v-model.number="sleepDurationMinutes" class="bb-input rule-input" />
+          <span>分钟（约 {{ sleepDurationHoursText }} 小时）</span>
+        </div>
+        <div class="rule-row">
+          <label>可开始睡觉时间</label>
+          <input type="time" v-model="sleepWindowStart" class="bb-input rule-time" />
+          <span>至</span>
+          <input type="time" v-model="sleepWindowEnd" class="bb-input rule-time" />
+          <span class="rule-hint">支持跨日期，例如 22:00 至 02:00；超时未睡将在结束时间被动入睡</span>
+        </div>
+        <div class="rule-row">
+          <label>洗澡后冷却</label>
+          <input type="number" min="0" max="1440" v-model.number="showerCooldownMinutes" class="bb-input rule-input" />
+          <span>分钟（单次洗澡限时 10 分钟，结束后自动回洗漱间）</span>
+        </div>
+        <div class="rule-row">
+          <button class="bb-btn bb-btn-primary" @click="saveSeason">保存规则</button>
         </div>
       </div>
+
       <div class="room-editor">
         <div v-for="r in allRooms" :key="r.id" class="room-edit-row">
           <span class="re-name">{{ r.icon }} {{ r.name }}</span>
@@ -121,7 +139,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import {
   bbGetHouseRooms,
   bbGetHouseMap,
@@ -170,7 +188,11 @@ const broadcastType = ref<'notice' | 'invite'>('notice')
 const broadcastRoom = ref('')
 const broadcastMessage = ref('')
 
-const autoSleepHour = ref(18)
+const sleepDurationMinutes = ref(360)
+const sleepWindowStart = ref('22:00')
+const sleepWindowEnd = ref('02:00')
+const showerCooldownMinutes = ref(30)
+const sleepDurationHoursText = computed(() => (Math.max(1, sleepDurationMinutes.value || 0) / 60).toFixed(1))
 const roomEdits = reactive<Record<string, { capacity: number | null; bedLimit: number | null; canSleep: boolean }>>({})
 
 // 聊天记录
@@ -200,8 +222,13 @@ async function loadChatLogs() {
 
 async function saveSeason() {
   try {
-    await bbAdminSetSeason({ autoSleepHour: autoSleepHour.value })
-    alert('已保存')
+    await bbAdminSetSeason({
+      sleepDurationMinutes: Math.max(1, Math.round(sleepDurationMinutes.value || 360)),
+      sleepWindowStart: sleepWindowStart.value,
+      sleepWindowEnd: sleepWindowEnd.value,
+      showerCooldownMinutes: Math.max(0, Math.round(showerCooldownMinutes.value || 0))
+    })
+    alert('作息规则已保存')
   } catch (e: any) {
     alert(e?.message || '保存失败')
   }
@@ -251,6 +278,8 @@ function formatTime(t: string) {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
 }
 
+let rulesLoaded = false
+
 async function loadData() {
   try {
     const [roomsRes, locRes, mapRes] = await Promise.all([
@@ -275,11 +304,19 @@ async function loadData() {
         }
       }
     }
-    // 自动睡眠时间
-    try {
-      const s = await bbGetSeason()
-      if (s) autoSleepHour.value = (s as any).autoSleepHour ?? 18
-    } catch {}
+    // 作息规则（仅首次加载，避免覆盖正在编辑的值）
+    if (!rulesLoaded) {
+      try {
+        const s = await bbGetSeason()
+        if (s) {
+          sleepDurationMinutes.value = (s as any).sleepDurationMinutes ?? 360
+          sleepWindowStart.value = (s as any).sleepWindowStart || '22:00'
+          sleepWindowEnd.value = (s as any).sleepWindowEnd || '02:00'
+          showerCooldownMinutes.value = (s as any).showerCooldownMinutes ?? 30
+        }
+      } catch {}
+      rulesLoaded = true
+    }
   } catch (e) {
     console.error(e)
   }
@@ -365,8 +402,16 @@ async function handleForceMove(playerId: string, targetRoomId: string) {
 .bb-select:focus, .bb-input:focus { border-color: #b39bff; }
 .bb-btn-primary { background: #b39bff22; border-color: #b39bff; }
 
-.sleep-setting { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #a99bd0; }
-.sleep-setting label { color: #8f83b8; }
+.house-rules {
+  display: flex; flex-direction: column; gap: 10px;
+  background: #120a22; border: 1px solid #b39bff22; border-radius: 8px;
+  padding: 12px 14px; margin-bottom: 8px;
+}
+.rule-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: #a99bd0; }
+.rule-row > label { color: #8f83b8; min-width: 108px; }
+.rule-input { max-width: 90px; flex: none; }
+.rule-time { max-width: 120px; flex: none; }
+.rule-hint { color: #6b5f92; font-size: 12px; }
 .room-editor { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .room-edit-row {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;

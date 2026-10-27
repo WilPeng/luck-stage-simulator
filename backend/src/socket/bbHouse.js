@@ -12,6 +12,12 @@ const BBHouseDoor = require('../games/bigbrother/models/BBHouseDoor')
 const BBHousePassage = require('../games/bigbrother/models/BBHousePassage')
 const BBSeason = require('../games/bigbrother/models/BBSeason')
 const { getCurrentHoh } = require('../games/bigbrother/houseMap')
+const {
+  localDateStr,
+  getSleepState,
+  getShowerSettings,
+  getShowerCooldownUntil
+} = require('../games/bigbrother/houseRules')
 const locationHistory = require('../games/bigbrother/locationHistory')
 
 const JWT_SECRET = process.env.JWT_SECRET || 'bigbrother_secret_key'
@@ -435,13 +441,6 @@ function initBBHouseSocket(io) {
 // ===== 定时任务：自动睡眠 / 洗澡自动结束 =====
 let houseTimer = null
 
-function localDate(d) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
 function startHouseTimers() {
   if (houseTimer) return
   houseTimer = setInterval(runHouseTimers, 60 * 1000)
@@ -452,37 +451,47 @@ function startHouseTimers() {
 async function runHouseTimers() {
   try {
     const season = await BBSeason.findOne({ gameId })
-    const hour = season?.autoSleepHour ?? 18
     const now = new Date()
-    const today = localDate(now)
 
-    // 自动睡眠：当天未完成睡觉且已过设定时间
+    // 自动睡眠：睡眠时间窗结束后仍未完成本轮睡觉 -> 被动入睡
     const guests = await BBHouseguest.find({ gameId, status: 'active' })
     for (const g of guests) {
       if (g.isSleeping) continue
-      if (g.lastSleepDate === today) continue
-      if (now.getHours() >= hour) {
-        g.isSleeping = true
-        g.sleepStartedAt = now.toISOString()
-        g.wakeAt = new Date(now.getTime() + 6 * 3600 * 1000).toISOString()
-        g.lastSleepDate = today
-        await g.save()
-        for (const [, s] of bbHouseNamespace.sockets) {
-          if (s.userId === g.id) s.emit('house:sleep-forced', { wakeAt: g.wakeAt })
+      const sleepState = getSleepState(season, now, g.lastSleepDate)
+      if (!sleepState.shouldForce) continue
+      // 玩家在窗口结束后才创建时，不追溯上一个周期
+      const createdAt = g.createdAt ? new Date(g.createdAt).getTime() : 0
+      if (createdAt > sleepState.endAt) continue
+      g.isSleeping = true
+      g.sleepStartedAt = now.toISOString()
+      g.wakeAt = new Date(now.getTime() + sleepState.sleepDurationMinutes * 60 * 1000).toISOString()
+      g.lastSleepDate = sleepState.cycleDate
+      await g.save()
+      for (const [, s] of bbHouseNamespace.sockets) {
+        if (s.userId === g.id) {
+          s.emit('house:sleep-forced', {
+            wakeAt: g.wakeAt,
+            sleepCycleDate: g.lastSleepDate,
+            sleepDurationMinutes: sleepState.sleepDurationMinutes
+          })
         }
       }
     }
 
-    // 洗澡 10 分钟后自动结束并移动到洗漱间
+    // 洗澡 10 分钟后自动结束，进入冷却并移动到洗漱间
+    const showerSettings = getShowerSettings(season)
     const showering = await BBHouseguest.find({ gameId, isShowering: true })
     for (const g of showering) {
       if (!g.showerStartedAt) continue
-      if (now.getTime() - new Date(g.showerStartedAt).getTime() >= 10 * 60 * 1000) {
+      if (now.getTime() - new Date(g.showerStartedAt).getTime() >= showerSettings.showerDurationMinutes * 60 * 1000) {
         g.isShowering = false
+        g.showerStartedAt = null
+        g.lastShowerDate = localDateStr(now)
+        g.showerCooldownUntil = getShowerCooldownUntil(season, now)
         await g.save()
         const loc = await BBPlayerLocation.findOne({ playerId: g.id, gameId })
-        const oldRoomId = loc?.currentRoomId || 'bathroom'
-        if (loc && oldRoomId !== 'washroom') {
+        if (loc && loc.currentRoomId === 'bathroom') {
+          const oldRoomId = loc.currentRoomId
           loc.currentRoomId = 'washroom'
           loc.enteredAt = now.toISOString()
           await loc.save()

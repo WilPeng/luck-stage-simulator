@@ -14,6 +14,14 @@ const BBChatMessage = require('../models/BBChatMessage')
 const BBLocationHistory = require('../models/BBLocationHistory')
 const { getCurrentSeason, logAction, BB_ACTION_TYPES } = require('../helpers')
 const { getReachableRooms, getCurrentHoh } = require('../houseMap')
+const {
+  localDateStr,
+  isValidHHMM,
+  getSleepSettings,
+  getShowerSettings,
+  getSleepState,
+  getShowerCooldownUntil
+} = require('../houseRules')
 const locationHistory = require('../locationHistory')
 const { getCollection } = require('../../../config/db')
 const { broadcastDoorUpdate, movePlayerSockets, takePendingInvite, broadcastHouse } = require('../../../socket/bbHouse')
@@ -118,7 +126,8 @@ router.get('/rooms/:roomId', auth, async (req, res) => {
         count,
         players,
         bathroomPlayers: await (async () => {
-          if (roomId !== 'washroom') return null
+          // 仅身处洗漱间（或管理员）可以看到浴室内有谁；聊天内容仍按房间隔离
+          if (roomId !== 'washroom' || (!isAdmin && !isInRoom)) return null
           const locs = await BBPlayerLocation.find({ currentRoomId: 'bathroom', gameId: 'bigbrother' })
           const guests = await BBHouseguest.find({ gameId: 'bigbrother' })
           const av = {}
@@ -199,6 +208,7 @@ router.get('/reachable', auth, async (req, res) => {
         const room = roomMap[id]
         let canEnter = true
         let denyReason = ''
+        let isFull = false
         if (room.accessRule === 'hoh_only') {
           if (hohId !== req.user.userId) { canEnter = false; denyReason = '仅 HOH 可进入' }
         } else if (room.accessRule === 'hoh_or_invited') {
@@ -209,12 +219,12 @@ router.get('/reachable', auth, async (req, res) => {
           if ((counts[id] || 0) >= 1) { canEnter = false; denyReason = '已有人在内' }
         }
 
-        // 人数上限
+        // 人数上限：前端仍允许点击，进入时再由服务端返回“人数已满”
         if (canEnter && room.capacity) {
-          if ((counts[id] || 0) >= room.capacity) { canEnter = false; denyReason = '房间已满' }
+          if ((counts[id] || 0) >= room.capacity) { canEnter = false; denyReason = '房间已满'; isFull = true }
         }
 
-        return { ...room.toObject(), canEnter, denyReason }
+        return { ...room.toObject(), canEnter, denyReason, isFull }
       })
 
     // 附带门状态，但仅在特定房间可见
@@ -263,9 +273,13 @@ router.post('/move', auth, async (req, res) => {
       return res.status(403).json({ success: false, error: '洗澡中无法离开浴室' })
     }
 
-    // 进入浴室：需先确认今天未洗过澡
-    if (targetRoomId === 'bathroom' && player.lastShowerDate === todayStr()) {
-      return res.status(403).json({ success: false, error: '今天已经洗过澡了' })
+    // 进入浴室：需确认已过洗澡冷却
+    if (targetRoomId === 'bathroom' && player.showerCooldownUntil) {
+      const remainMs = new Date(player.showerCooldownUntil).getTime() - Date.now()
+      if (remainMs > 0) {
+        const minutes = Math.ceil(remainMs / 60000)
+        return res.status(403).json({ success: false, error: `洗澡冷却中，还需 ${minutes} 分钟才能再次洗澡` })
+      }
     }
 
     // 2. 目标房间存在
@@ -337,7 +351,7 @@ router.post('/move', auth, async (req, res) => {
     if (targetRoom.capacity) {
       const count = await BBPlayerLocation.countDocuments({ currentRoomId: targetRoomId, gameId })
       if (count >= targetRoom.capacity) {
-        return res.status(403).json({ success: false, error: '房间已满' })
+        return res.status(403).json({ success: false, error: '人数已满请稍后重试' })
       }
     }
 
@@ -359,6 +373,7 @@ router.post('/move', auth, async (req, res) => {
       player.isShowering = true
       player.showerStartedAt = new Date().toISOString()
       player.lastShowerDate = todayStr()
+      player.showerCooldownUntil = null
       await player.save()
     }
 
@@ -735,10 +750,27 @@ router.post('/admin/init-locations', auth, requireAdmin, async (req, res) => {
 // ===== 睡眠 / 洗澡 / 状态 =====
 
 function todayStr(d = new Date()) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  return localDateStr(d)
+}
+
+// 结束洗澡：进入冷却，并把仍在浴室的玩家移动到洗漱间
+async function finishShower(g, season, now = new Date()) {
+  g.isShowering = false
+  g.showerStartedAt = null
+  g.lastShowerDate = localDateStr(now)
+  g.showerCooldownUntil = getShowerCooldownUntil(season, now)
+  await g.save()
+
+  const loc = await BBPlayerLocation.findOne({ playerId: g.id, gameId: 'bigbrother' })
+  if (loc && loc.currentRoomId === 'bathroom') {
+    const oldRoomId = loc.currentRoomId
+    loc.currentRoomId = 'washroom'
+    loc.enteredAt = now.toISOString()
+    await loc.save()
+    g.currentRoomId = 'washroom'
+    await g.save()
+    await movePlayerSockets(g.id, oldRoomId, 'washroom', '洗澡结束')
+  }
 }
 
 // GET /my-state - 当前玩家的睡眠/洗澡状态
@@ -746,6 +778,9 @@ router.get('/my-state', auth, async (req, res) => {
   try {
     const g = await BBHouseguest.findOne({ id: req.user.userId, gameId: 'bigbrother' })
     const season = await getCurrentSeason()
+    const now = new Date()
+    const sleepState = getSleepState(season, now, g?.lastSleepDate)
+    const showerSettings = getShowerSettings(season)
     res.json({
       success: true,
       data: {
@@ -757,8 +792,17 @@ router.get('/my-state', auth, async (req, res) => {
         isShowering: g?.isShowering || false,
         showerStartedAt: g?.showerStartedAt || null,
         lastShowerDate: g?.lastShowerDate || null,
-        today: todayStr(),
-        autoSleepHour: season?.autoSleepHour ?? 18,
+        showerCooldownUntil: g?.showerCooldownUntil || null,
+        today: localDateStr(now),
+        sleepCycleDate: sleepState.cycleDate,
+        sleepCompleted: sleepState.completed,
+        canSleepNow: sleepState.inWindow,
+        sleepWindowStart: sleepState.sleepWindowStart,
+        sleepWindowEnd: sleepState.sleepWindowEnd,
+        sleepWindowEndAt: new Date(sleepState.endAt).toISOString(),
+        sleepDurationMinutes: sleepState.sleepDurationMinutes,
+        showerCooldownMinutes: showerSettings.showerCooldownMinutes,
+        showerDurationMinutes: showerSettings.showerDurationMinutes,
         hohSleepAllowed: season?.hohSleepAllowed ?? true,
         now: Date.now()
       }
@@ -778,13 +822,25 @@ router.post('/sleep', auth, async (req, res) => {
     if (g.isSleeping) return res.status(400).json({ success: false, error: '你已在睡眠中' })
     if (g.isShowering) return res.status(400).json({ success: false, error: '洗澡中无法睡觉' })
 
+    const now = new Date()
+    const season = await getCurrentSeason()
+    const sleepState = getSleepState(season, now, g.lastSleepDate)
+    if (sleepState.completed) {
+      return res.status(400).json({ success: false, error: '本睡眠周期已完成' })
+    }
+    if (!sleepState.inWindow) {
+      return res.status(400).json({
+        success: false,
+        error: `当前不在可睡觉时间范围（${sleepState.sleepWindowStart} - ${sleepState.sleepWindowEnd}）`
+      })
+    }
+
     const loc = await BBPlayerLocation.findOne({ playerId: g.id, gameId })
     const room = await BBHouseRoom.findOne({ id: loc?.currentRoomId, gameId })
     if (!room || !room.canSleep) return res.status(400).json({ success: false, error: '该房间不能睡觉' })
 
     const hoh = await getCurrentHoh()
     const isHoh = !!(hoh && hoh.id === g.id)
-    const season = await getCurrentSeason()
 
     if (g.isHaveNot && room.id !== 'have_not_room') {
       return res.status(403).json({ success: false, error: '贫民只能在贫民屋睡觉' })
@@ -805,18 +861,18 @@ router.post('/sleep', auth, async (req, res) => {
     }
 
     g.isSleeping = true
-    g.sleepStartedAt = new Date().toISOString()
-    g.wakeAt = new Date(Date.now() + 6 * 3600 * 1000).toISOString()
-    g.lastSleepDate = todayStr()
+    g.sleepStartedAt = now.toISOString()
+    g.wakeAt = new Date(now.getTime() + sleepState.sleepDurationMinutes * 60 * 1000).toISOString()
+    g.lastSleepDate = sleepState.cycleDate
     await g.save()
-    res.json({ success: true, data: { wakeAt: g.wakeAt } })
+    res.json({ success: true, data: { wakeAt: g.wakeAt, sleepCycleDate: g.lastSleepDate, sleepDurationMinutes: sleepState.sleepDurationMinutes } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '睡觉失败' })
   }
 })
 
-// POST /sleep/wake - 醒来（必须满 6 小时）
+// POST /sleep/wake - 醒来（必须满管理员设置的睡眠时长）
 router.post('/sleep/wake', auth, async (req, res) => {
   try {
     const g = await BBHouseguest.findOne({ id: req.user.userId, gameId: 'bigbrother' })
@@ -854,7 +910,7 @@ router.post('/sleep/approve', auth, async (req, res) => {
   }
 })
 
-// POST /shower - 开始洗澡（仅浴室，每天一次）
+// POST /shower - 开始洗澡（仅浴室，不限次数，受冷却限制）
 router.post('/shower', auth, async (req, res) => {
   try {
     const gameId = 'bigbrother'
@@ -866,12 +922,17 @@ router.post('/shower', auth, async (req, res) => {
     if (!loc || loc.currentRoomId !== 'bathroom') {
       return res.status(400).json({ success: false, error: '只能在浴室洗澡' })
     }
-    if (g.lastShowerDate === todayStr()) {
-      return res.status(400).json({ success: false, error: '今天已经洗过澡了' })
+    if (g.showerCooldownUntil) {
+      const remainMs = new Date(g.showerCooldownUntil).getTime() - Date.now()
+      if (remainMs > 0) {
+        return res.status(400).json({ success: false, error: `洗澡冷却中，还需 ${Math.ceil(remainMs / 60000)} 分钟` })
+      }
     }
+    const now = new Date()
     g.isShowering = true
-    g.showerStartedAt = new Date().toISOString()
-    g.lastShowerDate = todayStr()
+    g.showerStartedAt = now.toISOString()
+    g.lastShowerDate = localDateStr(now)
+    g.showerCooldownUntil = null
     await g.save()
     res.json({ success: true, data: { showerStartedAt: g.showerStartedAt } })
   } catch (e) {
@@ -900,17 +961,61 @@ router.post('/admin/room', auth, requireAdmin, async (req, res) => {
   }
 })
 
-// POST /admin/season - 调整自动睡眠时间 / HOH 房睡觉开关
+// POST /admin/season - 调整睡眠规则 / 洗澡冷却 / HOH 房睡觉开关
 router.post('/admin/season', auth, requireAdmin, async (req, res) => {
   try {
-    const { autoSleepHour, hohSleepAllowed } = req.body || {}
+    const {
+      autoSleepHour,
+      sleepDurationMinutes,
+      sleepWindowStart,
+      sleepWindowEnd,
+      showerCooldownMinutes,
+      hohSleepAllowed
+    } = req.body || {}
     const season = await getCurrentSeason()
     if (!season) return res.status(404).json({ success: false, error: '赛季不存在' })
-    if (autoSleepHour !== undefined) season.autoSleepHour = Number(autoSleepHour)
+    if (sleepWindowStart !== undefined && !isValidHHMM(sleepWindowStart)) {
+      return res.status(400).json({ success: false, error: '睡觉开始时间格式应为 HH:mm' })
+    }
+    if (sleepWindowEnd !== undefined && !isValidHHMM(sleepWindowEnd)) {
+      return res.status(400).json({ success: false, error: '睡觉结束时间格式应为 HH:mm' })
+    }
+    if (sleepDurationMinutes !== undefined) {
+      const n = Number(sleepDurationMinutes)
+      if (!Number.isFinite(n) || n <= 0 || n > 1440) {
+        return res.status(400).json({ success: false, error: '单次睡觉时长应在 1-1440 分钟之间' })
+      }
+      season.sleepDurationMinutes = Math.round(n)
+    }
+    if (sleepWindowStart !== undefined) season.sleepWindowStart = sleepWindowStart
+    if (sleepWindowEnd !== undefined) season.sleepWindowEnd = sleepWindowEnd
+    if (showerCooldownMinutes !== undefined) {
+      const n = Number(showerCooldownMinutes)
+      if (!Number.isFinite(n) || n < 0 || n > 1440) {
+        return res.status(400).json({ success: false, error: '洗澡冷却应在 0-1440 分钟之间' })
+      }
+      season.showerCooldownMinutes = Math.round(n)
+    }
+    // 兼容旧调用：autoSleepHour -> sleepWindowStart
+    if (autoSleepHour !== undefined && sleepWindowStart === undefined) {
+      const h = Number(autoSleepHour)
+      if (Number.isFinite(h) && h >= 0 && h <= 23) {
+        season.sleepWindowStart = `${String(Math.round(h)).padStart(2, '0')}:00`
+      }
+    }
     if (hohSleepAllowed !== undefined) season.hohSleepAllowed = !!hohSleepAllowed
     season.updatedAt = new Date().toISOString()
     await season.save()
-    res.json({ success: true, data: { autoSleepHour: season.autoSleepHour, hohSleepAllowed: season.hohSleepAllowed } })
+    res.json({
+      success: true,
+      data: {
+        sleepDurationMinutes: season.sleepDurationMinutes,
+        sleepWindowStart: season.sleepWindowStart,
+        sleepWindowEnd: season.sleepWindowEnd,
+        showerCooldownMinutes: season.showerCooldownMinutes,
+        hohSleepAllowed: season.hohSleepAllowed
+      }
+    })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '调整失败' })
@@ -1004,18 +1109,33 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
 // GET /admin/guest-states - 所有房客的睡眠/洗澡状态
 router.get('/admin/guest-states', auth, requireAdmin, async (req, res) => {
   try {
+    const now = new Date()
+    const season = await getCurrentSeason()
+    const sleepSettings = getSleepSettings(season)
+    const showerSettings = getShowerSettings(season)
     const guests = await BBHouseguest.find({ gameId: 'bigbrother' })
     res.json({
       success: true,
       data: {
-        guests: guests.map(g => ({
-          id: g.id, name: g.name, avatar: g.avatar, role: g.role, status: g.status,
-          currentRoomId: g.currentRoomId,
-          isSleeping: g.isSleeping, wakeAt: g.wakeAt, lastSleepDate: g.lastSleepDate,
-          isShowering: g.isShowering, showerStartedAt: g.showerStartedAt, lastShowerDate: g.lastShowerDate,
-          hohSleepApproved: g.hohSleepApproved
-        })),
-        today: todayStr()
+        guests: guests.map(g => {
+          const sleepState = getSleepState(season, now, g.lastSleepDate)
+          return {
+            id: g.id, name: g.name, avatar: g.avatar, role: g.role, status: g.status,
+            currentRoomId: g.currentRoomId,
+            isSleeping: g.isSleeping, wakeAt: g.wakeAt, lastSleepDate: g.lastSleepDate,
+            sleepCycleDate: sleepState.cycleDate,
+            sleepCompleted: sleepState.completed,
+            canSleepNow: sleepState.inWindow,
+            isShowering: g.isShowering, showerStartedAt: g.showerStartedAt,
+            lastShowerDate: g.lastShowerDate, showerCooldownUntil: g.showerCooldownUntil,
+            hohSleepApproved: g.hohSleepApproved
+          }
+        }),
+        today: localDateStr(now),
+        sleepDurationMinutes: sleepSettings.sleepDurationMinutes,
+        sleepWindowStart: sleepSettings.sleepWindowStart,
+        sleepWindowEnd: sleepSettings.sleepWindowEnd,
+        showerCooldownMinutes: showerSettings.showerCooldownMinutes
       }
     })
   } catch (e) {
@@ -1031,10 +1151,13 @@ router.post('/admin/set-sleep', auth, requireAdmin, async (req, res) => {
     const g = await BBHouseguest.findOne({ id: playerId, gameId: 'bigbrother' })
     if (!g) return res.status(404).json({ success: false, error: '房客不存在' })
     if (sleeping) {
+      const now = new Date()
+      const season = await getCurrentSeason()
+      const sleepState = getSleepState(season, now, g.lastSleepDate)
       g.isSleeping = true
-      g.sleepStartedAt = new Date().toISOString()
-      g.wakeAt = new Date(Date.now() + 6 * 3600 * 1000).toISOString()
-      g.lastSleepDate = todayStr()
+      g.sleepStartedAt = now.toISOString()
+      g.wakeAt = new Date(now.getTime() + sleepState.sleepDurationMinutes * 60 * 1000).toISOString()
+      g.lastSleepDate = sleepState.cycleDate
     } else {
       g.isSleeping = false
       g.sleepStartedAt = null
@@ -1048,20 +1171,25 @@ router.post('/admin/set-sleep', auth, requireAdmin, async (req, res) => {
   }
 })
 
-// POST /admin/set-shower - 直接设置房客洗澡状态（已洗澡 = 记录今天日期）
+// POST /admin/set-shower - 直接设置房客洗澡状态（已洗澡 = 进入冷却）
 router.post('/admin/set-shower', auth, requireAdmin, async (req, res) => {
   try {
     const { playerId, showered } = req.body || {}
     const g = await BBHouseguest.findOne({ id: playerId, gameId: 'bigbrother' })
     if (!g) return res.status(404).json({ success: false, error: '房客不存在' })
     if (showered) {
-      g.lastShowerDate = todayStr()
+      const season = await getCurrentSeason()
+      await finishShower(g, season)
       g.isShowering = false
       g.showerStartedAt = null
+      await g.save()
     } else {
       g.lastShowerDate = null
+      g.showerCooldownUntil = null
+      g.isShowering = false
+      g.showerStartedAt = null
+      await g.save()
     }
-    await g.save()
     res.json({ success: true })
   } catch (e) {
     console.error(e)
@@ -1069,23 +1197,26 @@ router.post('/admin/set-shower', auth, requireAdmin, async (req, res) => {
   }
 })
 
-// POST /admin/sleep-action - action: start(立即开始睡) | end(立即结束) | mark(标记今天已睡) | clear(清除记录)
+// POST /admin/sleep-action - action: start(立即开始睡) | end(立即结束) | mark(标记本轮已睡) | clear(清除记录)
 router.post('/admin/sleep-action', auth, requireAdmin, async (req, res) => {
   try {
     const { playerId, action } = req.body || {}
     const g = await BBHouseguest.findOne({ id: playerId, gameId: 'bigbrother' })
     if (!g) return res.status(404).json({ success: false, error: '房客不存在' })
+    const now = new Date()
+    const season = await getCurrentSeason()
+    const sleepState = getSleepState(season, now, g.lastSleepDate)
     if (action === 'start') {
       g.isSleeping = true
-      g.sleepStartedAt = new Date().toISOString()
-      g.wakeAt = new Date(Date.now() + 6 * 3600 * 1000).toISOString()
-      g.lastSleepDate = todayStr()
+      g.sleepStartedAt = now.toISOString()
+      g.wakeAt = new Date(now.getTime() + sleepState.sleepDurationMinutes * 60 * 1000).toISOString()
+      g.lastSleepDate = sleepState.cycleDate
     } else if (action === 'end') {
       g.isSleeping = false
       g.sleepStartedAt = null
       g.wakeAt = null
     } else if (action === 'mark') {
-      g.lastSleepDate = todayStr()
+      g.lastSleepDate = sleepState.cycleDate
     } else if (action === 'clear') {
       g.lastSleepDate = null
     } else {
@@ -1099,27 +1230,35 @@ router.post('/admin/sleep-action', auth, requireAdmin, async (req, res) => {
   }
 })
 
-// POST /admin/shower-action - action: start(立即开始洗) | end(立即结束) | mark(标记今天已洗) | clear(清除记录)
+// POST /admin/shower-action - action: start(立即开始洗) | end(立即结束) | mark(标记刚洗过) | clear(清除冷却)
 router.post('/admin/shower-action', auth, requireAdmin, async (req, res) => {
   try {
     const { playerId, action } = req.body || {}
     const g = await BBHouseguest.findOne({ id: playerId, gameId: 'bigbrother' })
     if (!g) return res.status(404).json({ success: false, error: '房客不存在' })
+    const now = new Date()
+    const season = await getCurrentSeason()
     if (action === 'start') {
       g.isShowering = true
-      g.showerStartedAt = new Date().toISOString()
-      g.lastShowerDate = todayStr()
+      g.showerStartedAt = now.toISOString()
+      g.lastShowerDate = localDateStr(now)
+      g.showerCooldownUntil = null
+      await g.save()
     } else if (action === 'end') {
+      await finishShower(g, season, now)
+    } else if (action === 'mark') {
       g.isShowering = false
       g.showerStartedAt = null
-    } else if (action === 'mark') {
-      g.lastShowerDate = todayStr()
+      g.lastShowerDate = localDateStr(now)
+      g.showerCooldownUntil = getShowerCooldownUntil(season, now)
+      await g.save()
     } else if (action === 'clear') {
+      g.showerCooldownUntil = null
       g.lastShowerDate = null
+      await g.save()
     } else {
       return res.status(400).json({ success: false, error: '未知操作' })
     }
-    await g.save()
     res.json({ success: true })
   } catch (e) {
     console.error(e)

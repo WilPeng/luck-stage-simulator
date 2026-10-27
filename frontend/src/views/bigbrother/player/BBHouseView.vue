@@ -9,7 +9,7 @@
     <div class="page-header">
       <h1>🏠 BB House</h1>
       <div class="header-meta">
-        <button v-if="canSleepHere && !isSleeping && !isShowering" class="bb-btn bb-btn-sm" @click="doSleep">😴 睡觉</button>
+        <button v-if="canSleepHere && !isSleeping && !isShowering" class="bb-btn bb-btn-sm" :disabled="!canStartSleep" @click="doSleep">😴 睡觉</button>
         <span class="location-tag">
           📍 {{ currentRoomName }}
         </span>
@@ -93,13 +93,20 @@
 
         <!-- 睡觉 -->
         <div v-if="canSleepHere" class="action-panel">
-          <button class="bb-btn bb-btn-sm" @click="doSleep">😴 睡觉</button>
-          <span v-if="myState.lastSleepDate === myState.today" class="action-hint">今天已完成睡觉任务</span>
+          <button class="bb-btn bb-btn-sm" :disabled="!canStartSleep" @click="doSleep">😴 睡觉</button>
+          <span v-if="myState.sleepCompleted" class="action-hint">本睡眠周期已完成</span>
+          <span v-else-if="!myState.canSleepNow" class="action-hint">
+            可睡觉时间 {{ myState.sleepWindowStart }} - {{ myState.sleepWindowEnd }}
+          </span>
+          <span v-else class="action-hint">单次睡眠约 {{ sleepDurationText }}</span>
         </div>
 
         <!-- 洗漱间：查看浴室内有谁 -->
         <div v-if="currentRoomId === 'washroom'" class="washroom-panel">
           <div class="washroom-title">🧼 洗漱间 · 浴室内</div>
+          <div v-if="showerCooldownActive" class="washroom-cooldown">
+            🚿 洗澡冷却中，约 {{ showerCooldownText }} 后可再次洗澡
+          </div>
           <div v-if="washroomBathroomPlayers.length" class="washroom-list">
             <div v-for="p in washroomBathroomPlayers" :key="p.playerId" class="washroom-player">
               <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
@@ -238,7 +245,10 @@ const broadcastData = ref<{ type: string; roomId: string | null; roomName?: stri
 const myState = ref<any>({
   isSleeping: false, wakeAt: null, sleepStartedAt: null,
   isShowering: false, showerStartedAt: null, lastShowerDate: null,
-  autoSleepHour: 18, today: '', hohSleepAllowed: true
+  showerCooldownUntil: null,
+  sleepCompleted: false, canSleepNow: false,
+  sleepWindowStart: '22:00', sleepWindowEnd: '02:00', sleepDurationMinutes: 360,
+  today: '', hohSleepAllowed: true
 })
 const nowTs = ref(Date.now())
 const washroomBathroomPlayers = ref<any[]>([])
@@ -281,6 +291,24 @@ const sleepCountdown = computed(() => {
 const showerSecondsLeft = computed(() => {
   if (!myState.value.showerStartedAt) return 0
   return Math.max(0, Math.ceil((new Date(myState.value.showerStartedAt).getTime() + 10 * 60 * 1000 - nowTs.value) / 1000))
+})
+const canStartSleep = computed(() => !!myState.value.canSleepNow && !myState.value.sleepCompleted)
+const sleepDurationText = computed(() => {
+  const minutes = Math.max(1, Number(myState.value.sleepDurationMinutes) || 360)
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m ? `${h} 小时 ${m} 分钟` : `${h} 小时`
+})
+const showerCooldownActive = computed(() => {
+  if (!myState.value.showerCooldownUntil) return false
+  return new Date(myState.value.showerCooldownUntil).getTime() > nowTs.value
+})
+const showerCooldownText = computed(() => {
+  if (!myState.value.showerCooldownUntil) return ''
+  const ms = new Date(myState.value.showerCooldownUntil).getTime() - nowTs.value
+  if (ms <= 0) return ''
+  const mins = Math.ceil(ms / 60000)
+  return mins < 60 ? `${mins} 分钟` : `${Math.floor(mins / 60)} 小时 ${mins % 60} 分钟`
 })
 const showMonitor = computed(() => currentRoomId.value === 'hoh_room')
 const approveCandidates = computed(() => activePlayers.value.filter(p => p.id !== myId.value))
@@ -413,7 +441,15 @@ house.onBroadcast.value = (data) => {
 }
 
 house.onSleepForced.value = (data) => {
-  myState.value = { ...myState.value, isSleeping: true, wakeAt: data.wakeAt }
+  myState.value = {
+    ...myState.value,
+    isSleeping: true,
+    sleepStartedAt: new Date().toISOString(),
+    wakeAt: data.wakeAt,
+    sleepCompleted: true,
+    lastSleepDate: data.sleepCycleDate || myState.value.lastSleepDate,
+    sleepDurationMinutes: data.sleepDurationMinutes || myState.value.sleepDurationMinutes
+  }
 }
 
 house.onForceMoved.value = (data) => {
@@ -570,7 +606,7 @@ function handleCancelInvite(pid: string) {
 }
 
 async function doSleep() {
-  if (!confirm('确认开始睡觉？睡觉后 6 小时内无法进行任何操作。')) return
+  if (!confirm(`确认开始睡觉？本次睡眠约 ${sleepDurationText.value}，期间无法进行任何操作。`)) return
   try { await bbSleep(); await loadData() } catch (e: any) { alert(e?.message || '无法睡觉') }
 }
 async function doWake() {
@@ -587,15 +623,25 @@ async function loadActivePlayers() {
 }
 
 let stateTicker: ReturnType<typeof setInterval> | null = null
+let washroomTicker: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   loadData()
   loadActivePlayers()
   stateTicker = setInterval(() => { nowTs.value = Date.now() }, 1000)
+  // 洗漱间：定时刷新浴室内人员（聊天仍按房间隔离，不可见）
+  washroomTicker = setInterval(async () => {
+    if (currentRoomId.value !== 'washroom') return
+    try {
+      const r = await bbGetRoomPlayers('washroom')
+      washroomBathroomPlayers.value = r?.bathroomPlayers || []
+    } catch {}
+  }, 5000)
 })
 
 onUnmounted(() => {
   if (stateTicker) { clearInterval(stateTicker); stateTicker = null }
+  if (washroomTicker) { clearInterval(washroomTicker); washroomTicker = null }
 })
 
 // 监听 season 变化以更新 backyardDoorOpen
@@ -739,6 +785,7 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 .washroom-list { display: flex; flex-direction: column; gap: 8px; }
 .washroom-player { display: flex; align-items: center; gap: 8px; color: #cfc4ea; font-size: 13px; }
 .washroom-empty { color: #6b5f92; font-size: 12px; }
+.washroom-cooldown { color: #e6c988; font-size: 12px; margin-bottom: 10px; }
 
 .approve-list { display: flex; flex-direction: column; gap: 6px; }
 .approve-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #cfc4ea; }
@@ -873,6 +920,7 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   transition: all 0.2s;
 }
 .bb-btn:hover { background: #b39bff22; }
+.bb-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .bb-btn-sm { padding: 4px 12px; font-size: 11px; }
 .bb-btn-outline { border-color: #ffffff22; color: #8f83b8; }
 .bb-btn-outline:hover { background: #ffffff08; color: #a99bd0; border-color: #ffffff33; }

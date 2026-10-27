@@ -5,7 +5,7 @@
       <div class="sleep-card">
         <div class="sleep-icon">😴</div>
         <div class="sleep-title">睡眠中</div>
-        <div class="sleep-desc">你在睡觉，无法进行任何操作或接收消息</div>
+        <div class="sleep-desc">你在睡觉（约 {{ sleepDurationText }}），无法进行任何操作或接收消息</div>
         <div v-if="!wakeReady" class="sleep-timer">可醒来倒计时：{{ sleepCountdown }}</div>
         <button class="bb-btn" :disabled="!wakeReady" @click="doWake">
           {{ wakeReady ? '醒来' : '还未到时间' }}
@@ -156,10 +156,16 @@ const mobileMenuOpen = ref(false)
 const collapsedRounds = ref<Set<number>>(new Set())
 
 // 睡眠全局状态
-const myState = ref<any>({ isSleeping: false, wakeAt: null })
+const myState = ref<any>({ isSleeping: false, wakeAt: null, sleepDurationMinutes: 360 })
 const nowTs = ref(Date.now())
 const isSleeping = computed(() => !!myState.value.isSleeping)
 const wakeReady = computed(() => myState.value.wakeAt ? nowTs.value >= new Date(myState.value.wakeAt).getTime() : false)
+const sleepDurationText = computed(() => {
+  const minutes = Math.max(1, Number(myState.value.sleepDurationMinutes) || 360)
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m ? `${h} 小时 ${m} 分钟` : `${h} 小时`
+})
 const sleepCountdown = computed(() => {
   if (!myState.value.wakeAt) return ''
   const ms = Math.max(0, new Date(myState.value.wakeAt).getTime() - nowTs.value)

@@ -116,7 +116,14 @@ export async function bbAdminSetRoom(data: { roomId: string; capacity?: number |
   return doRequest<any>('/house/admin/room', { method: 'POST', body: JSON.stringify(data) })
 }
 
-export async function bbAdminSetSeason(data: { autoSleepHour?: number; hohSleepAllowed?: boolean }) {
+export async function bbAdminSetSeason(data: {
+  autoSleepHour?: number
+  sleepDurationMinutes?: number
+  sleepWindowStart?: string
+  sleepWindowEnd?: string
+  showerCooldownMinutes?: number
+  hohSleepAllowed?: boolean
+}) {
   return doRequest<any>('/house/admin/season', { method: 'POST', body: JSON.stringify(data) })
 }
 
