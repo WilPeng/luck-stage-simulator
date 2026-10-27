@@ -131,6 +131,8 @@ import AbracaGame from '../../../components/bigbrother/minigames/AbracaGame.vue'
 import DescribeGuessGame from '../../../components/bigbrother/minigames/DescribeGuessGame.vue'
 import StayOrFoldGame from '../../../components/bigbrother/minigames/StayOrFold.vue'
 import CatchMistressGame from '../../../components/bigbrother/minigames/CatchMistress.vue'
+import GermanHeartGame from '../../../components/bigbrother/minigames/GermanHeartGame.vue'
+import NumberDivinationGame from '../../../components/bigbrother/minigames/NumberDivinationGame.vue'
 import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
 import JuryQA from '../../../components/bigbrother/JuryQA.vue'
 import type { MinigameRoom, BBEndgameStatus } from '../../../types/bigbrother'
@@ -185,7 +187,9 @@ const gameComponentMap: Record<string, Component> = {
   'abraca': markRaw(AbracaGame),
   'describe-guess': markRaw(DescribeGuessGame),
   'stay-or-fold': markRaw(StayOrFoldGame),
-  'catch-mistress': markRaw(CatchMistressGame)
+  'catch-mistress': markRaw(CatchMistressGame),
+  'german-heart': markRaw(GermanHeartGame),
+  'number-divination': markRaw(NumberDivinationGame)
 }
 
 function inMe(room: MinigameRoom): boolean {

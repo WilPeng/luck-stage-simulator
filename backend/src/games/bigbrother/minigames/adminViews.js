@@ -162,6 +162,44 @@ function buildAdminView(minigameId, state) {
         }
         return { type: 'describe-guess', summary, players }
       }
+      case 'german-heart': {
+        const players = {}
+        for (const [pid, score] of Object.entries(state.scores || {})) {
+          const ring = state.roundRing ? state.roundRing[pid] : null
+          players[pid] = {
+            得分: score,
+            本轮抢铃: ring ? (ring.correct ? '成功 +1' : '错误 -3') : '—'
+          }
+        }
+        const counts = {}
+        for (const f of (state.cards || [])) counts[f] = (counts[f] || 0) + 1
+        const summary = {
+          轮次: state.round || 0,
+          阶段: state.phase === 'live' ? '抢铃中' : '结算',
+          目标分: state.opts ? state.opts.targetPoints : 5,
+          当前牌面: (state.cards || []).join(' '),
+          各水果数量: Object.entries(counts).map(([f, n]) => `${f}×${n}`).join(' ')
+        }
+        return { type: 'german-heart', summary, players }
+      }
+      case 'number-divination': {
+        const players = {}
+        for (const [pid, ps] of Object.entries(state.scores || {})) {
+          players[pid] = {
+            总分: ps || 0,
+            本轮选择: state.choices?.[pid] ? state.choices[pid].number : '—',
+            已用数字: (state.used?.[pid] || []).join('、') || '—'
+          }
+        }
+        return {
+          type: 'number-divination',
+          summary: {
+            轮次: `${Math.min(state.round || 0, state.totalRounds || 10)}/${state.totalRounds || 10}`,
+            阶段: state.phase === 'pick' ? '选择中' : '结算'
+          },
+          players
+        }
+      }
       case 'custom-mode': {
         const players = {}
         for (const [pid, ps] of Object.entries(state.playerStates || {})) {

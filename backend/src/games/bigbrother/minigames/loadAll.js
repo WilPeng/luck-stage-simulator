@@ -19,6 +19,8 @@ require('./abraca')
 require('./describeGuess')
 require('./stayOrFold')
 require('./catchMistress')
+require('./germanHeart')
+require('./numberDivination')
 
 const { getAllGames, getGame, GAME_REGISTRY } = require('./index')
 const { loadCustomGame, createCustomGameHandler, getCustomHandlerId, clearCustomGameCache } = require('./customGame')

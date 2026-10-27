@@ -91,6 +91,60 @@
                 </div>
               </template>
 
+              <!-- 少数决：自定义题库（每轮一道题 + 两个选项） -->
+              <template v-if="pendingGame.id === 'minority'">
+                <p class="opt-hint">每轮限时 15 秒，选手在两道选项中选择一个；多数方与未作答者出局，存活到最后者胜。以下题库按顺序作为每一轮的题目；留空则使用内置题库。</p>
+                <div class="opt-questions">
+                  <div v-for="(q, i) in options.questions" :key="i" class="opt-question-row">
+                    <div class="opt-question-head">
+                      <span class="opt-question-no">第 {{ i + 1 }} 轮</span>
+                      <button class="opt-remove" type="button" @click="removeMinorityQuestion(i)">删除</button>
+                    </div>
+                    <input v-model="q.text" class="opt-input" placeholder="问题，如：你更喜欢猫还是狗？" />
+                    <div class="opt-question-options">
+                      <input v-model="q.optionA" class="opt-input" placeholder="选项 A，如：猫" />
+                      <input v-model="q.optionB" class="opt-input" placeholder="选项 B，如：狗" />
+                    </div>
+                  </div>
+                  <button class="opt-add" type="button" @click="addMinorityQuestion">+ 添加一轮题目</button>
+                </div>
+              </template>
+
+              <!-- 德国心脏病：目标分 / 每轮牌数 / 节奏 -->
+              <template v-if="pendingGame.id === 'german-heart'">
+                <p class="opt-hint">每轮桌面翻出一组水果牌。恰好出现 5 个相同水果时，最快抢铃者 +1 分；没有 5 个相同水果时抢铃，每次 -3 分（每人每轮仅可抢一次）。先到目标分者胜；或只剩一人得分为正数时获胜。</p>
+                <div class="opt-row">
+                  <label class="opt-label">目标分
+                    <input v-model.number="options.targetPoints" type="number" min="1" max="20" class="opt-number" />
+                  </label>
+                  <label class="opt-label">每轮限时(秒)
+                    <input v-model.number="options.roundTime" type="number" min="2" max="20" class="opt-number" />
+                  </label>
+                  <label class="opt-label">结算展示(秒)
+                    <input v-model.number="options.revealTime" type="number" min="1" max="10" class="opt-number" />
+                  </label>
+                  <label class="opt-label">每轮牌数
+                    <input v-model.number="options.cardCount" type="number" min="8" max="20" class="opt-number" />
+                  </label>
+                </div>
+              </template>
+
+              <!-- 数字占卜术：轮数 / 每轮时长 / 结算展示 -->
+              <template v-if="pendingGame.id === 'number-divination'">
+                <p class="opt-hint">每人持有数字 1–10，每轮同时打出 1 个未使用过的数字。未重复的数字获得该数字分数，其中最大的数字双倍；重复数字中重复次数最多者，其所有玩家扣除该数字分数。共 N 轮，最终最高分且不并列者获胜。</p>
+                <div class="opt-row">
+                  <label class="opt-label">轮数
+                    <input v-model.number="options.roundCount" type="number" min="1" max="10" class="opt-number" />
+                  </label>
+                  <label class="opt-label">每轮限时(秒)
+                    <input v-model.number="options.roundTime" type="number" min="5" max="120" class="opt-number" />
+                  </label>
+                  <label class="opt-label">结算展示(秒)
+                    <input v-model.number="options.revealTime" type="number" min="2" max="30" class="opt-number" />
+                  </label>
+                </div>
+              </template>
+
               <!-- 限时设置：所有游戏通用，可选无限时 -->
               <div class="opt-block">
                 <label class="opt-check">
@@ -166,10 +220,19 @@ function onSelect(id: string, game?: MinigameDef) {
     options.showDuration = 8
     options.answerWindow = 25
     options.decisionWindow = 15
-    options.targetPoints = 3
+    options.targetPoints = game.id === 'german-heart' ? 5 : 3
+    options.roundTime = 5
+    options.revealTime = 2
+    options.cardCount = 10
     options.gridSize = 400
     options.hideTime = 30
     options.turnTime = 20
+    options.questions = [{ text: '', optionA: '', optionB: '' }]
+    if (game.id === 'number-divination') {
+      options.roundCount = 10
+      options.roundTime = 15
+      options.revealTime = 5
+    }
     uploadError.value = ''
     return
   }
@@ -205,6 +268,11 @@ function confirmOptions() {
     if (counts.length) payload.correctCounts = counts
     delete payload.correctCountsText
   }
+  if (pendingGame.value.id === 'minority') {
+    const qs = parseMinorityQuestions(payload.questions)
+    if (qs.length) payload.questions = qs
+    else delete payload.questions
+  }
   emit('select', pendingGame.value.id, payload)
   pendingGame.value = null
   close()
@@ -223,6 +291,28 @@ function parseQuestions(text: string): { answer: string; clues: string[] }[] {
 function parseCounts(text: string): number[] {
   if (!text) return []
   return String(text).split(/[\s,，、]+/).map(s => parseInt(s, 10)).filter(n => Number.isFinite(n) && n >= 0)
+}
+
+function addMinorityQuestion() {
+  if (!Array.isArray(options.questions)) options.questions = []
+  options.questions.push({ text: '', optionA: '', optionB: '' })
+}
+
+function removeMinorityQuestion(index: number) {
+  if (!Array.isArray(options.questions)) return
+  options.questions.splice(index, 1)
+}
+
+// 解析少数决题库：过滤掉问题或任一选项为空的行
+function parseMinorityQuestions(raw: any): { text: string; options: [string, string] }[] {
+  if (!Array.isArray(raw)) return []
+  return raw.map(q => {
+    const text = String(q?.text || '').trim()
+    const a = String(q?.optionA || '').trim()
+    const b = String(q?.optionB || '').trim()
+    if (!text || !a || !b) return null
+    return { text, options: [a, b] as [string, string] }
+  }).filter(Boolean) as { text: string; options: [string, string] }[]
 }
 </script>
 
@@ -355,6 +445,17 @@ function parseCounts(text: string): number[] {
 .opt-row { display: flex; flex-wrap: wrap; gap: 16px; }
 .opt-number { width: 140px; padding: 8px 12px; background: #17112a; border: 1px solid #b39bff44; border-radius: 6px; color: #ece7fb; }
 .opt-textarea { width: 100%; padding: 8px 12px; background: #17112a; border: 1px solid #b39bff44; border-radius: 6px; color: #ece7fb; font-family: inherit; font-size: 13px; resize: vertical; box-sizing: border-box; }
+.opt-questions { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
+.opt-question-row { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #ffffff06; border: 1px solid #b39bff22; border-radius: 8px; }
+.opt-question-head { display: flex; align-items: center; justify-content: space-between; }
+.opt-question-no { font-size: 12px; color: #b39bff; font-weight: 600; }
+.opt-question-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.opt-input { width: 100%; padding: 8px 12px; background: #17112a; border: 1px solid #b39bff44; border-radius: 6px; color: #ece7fb; font-family: inherit; font-size: 13px; box-sizing: border-box; }
+.opt-input:focus { outline: none; border-color: #b39bff; }
+.opt-remove { background: transparent; border: none; color: #ff6b6b; font-size: 12px; cursor: pointer; padding: 2px 6px; }
+.opt-remove:hover { text-decoration: underline; }
+.opt-add { align-self: flex-start; background: transparent; border: 1px dashed #b39bff66; color: #b39bff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.opt-add:hover { background: #b39bff11; }
 .opt-actions { display: flex; gap: 12px; margin-top: 8px; }
 .opt-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 20px; border-radius: 6px; cursor: pointer; }
 .opt-btn:disabled { opacity: 0.4; cursor: not-allowed; }

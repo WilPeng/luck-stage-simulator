@@ -543,8 +543,8 @@ const initBBMinigameSocket = (io) => {
           finishGame(room, minigameNs)
         }
       }, TICK_INTERVAL)
-    } else if (room.handler && room.handler.needsServerTick) {
-      startServerTick(room, room.handler, minigameNs)
+    } else if ((room.handler || getGame(room.minigameId))?.needsServerTick) {
+      startServerTick(room, room.handler || getGame(room.minigameId), minigameNs)
     }
 
     minigameNs.to(roomId).emit('game_resumed', { status: 'playing' })

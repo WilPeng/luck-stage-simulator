@@ -89,6 +89,8 @@ import AbracaGame from '../../../components/bigbrother/minigames/AbracaGame.vue'
 import DescribeGuessGame from '../../../components/bigbrother/minigames/DescribeGuessGame.vue'
 import StayOrFoldGame from '../../../components/bigbrother/minigames/StayOrFold.vue'
 import CatchMistressGame from '../../../components/bigbrother/minigames/CatchMistress.vue'
+import GermanHeartGame from '../../../components/bigbrother/minigames/GermanHeartGame.vue'
+import NumberDivinationGame from '../../../components/bigbrother/minigames/NumberDivinationGame.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import type { BBHohRecord, MinigameRoom } from '../../../types/bigbrother'
 
@@ -136,6 +138,8 @@ const gameComponentMap: Record<string, Component> = {
   'describe-guess': markRaw(DescribeGuessGame),
   'stay-or-fold': markRaw(StayOrFoldGame),
   'catch-mistress': markRaw(CatchMistressGame),
+  'german-heart': markRaw(GermanHeartGame),
+  'number-divination': markRaw(NumberDivinationGame),
   'power-challenge': markRaw(PowerChallengeGame)
 }
 

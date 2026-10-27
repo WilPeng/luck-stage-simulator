@@ -247,6 +247,47 @@
               </div>
             </template>
 
+            <!-- 德国心脏病 -->
+            <template v-else-if="meta.type === 'german-heart'">
+              <div class="reveal-big">目标分数：<strong>{{ meta.targetPoints }}</strong> 分</div>
+              <div class="race-list">
+                <div v-for="r in meta.history" :key="r.round" class="race-item">
+                  <div class="race-head">
+                    第 {{ r.round }} 轮 ·
+                    <strong>{{ r.valid ? `出现 5 个 ${r.fruit}` : '没有 5 个相同水果' }}</strong>
+                  </div>
+                  <div v-if="r.winnerId" class="mc ok">抢铃成功：{{ playerName(r.winnerId) }} +1</div>
+                  <div v-if="r.wrong && r.wrong.length" class="mc bad">
+                    错误抢铃：{{ r.wrong.map(playerName).join('、') }}（各 -3）
+                  </div>
+                  <div v-if="!r.winnerId && (!r.wrong || !r.wrong.length)" class="empty-hint">本轮无人抢铃</div>
+                  <div class="snap-sub">牌面：{{ r.counts ? Object.entries(r.counts).map(([f, n]) => `${f}×${n}`).join(' ') : '-' }}</div>
+                </div>
+              </div>
+            </template>
+
+            <!-- 数字占卜术 -->
+            <template v-else-if="meta.type === 'number-divination'">
+              <div class="reveal-big">共 <strong>{{ meta.totalRounds }}</strong> 轮</div>
+              <div class="race-list">
+                <div v-for="r in meta.history || []" :key="r.round" class="race-item">
+                  <div class="race-head">第 {{ r.round }} 轮</div>
+                  <table class="meta-table">
+                    <thead><tr><th>选手</th><th>数字</th><th>本轮得分</th></tr></thead>
+                    <tbody>
+                      <tr v-for="p in detail.participants" :key="p.playerId">
+                        <td class="mc-name">{{ p.playerName }}</td>
+                        <td>{{ r.choices?.[p.playerId] ?? '-' }}</td>
+                        <td class="mc" :class="(r.deltas?.[p.playerId] || 0) > 0 ? 'ok' : ((r.deltas?.[p.playerId] || 0) < 0 ? 'bad' : '')">
+                          {{ (r.deltas?.[p.playerId] || 0) > 0 ? '+' : '' }}{{ r.deltas?.[p.playerId] || 0 }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </template>
+
             <!-- 抓小三 -->
             <template v-else-if="meta.type === 'catch-mistress'">
               <div v-if="meta.winnerName" class="reveal-big">获胜者：<strong>{{ meta.winnerName }}</strong></div>
@@ -425,6 +466,9 @@ const boardPlayers = computed(() => {
 })
 
 function fs(pid: string) { return detail.value?.finalStates?.[pid] || null }
+function playerName(pid: string) {
+  return detail.value?.participants?.find((p: any) => p.playerId === pid)?.playerName || pid
+}
 function isEliminated(pid: string) {
   const s = fs(pid)
   return !!(s && s.done && detail.value?.winner && detail.value.winner.playerId !== pid)

@@ -9,6 +9,13 @@ const { registerGame } = require('./index')
  */
 const ROUND_MS = 15000
 
+function optionLabel(question, choice) {
+  if (question && Array.isArray(question.options) && question.options[choice] != null) {
+    return String(question.options[choice])
+  }
+  return choice === 0 ? 'A' : 'B'
+}
+
 function pushReplay(state, type, text, data) {
   if (!state._replayEvents) state._replayEvents = []
   state._replayEvents.push({ type, text, data: data || null })
@@ -22,6 +29,20 @@ const DEFAULT_QUESTIONS = [
   { text: '你更喜欢早睡还是晚睡？', options: ['早睡', '晚睡'] }
 ]
 
+// 自定义题库：每轮一道题，两个选项
+function normalizeQuestions(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw.map(item => {
+    if (!item || typeof item !== 'object') return null
+    const text = String(item.text || '').trim()
+    const opts = Array.isArray(item.options)
+      ? item.options.map(o => String(o == null ? '' : o).trim())
+      : []
+    if (!text || opts.length !== 2 || !opts[0] || !opts[1]) return null
+    return { text, options: [opts[0], opts[1]] }
+  }).filter(Boolean)
+}
+
 registerGame({
   id: 'minority',
   name: '少数决',
@@ -32,12 +53,13 @@ registerGame({
   duration: 300,
   broadcastState: true,
 
-  init(participants) {
+  init(participants, _pool, options) {
     const playerStates = {}
     participants.forEach(p => {
       playerStates[p.playerId] = { alive: true, eliminatedRound: null, lastTime: null, name: p.playerName || p.playerId }
     })
-    const questions = DEFAULT_QUESTIONS
+    const customQuestions = normalizeQuestions(options && options.questions)
+    const questions = customQuestions.length ? customQuestions : DEFAULT_QUESTIONS
     return {
       playerStates,
       status: 'ready',
@@ -146,7 +168,7 @@ registerGame({
     const nameOf = pid => (state.playerStates[pid] && state.playerStates[pid].name) || pid
     const choiceText = alive.map(([pid]) => {
       const a = state.roundAnswers[pid]
-      return `${nameOf(pid)}:${a ? (a.choice === 0 ? 'A' : 'B') : '未作答'}`
+      return `${nameOf(pid)}:${a ? optionLabel(state.question, a.choice) : '未作答'}`
     }).join('、')
     const elimText = eliminated.length ? eliminated.map(nameOf).join('、') + ' 出局' : '本轮无人出局'
     pushReplay(state, 'round', `第${state.round + 1}轮「${state.question ? state.question.text : ''}」：${choiceText}；${elimText}`, {
@@ -241,7 +263,7 @@ registerGame({
     const ps = state.playerStates[playerId]
     const name = ps ? ps.name : playerId
     if (action && action.type === 'choose') {
-      return { text: `${name} 选择：${action.choice === 0 ? 'A' : 'B'}`, data: { choice: action.choice } }
+      return { text: `${name} 选择：${optionLabel(state.question, action.choice)}`, data: { choice: action.choice } }
     }
     return null
   },
