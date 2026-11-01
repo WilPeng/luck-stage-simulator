@@ -19,7 +19,8 @@ app.use(cors({
   ],
   credentials: true
 }))
-app.use(express.json())
+app.use(express.json({ limit: '20mb' }))
+app.use(express.urlencoded({ extended: true, limit: '20mb' }))
 
 // 确保 Big Brother 头像上传目录存在
 const BB_AVATAR_DIR = path.join(__dirname, '..', 'uploads', 'bbavatars')
@@ -58,6 +59,14 @@ app.use('/api/bigbrother/custom-game', bbGameIdMiddleware, require('./games/bigb
 app.use('/api/bigbrother/game-library', bbGameIdMiddleware, require('./games/bigbrother/routes/bbGameLibrary'))
 app.use('/api/bigbrother/power-challenge', bbGameIdMiddleware, require('./games/bigbrother/routes/bbPowerChallenge'))
 app.use('/api/bigbrother/house', bbGameIdMiddleware, require('./games/bigbrother/routes/bbHouse'))
+
+// 请求体过大等解析错误统一返回 JSON，避免前端只收到 413 HTML
+app.use((err, req, res, next) => {
+  if (err && (err.type === 'entity.too.large' || err.status === 413 || err.statusCode === 413)) {
+    return res.status(413).json({ success: false, error: '请求内容过大' })
+  }
+  next(err)
+})
 
 app.get('/', (req, res) => {
   res.send('Big Brother API 服务运行中')
