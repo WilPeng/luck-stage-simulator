@@ -13,7 +13,7 @@
       <div class="game-icon">🔍</div>
       <h2>找不同</h2>
       <p>两个10×10颜色矩阵中有若干处不同，在右图中点击不同处并提交，第一个找齐者获胜！</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

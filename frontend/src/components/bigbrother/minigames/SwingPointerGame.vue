@@ -13,7 +13,7 @@
       <div class="game-icon">🎯</div>
       <h2>指针摆动</h2>
       <p>30秒内点击 5 次，指针到最中心得 100 分、两侧为 0 分，累计最高者获胜！</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

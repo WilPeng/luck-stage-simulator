@@ -145,6 +145,15 @@
                 </div>
               </template>
 
+              <!-- 规则说明：所有游戏通用，选手准备页展示 -->
+              <div class="opt-block">
+                <label class="opt-label">比赛规则说明（选手准备页展示）
+                  <textarea v-model="options.rules" class="opt-textarea" rows="4"
+                    placeholder="填写本场比赛的规则说明，选手在准备页面可见；留空则不展示。"></textarea>
+                </label>
+                <p class="opt-hint">默认已填入游戏描述，管理员可在此补充或修改本场规则。</p>
+              </div>
+
               <!-- 限时设置：所有游戏通用，可选无限时 -->
               <div class="opt-block">
                 <label class="opt-check">
@@ -212,6 +221,7 @@ function onSelect(id: string, game?: MinigameDef) {
   if (game) {
     pendingGame.value = game
     options.imageUrl = ''
+    options.rules = (game as any).rules || game.description || ''
     options.timeLimit = (game as any).duration || 120
     options.noTimeLimit = false
     options.clueCount = 5

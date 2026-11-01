@@ -140,7 +140,7 @@
 
         <!-- 准备环节 -->
         <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
-          :gameTitle="activeRoom.minigameName" :summoning="summoning" @summon="summonPlayers" />
+          :gameTitle="activeRoom.minigameName" :rules="activeRoom.options?.rules || ''" :summoning="summoning" @summon="summonPlayers" />
 
         <!-- 目标设置确认创建 -->
         <div v-if="selectedMinigameId" class="target-setup">

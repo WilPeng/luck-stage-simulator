@@ -4,6 +4,11 @@
     <h2 class="lobby-title">{{ gameTitle || '小游戏' }}</h2>
     <p class="lobby-sub">管理员已召集本场比赛，请点击「准备」。全员准备后即可开始。</p>
 
+    <div v-if="rules" class="lobby-rules">
+      <div class="lobby-rules-title">📜 比赛规则</div>
+      <div class="lobby-rules-text">{{ rules }}</div>
+    </div>
+
     <div class="lobby-players">
       <div
         v-for="p in players"
@@ -36,6 +41,7 @@ import BBAvatar from './BBAvatar.vue'
 const props = defineProps<{
   roomId: string
   gameTitle?: string
+  rules?: string
   participants?: any[]
   myId: string
 }>()
@@ -66,6 +72,9 @@ onMounted(() => {
 @keyframes lobbyPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
 .lobby-title { font-size: 24px; color: #ece7fb; margin: 0 0 8px; }
 .lobby-sub { color: #b3a6d6; font-size: 14px; margin: 0 0 22px; }
+.lobby-rules { display: inline-block; text-align: left; max-width: 640px; margin: 0 auto 22px; padding: 12px 18px; background: #e6c9880d; border: 1px solid #e6c98844; border-radius: 10px; }
+.lobby-rules-title { font-size: 13px; font-weight: 700; color: #e6c988; margin-bottom: 6px; }
+.lobby-rules-text { font-size: 13px; color: #cfc4ea; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 .lobby-players { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; max-width: 640px; margin: 0 auto 22px; }
 .lp { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #ffffff14; border-radius: 8px; background: #ffffff06; font-size: 13px; color: #ddd; }
 .lp.me { border-color: #b39bff66; }

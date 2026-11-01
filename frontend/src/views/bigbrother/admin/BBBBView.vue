@@ -44,7 +44,7 @@
         </div>
       </div>
       <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
-        :gameTitle="activeRoom.minigameName" :summoning="summoning" @summon="summonPlayers" />
+        :gameTitle="activeRoom.minigameName" :rules="activeRoom.options?.rules || ''" :summoning="summoning" @summon="summonPlayers" />
     </div>
 
     <MinigameSelectModal v-model:open="showPicker" title="选择 BBBB 小游戏" @select="onSelectMinigame" />

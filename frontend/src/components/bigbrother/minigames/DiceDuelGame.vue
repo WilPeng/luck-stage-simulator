@@ -4,7 +4,7 @@
       <div class="game-icon">🎲</div>
       <h2>骰子对决</h2>
       <p>3轮策略性投骰子，每轮选择1-4个骰子，总分最接近且不超过目标值者获胜！</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

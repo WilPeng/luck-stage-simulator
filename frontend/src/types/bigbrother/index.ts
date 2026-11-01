@@ -502,6 +502,7 @@ export interface MinigameDef {
   name: string
   icon: string
   description: string
+  rules?: string
   category: MinigameCategory
   playerCount: { min: number; max: number }
   duration: number
@@ -661,6 +662,7 @@ export interface BBCustomGameDef {
   id: string
   name: string
   description: string
+  rules?: string
   icon: string
   type: CustomGameType
   questions: CustomGameQuestion[]

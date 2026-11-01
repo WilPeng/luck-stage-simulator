@@ -13,7 +13,7 @@
       <div class="game-icon">💡</div>
       <h2>描述猜谜</h2>
       <p>根据逐条放出的描述猜出答案。每题共 {{ clueTotal }} 条描述，每条间隔放出。任意时刻可作答，每题仅 1 次。越早答对得分越高，答错或超时 0 分。</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

@@ -28,7 +28,7 @@
       <p>未与其他玩家重复的数字获得对应分数；其中<strong>最大的数字获得双倍分数</strong>。</p>
       <p>重复数字中，<strong>重复次数最多</strong>的数字，对应玩家全部扣除该数字的分数。</p>
       <p>共 {{ totalRounds }} 轮，最终得分最高且不并列者获得 HOH；若并列则比较最后一轮得分，再比较提交时间。</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

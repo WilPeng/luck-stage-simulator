@@ -21,7 +21,7 @@
       <h2>{{ gameTitle || '抓小三' }}</h2>
       <p>本场共有 {{ totalLocations }} 个藏身地点。每位选手秘密选择 1 个藏身地点，随后按随机顺序逐一揭开地点。被揭开藏身点的选手立即淘汰，躲到最后的人获胜。</p>
       <p class="cm-rule-note">特别规则：若多人选择同一地点，且这是最后唯一未揭开的地点，则最先揭开该地点的选手获胜。</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

@@ -24,6 +24,10 @@
             <label>描述</label>
             <textarea v-model="form.description" class="bb-input" rows="2" placeholder="简要描述游戏规则" maxlength="200"></textarea>
           </div>
+          <div class="form-row">
+            <label>规则说明（选手准备页展示）</label>
+            <textarea v-model="form.rules" class="bb-input" rows="4" placeholder="填写选手比赛前准备页面展示的完整规则说明" maxlength="2000"></textarea>
+          </div>
           <div class="form-row-inline">
             <div class="form-row">
               <label>游戏类型 *</label>
@@ -297,6 +301,7 @@ function createBlankQuestion(idx: number): QuestionForm {
 const form = reactive({
   name: '',
   description: '',
+  rules: '',
   icon: '🎮',
   type: 'quiz' as string,
   questions: [] as QuestionForm[],
@@ -366,6 +371,7 @@ onMounted(() => {
   if (props.game) {
     form.name = props.game.name
     form.description = props.game.description
+    form.rules = props.game.rules || ''
     form.icon = props.game.icon
     form.type = props.game.type
     form.submitMode = (props.game as any).submitMode || 'single'
@@ -438,6 +444,7 @@ async function save() {
     const payload: any = {
       name: form.name,
       description: form.description,
+      rules: form.rules,
       icon: form.icon,
       type: form.type,
       questions: form.questions.map(q => ({

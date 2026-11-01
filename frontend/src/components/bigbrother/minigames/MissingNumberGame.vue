@@ -13,7 +13,7 @@
       <div class="game-icon">🔢</div>
       <h2>找出遗失的数字</h2>
       <p>7×7 矩阵里有 1-50 中的 49 个数字，只缺少 1 个。在下方填写缺少的数字，只能提交一次。最先答对者获胜；无人答对时最接近者获胜。</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

@@ -13,7 +13,7 @@
       <div class="game-icon">⚡</div>
       <h2>反应力</h2>
       <p>9个板块随机变绿，变绿后尽快点击，总反应时间最短者获胜！</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

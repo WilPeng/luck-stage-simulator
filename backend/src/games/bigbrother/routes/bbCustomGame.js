@@ -74,7 +74,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      name, description, icon, type, questions, cooldownSeconds, maxAttempts,
+      name, description, rules, icon, type, questions, cooldownSeconds, maxAttempts,
       timeLimit, scoringRule, playerCount, winCondition,
       submitMode, wrongFeedback, lockOnWrong, targetCorrect,
       eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit, media
@@ -111,6 +111,7 @@ router.post('/', async (req, res) => {
       id: gameId,
       name: name.trim(),
       description: (description || '').trim(),
+      rules: (rules || '').trim(),
       icon: icon || '🎮',
       type,
       questions: questions.map((q, idx) => mapQuestion(q, idx)),
@@ -151,7 +152,7 @@ router.put('/:id', async (req, res) => {
     }
 
     const {
-      name, description, icon, type, questions, cooldownSeconds, maxAttempts,
+      name, description, rules, icon, type, questions, cooldownSeconds, maxAttempts,
       timeLimit, scoringRule, playerCount, winCondition, enabled,
       submitMode, wrongFeedback, lockOnWrong, targetCorrect,
       eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit, media
@@ -174,6 +175,7 @@ router.put('/:id', async (req, res) => {
 
     if (name !== undefined) existing.name = name.trim()
     if (description !== undefined) existing.description = description.trim()
+    if (rules !== undefined) existing.rules = String(rules).trim()
     if (icon !== undefined) existing.icon = icon
     if (type !== undefined && ALLOWED_TYPES.includes(type)) existing.type = type
     if (questions !== undefined) {

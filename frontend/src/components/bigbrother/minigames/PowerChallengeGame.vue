@@ -3,7 +3,7 @@
     <div class="pc-header">
       <div class="pc-theme">{{ theme }}</div>
       <div class="pc-status" v-if="status === 'playing'">比赛中</div>
-      <div class="pc-status" v-else-if="status === 'countdown'">倒计时 {{ countdown }}</div>
+      <div class="pc-status" v-else-if="status === 'countdown'">倒计时 {{ countdown.toFixed(1) }}</div>
       <div class="pc-status finished" v-else-if="status === 'finished'">已结束</div>
     </div>
 

@@ -13,7 +13,7 @@
       <div class="game-icon">🎭</div>
       <h2>少数决</h2>
       <p>每轮15秒二选一，多数方与未作答者出局，存活到最后者胜！</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

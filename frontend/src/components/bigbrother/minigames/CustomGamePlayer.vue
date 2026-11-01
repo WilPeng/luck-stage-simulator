@@ -18,7 +18,7 @@
       <div class="game-icon">🎮</div>
       <h2>{{ gameTitle }}</h2>
       <p>等待管理员开始比赛...</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
     </div>
 
     <div v-else class="game-playing">
@@ -60,6 +60,9 @@
       <template v-if="isBatch">
         <div v-if="done" class="completed">
           <span class="done-msg">✅ 已完成，等待其他玩家...</span>
+        </div>
+        <div v-else-if="attemptsExhausted" class="completed">
+          <span class="done-msg">⛔ 提交次数已用完，等待管理员结束比赛...</span>
         </div>
         <template v-else>
           <div class="batch-list">
@@ -104,6 +107,9 @@
       <template v-else>
         <div v-if="done" class="completed">
           <span class="done-msg">✅ 已完成，等待其他玩家...</span>
+        </div>
+        <div v-else-if="attemptsExhausted" class="completed">
+          <span class="done-msg">⛔ 提交次数已用完，等待管理员结束比赛...</span>
         </div>
         <div v-else-if="currentQuestion" class="question-area">
           <div class="question-text" v-html="sanitizeRichText(currentQuestion.text)"></div>
@@ -206,6 +212,7 @@ let startSent = false
 const isAdminJudge = computed(() => winCondition.value === 'admin_judge')
 const isModeGame = computed(() => !!modeState.value)
 const isBatch = computed(() => submitMode.value === 'batch' || isAdminJudge.value)
+const attemptsExhausted = computed(() => maxAttempts.value > 0 && attemptsUsed.value >= maxAttempts.value)
 
 const gameStarted = computed(() => {
   const gs: any = gameState.value

@@ -56,7 +56,7 @@
 
       <!-- 准备环节 -->
       <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
-        :gameTitle="activeRoom.minigameName" :summoning="summoning" @summon="summonPlayers" />
+        :gameTitle="activeRoom.minigameName" :rules="activeRoom.options?.rules || ''" :summoning="summoning" @summon="summonPlayers" />
 
       <!-- 实时观战 -->
       <div v-if="activeRoom" class="observer-wrap">

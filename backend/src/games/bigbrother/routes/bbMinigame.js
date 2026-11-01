@@ -166,6 +166,7 @@ router.get('/list', async (req, res) => {
           id: `custom-${obj.id}`,
           name: obj.name,
           description: obj.description,
+          rules: obj.rules || '',
           icon: obj.icon,
           category: 'custom',
           playerCount: obj.playerCount,
@@ -224,22 +225,27 @@ router.post('/create-room', async (req, res) => {
     }
 
     const season = await getCurrentSeason()
-    // 解析小游戏名称（自定义游戏需查库），供选手端开始前显示
+    // 解析小游戏名称与默认规则（自定义游戏需查库），供选手端准备页显示
     let minigameName = ''
+    let defaultRules = ''
     try {
       if (minigameId.startsWith('custom-')) {
         const cg = await BBCustomGame.findOne({ id: minigameId.replace(/^custom-/, '') })
         minigameName = cg?.name || ''
+        defaultRules = cg?.rules || cg?.description || ''
       } else {
         const h = getGame(minigameId)
         minigameName = h?.name || ''
+        defaultRules = h?.description || ''
       }
     } catch { /* ignore */ }
+    const roomOptions = options && typeof options === 'object' ? { ...options } : {}
+    if (!roomOptions.rules) roomOptions.rules = defaultRules
     const room = minigameNs.createRoom(gameType, minigameId, participants, target, {
       roundIndex: season?.currentRound ?? null,
       roundId: season ? `round-${season.currentRound}` : '',
       name: minigameName,
-      options: options && typeof options === 'object' ? options : {}
+      options: roomOptions
     })
 
     res.json({

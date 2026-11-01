@@ -13,7 +13,7 @@
       <div class="game-icon">🧠</div>
       <h2>顺序记忆</h2>
       <p>记住emoji闪动顺序，回答第N个是什么，答错或超时出局！</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

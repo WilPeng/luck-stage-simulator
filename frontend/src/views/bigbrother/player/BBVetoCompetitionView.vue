@@ -22,6 +22,7 @@
     <!-- 准备环节 -->
     <div v-else-if="showLobby" class="minigame-section">
       <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
+        :rules="activeRoom.options?.rules || ''"
         :participants="activeRoom.participants" :myId="myId" />
     </div>
 

@@ -95,7 +95,7 @@
             @click="registerRoomWinner">✅ 登记胜者 {{ roomWinner.playerName }}</button>
         </div>
         <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
-          :gameTitle="activeRoom.minigameName" :summoning="summoning" @summon="summonPlayers" />
+          :gameTitle="activeRoom.minigameName" :rules="activeRoom.options?.rules || ''" :summoning="summoning" @summon="summonPlayers" />
       </div>
 
       <!-- FHOH 选择 FTC -->

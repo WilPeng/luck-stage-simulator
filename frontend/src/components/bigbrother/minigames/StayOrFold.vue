@@ -13,7 +13,7 @@
       <div class="game-icon">🎯</div>
       <h2>Stay or Fold</h2>
       <p>观察 emoji 散点图，估算目标 emoji 的数量；Stay 继续争取分数，Fold 本轮退出。每轮 Stay 中最接近者 +1 分，最远者淘汰。先到 {{ targetPoints }} 分者胜。</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

@@ -8,6 +8,8 @@ class BBCustomGame extends BaseModel {
     this.gameId = data.gameId || 'bigbrother'
     this.name = data.name || ''
     this.description = data.description || ''
+    // 规则说明：管理员提前设定，选手准备页面展示
+    this.rules = data.rules || ''
     this.icon = data.icon || '🎮'
     // quiz(答对赛制) | score(积分赛制)
     // elim-last(模式1 最后作答/首个答错出局) | first-pick(模式2 首个作答定胜负)

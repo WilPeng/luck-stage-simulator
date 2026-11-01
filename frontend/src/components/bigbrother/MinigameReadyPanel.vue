@@ -8,6 +8,10 @@
         {{ summoning ? '召集中…' : '📣 召集选手' }}
       </button>
     </div>
+    <div v-if="rules" class="mr-rules">
+      <div class="mr-rules-title">📜 比赛规则（选手可见）</div>
+      <div class="mr-rules-text">{{ rules }}</div>
+    </div>
     <div class="mr-players">
       <span
         v-for="p in participants"
@@ -33,6 +37,7 @@ import BBAvatar from './BBAvatar.vue'
 const props = defineProps<{
   roomId: string
   gameTitle?: string
+  rules?: string
   summoning?: boolean
 }>()
 
@@ -64,6 +69,9 @@ onMounted(() => {
 .mr-count.all { color: #b39bff; font-weight: 600; }
 .bb-btn-summon { margin-left: auto; border-color: #e6c98866; color: #e6c988; padding: 6px 16px; font-size: 13px; }
 .bb-btn-summon:hover:not(:disabled) { background: #e6c98822; }
+.mr-rules { margin-bottom: 10px; padding: 10px 14px; background: #e6c9880d; border: 1px solid #e6c98844; border-radius: 8px; }
+.mr-rules-title { font-size: 12px; font-weight: 700; color: #e6c988; margin-bottom: 4px; }
+.mr-rules-text { font-size: 13px; color: #cfc4ea; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 .mr-players { display: flex; flex-wrap: wrap; gap: 8px; }
 .mr-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid #ffffff18; border-radius: 8px; background: #ffffff06; font-size: 13px; color: #ddd; }
 .mr-chip.ready { border-color: #b39bff; background: #b39bff12; }

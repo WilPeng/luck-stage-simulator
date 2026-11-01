@@ -4,7 +4,7 @@
       <div class="game-icon">⚖️</div>
       <h2>保持平衡</h2>
       <p>按住空格键保持指针在绿色区域，停留时间最长者获胜！</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown }}</div>
+      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

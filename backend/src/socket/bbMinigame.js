@@ -340,12 +340,17 @@ const initBBMinigameSocket = (io) => {
     room.gameState = gameState
     room.status = 'countdown'
 
-    // 倒计时 3 秒
-    let countdown = 3
+    // 倒计时 10 秒（每 0.1 秒更新一次，显示到小数点后一位）
+    const countdownStartAt = Date.now() + 10000
+    const emitCountdown = () => {
+      const remaining = Math.max(0, (countdownStartAt - Date.now()) / 1000)
+      minigameNs.to(roomId).emit('game_countdown', { seconds: Number(remaining.toFixed(1)) })
+      return remaining
+    }
+    emitCountdown()
     const countdownTimer = setInterval(() => {
-      minigameNs.to(roomId).emit('game_countdown', { seconds: countdown })
-      countdown--
-      if (countdown < 0) {
+      const remaining = emitCountdown()
+      if (remaining <= 0) {
         clearInterval(countdownTimer)
         // 开始游戏
         room.status = 'playing'
@@ -433,7 +438,7 @@ const initBBMinigameSocket = (io) => {
           }
         }
       }
-    }, 1000)
+    }, 100)
 
     callback({ success: true })
   }
