@@ -33,7 +33,7 @@
 
               <!-- 描述猜谜：M / N / K 配置 + 自定义题目模板 -->
               <template v-if="pendingGame.id === 'describe-guess'">
-                <p class="opt-hint">每题呈 M 条描述，每条间隔 K 秒放出；选手任意时刻可作答（每题 1 次）。第 1 条后答对得 M+1 分，之后每多一条 -1 分。共 N 题，总分高者胜。</p>
+                <p class="opt-hint">每题呈 M 条描述，每条间隔 K 秒放出；选手任意时刻可作答（每题 1 次）。第 1 条后答对得 M+1 分，之后每多一条 -1 分。每题结束后公示得分分布（不公布具体选手），共 N 题，总分高者胜。</p>
                 <div class="opt-row">
                   <label class="opt-label">每题描述数 M
                     <input v-model.number="options.clueCount" type="number" min="1" max="10" class="opt-number" />
@@ -43,6 +43,9 @@
                   </label>
                   <label class="opt-label">放送间隔 K（秒）
                     <input v-model.number="options.interval" type="number" min="3" max="120" class="opt-number" />
+                  </label>
+                  <label class="opt-label">得分公示时长（秒）
+                    <input v-model.number="options.revealTime" type="number" min="0" max="60" class="opt-number" />
                   </label>
                 </div>
                 <label class="opt-label">题目模板（每行一道题：答案|描述1|描述2|…）
@@ -238,6 +241,9 @@ function onSelect(id: string, game?: MinigameDef) {
     options.hideTime = 30
     options.turnTime = 20
     options.questions = [{ text: '', optionA: '', optionB: '' }]
+    if (game.id === 'describe-guess') {
+      options.revealTime = 8
+    }
     if (game.id === 'number-divination') {
       options.roundCount = 10
       options.roundTime = 15

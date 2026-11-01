@@ -31,17 +31,46 @@
         <div v-if="clues.length === 0" class="clue-line dim">描述即将放出…</div>
       </div>
 
-      <div class="answer-area">
-        <template v-if="!answeredThisQuestion">
-          <input v-model="inputValue" class="ans-input" placeholder="输入你的答案" @keyup.enter="submit" />
-          <button class="submit-btn" :disabled="!inputValue.trim() || submitting" @click="submit">提交（仅 1 次）</button>
-        </template>
-        <div v-else class="submitted">
-          <p class="submitted-title">本题已作答，等待下一题…</p>
+      <div v-if="isReveal" class="reveal-panel">
+        <div class="reveal-title">第 {{ currentIndex + 1 }} 题结束 · 得分公示</div>
+        <div class="reveal-sub">仅公示得分分布，不公布具体选手</div>
+
+        <div class="dist-section">
+          <div class="dist-heading">本题得分分布</div>
+          <div v-if="questionDist.length === 0" class="dist-empty">暂无数据</div>
+          <div v-for="item in questionDist" :key="'q-' + item.score" class="dist-row">
+            <span class="dist-label">{{ item.score }} 分</span>
+            <div class="dist-bar"><div class="dist-fill" :style="{ width: barWidth(item.count, maxQuestionCount) }"></div></div>
+            <span class="dist-count">{{ item.count }} 人</span>
+          </div>
         </div>
+
+        <div class="dist-section">
+          <div class="dist-heading">累计总分分布</div>
+          <div v-if="totalDist.length === 0" class="dist-empty">暂无数据</div>
+          <div v-for="item in totalDist" :key="'t-' + item.score" class="dist-row">
+            <span class="dist-label">{{ item.score }} 分</span>
+            <div class="dist-bar"><div class="dist-fill total" :style="{ width: barWidth(item.count, maxTotalCount) }"></div></div>
+            <span class="dist-count">{{ item.count }} 人</span>
+          </div>
+        </div>
+
+        <div class="hint">下一题 {{ revealRemaining }}s 后开始</div>
       </div>
 
-      <div class="hint">已放出 {{ revealedClues }} / {{ clueTotal }} 条描述<span v-if="secondsToNext > 0"> · {{ secondsToNext }}s 后下一条</span></div>
+      <template v-else>
+        <div class="answer-area">
+          <template v-if="!answeredThisQuestion">
+            <input v-model="inputValue" class="ans-input" placeholder="输入你的答案" @keyup.enter="submit" />
+            <button class="submit-btn" :disabled="!inputValue.trim() || submitting" @click="submit">提交（仅 1 次）</button>
+          </template>
+          <div v-else class="submitted">
+            <p class="submitted-title">本题已作答，等待下一题…</p>
+          </div>
+        </div>
+
+        <div class="hint">已放出 {{ revealedClues }} / {{ clueTotal }} 条描述<span v-if="secondsToNext > 0"> · {{ secondsToNext }}s 后下一条</span></div>
+      </template>
     </div>
   </div>
 </template>
@@ -75,6 +104,25 @@ const secondsToNext = computed(() => {
   if (!t) return 0
   return Math.max(0, Math.ceil((t - nowTs.value) / 1000))
 })
+
+const isReveal = computed(() => state.value.phase === 'reveal' && !!state.value.distribution)
+const questionDist = computed<{ score: number; count: number }[]>(() =>
+  Array.isArray(state.value.distribution?.question) ? state.value.distribution.question : []
+)
+const totalDist = computed<{ score: number; count: number }[]>(() =>
+  Array.isArray(state.value.distribution?.total) ? state.value.distribution.total : []
+)
+const maxQuestionCount = computed(() => questionDist.value.reduce((m, i) => Math.max(m, i.count), 1))
+const maxTotalCount = computed(() => totalDist.value.reduce((m, i) => Math.max(m, i.count), 1))
+const revealRemaining = computed(() => {
+  const t = state.value.revealEndsAt
+  if (!t) return 0
+  return Math.max(0, Math.ceil((t - nowTs.value) / 1000))
+})
+
+function barWidth(count: number, max: number) {
+  return `${Math.round((count / (max || 1)) * 100)}%`
+}
 
 function submit() {
   if (submitting.value || answeredThisQuestion.value) return
@@ -123,6 +171,19 @@ p { color: #8f83b8; font-size: 14px; }
 .submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .submitted { color: #b39bff; font-size: 14px; }
 .hint { color: #7d6fa6; font-size: 13px; }
+.reveal-panel { background: #0f1b2e; border: 1px solid #b39bff44; border-radius: 12px; padding: 18px; text-align: left; }
+.reveal-title { color: #d6e4ff; font-size: 17px; font-weight: 700; text-align: center; }
+.reveal-sub { color: #7d6fa6; font-size: 12px; text-align: center; margin: 4px 0 16px; }
+.dist-section { margin-bottom: 16px; }
+.dist-heading { color: #b39bff; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.dist-empty { color: #556; font-size: 13px; }
+.dist-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.dist-label { flex: 0 0 48px; color: #a99bd0; font-size: 13px; }
+.dist-bar { flex: 1; height: 12px; background: #17112a; border-radius: 6px; overflow: hidden; }
+.dist-fill { height: 100%; min-width: 2px; background: linear-gradient(90deg, #7b5cff, #b39bff); border-radius: 6px; transition: width 0.3s ease; }
+.dist-fill.total { background: linear-gradient(90deg, #c9973f, #e6c988); }
+.dist-count { flex: 0 0 40px; text-align: right; color: #d6e4ff; font-size: 13px; }
+.reveal-panel .hint { text-align: center; margin-top: 10px; }
 .winner-name { font-size: 26px; font-weight: 700; color: #e6c988; }
 .winner-label { display: block; font-size: 14px; color: #e6c988; margin-top: 4px; }
 @media (max-width: 480px) {

@@ -156,6 +156,7 @@ function buildAdminView(minigameId, state) {
           players[pid] = { 得分: state.scores[pid] || 0, 作答记录: list }
         }
         const summary = {
+          阶段: state.revealEndsAt ? '得分公示' : '作答中',
           进度: `${(state.currentIndex || 0) + 1}/${state.N || 0}`,
           已放出描述: state.revealedClues || 0,
           题目: (state.questions || []).map((q, i) => `第${i + 1}题答案：${q.answer}`)

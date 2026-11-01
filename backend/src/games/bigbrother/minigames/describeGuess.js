@@ -5,8 +5,9 @@
  *  - 选手可在任意时刻作答，每题仅可作答 1 次。
  *  - 第 1 条描述后答对得 M+1 分；此后每多放一条，答对可得分数 -1。
  *  - 答错或超时未作答得 0 分。
+ *  - 每题结束后进入公示阶段：公示本题得分与累计总分的分布（只显示人数，不显示具体选手）。
  *  - 共 N 题，总分高者胜；同分则比较所有题目提交耗时之和（ms），用时更少者胜。
- * M / N / K 及题目内容均可通过 options 配置。
+ * M / N / K / 公示时长及题目内容均可通过 options 配置。
  */
 const { registerGame } = require('./index')
 
@@ -20,6 +21,31 @@ function clampInt(v, min, max, dflt) {
   const n = parseInt(v)
   if (Number.isNaN(n)) return dflt
   return Math.max(min, Math.min(max, n))
+}
+
+// 将 { 分值: 人数 } 转为按分值降序排列的数组；只含分值与人次，不含选手信息
+function toDistribution(counts) {
+  return Object.keys(counts)
+    .map(Number)
+    .sort((a, b) => b - a)
+    .map(score => ({ score, count: counts[score] }))
+}
+
+function buildDistribution(state, qIndex) {
+  const questionCounts = {}
+  const totalCounts = {}
+  for (const pid of Object.keys(state.scores)) {
+    const rec = state.records[pid] && state.records[pid][qIndex]
+    const gain = rec ? (rec.gain || 0) : 0
+    questionCounts[gain] = (questionCounts[gain] || 0) + 1
+    const total = state.scores[pid] || 0
+    totalCounts[total] = (totalCounts[total] || 0) + 1
+  }
+  return {
+    questionIndex: qIndex,
+    question: toDistribution(questionCounts),
+    total: toDistribution(totalCounts)
+  }
 }
 
 registerGame({
@@ -37,6 +63,7 @@ registerGame({
     const M = clampInt(options.clueCount, 1, 10, 5)
     const N = clampInt(options.questionCount, 1, 30, 7)
     const K = clampInt(options.interval, 3, 120, 15)
+    const R = clampInt(options.revealTime, 0, 60, 8)
 
     let src = Array.isArray(options.questions) && options.questions.length ? options.questions : PLACEHOLDER_QUESTIONS
     const questions = []
@@ -63,11 +90,13 @@ registerGame({
       status: 'ready',
       started: false,
       finished: false,
-      M, N, K, questions,
+      M, N, K, R, questions,
       currentIndex: 0,
       revealedClues: 0,
       questionStartAt: 0,
       nextAt: 0,
+      revealEndsAt: 0,
+      lastDistribution: null,
       scores, answered, submitMs, records
     }
   },
@@ -82,13 +111,34 @@ registerGame({
       state.nextAt = now + state.K * 1000
       return
     }
+    // 得分公示阶段：到点后进入下一题
+    if (state.revealEndsAt) {
+      if (now < state.revealEndsAt) return
+      state.revealEndsAt = 0
+      state.lastDistribution = null
+      state.currentIndex += 1
+      if (state.currentIndex >= state.N) {
+        state.finished = true
+        return
+      }
+      state.revealedClues = 1
+      state.questionStartAt = now
+      state.nextAt = now + state.K * 1000
+      return
+    }
     if (now < state.nextAt) return
     if (state.revealedClues < state.M) {
       state.revealedClues += 1
       state.nextAt = now + state.K * 1000
       return
     }
-    // 本题描述已放完，进入下一题
+    // 本题结束：公示得分分布（不含选手身份）
+    if (state.R > 0) {
+      state.lastDistribution = buildDistribution(state, state.currentIndex)
+      state.revealEndsAt = now + state.R * 1000
+      return
+    }
+    // 未配置公示时长，直接进入下一题
     state.currentIndex += 1
     if (state.currentIndex >= state.N) {
       state.finished = true
@@ -103,6 +153,9 @@ registerGame({
     if (!state.scores.hasOwnProperty(playerId)) return { updated: false }
     if (action.type !== 'answer') return { updated: false }
     if (state.finished) return { updated: false, finished: true }
+    // 公示阶段或本题已结束（描述放完后等待进入公示）时不再接受作答
+    if (state.revealEndsAt) return { updated: false }
+    if (state.revealedClues >= state.M && state.nextAt && Date.now() >= state.nextAt) return { updated: false }
     const qIndex = state.currentIndex
     if (state.answered[playerId] && state.answered[playerId][qIndex]) return { updated: false }
 
@@ -155,10 +208,12 @@ registerGame({
   getState(state, playerId) {
     const q = state.questions[state.currentIndex] || { clues: [] }
     const pid = playerId || ''
+    const revealing = !!state.revealEndsAt
     return {
       status: state.status,
       started: state.started,
       finished: state.finished,
+      phase: revealing ? 'reveal' : 'clue',
       currentIndex: state.currentIndex,
       totalQuestions: state.N,
       clueTotal: state.M,
@@ -168,7 +223,9 @@ registerGame({
       myScore: state.scores[pid] || 0,
       scores: state.scores,
       interval: state.K,
-      nextAt: state.nextAt
+      nextAt: state.nextAt,
+      revealEndsAt: state.revealEndsAt || 0,
+      distribution: revealing ? state.lastDistribution : null
     }
   },
 
