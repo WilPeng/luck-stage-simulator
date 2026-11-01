@@ -621,10 +621,61 @@ export async function bbCreateMinigameRoom(
   })
 }
 
+// 上传前压缩图片，避免超过服务器/反向代理的请求体限制（常见为 1MB）
+const IMAGE_UPLOAD_MAX_BYTES = 800 * 1024
+const IMAGE_UPLOAD_MAX_DIM = 1600
+
+function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> {
+  return new Promise(resolve => canvas.toBlob(blob => resolve(blob), 'image/jpeg', quality))
+}
+
+async function compressImageForUpload(file: File): Promise<File> {
+  if (typeof document === 'undefined') return file
+  const compressible = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
+  if (!compressible || file.size <= IMAGE_UPLOAD_MAX_BYTES) return file
+
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = async () => {
+      try {
+        const scale = Math.min(1, IMAGE_UPLOAD_MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight))
+        const width = Math.max(1, Math.round(img.naturalWidth * scale))
+        const height = Math.max(1, Math.round(img.naturalHeight * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { resolve(file); return }
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, width, height)
+        ctx.drawImage(img, 0, 0, width, height)
+
+        let quality = 0.85
+        let blob = await canvasToBlob(canvas, quality)
+        while (blob && blob.size > IMAGE_UPLOAD_MAX_BYTES && quality > 0.5) {
+          quality -= 0.1
+          blob = await canvasToBlob(canvas, quality)
+        }
+        if (!blob || blob.size >= file.size) { resolve(file); return }
+        const base = file.name.replace(/\.[^.]+$/, '') || 'image'
+        resolve(new File([blob], `${base}.jpg`, { type: 'image/jpeg' }))
+      } catch {
+        resolve(file)
+      } finally {
+        URL.revokeObjectURL(url)
+      }
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file) }
+    img.src = url
+  })
+}
+
 // 上传小游戏图片（拼图）
 export async function bbUploadGameImage(file: File): Promise<{ url: string }> {
+  const uploadFile = await compressImageForUpload(file)
   const fd = new FormData()
-  fd.append('image', file)
+  fd.append('image', uploadFile)
   const token = getToken()
   const res = await fetch(`${API_BASE}/minigame/upload-image`, {
     method: 'POST',
@@ -632,7 +683,10 @@ export async function bbUploadGameImage(file: File): Promise<{ url: string }> {
     body: fd
   })
   const json = await res.json().catch(() => ({}))
-  if (!res.ok || json.success === false) throw new Error(json.error || '图片上传失败')
+  if (!res.ok || json.success === false) {
+    if (res.status === 413) throw new Error('图片过大，上传被服务器或反向代理拒绝')
+    throw new Error(json.error || '图片上传失败')
+  }
   return json.data
 }
 
