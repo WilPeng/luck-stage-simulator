@@ -11,6 +11,7 @@ const { auth, requireAdmin } = require('../../../middleware/auth')
 const { getAllGames, getGame } = require('../minigames/loadAll')
 const { getCurrentSeason } = require('../helpers')
 const BBCustomGame = require('../models/BBCustomGame')
+const BBGameLibrary = require('../models/BBGameLibrary')
 const BBMinigameReplay = require('../models/BBMinigameReplay')
 
 // 小游戏图片（拼图等）上传目录
@@ -172,14 +173,40 @@ router.get('/list', async (req, res) => {
           playerCount: obj.playerCount,
           duration: obj.type === 'score' ? obj.timeLimit : Math.max(60, obj.questions.length * 15),
           type: obj.type,
-          isCustom: true
+          isCustom: true,
+          _libraryKey: obj.id
         }
       })
     } catch (e) {
       console.error('加载自定义游戏失败:', e)
     }
 
-    res.json({ success: true, data: [...builtinGames, ...customGames] })
+    // 按游戏库设置的顺序排序（未设置的游戏排在最后，保持原有顺序）
+    let order = []
+    try {
+      const library = await BBGameLibrary.findOne({ id: BBGameLibrary.LIBRARY_ID })
+      if (library && Array.isArray(library.order)) order = library.order
+    } catch (e) { /* ignore */ }
+    const orderIndex = new Map(order.map((key, idx) => [key, idx]))
+    const entries = [
+      ...builtinGames.map(g => ({ key: g.id, game: g })),
+      ...customGames.map(g => ({ key: g._libraryKey, game: g }))
+    ]
+    entries.sort((a, b) => {
+      const ai = orderIndex.has(a.key) ? orderIndex.get(a.key) : Infinity
+      const bi = orderIndex.has(b.key) ? orderIndex.get(b.key) : Infinity
+      if (ai === bi) return 0
+      return ai - bi
+    })
+    const data = entries.map(e => {
+      if (e.game._libraryKey !== undefined) {
+        const { _libraryKey, ...rest } = e.game
+        return rest
+      }
+      return e.game
+    })
+
+    res.json({ success: true, data })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '获取小游戏列表失败' })

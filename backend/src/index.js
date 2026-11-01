@@ -55,6 +55,7 @@ app.use('/api/bigbrother/jury-qa', bbGameIdMiddleware, require('./games/bigbroth
 app.use('/api/bigbrother/logs', bbGameIdMiddleware, require('./games/bigbrother/routes/bbLogs'))
 app.use('/api/bigbrother/minigame', bbGameIdMiddleware, require('./games/bigbrother/routes/bbMinigame'))
 app.use('/api/bigbrother/custom-game', bbGameIdMiddleware, require('./games/bigbrother/routes/bbCustomGame'))
+app.use('/api/bigbrother/game-library', bbGameIdMiddleware, require('./games/bigbrother/routes/bbGameLibrary'))
 app.use('/api/bigbrother/power-challenge', bbGameIdMiddleware, require('./games/bigbrother/routes/bbPowerChallenge'))
 app.use('/api/bigbrother/house', bbGameIdMiddleware, require('./games/bigbrother/routes/bbHouse'))
 
@@ -229,6 +230,7 @@ async function ensureBBIndexes() {
     ['BBMinigameReplay', [{ gameId: 1, gameType: 1, startedAt: -1 }]],
     ['BBOperationLog', [{ gameId: 1, createdAt: -1 }]],
     ['BBCustomGame', [{ gameId: 1, enabled: 1 }]],
+    ['BBGameLibrary', [{ gameId: 1 }]],
     ['BBPowerChallenge', [{ gameId: 1 }]],
     ['BBSerpentMark', [{ gameId: 1, roundIndex: 1 }]],
     ['BBHouseRoom', [{ gameId: 1, id: 1 }]],

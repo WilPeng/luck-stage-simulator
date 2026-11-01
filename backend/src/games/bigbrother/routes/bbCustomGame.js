@@ -5,6 +5,7 @@
 const express = require('express')
 const router = express.Router()
 const BBCustomGame = require('../models/BBCustomGame')
+const BBGameLibrary = require('../models/BBGameLibrary')
 const { getCurrentSeason } = require('../helpers')
 const { clearCustomGameCache } = require('../minigames/customGame')
 
@@ -219,6 +220,20 @@ router.delete('/:id', async (req, res) => {
 
     await BBCustomGame.deleteOne({ id: req.params.id })
     clearCustomGameCache(req.params.id)
+
+    // 同步清理游戏库中的排序与文件夹引用
+    try {
+      const library = await BBGameLibrary.findOne({ id: BBGameLibrary.LIBRARY_ID })
+      if (library) {
+        library.order = (library.order || []).filter(key => key !== req.params.id)
+        library.folders = (library.folders || []).map(f => ({
+          ...f,
+          games: (f.games || []).filter(key => key !== req.params.id)
+        }))
+        library.updatedAt = new Date().toISOString()
+        await library.save()
+      }
+    } catch (e) { /* ignore */ }
 
     res.json({ success: true, message: '已删除' })
   } catch (e) {

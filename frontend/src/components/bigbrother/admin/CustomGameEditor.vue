@@ -279,7 +279,26 @@ const emit = defineEmits<{ save: []; close: [] }>()
 const isEdit = computed(() => !!props.game?.id)
 const saving = ref(false)
 
-const emojiOptions = ['🎮', '🧩', '🎯', '🧠', '⚡', '🎲', '🃏', '🏆', '📚', '🔢', '🔠', '🎪', '🎭', '🎵', '🏃', '💪']
+const emojiOptions = [
+  // 游戏 / 娱乐
+  '🎮', '🕹️', '🎲', '🎯', '🧩', '🃏', '🎰', '🎳', '🎱', '🪀', '🧸', '🎪', '🎭', '🎨', '🎬',
+  '🎤', '🎧', '🎼', '🎵', '🎺', '🥁', '🎸', '🎹', '🎊', '🎉', '🎈', '🎁', '🔮', '🪄', '🧿',
+  // 运动 / 竞技
+  '🏆', '🏅', '🥇', '🥈', '🥉', '⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏉', '🏓', '🏸', '🥊',
+  '🥋', '🥅', '🏒', '🏹', '🎣', '🤿', '🏊', '🏃', '🚴', '🧗', '⛳', '🛹', '🛼', '🏋️', '🤺', '💪',
+  // 头脑 / 学习
+  '🧠', '💡', '📚', '📖', '📝', '✏️', '🖊️', '📐', '📏', '🔢', '🔠', '🔡', '🧮', '🔍', '🔎',
+  '🧪', '🔬', '🧬', '🗺️', '🧭', '📊', '📈', '🗂️', '📌', '📍', '🔖', '📎', '🧷', '📋', '🗒️',
+  // 动物 / 自然
+  '🦁', '🐯', '🐺', '🦊', '🐸', '🐵', '🐼', '🐨', '🦄', '🐉', '🦅', '🦉', '🐙', '🦋', '🐝',
+  '🐬', '🦈', '🐢', '🐧', '🦖', '🌟', '⭐', '✨', '🔥', '💧', '🌈', '🌙', '☀️', '❄️', '🌪️', '⚡',
+  // 物品 / 角色
+  '💎', '💰', '💣', '🔔', '🔑', '🗝️', '🛡️', '⚔️', '📦', '🚀', '✈️', '🚗', '🏰', '🏠', '🚪',
+  '🪑', '🕯️', '👑', '🤖', '👽', '🧙', '🧛', '🦸', '🦹', '🧟', '👻', '💀', '🤡', '😈', '🐲',
+  // 食物
+  '🍎', '🍌', '🍕', '🍔', '🍟', '🍩', '🎂', '🍫', '🍬', '🍭', '☕', '🍵', '🧃', '🍇', '🍉',
+  '🍓', '🥑', '🍪', '🍦', '🍿'
+]
 
 interface QuestionForm extends CustomGameQuestion {
   optionsText: string
@@ -513,7 +532,7 @@ async function save() {
 .bb-input:focus { border-color: #b39bff; }
 select.bb-input { cursor: pointer; }
 textarea.bb-input { resize: vertical; font-family: inherit; }
-.icon-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.icon-picker { display: flex; flex-wrap: wrap; gap: 6px; max-height: 168px; overflow-y: auto; padding: 6px; border: 1px solid #b39bff22; border-radius: 6px; }
 .emoji-btn { width: 36px; height: 36px; font-size: 20px; border: 2px solid #b39bff22; border-radius: 6px; background: transparent; cursor: pointer; transition: all 0.15s; }
 .emoji-btn:hover { border-color: #b39bff66; }
 .emoji-btn.active { border-color: #b39bff; background: #b39bff22; }

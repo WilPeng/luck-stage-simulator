@@ -199,6 +199,19 @@
 
             <!-- 描述猜谜 -->
             <template v-else-if="meta.type === 'describe-guess'">
+              <div class="reveal-big">最终得分</div>
+              <table class="meta-table">
+                <thead><tr><th>名次</th><th>选手</th><th>总分</th><th>答题总用时</th></tr></thead>
+                <tbody>
+                  <tr v-for="(row, i) in dgStandings" :key="row.playerId">
+                    <td>{{ i + 1 }}</td>
+                    <td class="mc-name">{{ row.playerName }}</td>
+                    <td class="mc ok">{{ row.score }}</td>
+                    <td>{{ dur(row.submitMs) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+
               <div class="race-list">
                 <div v-for="(q, qi) in meta.questions" :key="qi" class="race-item">
                   <div class="race-head">第 {{ qi + 1 }} 题 · 答案：<strong>{{ q.answer }}</strong></div>
@@ -206,7 +219,7 @@
                     <span v-for="(c, ci) in q.clues" :key="ci" class="race-clue">{{ ci + 1 }}. {{ c }}</span>
                   </div>
                   <table class="meta-table">
-                    <thead><tr><th>选手</th><th>作答</th><th>得分</th></tr></thead>
+                    <thead><tr><th>选手</th><th>作答</th><th>本题得分</th><th>累计</th></tr></thead>
                     <tbody>
                       <tr v-for="p in detail.participants" :key="p.playerId">
                         <td class="mc-name">{{ p.playerName }}</td>
@@ -214,6 +227,7 @@
                         <td class="mc" :class="dgRecord(p.playerId, qi)?.correct ? 'ok' : 'bad'">
                           {{ dgRecord(p.playerId, qi) ? `+${dgRecord(p.playerId, qi).gain}` : 0 }}
                         </td>
+                        <td>{{ dgCumulative(p.playerId, qi) }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -537,6 +551,29 @@ function answerOf(type: string, pid: string, i: number) {
 function dgRecord(pid: string, qi: number) {
   const recs = meta.value?.players?.[pid]?.records || {}
   return recs[qi] || recs[String(qi)] || null
+}
+const dgStandings = computed(() => {
+  const parts = detail.value?.participants || []
+  const rows = parts.map((p: any) => {
+    const mp = meta.value?.players?.[p.playerId] || {}
+    const score = mp.score ?? detail.value?.scores?.[p.playerId] ?? 0
+    const submitMs = mp.submitMs ?? null
+    return { playerId: p.playerId, playerName: p.playerName, score, submitMs }
+  })
+  return rows.sort((a: any, b: any) => {
+    if (b.score !== a.score) return b.score - a.score
+    const ta = a.submitMs == null ? Infinity : a.submitMs
+    const tb = b.submitMs == null ? Infinity : b.submitMs
+    return ta - tb
+  })
+})
+function dgCumulative(pid: string, qi: number) {
+  let sum = 0
+  for (let i = 0; i <= qi; i++) {
+    const r = dgRecord(pid, i)
+    if (r) sum += (r.gain || 0)
+  }
+  return sum
 }
 function customAnswer(pid: string, qid: string) {
   const ans = meta.value?.players?.[pid]?.answers || []

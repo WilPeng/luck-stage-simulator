@@ -119,21 +119,40 @@ function createCustomGameHandler(gameDef) {
     return { ok: true }
   }
 
-  // 单题反馈（不向选手透露正确答案）
+  // 单题反馈（严格执行答错反馈设置，不向选手透露正确答案）
   function singleFeedback(ps, q, correct) {
-    const out = { correct }
-    if (correct) return out
     const fb = gameDef.wrongFeedback
-    if (fb === 'count') out.correctCount = ps.correctCount
-    // reveal / none / all_correct_only 均不告知正确答案
-    return out
+    // 不告知：不透露本次提交是否正确
+    if (fb === 'none') return { submitted: true }
+    // 仅全部答对时告知：未全部答对前保持中立
+    if (fb === 'all_correct_only') {
+      if (ps.correctCount >= totalQuestions) {
+        return { correct: true, correctCount: ps.correctCount, totalQuestions }
+      }
+      return { submitted: true }
+    }
+    // 告知答对数量（不告知具体题目）
+    if (fb === 'count') return { correct, correctCount: ps.correctCount }
+    // reveal 及其他：保留原有反馈
+    return { correct }
   }
 
-  // 批量反馈（不向选手透露正确答案）
+  // 批量反馈（严格执行答错反馈设置，不向选手透露正确答案）
   function batchFeedback(ps, gradedCorrect, gradedCount, wrongAnswers) {
-    const out = { correct: gradedCorrect > 0, gradedCorrect, gradedCount, correctCount: ps.correctCount }
-    // 不再返回 correctAnswers（正确答案不下发选手）
-    return out
+    const fb = gameDef.wrongFeedback
+    // 不告知：不透露本次提交中任何题目的对错
+    if (fb === 'none') return { submitted: true }
+    // 仅全部答对时告知：未全部答对前保持中立
+    if (fb === 'all_correct_only') {
+      if (ps.correctCount >= totalQuestions) {
+        return { correct: true, correctCount: ps.correctCount, totalQuestions }
+      }
+      return { submitted: true }
+    }
+    // 告知答对数量（不告知具体题目）
+    if (fb === 'count') return { submitted: true, correctCount: ps.correctCount }
+    // reveal 及其他：保留原有反馈
+    return { correct: gradedCorrect > 0, gradedCorrect, gradedCount, correctCount: ps.correctCount }
   }
 
   return {
@@ -359,9 +378,11 @@ function createCustomGameHandler(gameDef) {
 
       if (submitMode === 'batch' || isAdminJudge) {
         const allCorrect = ps.correctCount >= totalQuestions
+        // 仅“告知正确答案”模式下才下发每题对错，避免其他反馈设置泄露结果
+        const revealPerQuestion = gameDef.wrongFeedback === 'reveal'
         base.questions = ps.questions.map(q => {
           const rec = ps.answers[q.id]
-          return {
+          const item = {
             id: q.id,
             text: q.text,
             qtype: q.qtype || 'text',
@@ -369,9 +390,10 @@ function createCustomGameHandler(gameDef) {
               : (q.qtype === 'judge' ? (q.options && q.options.length ? q.options : ['对', '错']) : []),
             points: q.points,
             userAnswer: rec ? rec.userAnswer : '',
-            correct: rec ? !!rec.correct : false,
             locked: !!ps.locked[q.id]
           }
+          if (revealPerQuestion) item.correct = rec ? !!rec.correct : false
+          return item
         })
       } else {
         const q = ps.currentIndex < ps.questions.length ? ps.questions[ps.currentIndex] : null

@@ -686,6 +686,22 @@ export interface BBCustomGameDef {
   updatedAt: string
 }
 
+export interface BBGameFolder {
+  id: string
+  name: string
+  games: string[]
+  createdAt?: string
+}
+
+export interface BBGameLibrary {
+  id: string
+  gameId?: string
+  order: string[]
+  folders: BBGameFolder[]
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface CustomGameBatchQuestion {
   id: string
   text: string

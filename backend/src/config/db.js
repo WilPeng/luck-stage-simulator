@@ -20,6 +20,7 @@ const COLLECTIONS = [
   'BBPlayerLocation', // 玩家当前位置
   'BBLocationHistory',// 玩家位置历史（消息可见性核心）
   'BBCustomGame',     // 自定义游戏
+  'BBGameLibrary',    // 游戏库排序 / 文件夹
   'BBPowerChallenge', // 实力大挑战题目池
   'BBMinigameReplay', // 小游戏对局回放/复盘
   'BBJuryQA'          // 陪审团问答（冠军投票前）

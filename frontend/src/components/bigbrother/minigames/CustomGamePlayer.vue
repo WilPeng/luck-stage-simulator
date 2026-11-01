@@ -282,7 +282,13 @@ function buildFeedback(result: any) {
     return
   }
   if (result.submitted) {
-    feedback.value = { type: 'info', text: '已提交，等待管理员评判' }
+    let text = '已提交'
+    if (isAdminJudge.value) {
+      text = '已提交，等待管理员评判'
+    } else if (result.correctCount !== undefined) {
+      text = `已提交，当前答对 ${result.correctCount} 题`
+    }
+    feedback.value = { type: 'info', text }
     return
   }
   if (result.correct) {
@@ -294,6 +300,8 @@ function buildFeedback(result: any) {
   let detail = ''
   if (result.gradedCount !== undefined) {
     detail = `本次答对 ${result.gradedCorrect}/${result.gradedCount} 题`
+  } else if (result.correctCount !== undefined) {
+    detail = `当前答对 ${result.correctCount} 题`
   }
   feedback.value = { type: 'wrong', text: parts.join('，'), detail }
 }

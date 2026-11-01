@@ -5,7 +5,7 @@ import type {
   BBChatMessage, BBVoteResult, BBStageType,
   BBTwistRoundConfig, BBTwistDef, BBRoundConfig,
   MinigameDef, MinigameRoom, MinigameProgress, BBSettlement, BBEndgameStatus,
-  BBCustomGameDef
+  BBCustomGameDef, BBGameLibrary, BBGameFolder
 } from '../types/bigbrother'
 
 function getApiRoot(): string {
@@ -804,6 +804,48 @@ export async function bbToggleCustomGame(id: string): Promise<{ id: string; enab
   return doRequest<{ id: string; enabled: boolean }>(`/custom-game/${id}/toggle`, {
     method: 'POST'
   })
+}
+
+// ===== 游戏库排序 / 文件夹 API =====
+
+export async function bbGetGameLibrary(): Promise<BBGameLibrary> {
+  return doRequest<BBGameLibrary>('/game-library')
+}
+
+export async function bbSaveGameLibraryOrder(order: string[]): Promise<{ order: string[] }> {
+  return doRequest<{ order: string[] }>('/game-library/order', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order })
+  })
+}
+
+export async function bbCreateGameFolder(name: string): Promise<BBGameFolder> {
+  return doRequest<BBGameFolder>('/game-library/folders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  })
+}
+
+export async function bbUpdateGameFolder(id: string, data: { name?: string; games?: string[] }): Promise<BBGameFolder> {
+  return doRequest<BBGameFolder>(`/game-library/folders/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+}
+
+export async function bbToggleGameInFolder(folderId: string, gameKey: string): Promise<BBGameFolder> {
+  return doRequest<BBGameFolder>(`/game-library/folders/${folderId}/toggle`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ gameKey })
+  })
+}
+
+export async function bbDeleteGameFolder(id: string): Promise<void> {
+  return doRequest<void>(`/game-library/folders/${id}`, { method: 'DELETE' })
 }
 
 // ===== 实力大挑战 API =====
