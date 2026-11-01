@@ -38,6 +38,129 @@ router.get('/votes', async (req, res) => {
   }
 })
 
+// GET /campaign - 获取本轮拉票内容（投票开始前仅本人/管理员可见，开始后所有人可见）
+router.get('/campaign', auth, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const roundId = `round-${season.currentRound}`
+    const { getCollection } = require('../../../config/db')
+    const nominationDoc = await getCollection('BBNomination').findOne({ gameId: 'bigbrother', roundId })
+    const isAdmin = req.user?.role === 'admin'
+    const voteStarted = !!nominationDoc?.voteStarted
+    const allCampaigns = Array.isArray(nominationDoc?.campaigns) ? nominationDoc.campaigns : []
+    const campaigns = (isAdmin || voteStarted)
+      ? allCampaigns
+      : allCampaigns.filter(c => c.playerId === req.user?.userId)
+    res.json({ success: true, data: { voteStarted, campaigns } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取拉票内容失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /campaign - 被提名者在管理员开始投票前提交拉票内容
+router.post('/campaign', auth, async (req, res) => {
+  try {
+    const rawContent = req.body?.content
+    const content = typeof rawContent === 'string' ? rawContent.trim() : ''
+    if (!content) {
+      return res.status(400).json({ success: false, error: '拉票内容不能为空', code: 'EMPTY_CONTENT' })
+    }
+    if (content.length > 1000) {
+      return res.status(400).json({ success: false, error: '拉票内容不能超过 1000 字', code: 'CONTENT_TOO_LONG' })
+    }
+    const season = await getCurrentSeason()
+    if (season.currentStage !== 'eviction_vote') {
+      return res.status(400).json({ success: false, error: '当前不是淘汰投票阶段，无法提交拉票内容', code: 'WRONG_STAGE' })
+    }
+    const roundId = `round-${season.currentRound}`
+    const { getCollection } = require('../../../config/db')
+    const nomCol = getCollection('BBNomination')
+    const nominationDoc = await nomCol.findOne({ gameId: 'bigbrother', roundId })
+    if (!nominationDoc) {
+      return res.status(400).json({ success: false, error: '本轮提名不存在', code: 'NO_NOMINATION' })
+    }
+    if (nominationDoc.voteStarted) {
+      return res.status(400).json({ success: false, error: '投票已开始，无法再提交或修改拉票内容', code: 'VOTE_STARTED' })
+    }
+    const nomineeIds = [...(nominationDoc.nomineeIds || [])]
+    if (nominationDoc.replacementNomineeId) nomineeIds.push(nominationDoc.replacementNomineeId)
+    const isNominee = nomineeIds.includes(req.user?.userId) && req.user?.userId !== nominationDoc.bbbbWinnerId
+    if (!isNominee) {
+      return res.status(403).json({ success: false, error: '只有被提名者可以提交拉票内容', code: 'NOT_NOMINEE' })
+    }
+    const voter = await BBHouseguest.findOne({ id: req.user?.userId })
+    if (!voter) {
+      return res.status(404).json({ success: false, error: '用户不存在', code: 'NOT_FOUND' })
+    }
+    const entry = {
+      playerId: voter.id,
+      playerName: voter.name || '',
+      content,
+      submittedAt: new Date().toISOString()
+    }
+    const campaigns = Array.isArray(nominationDoc.campaigns) ? [...nominationDoc.campaigns] : []
+    const idx = campaigns.findIndex(c => c.playerId === voter.id)
+    if (idx >= 0) campaigns[idx] = entry
+    else campaigns.push(entry)
+    await nomCol.updateOne(
+      { gameId: 'bigbrother', roundId },
+      { $set: { campaigns, updatedAt: new Date().toISOString() } }
+    )
+    res.json({ success: true, data: entry })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '提交拉票内容失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /start-vote - 管理员开始投票：公开所有拉票内容并开放投票
+router.post('/start-vote', auth, requireAdmin, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    if (season.currentStage !== 'eviction_vote') {
+      return res.status(400).json({ success: false, error: '当前不是淘汰投票阶段，无法开始投票', code: 'WRONG_STAGE' })
+    }
+    const roundId = `round-${season.currentRound}`
+    const { getCollection } = require('../../../config/db')
+    const nomCol = getCollection('BBNomination')
+    const nominationDoc = await nomCol.findOne({ gameId: 'bigbrother', roundId })
+    if (!nominationDoc) {
+      return res.status(400).json({ success: false, error: '本轮提名不存在，无法开始投票', code: 'NO_NOMINATION' })
+    }
+    const nowIso = new Date().toISOString()
+    if (!nominationDoc.voteStarted) {
+      await nomCol.updateOne(
+        { gameId: 'bigbrother', roundId },
+        { $set: { voteStarted: true, voteStartedAt: nowIso, updatedAt: nowIso } }
+      )
+    }
+    // 开始投票时确保投票未被锁定
+    if (season.votesLocked) {
+      season.votesLocked = false
+      season.updatedAt = nowIso
+      await season.save()
+    }
+    const updated = await nomCol.findOne({ gameId: 'bigbrother', roundId })
+    broadcastBBGame('bb:eviction-vote-start', {
+      roundId,
+      voteStarted: true,
+      campaigns: updated?.campaigns || []
+    })
+    res.json({
+      success: true,
+      data: {
+        voteStarted: true,
+        voteStartedAt: updated?.voteStartedAt || nowIso,
+        campaigns: updated?.campaigns || []
+      }
+    })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '开始投票失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // POST /vote - 投票（仅在 eviction_vote 阶段可操作，HOH 仅在平票时可投票，管理员可代投）
 router.post('/vote', async (req, res) => {
   try {
@@ -62,6 +185,9 @@ router.post('/vote', async (req, res) => {
     // 校验投票目标是否在提名名单上
     const nomCol = getCollection('BBNomination')
     const nominationDoc = await nomCol.findOne({ gameId: 'bigbrother', roundId })
+    if (!nominationDoc?.voteStarted) {
+      return res.status(400).json({ success: false, error: '投票尚未开始，请等待管理员开始投票', code: 'VOTE_NOT_STARTED' })
+    }
     const validTargetIds = nominationDoc?.nomineeIds || []
     if (!validTargetIds.includes(targetId)) {
       return res.status(400).json({ success: false, error: '投票目标不在提名名单上', code: 'INVALID_TARGET' })

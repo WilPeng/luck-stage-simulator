@@ -35,11 +35,12 @@ registerGame({
 
   init(participants, pool, options) {
     const imageUrl = (options && options.imageUrl) || ''
+    // 所有选手共享同一套打乱顺序，保证开始前状态完全一致（同一道题）
+    let baseOrder = identity()
+    do { baseOrder = shuffle(identity()) } while (isSolved(baseOrder))
     const playerStates = {}
     for (const p of participants) {
-      let order = identity()
-      do { order = shuffle(identity()) } while (isSolved(order))
-      playerStates[p.playerId] = { order, cooldownUntil: 0, done: false, finishTime: null }
+      playerStates[p.playerId] = { order: [...baseOrder], cooldownUntil: 0, done: false, finishTime: null }
     }
     return { playerStates, status: 'ready', startTime: null, size: SIZE, imageUrl }
   },

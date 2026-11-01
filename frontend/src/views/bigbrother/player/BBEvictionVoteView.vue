@@ -14,6 +14,20 @@
     </div>
 
     <template v-else-if="isCurrentRound">
+      <!-- 投票开始后：向所有选手展示被提名人的拉票内容 -->
+      <div v-if="campaignData.voteStarted && campaignData.campaigns.length > 0" class="campaign-display">
+        <h3>📣 被提名人拉票</h3>
+        <div class="campaign-display-list">
+          <div v-for="c in campaignData.campaigns" :key="c.playerId" class="campaign-display-item">
+            <div class="campaign-display-head">
+              <BBAvatar :name="c.playerName" :avatar="avatarMap[c.playerId] || null" size="sm" />
+              <span class="campaign-display-name">{{ c.playerName }}</span>
+            </div>
+            <div class="campaign-display-text">{{ c.content }}</div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="hasVoted" class="voted-card">
         <div class="voted-icon">🗳️</div>
         <div class="voted-info">
@@ -22,11 +36,44 @@
         </div>
       </div>
 
-      <div v-if="isHoh && !hasVoted" class="hoh-vote-note">
+      <div v-if="isHoh && !hasVoted && campaignData.voteStarted" class="hoh-vote-note">
         👑 你是本周的 HOH，请正常投票。你的投票仅在出现平票时作为最终裁决使用，不影响常规计票。
       </div>
 
-      <div v-if="isNominee && seasonStore.currentStage === 'eviction_vote'" class="nominee-waiting-card">
+      <!-- 投票开始前：被提名人撰写拉票内容 -->
+      <div v-if="isNominee && seasonStore.currentStage === 'eviction_vote' && !campaignData.voteStarted" class="campaign-form-card">
+        <div class="campaign-form-title">📣 拉票时间</div>
+        <div class="campaign-form-desc">
+          你本轮被提名。在管理员开始投票前，你可以填写拉票内容并提交，管理员会看到两位被提名人的内容。管理员开始投票后，所有选手都能看到你的拉票内容，并开始投票。
+        </div>
+        <textarea
+          v-model="campaignInput"
+          class="campaign-textarea"
+          rows="5"
+          maxlength="1000"
+          placeholder="写下你的拉票内容，向其他选手争取支持..."
+        ></textarea>
+        <div class="campaign-form-footer">
+          <span class="campaign-char-count">{{ campaignInput.length }} / 1000</span>
+          <button
+            class="bb-btn bb-btn-primary"
+            :disabled="!campaignInput.trim() || campaignSubmitting"
+            @click="submitCampaign"
+          >{{ campaignSubmitting ? '提交中...' : (myCampaign ? '更新拉票内容' : '确认提交') }}</button>
+        </div>
+        <div v-if="myCampaign" class="campaign-submitted-note">
+          ✅ 已提交（{{ formatTime(myCampaign.submittedAt) }}），管理员开始投票前可以修改
+        </div>
+      </div>
+
+      <!-- 投票开始前：非被提名人等待拉票环节结束 -->
+      <div v-if="!isNominee && seasonStore.currentStage === 'eviction_vote' && !campaignData.voteStarted" class="campaign-waiting-card">
+        <div class="nominee-waiting-icon">📣</div>
+        <div class="nominee-waiting-title">拉票环节进行中</div>
+        <div class="nominee-waiting-desc">被提名人正在撰写拉票内容，管理员开始投票后即可查看拉票内容并投票。</div>
+      </div>
+
+      <div v-if="isNominee && seasonStore.currentStage === 'eviction_vote' && campaignData.voteStarted" class="nominee-waiting-card">
         <div class="nominee-waiting-icon">⏳</div>
         <div class="nominee-waiting-title">你本轮是被提名者，等待其他玩家投票</div>
         <div class="nominee-waiting-desc">作为被提名人，你无法参与本轮淘汰投票。结果将在投票结束后公布。</div>
@@ -48,7 +95,7 @@
         <div class="nominee-waiting-desc">管理员即将宣布本轮淘汰结果。</div>
       </div>
 
-      <div v-if="nomination && !hasVoted && !isNominee && seasonStore.currentStage === 'eviction_vote'" class="vote-section">
+      <div v-if="nomination && !hasVoted && !isNominee && seasonStore.currentStage === 'eviction_vote' && campaignData.voteStarted" class="vote-section">
         <h3>选择你要淘汰的对象</h3>
         <div class="vote-options">
           <div v-for="(name, i) in voteOptions" :key="i" class="vote-option"
@@ -81,7 +128,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetCurrentNomination, bbGetNominationHistory, bbCastVote, bbGetMyVote, bbGetCurrentHoh, bbGetActiveHouseguests } from '../../../services/bbApi'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
+import { bbGetCurrentNomination, bbGetNominationHistory, bbCastVote, bbGetMyVote, bbGetCurrentHoh, bbGetActiveHouseguests, bbGetEvictionCampaign, bbSubmitEvictionCampaign } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBNomination, BBEvictionVote } from '../../../types/bigbrother'
 
@@ -100,6 +148,14 @@ const currentHoh = ref<any>(null)
 const selectedVote = ref<string>('')
 const loading = ref(true)
 const avatarMap = ref<Record<string, string | null>>({})
+const campaignData = ref<{ voteStarted: boolean; campaigns: any[] }>({ voteStarted: false, campaigns: [] })
+const campaignInput = ref('')
+const campaignSubmitting = ref(false)
+
+const myCampaign = computed(() => {
+  if (!authStore.currentUser?.id) return null
+  return campaignData.value.campaigns.find(c => c.playerId === authStore.currentUser?.id) || null
+})
 
 const hasVoted = computed(() => !!myVote.value)
 const isHoh = computed(() => currentHoh.value?.winnerId === authStore.currentUser?.id)
@@ -140,7 +196,30 @@ async function castVote() {
   }
 }
 
-onMounted(async () => {
+async function submitCampaign() {
+  const content = campaignInput.value.trim()
+  if (!content || campaignSubmitting.value) return
+  campaignSubmitting.value = true
+  try {
+    const entry = await bbSubmitEvictionCampaign(content)
+    const others = campaignData.value.campaigns.filter(c => c.playerId !== entry.playerId)
+    campaignData.value = {
+      voteStarted: campaignData.value.voteStarted,
+      campaigns: [...others, entry]
+    }
+    alert('拉票内容已提交！')
+  } catch (e: any) {
+    alert(e?.message || '提交失败')
+  } finally {
+    campaignSubmitting.value = false
+  }
+}
+
+function formatTime(t: string) {
+  return t ? new Date(t).toLocaleString('zh-CN') : ''
+}
+
+async function fetchData() {
   // 加载提名数据（当前轮次用 /current 接口，历史轮次用 history 接口）
   if (isCurrentRound.value) {
     try { nomination.value = await bbGetCurrentNomination() } catch {}
@@ -154,6 +233,16 @@ onMounted(async () => {
   if (isCurrentRound.value) {
     try { currentHoh.value = await bbGetCurrentHoh() } catch {}
     try { myVote.value = await bbGetMyVote() } catch {}
+    try {
+      const campaign = await bbGetEvictionCampaign()
+      campaignData.value = {
+        voteStarted: !!campaign.voteStarted,
+        campaigns: campaign.campaigns || []
+      }
+      // 首次加载时回填自己已提交的内容；正在编辑时不要覆盖
+      const mine = campaignData.value.campaigns.find(c => c.playerId === authStore.currentUser?.id)
+      if (mine && !campaignInput.value) campaignInput.value = mine.content
+    } catch {}
   }
   try {
     const list = await bbGetActiveHouseguests()
@@ -162,7 +251,10 @@ onMounted(async () => {
     avatarMap.value = m
   } catch {}
   loading.value = false
-})
+}
+
+useBbRefresh(fetchData)
+onMounted(fetchData)
 </script>
 
 <style scoped>
@@ -206,4 +298,21 @@ onMounted(async () => {
 .nominee-list-preview { margin-top: 20px; padding-top: 16px; border-top: 1px solid #ffffff10; text-align: left; }
 .nominee-list-label { font-size: 13px; color: #8f83b8; margin-bottom: 10px; }
 .nominee-chips { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.campaign-form-card { background: linear-gradient(135deg, #1a0f2e, #2a1a0f); border: 1px solid #e6c98855; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+.campaign-form-title { font-size: 18px; font-weight: 600; color: #e6c988; margin-bottom: 10px; }
+.campaign-form-desc { font-size: 13px; color: #a99bd0; line-height: 1.7; margin-bottom: 14px; }
+.campaign-textarea { width: 100%; box-sizing: border-box; background: #1b1130; border: 1px solid #4a3d6e; border-radius: 8px; color: #ece7fb; font-size: 14px; line-height: 1.6; padding: 12px; resize: vertical; min-height: 120px; outline: none; font-family: inherit; }
+.campaign-textarea:focus { border-color: #e6c988; }
+.campaign-form-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; gap: 12px; }
+.campaign-char-count { font-size: 12px; color: #6b5f92; }
+.campaign-submitted-note { margin-top: 12px; font-size: 12px; color: #4ade80; }
+.campaign-waiting-card { background: linear-gradient(135deg, #1a0f2e, #1e1636); border: 1px solid #e6c98844; border-radius: 12px; padding: 28px 24px; margin-bottom: 20px; text-align: center; }
+.campaign-waiting-card .nominee-waiting-title { color: #e6c988; }
+.campaign-display { background: #1b1130; border: 1px solid #e6c98833; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.campaign-display h3 { margin: 0 0 14px; font-size: 16px; color: #e6c988; }
+.campaign-display-list { display: flex; flex-direction: column; gap: 12px; }
+.campaign-display-item { background: #2a1a4a; border: 1px solid #ffffff10; border-radius: 8px; padding: 14px 16px; }
+.campaign-display-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.campaign-display-name { font-size: 14px; font-weight: 600; color: #ece7fb; }
+.campaign-display-text { font-size: 14px; color: #cfc4ea; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
 </style>

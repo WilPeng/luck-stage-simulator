@@ -54,7 +54,7 @@
       </div>
 
       <!-- 管理员评判模式提示 -->
-      <div v-if="isAdminJudge" class="judge-banner">📝 本题由管理员评判，提交后请等待结果</div>
+      <div v-if="isAdminJudge" class="judge-banner">📝 有明确答案的题目会自动判定；其余提交由管理员评判</div>
 
       <!-- 全部一起提交模式 -->
       <template v-if="isBatch">
@@ -284,7 +284,9 @@ function buildFeedback(result: any) {
   if (result.submitted) {
     let text = '已提交'
     if (isAdminJudge.value) {
-      text = '已提交，等待管理员评判'
+      text = result.autoGradedCount
+        ? '已提交，部分题目已自动判定，其余等待管理员评判'
+        : '已提交，等待管理员评判'
     } else if (result.correctCount !== undefined) {
       text = `已提交，当前答对 ${result.correctCount} 题`
     }
@@ -296,10 +298,11 @@ function buildFeedback(result: any) {
     return
   }
   // 错误（不透露正确答案）
-  const parts: string[] = ['❌ 错误']
+  const parts: string[] = ['❌ 答案错误，请重新检查']
   let detail = ''
   if (result.gradedCount !== undefined) {
     detail = `本次答对 ${result.gradedCorrect}/${result.gradedCount} 题`
+    if (result.pendingManual) detail += '，其余提交等待管理员评判'
   } else if (result.correctCount !== undefined) {
     detail = `当前答对 ${result.correctCount} 题`
   }

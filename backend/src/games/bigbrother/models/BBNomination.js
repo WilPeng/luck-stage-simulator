@@ -13,6 +13,11 @@ class BBNomination extends BaseModel {
     this.replacementNomineeName = data?.replacementNomineeName || ''
     this.bbbbWinnerId = data?.bbbbWinnerId || null   // BBBB 胜者（安全，不进入淘汰投票）
     this.bbbbWinnerName = data?.bbbbWinnerName || ''
+    // 淘汰投票前的拉票内容：[{ playerId, playerName, content, submittedAt }]
+    this.campaigns = data?.campaigns || []
+    // 管理员是否已开始投票（开始前被提名人可提交拉票，开始后所有人可见并可投票）
+    this.voteStarted = data?.voteStarted ?? false
+    this.voteStartedAt = data?.voteStartedAt || null
     // 钥匙仪式：{ order:[{playerId,playerName}], drawnCount, nomineeCount, active }
     this.keyCeremony = data?.keyCeremony || null
     this.vetoUsed = data?.vetoUsed || false

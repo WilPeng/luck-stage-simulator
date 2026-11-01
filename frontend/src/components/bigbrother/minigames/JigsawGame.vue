@@ -19,7 +19,7 @@
 
     <div v-else class="game-playing">
       <div class="game-header">
-        <span>正确 {{ placedCount }} / {{ size * size }}</span>
+        <span>还原拼图</span>
         <span v-if="selected !== null" class="hint">已选 #{{ selected + 1 }}，点击另一块交换</span>
       </div>
 
@@ -29,7 +29,7 @@
             v-for="(piece, pos) in order"
             :key="pos"
             class="cell"
-            :class="{ selected: selected === pos, correct: piece === pos }"
+            :class="{ selected: selected === pos }"
             :style="cellStyle(piece)"
             @click="onCellClick(pos)"
           >
@@ -70,7 +70,6 @@ let coolTimer: ReturnType<typeof setInterval> | null = null
 
 const gameStarted = computed(() => (gameState.value as any)?.started === true)
 const mine = computed<any>(() => gameState.value || {})
-const placedCount = computed(() => order.value.filter((v, i) => v === i).length)
 
 const IMG = computed(() => (imageUrl.value ? `url(${toAbsolute(imageUrl.value)})` : 'none'))
 const boardStyle = computed(() => ({ backgroundImage: IMG.value }))
@@ -159,7 +158,6 @@ p { color: #8f83b8; font-size: 14px; }
 .board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; width: min(420px, 82vw); aspect-ratio: 1/1; background: #000; border-radius: 8px; overflow: hidden; }
 .cell { position: relative; aspect-ratio: 1/1; background-repeat: no-repeat; cursor: pointer; outline: 0 solid #b39bff; transition: outline-width 0.1s; display: flex; align-items: center; justify-content: center; }
 .cell.selected { outline: 3px solid #e6c988; outline-offset: -3px; z-index: 2; }
-.cell.correct { box-shadow: inset 0 0 0 1px #b39bff55; }
 .cell-num { color: #ffffffcc; font-weight: 700; font-size: 18px; }
 .cooldown-panel { position: absolute; inset: 0; background: #000000cc; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .cool-icon { font-size: 52px; }

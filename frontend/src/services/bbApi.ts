@@ -1,7 +1,7 @@
 import type {
   BBSeason, BBSeasonProgress, BBMenuData, BBHouseguest,
   BBHouseguestListResponse, BBHouseguestStats, BBHohRecord,
-  BBNomination, BBVetoRecord, BBEvictionVote, BBEviction,
+  BBNomination, BBElectionCampaign, BBVetoRecord, BBEvictionVote, BBEviction,
   BBChatMessage, BBVoteResult, BBStageType,
   BBTwistRoundConfig, BBTwistDef, BBRoundConfig,
   MinigameDef, MinigameRoom, MinigameProgress, BBSettlement, BBEndgameStatus,
@@ -497,6 +497,25 @@ export async function bbGetVetoPickable(): Promise<{ canPick: boolean; role?: st
 // ===== 淘汰投票 =====
 export async function bbGetVotes(): Promise<BBVoteResult> {
   return doRequest<BBVoteResult>('/eviction/votes')
+}
+
+// 拉票内容：投票开始前仅本人/管理员可见，开始后所有人可见
+export async function bbGetEvictionCampaign(): Promise<{ voteStarted: boolean; campaigns: BBElectionCampaign[] }> {
+  return doRequest('/eviction/campaign')
+}
+
+export async function bbSubmitEvictionCampaign(content: string): Promise<BBElectionCampaign> {
+  return doRequest('/eviction/campaign', {
+    method: 'POST',
+    body: JSON.stringify({ content })
+  })
+}
+
+export async function bbStartEvictionVote(): Promise<{ voteStarted: boolean; voteStartedAt: string; campaigns: BBElectionCampaign[] }> {
+  return doRequest('/eviction/start-vote', {
+    method: 'POST',
+    body: JSON.stringify({})
+  })
 }
 
 export async function bbCastVote(targetId: string, targetName: string, voterId?: string, voterName?: string): Promise<BBEvictionVote> {

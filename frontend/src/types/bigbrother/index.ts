@@ -356,6 +356,13 @@ export interface BBHohRecord {
   updatedAt: string
 }
 
+export interface BBElectionCampaign {
+  playerId: string
+  playerName: string
+  content: string
+  submittedAt: string
+}
+
 export interface BBNomination {
   id: string
   roundId: string
@@ -366,6 +373,9 @@ export interface BBNomination {
   replacementNomineeId: string | null
   replacementNomineeName: string
   vetoUsed: boolean
+  campaigns?: BBElectionCampaign[]
+  voteStarted?: boolean
+  voteStartedAt?: string | null
   gameId: string
   createdAt: string
   updatedAt: string

@@ -20,6 +20,38 @@
       </div>
     </div>
 
+    <!-- 拉票环节 -->
+    <div v-if="nomination" class="campaign-section">
+      <div class="campaign-header">
+        <h3>📣 拉票环节</h3>
+        <span class="campaign-status" :class="campaignData.voteStarted ? 'open' : 'pending'">
+          {{ campaignData.voteStarted ? '投票已开始' : '等待开始投票' }}
+        </span>
+      </div>
+      <div class="campaign-grid">
+        <div v-for="n in campaignNominees" :key="n.id" class="campaign-card">
+          <div class="campaign-name-row">
+            <BBAvatar :name="n.name" :avatar="null" size="sm" />
+            <span class="campaign-name">{{ n.name }}</span>
+            <span v-if="campaignOf(n.id)" class="campaign-submitted-tag">已提交</span>
+            <span v-else class="campaign-pending-tag">未提交</span>
+          </div>
+          <div v-if="campaignOf(n.id)" class="campaign-content">{{ campaignOf(n.id).content }}</div>
+          <div v-else class="campaign-empty">尚未提交拉票内容</div>
+          <div v-if="campaignOf(n.id)" class="campaign-time">
+            提交于 {{ formatTime(campaignOf(n.id).submittedAt) }}
+          </div>
+        </div>
+      </div>
+      <div class="campaign-actions">
+        <span class="campaign-progress">已提交 {{ submittedCampaignCount }} / {{ campaignNominees.length }}</span>
+        <button v-if="!campaignData.voteStarted" class="bb-btn bb-btn-gold" @click="startVoting">
+          ▶️ 开始投票
+        </button>
+        <span v-else class="campaign-open-hint">拉票内容已展示给所有选手，投票已开放</span>
+      </div>
+    </div>
+
     <!-- 实时票数汇总 -->
     <div v-if="nomineeOptions.length > 0" class="tally-section">
       <div class="tally-header">
@@ -48,6 +80,9 @@
     <!-- 投票管理 -->
     <div v-if="activeHouseguests.length > 0 && nomination" class="vote-manage-section">
       <h3>🗳️ 为房客投票</h3>
+      <div v-if="!campaignData.voteStarted" class="vote-locked-hint">
+        投票尚未开始，请先在上方点击「开始投票」。开始后被提名人提交的拉票内容会展示给所有选手。
+      </div>
       <div class="vote-grid">
         <div v-for="h in activeHouseguests" :key="h.id" class="vote-row"
           :class="{ voted: getVote(h.id), isHoh: h.id === currentHohId, isNominee: isNominee(h.id) }">
@@ -63,7 +98,7 @@
           </div>
           <div class="voter-action">
             <select v-model="voteSelections[h.id]" class="bb-select-sm"
-              :disabled="isNominee(h.id)"
+              :disabled="isNominee(h.id) || !campaignData.voteStarted"
               @change="castVoteFor(h.id, h.name, voteSelections[h.id])">
               <option value="">{{ isNominee(h.id) ? '被提名者不可投票' : '选择投票对象' }}</option>
               <option v-for="n in nomineeOptions" :key="n.id" :value="n.id"
@@ -101,7 +136,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
-import { bbGetVotes, bbCastVote, bbGetActiveHouseguests, bbGetCurrentNomination, bbGetCurrentHoh, bbGetHouseguestStats } from '../../../services/bbApi'
+import { bbGetVotes, bbCastVote, bbGetActiveHouseguests, bbGetCurrentNomination, bbGetCurrentHoh, bbGetHouseguestStats, bbGetEvictionCampaign, bbStartEvictionVote } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 
 const voteData = ref<{ votes: any[]; total: number }>({ votes: [], total: 0 })
@@ -111,8 +146,35 @@ const activeHouseguests = ref<{ id: string; name: string }[]>([])
 const nomination = ref<any>(null)
 const currentHoh = ref<any>(null)
 const voteSelections = ref<Record<string, string>>({})
+const campaignData = ref<{ voteStarted: boolean; campaigns: any[] }>({ voteStarted: false, campaigns: [] })
 
 const currentHohId = computed(() => currentHoh.value?.winnerId || '')
+
+const campaignNominees = computed(() => {
+  if (!nomination.value) return []
+  const ids = [...(nomination.value.nomineeIds || [])]
+  const names = [...(nomination.value.nomineeNames || [])]
+  if (nomination.value.replacementNomineeId) {
+    ids.push(nomination.value.replacementNomineeId)
+    names.push(nomination.value.replacementNomineeName || '')
+  }
+  const seen = new Set<string>()
+  return ids
+    .map((id: string, i: number) => ({ id, name: names[i] || '' }))
+    .filter((n: any) => {
+      if (!n.id || seen.has(n.id)) return false
+      seen.add(n.id)
+      return true
+    })
+})
+
+function campaignOf(playerId: string) {
+  return campaignData.value.campaigns.find((c: any) => c.playerId === playerId) || null
+}
+
+const submittedCampaignCount = computed(() => {
+  return campaignNominees.value.filter((n: any) => !!campaignOf(n.id)).length
+})
 
 const nomineeOptions = computed(() => {
   const ids = nomination.value?.nomineeIds || []
@@ -158,6 +220,11 @@ function getVote(voterId: string): string {
 
 async function castVoteFor(voterId: string, voterName: string, targetId: string) {
   if (!targetId) return
+  if (!campaignData.value.voteStarted) {
+    alert('投票尚未开始，请先点击「开始投票」')
+    voteSelections.value[voterId] = ''
+    return
+  }
   try {
     const target = nomineeOptions.value.find((n: any) => n.id === targetId)
     await bbCastVote(targetId, target?.name || '', voterId, voterName)
@@ -169,12 +236,39 @@ async function castVoteFor(voterId: string, voterName: string, targetId: string)
   }
 }
 
+async function startVoting() {
+  if (campaignData.value.voteStarted) return
+  const missing = campaignNominees.value.filter((n: any) => !campaignOf(n.id))
+  const msg = missing.length
+    ? `还有 ${missing.length} 位被提名人未提交拉票内容（${missing.map((n: any) => n.name).join('、')}），确定现在开始投票吗？`
+    : '确定开始投票吗？开始后拉票内容将展示给所有选手，并开放投票。'
+  if (!confirm(msg)) return
+  try {
+    const result = await bbStartEvictionVote()
+    campaignData.value = {
+      voteStarted: true,
+      campaigns: result?.campaigns || campaignData.value.campaigns
+    }
+    try { nomination.value = await bbGetCurrentNomination() } catch {}
+    alert('投票已开始！')
+  } catch (e: any) {
+    alert(e?.message || '开始投票失败')
+  }
+}
+
 async function fetchData() {
   try { voteData.value = await bbGetVotes() } catch {}
   try { const stats = await bbGetHouseguestStats(); activeCount.value = stats.active } catch {}
   try { activeHouseguests.value = await bbGetActiveHouseguests() } catch {}
   try { nomination.value = await bbGetCurrentNomination() } catch {}
   try { currentHoh.value = await bbGetCurrentHoh() } catch {}
+  try {
+    const campaign = await bbGetEvictionCampaign()
+    campaignData.value = {
+      voteStarted: !!campaign.voteStarted,
+      campaigns: campaign.campaigns || []
+    }
+  } catch {}
   for (const h of activeHouseguests.value) {
     voteSelections.value[h.id] = ''
   }
@@ -242,4 +336,25 @@ onMounted(fetchData)
 .tally-count { font-size: 20px; font-weight: 700; color: #ff6b6b; min-width: 32px; text-align: right; flex-shrink: 0; }
 .tally-card.leading .tally-count { color: #ff4444; text-shadow: 0 0 10px #ff444444; }
 .tally-empty { text-align: center; color: #5c5182; font-size: 13px; padding: 16px; }
+.campaign-section { background: #1b1130; border: 1px solid #e6c98833; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+.campaign-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.campaign-header h3 { margin: 0; font-size: 16px; color: #ece7fb; }
+.campaign-status { font-size: 12px; padding: 2px 10px; border-radius: 10px; border: 1px solid; }
+.campaign-status.pending { color: #e6c988; background: #e6c98818; border-color: #e6c98844; }
+.campaign-status.open { color: #4ade80; background: #4ade8018; border-color: #4ade8044; }
+.campaign-grid { display: flex; flex-direction: column; gap: 10px; }
+.campaign-card { background: #2a1a4a; border: 1px solid #ffffff10; border-radius: 8px; padding: 14px 16px; }
+.campaign-name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.campaign-name { font-size: 14px; font-weight: 600; color: #ece7fb; }
+.campaign-submitted-tag { font-size: 10px; color: #4ade80; background: #4ade8018; padding: 1px 8px; border-radius: 6px; }
+.campaign-pending-tag { font-size: 10px; color: #8f83b8; background: #ffffff08; padding: 1px 8px; border-radius: 6px; }
+.campaign-content { font-size: 14px; color: #cfc4ea; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.campaign-empty { font-size: 13px; color: #6b5f92; }
+.campaign-time { margin-top: 8px; font-size: 11px; color: #6b5f92; }
+.campaign-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.campaign-progress { font-size: 12px; color: #8f83b8; }
+.campaign-open-hint { font-size: 12px; color: #4ade80; }
+.vote-locked-hint { padding: 10px 14px; background: #e6c98811; border: 1px solid #e6c98833; border-radius: 8px; font-size: 13px; color: #e6c988; margin-bottom: 12px; }
+.bb-btn-gold { border-color: #e6c988; color: #e6c988; }
+.bb-btn-gold:hover { background: #e6c98822; }
 </style>

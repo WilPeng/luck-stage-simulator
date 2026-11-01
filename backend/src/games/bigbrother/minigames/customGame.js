@@ -73,6 +73,14 @@ function createCustomGameHandler(gameDef) {
     return normalize(userAnswer) === normalize(q.correctAnswer)
   }
 
+  // 题目是否设置了明确答案（有答案的题目可自动判定）
+  function hasCorrectAnswer(q) {
+    if (q.qtype === 'number') {
+      return q.correctAnswer !== '' && q.correctAnswer !== null && q.correctAnswer !== undefined && !Number.isNaN(Number(q.correctAnswer))
+    }
+    return !!(q.correctAnswer !== undefined && q.correctAnswer !== null && String(q.correctAnswer).trim())
+  }
+
   function makePlayerState() {
     return {
       questions: gameDef.questions.map(q => ({
@@ -200,7 +208,7 @@ function createCustomGameHandler(gameDef) {
         return { updated: false, finished: false, result: { error: '时间已到' } }
       }
 
-      // ===== 管理员评判模式：仅记录提交，不判定 =====
+      // ===== 管理员评判模式：有明确答案的题目自动判定，其余仅记录提交 =====
       if (isAdminJudge) {
         if (action.type !== 'answer' && action.type !== 'submit_all') return { updated: false }
         const c = canSubmit(ps)
@@ -212,6 +220,38 @@ function createCustomGameHandler(gameDef) {
           ? { [action.questionId]: action.answer }
           : (action.answers || {})
         ps.submissions.push({ answers: payload, submitTime: Date.now() })
+
+        let gradedCorrect = 0
+        let gradedCount = 0
+        let hasManual = false
+        for (const q of ps.questions) {
+          if (!(q.id in payload)) continue
+          if (ps.locked[q.id]) continue
+          if (ps.answers[q.id] && ps.answers[q.id].correct) continue
+          if (!hasCorrectAnswer(q)) { hasManual = true; continue }
+          const userAnswer = String(payload[q.id] == null ? '' : payload[q.id]).trim()
+          const correct = grade(q, userAnswer)
+          if (correct === null) { hasManual = true; continue }
+          ps.answers[q.id] = { userAnswer, correct, points: correct ? q.points : 0, submitTime: Date.now() }
+          gradedCount++
+          if (correct) {
+            gradedCorrect++
+            ps.correctCount++
+            ps.score += q.points
+          } else if (gameDef.lockOnWrong) {
+            ps.locked[q.id] = true
+          }
+        }
+
+        if (gradedCount > 0 && gradedCorrect < gradedCount) {
+          return { updated: true, finished: false, result: { correct: false, gradedCorrect, gradedCount, correctCount: ps.correctCount, pendingManual: hasManual } }
+        }
+        if (gradedCount > 0 && !hasManual) {
+          return { updated: true, finished: false, result: { correct: true, correctCount: ps.correctCount } }
+        }
+        if (gradedCount > 0 && hasManual) {
+          return { updated: true, finished: false, result: { submitted: true, autoGradedCount: gradedCount, correctCount: ps.correctCount } }
+        }
         return { updated: true, finished: false, result: { submitted: true } }
       }
 
