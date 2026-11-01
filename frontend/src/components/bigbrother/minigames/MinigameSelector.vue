@@ -17,6 +17,27 @@
           <span class="cat-tab-label">{{ tab.label }}</span>
         </button>
       </div>
+      <div v-if="folders.length" class="category-tabs folder-tabs">
+        <button
+          class="cat-tab folder-tab"
+          :class="{ active: activeFolderId === null }"
+          @click="activeFolderId = null"
+        >
+          <span class="cat-tab-icon">📁</span>
+          <span class="cat-tab-label">全部文件夹</span>
+        </button>
+        <button
+          v-for="f in folders"
+          :key="f.id"
+          class="cat-tab folder-tab"
+          :class="{ active: activeFolderId === f.id }"
+          @click="activeFolderId = f.id"
+        >
+          <span class="cat-tab-icon">📁</span>
+          <span class="cat-tab-label">{{ f.name }}</span>
+          <span class="folder-count">{{ folderGameCount(f) }}</span>
+        </button>
+      </div>
     </div>
 
     <div v-if="loading" class="loading-state">
@@ -65,8 +86,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { bbGetMinigameList } from '../../../services/bbApi'
-import type { MinigameDef } from '../../../types/bigbrother'
+import { bbGetMinigameList, bbGetGameLibrary } from '../../../services/bbApi'
+import type { MinigameDef, BBGameFolder } from '../../../types/bigbrother'
 
 withDefaults(defineProps<{ selectedId: string | null; showTitle?: boolean }>(), {
   showTitle: true
@@ -74,8 +95,10 @@ withDefaults(defineProps<{ selectedId: string | null; showTitle?: boolean }>(), 
 defineEmits<{ (e: 'select', id: string, game?: MinigameDef): void }>()
 
 const games = ref<MinigameDef[]>([])
+const folders = ref<BBGameFolder[]>([])
 const loading = ref(false)
 const activeCategory = ref('all')
+const activeFolderId = ref<string | null>(null)
 
 const categoryTabs = [
   { key: 'all', icon: '🎲', label: '全部' },
@@ -88,9 +111,28 @@ const categoryTabs = [
 ]
 
 const filteredGames = computed(() => {
-  if (activeCategory.value === 'all') return games.value
-  return games.value.filter(g => g.category === activeCategory.value)
+  let list = games.value
+  if (activeCategory.value !== 'all') {
+    list = list.filter(g => g.category === activeCategory.value)
+  }
+  if (activeFolderId.value) {
+    const folder = folders.value.find(f => f.id === activeFolderId.value)
+    if (folder) {
+      const keys = new Set(folder.games)
+      list = list.filter(g => keys.has(libraryKey(g)))
+    }
+  }
+  return list
 })
+
+function libraryKey(game: MinigameDef): string {
+  return game.category === 'custom' ? String(game.id).replace(/^custom-/, '') : String(game.id)
+}
+
+function folderGameCount(folder: BBGameFolder): number {
+  const keys = new Set(games.value.map(g => libraryKey(g)))
+  return folder.games.filter(k => keys.has(k)).length
+}
 
 function categoryName(cat: string) {
   const map: Record<string, string> = {
@@ -101,7 +143,14 @@ function categoryName(cat: string) {
 
 onMounted(async () => {
   loading.value = true
-  try { games.value = await bbGetMinigameList() } catch {}
+  const [listResult, libraryResult] = await Promise.allSettled([
+    bbGetMinigameList(),
+    bbGetGameLibrary()
+  ])
+  if (listResult.status === 'fulfilled') games.value = listResult.value
+  if (libraryResult.status === 'fulfilled' && Array.isArray(libraryResult.value.folders)) {
+    folders.value = libraryResult.value.folders
+  }
   loading.value = false
 })
 </script>
@@ -172,6 +221,26 @@ onMounted(async () => {
 
 .cat-tab-label {
   line-height: 1;
+}
+
+.folder-tabs {
+  padding-top: 12px;
+  border-top: 1px dashed #ffffff10;
+}
+
+.folder-tab.active {
+  border-color: #e6c98866;
+  background: #e6c98818;
+  color: #e6c988;
+}
+
+.folder-count {
+  font-size: 10px;
+  color: #8f83b8;
+  background: #ffffff10;
+  border-radius: 999px;
+  padding: 0 6px;
+  line-height: 1.5;
 }
 
 .loading-state {

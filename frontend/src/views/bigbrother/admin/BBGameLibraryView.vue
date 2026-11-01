@@ -29,7 +29,7 @@
         v-for="(g, idx) in visibleGames"
         :key="g.key"
         class="game-card"
-        :class="{ disabled: g.isCustom && !g.custom?.enabled, builtin: !g.isCustom }"
+        :class="{ disabled: g.isCustom && !g.custom?.enabled, builtin: !g.isCustom, 'menu-open': openMenuKey === g.key }"
       >
         <div v-if="selectedFolderId === null" class="reorder">
           <button class="reorder-btn" :disabled="idx === 0" title="上移" @click="moveGame(g.key, -1)">↑</button>
@@ -60,7 +60,7 @@
           </div>
 
           <div class="card-footer">
-            <details class="folder-menu">
+            <details class="folder-menu" @toggle="onMenuToggle(g.key, $event)">
               <summary class="folder-menu-btn">文件夹</summary>
               <div class="folder-menu-list">
                 <p v-if="folders.length === 0" class="folder-menu-empty">暂无文件夹</p>
@@ -130,6 +130,7 @@ const builtinGames = ref<MinigameDef[]>([])
 const customGames = ref<BBCustomGameDef[]>([])
 const library = ref<BBGameLibrary>({ id: 'bigbrother', order: [], folders: [] })
 const selectedFolderId = ref<string | null>(null)
+const openMenuKey = ref<string | null>(null)
 const showEditor = ref(false)
 const editingGame = ref<BBCustomGameDef | null>(null)
 
@@ -168,6 +169,12 @@ const visibleGames = computed<LibraryGame[]>(() => {
 
 function foldersOf(gameKey: string): BBGameFolder[] {
   return folders.value.filter(f => f.games.includes(gameKey))
+}
+
+function onMenuToggle(gameKey: string, event: Event) {
+  const open = (event.target as HTMLDetailsElement).open
+  if (open) openMenuKey.value = gameKey
+  else if (openMenuKey.value === gameKey) openMenuKey.value = null
 }
 
 function folderGameCount(folder: BBGameFolder): number {
@@ -329,8 +336,9 @@ onMounted(fetchData)
 
 .empty-state { color: #6b5f92; font-size: 14px; padding: 20px 0; }
 .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
-.game-card { display: flex; align-items: flex-start; gap: 16px; padding: 16px; border: 1px solid #b39bff22; border-radius: 10px; background: #17112a44; transition: all 0.2s; position: relative; }
+.game-card { display: flex; align-items: flex-start; gap: 16px; padding: 16px; border: 1px solid #b39bff22; border-radius: 10px; background: #17112a44; transition: all 0.2s; position: relative; z-index: 1; }
 .game-card:hover { border-color: #b39bff44; background: #17112a66; }
+.game-card.menu-open { z-index: 50; }
 .game-card.builtin { opacity: 0.85; }
 .game-card.disabled { opacity: 0.5; }
 .reorder { position: absolute; top: 34px; right: 10px; display: flex; flex-direction: column; gap: 2px; }
@@ -353,10 +361,11 @@ onMounted(fetchData)
 .custom-badge { background: #4488ff18; color: #4488ff; }
 .card-footer { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
 .folder-menu { position: relative; }
+.folder-menu[open] { z-index: 60; }
 .folder-menu-btn { list-style: none; cursor: pointer; font-size: 12px; padding: 4px 12px; border-radius: 4px; border: 1px solid #e6c98866; color: #e6c988; user-select: none; }
 .folder-menu-btn::-webkit-details-marker { display: none; }
 .folder-menu[open] .folder-menu-btn { background: #e6c98822; }
-.folder-menu-list { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; min-width: 160px; max-height: 220px; overflow-y: auto; padding: 8px; border: 1px solid #b39bff33; border-radius: 8px; background: #1b1130; box-shadow: 0 8px 24px #00000066; }
+.folder-menu-list { position: absolute; top: calc(100% + 6px); left: 0; z-index: 1000; min-width: 160px; max-height: 220px; overflow-y: auto; padding: 8px; border: 1px solid #b39bff33; border-radius: 8px; background: #1b1130; box-shadow: 0 8px 24px #00000066; }
 .folder-menu-item { display: flex; align-items: center; gap: 8px; padding: 5px 6px; font-size: 13px; color: #cdc3ea; cursor: pointer; border-radius: 4px; }
 .folder-menu-item:hover { background: #b39bff15; }
 .folder-menu-empty { margin: 0; padding: 4px 6px; font-size: 12px; color: #6b5f92; }
