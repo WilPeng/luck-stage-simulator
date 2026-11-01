@@ -62,7 +62,10 @@ async function authRequest(path: string, username: string, password: string): Pr
   if (res.ok && json.success !== false) {
     return { token: json.token, user: json.data }
   }
-  throw new Error(json.error || '登录失败')
+  const err = new Error(json.error || '登录失败')
+  ;(err as any).status = res.status
+  ;(err as any).code = json?.code
+  throw err
 }
 
 export async function bbLogin(username: string, password: string): Promise<{ token: string; user: BBHouseguest }> {

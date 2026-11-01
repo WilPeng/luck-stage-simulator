@@ -45,9 +45,9 @@
               fill="url(#goldGrad)" />
           </svg>
         </div>
-        <h1 class="hero-title">Big Brother</h1>
-        <div class="hero-latin"><span class="ln"></span>BIG&nbsp;·&nbsp;BROTHER<span class="ln"></span></div>
-        <div class="hero-tag">入局 · 结盟 · 生存</div>
+        <h1 class="hero-title">萌学园</h1>
+        <div class="hero-latin"><span class="ln"></span>MENG&nbsp;·&nbsp;XUE&nbsp;·&nbsp;YUAN<span class="ln"></span></div>
+        <div class="hero-tag">魔法 · 校园 · 冒险</div>
         <div class="hero-sigils">
           <span class="sigil s-purple"></span>
           <span class="sigil s-blue"></span>
@@ -72,8 +72,8 @@
             </svg>
           </div>
 
-          <h2 class="panel-title">欢迎回到 Big Brother</h2>
-          <div class="panel-sub"><span class="ln"></span>开启你的老大哥之旅<span class="ln"></span></div>
+          <h2 class="panel-title">欢迎回到萌学园</h2>
+          <div class="panel-sub"><span class="ln"></span>开启你的萌学园之旅<span class="ln"></span></div>
 
           <div v-if="error" class="alert err">{{ error }}</div>
           <div v-if="success" class="alert ok">{{ success }}</div>
@@ -83,7 +83,7 @@
               <span class="field-icon">
                 <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-7 2.2-7 5v1h14v-1c0-2.8-3-5-7-5Z"/></svg>
               </span>
-              <input v-model="username" placeholder="账号 / 用户名" autocomplete="username" :disabled="isLoading" />
+              <input v-model="username" placeholder="账号 / 用户名" autocomplete="username" :disabled="isLoading || isCooldown" />
             </div>
 
             <div class="field">
@@ -91,7 +91,7 @@
                 <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2a4 4 0 0 0-4 4v3H6v13h12V9h-2V6a4 4 0 0 0-4-4Zm-2 7V6a2 2 0 1 1 4 0v3h-4Z"/></svg>
               </span>
               <input :type="showPwd ? 'text' : 'password'" v-model="password" placeholder="登录密码"
-                autocomplete="current-password" :disabled="isLoading" />
+                autocomplete="current-password" :disabled="isLoading || isCooldown" />
               <button type="button" class="eye" @click="showPwd = !showPwd" :aria-label="showPwd ? '隐藏密码' : '显示密码'">
                 <svg v-if="!showPwd" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg>
                 <svg v-else viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3 3 21 21l-1.4 1.4L2 4.4 3.3 3ZM12 5c5 0 9 4.5 10 7a13 13 0 0 1-2.6 3.5l-2.2-2.2A5 5 0 0 0 9.8 7.9L7.5 5.6C8.8 5.2 10.3 5 12 5ZM4.6 8.5 6.8 10.7A5 5 0 0 0 13.3 17l1.9 1.9c-1 .3-2.1.4-3.2.4-5 0-9-4.5-10-7 .5-1.3 1.4-2.6 2.6-3.8Z"/></svg>
@@ -105,8 +105,8 @@
               </label>
             </div>
 
-            <button type="submit" class="submit" :disabled="isLoading">
-              <span>{{ isLoading ? '登录中…' : '进入 Big Brother' }}</span>
+            <button type="submit" class="submit" :disabled="isLoading || isCooldown">
+              <span>{{ isLoading ? '登录中…' : isCooldown ? `请等待 ${cooldownLeft}s` : '进入萌学园' }}</span>
               <span class="arrow">→</span>
             </button>
           </form>
@@ -119,7 +119,7 @@
             <span class="chev">›</span>
           </button>
 
-          <div class="footer">© BIG BROTHER · 真人秀模拟系统</div>
+          <div class="footer">© 萌学园 · 真人秀模拟系统</div>
         </div>
       </section>
     </div>
@@ -127,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useBbAuthStore } from '../../stores/bbAuthStore'
 import { useRouter, useRoute } from 'vue-router'
 
@@ -136,6 +136,8 @@ const router = useRouter()
 const route = useRoute()
 
 const SAVED_KEY = 'bigbrother_saved_player'
+const COOLDOWN_KEY = 'bigbrother_login_cooldown_until'
+const COOLDOWN_MS = 5000
 
 const username = ref('')
 const password = ref('')
@@ -144,6 +146,42 @@ const showPwd = ref(false)
 const isLoading = ref(false)
 const error = ref('')
 const success = ref('')
+const cooldownLeft = ref(0)
+const isCooldown = computed(() => cooldownLeft.value > 0)
+
+let cooldownUntil = 0
+let cooldownTimer: number | undefined
+
+function updateCooldown() {
+  cooldownLeft.value = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000))
+  if (cooldownLeft.value === 0) {
+    cooldownUntil = 0
+    if (cooldownTimer) { window.clearInterval(cooldownTimer); cooldownTimer = undefined }
+    try { localStorage.removeItem(COOLDOWN_KEY) } catch {}
+  } else if (error.value.startsWith('密码错误')) {
+    error.value = `密码错误，请 ${cooldownLeft.value} 秒后再试`
+  }
+}
+
+function startCooldown() {
+  cooldownUntil = Date.now() + COOLDOWN_MS
+  try { localStorage.setItem(COOLDOWN_KEY, String(cooldownUntil)) } catch {}
+  updateCooldown()
+  if (!cooldownTimer) cooldownTimer = window.setInterval(updateCooldown, 200)
+}
+
+function restoreCooldown() {
+  try {
+    const until = Number(localStorage.getItem(COOLDOWN_KEY) || 0)
+    if (until > Date.now()) {
+      cooldownUntil = until
+      updateCooldown()
+      cooldownTimer = window.setInterval(updateCooldown, 200)
+    } else {
+      localStorage.removeItem(COOLDOWN_KEY)
+    }
+  } catch {}
+}
 
 function loadSaved() {
   try {
@@ -172,6 +210,11 @@ function goAdminLogin() {
 }
 
 async function handleLogin() {
+  if (isCooldown.value) {
+    error.value = `密码错误，请 ${cooldownLeft.value} 秒后再试`
+    success.value = ''
+    return
+  }
   if (!username.value.trim() || !password.value) {
     error.value = '请输入账号和密码'
     success.value = ''
@@ -191,18 +234,28 @@ async function handleLogin() {
     await new Promise((resolve) => setTimeout(resolve, 400))
     await router.replace((route.query.redirect as string) || '/games/bigbrother/player/home')
   } catch (err: any) {
-    error.value = err.message || '登录失败，请稍后重试'
+    if (err?.status === 401) {
+      startCooldown()
+      error.value = `密码错误，请 ${cooldownLeft.value} 秒后再试`
+    } else {
+      error.value = err.message || '登录失败，请稍后重试'
+    }
   } finally {
     isLoading.value = false
   }
 }
 
 onMounted(() => {
+  restoreCooldown()
   const saved = loadSaved()
   if (!saved) return
   username.value = saved.username || ''
   rememberMe.value = saved.remember !== false
   if (saved.password) password.value = saved.password
+})
+
+onBeforeUnmount(() => {
+  if (cooldownTimer) window.clearInterval(cooldownTimer)
 })
 </script>
 
