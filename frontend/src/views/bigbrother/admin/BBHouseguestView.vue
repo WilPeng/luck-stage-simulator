@@ -14,6 +14,11 @@
 
     <div class="toolbar">
       <input v-model="searchKeyword" class="bb-input" placeholder="搜索房客名称/账号..." @input="onSearch" />
+      <select v-model="roleFilter" class="bb-select" @change="onRoleChange">
+        <option value="">全部身份</option>
+        <option value="houseguest">房客</option>
+        <option value="admin">管理员</option>
+      </select>
       <select v-model="statusFilter" class="bb-select" @change="fetchData">
         <option value="">全部状态</option>
         <option value="active">活跃</option>
@@ -47,7 +52,8 @@
             <td><code class="code-tag">{{ h.username }}</code></td>
             <td><code class="code-tag">{{ h.password }}</code></td>
             <td>
-              <span class="status-tag" :class="h.role === 'admin' ? 'admin' : h.status">
+              <span v-if="h.isSuperAdmin" class="status-tag super">总管理员</span>
+              <span v-else class="status-tag" :class="h.role === 'admin' ? 'admin' : h.status">
                 {{ h.role === 'admin' ? '管理员' : statusText(h.status) }}
               </span>
             </td>
@@ -60,7 +66,8 @@
             <td>{{ h.hasLogin ? '是' : '否' }}</td>
             <td class="actions">
               <button class="bb-btn bb-btn-xs" @click="editHouseguest(h)">编辑</button>
-              <button v-if="!(h.role === 'admin' && h.username === 'admin')" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
+              <button v-if="h.role === 'admin' && !h.isSuperAdmin" class="bb-btn bb-btn-xs" @click="setSuperAdmin(h)">设为总管理员</button>
+              <button v-if="!(h.role === 'admin' && h.username === 'admin') && !h.isSuperAdmin" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
             </td>
           </tr>
           <tr v-if="list.length === 0"><td colspan="9" class="empty-cell">暂无数据</td></tr>
@@ -97,12 +104,21 @@
             </div>
             <div class="form-group">
               <label>身份</label>
-              <select v-model="formRole" class="bb-select">
+              <select v-model="formRole" class="bb-select" :disabled="editingSuperAdmin">
                 <option value="houseguest">房客</option>
                 <option value="admin">管理员</option>
               </select>
             </div>
             <div v-if="formRole === 'admin'" class="form-group">
+              <label class="checkbox-row">
+                <input type="checkbox" v-model="formIsSuperAdmin" :disabled="editingSuperAdmin" />
+                <span>设为总管理员（唯一，拥有全部权限，不可删除）</span>
+              </label>
+              <p v-if="formIsSuperAdmin" class="form-hint">
+                当前为总管理员。如需更换，请在其他管理员上点击「设为总管理员」。
+              </p>
+            </div>
+            <div v-if="formRole === 'admin' && !formIsSuperAdmin" class="form-group">
               <label>权限（不勾选 = 拥有全部权限）</label>
               <div class="perm-grid">
                 <label v-for="p in PERMISSIONS" :key="p.key" class="checkbox-row">
@@ -162,12 +178,14 @@ const page = ref(1)
 const totalPages = ref(1)
 const searchKeyword = ref('')
 const statusFilter = ref('')
+const roleFilter = ref('')
 const showCreateModal = ref(false)
 const editingId = ref<string | null>(null)
 const formName = ref('')
 const formUsername = ref('')
 const formPassword = ref('')
 const formRole = ref<'houseguest' | 'admin'>('houseguest')
+const formIsSuperAdmin = ref(false)
 const formPermissions = ref<string[]>([])
 const formStatus = ref('active')
 const formIsHaveNot = ref(false)
@@ -189,6 +207,11 @@ const PERMISSIONS = [
   { key: 'minigame', label: '小游戏实况/复盘' },
   { key: 'logs', label: '操作日志' }
 ]
+
+const editingSuperAdmin = computed(() => {
+  const h = list.value.find(x => x.id === editingId.value)
+  return !!h?.isSuperAdmin
+})
 
 const selectableList = computed(() => list.value.filter(h => h.role !== 'admin'))
 const allSelected = computed(() => selectableList.value.length > 0 && selectableList.value.every(h => selectedIds.value.includes(h.id)))
@@ -216,6 +239,7 @@ async function fetchData() {
     const result = await bbGetHouseguests({
       keyword: searchKeyword.value,
       status: statusFilter.value || undefined,
+      role: roleFilter.value || undefined,
       page: page.value,
       pageSize: 20
     })
@@ -227,6 +251,7 @@ async function fetchData() {
 }
 
 function onSearch() { page.value = 1; fetchData() }
+function onRoleChange() { page.value = 1; fetchData() }
 function changePage(p: number) { page.value = p; fetchData() }
 
 function statusText(status: string): string {
@@ -240,11 +265,20 @@ function editHouseguest(h: BBHouseguest) {
   formUsername.value = h.username
   formPassword.value = h.password || ''
   formRole.value = h.role === 'admin' ? 'admin' : 'houseguest'
+  formIsSuperAdmin.value = !!h.isSuperAdmin
   formPermissions.value = Array.isArray(h.permissions) ? [...h.permissions] : []
   formStatus.value = h.status
   formIsHaveNot.value = !!h.isHaveNot
   editingAvatar.value = h.avatar
   showCreateModal.value = true
+}
+
+async function setSuperAdmin(h: BBHouseguest) {
+  if (!confirm(`确定将 ${h.name} 设为总管理员吗？当前总管理员将降为普通管理员。`)) return
+  try {
+    await bbUpdateHouseguest(h.id, { role: 'admin', isSuperAdmin: true })
+    await fetchData()
+  } catch (e: any) { alert(e.message || '设置失败') }
 }
 
 async function toggleHaveNot(h: BBHouseguest) {
@@ -282,7 +316,8 @@ async function saveHouseguest() {
       username: formUsername.value,
       password: formPassword.value,
       role: formRole.value,
-      permissions: formRole.value === 'admin' ? formPermissions.value : []
+      isSuperAdmin: formRole.value === 'admin' ? formIsSuperAdmin.value : false,
+      permissions: formRole.value === 'admin' && !formIsSuperAdmin.value ? formPermissions.value : []
     }
     if (editingId.value) {
       const payload: any = { ...base, status: formRole.value === 'admin' ? 'active' : formStatus.value }
@@ -297,6 +332,7 @@ async function saveHouseguest() {
     formUsername.value = ''
     formPassword.value = ''
     formRole.value = 'houseguest'
+    formIsSuperAdmin.value = false
     formPermissions.value = []
     formIsHaveNot.value = false
     await fetchData()
@@ -334,7 +370,7 @@ async function exportCsv() {
       h.name,
       h.username,
       h.password || '',
-      h.role === 'admin' ? '管理员' : '房客',
+      h.isSuperAdmin ? '总管理员' : (h.role === 'admin' ? '管理员' : '房客'),
       statusLabel(h.status),
       h.hasLogin ? '是' : '否'
     ])
@@ -481,6 +517,8 @@ onMounted(fetchData)
 .status-tag.jury { background: #e6c98822; color: #e6c988; }
 .status-tag.f2 { background: #a855f722; color: #c084fc; }
 .status-tag.admin { background: #4488ff22; color: #66aaff; }
+.status-tag.super { background: #e6c98833; color: #f0d488; font-weight: 600; }
+.form-hint { margin: 8px 0 0; font-size: 12px; color: #8f83b8; line-height: 1.4; }
 .perm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 12px; }
 .havenot-tag { padding: 2px 10px; border-radius: 10px; font-size: 12px; background: #66aaff22; color: #66aaff; margin-right: 6px; }
 .checkbox-row { display: flex; align-items: center; gap: 8px; color: #cfc4ea; cursor: pointer; }

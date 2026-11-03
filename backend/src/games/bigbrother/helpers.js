@@ -238,6 +238,39 @@ const getCurrentSeason = async () => {
   return await BBSeason.findOne({ gameId: 'bigbrother' })
 }
 
+// ===== 总管理员（唯一）=====
+// 保证始终存在且仅存在一位总管理员：优先保留已标记者或内置 admin 账号。
+const ensureSuperAdmin = async () => {
+  const BBHouseguest = require('./models/BBHouseguest')
+  const admins = await BBHouseguest.find({ gameId: 'bigbrother', role: 'admin' })
+  if (!admins.length) return null
+
+  const marked = admins.filter(a => a.isSuperAdmin)
+  let superAdmin = marked.find(a => a.username === 'admin') || marked[0]
+  if (!superAdmin) {
+    superAdmin = admins.find(a => a.username === 'admin') || admins[0]
+  }
+
+  // 总管理员始终为管理员且拥有全部权限（空权限 = 全部）
+  let changed = false
+  if (!superAdmin.isSuperAdmin) { superAdmin.isSuperAdmin = true; changed = true }
+  if (superAdmin.role !== 'admin') { superAdmin.role = 'admin'; changed = true }
+  if (!Array.isArray(superAdmin.permissions) || superAdmin.permissions.length > 0) {
+    superAdmin.permissions = []
+    changed = true
+  }
+  if (changed) await superAdmin.save()
+
+  // 清除其他管理员的总管理员标记，保证唯一
+  for (const admin of admins) {
+    if (admin.id !== superAdmin.id && admin.isSuperAdmin) {
+      admin.isSuperAdmin = false
+      await admin.save()
+    }
+  }
+  return superAdmin
+}
+
 // ===== 随机工具 =====
 const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
 
@@ -246,6 +279,7 @@ module.exports = {
   logAction,
   randomInt,
   getCurrentSeason,
+  ensureSuperAdmin,
   getStageStatus,
   getEndgameStatus,
   getStageName,

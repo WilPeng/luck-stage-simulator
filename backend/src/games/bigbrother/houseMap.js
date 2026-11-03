@@ -163,6 +163,8 @@ async function ensureBBHouseData() {
   const { ensureOpenInterval } = require('./locationHistory')
   let created = 0
   for (const p of houseguests) {
+    // 管理员不进入任何房间（上帝视角），不创建位置记录
+    if (p.role === 'admin') continue
     let loc = await BBPlayerLocation.findOne({ playerId: p.id, gameId: 'bigbrother' })
     if (!loc) {
       loc = new BBPlayerLocation({

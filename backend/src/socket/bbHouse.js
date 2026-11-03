@@ -96,31 +96,41 @@ function initBBHouseSocket(io) {
     try {
       const guest = await BBHouseguest.findOne({ id: socket.userId, gameId })
       if (guest?.name) socket.userName = guest.name
+      if (guest?.role) socket.userRole = guest.role
     } catch (e) { /* ignore */ }
     console.log(`[BBHouse] Player connected: ${socket.userName} (${socket.userId})`)
 
     try {
-      // 获取玩家当前位置
-      const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
-      const currentRoomId = loc?.currentRoomId || 'living_room'
+      if (socket.userRole === 'admin') {
+        // 管理员不进入任何房间（上帝视角）：加入全部房间频道以接收所有发言
+        const rooms = await BBHouseRoom.find({ gameId })
+        for (const room of rooms) socket.join(`room:${room.id}`)
+        socket.currentRoomId = null
+        socket.emit('house:god-view', { rooms: rooms.map(r => ({ id: r.id, name: r.name, icon: r.icon })) })
+        console.log(`[BBHouse] Admin ${socket.userName} entered god view (all rooms)`)
+      } else {
+        // 获取玩家当前位置
+        const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
+        const currentRoomId = loc?.currentRoomId || 'living_room'
 
-      // 确保位置历史有当前区间
-      await locationHistory.ensureOpenInterval(socket.userId, socket.userName, currentRoomId, loc?.enteredAt)
+        // 确保位置历史有当前区间
+        await locationHistory.ensureOpenInterval(socket.userId, socket.userName, currentRoomId, loc?.enteredAt)
 
-      // 加入当前房间的 Socket.IO room
-      socket.join(`room:${currentRoomId}`)
-      socket.currentRoomId = currentRoomId
+        // 加入当前房间的 Socket.IO room
+        socket.join(`room:${currentRoomId}`)
+        socket.currentRoomId = currentRoomId
 
-      // 发送当前房间的历史消息（仅“发送时我在该房间”的消息，最近 50 条）
-      const allMessages = await BBChatMessage.find({ gameId, chatType: 'room', roomId: currentRoomId })
-      allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-      const visible = await locationHistory.filterVisibleMessages(socket.userId, currentRoomId, allMessages)
-      const recent = visible.slice(-50)
-      socket.emit('house:history', { roomId: currentRoomId, messages: recent.map(m => m.toObject()) })
+        // 发送当前房间的历史消息（仅“发送时我在该房间”的消息，最近 50 条）
+        const allMessages = await BBChatMessage.find({ gameId, chatType: 'room', roomId: currentRoomId })
+        allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        const visible = await locationHistory.filterVisibleMessages(socket.userId, currentRoomId, allMessages)
+        const recent = visible.slice(-50)
+        socket.emit('house:history', { roomId: currentRoomId, messages: recent.map(m => m.toObject()) })
 
-      // 发送房间内玩家列表（按位置，包含离线房客）
-      await broadcastRoomPresence(currentRoomId)
-      // 注意：上线/下线不产生“进入/离开房间”消息（视为一直在该房间）
+        // 发送房间内玩家列表（按位置，包含离线房客）
+        await broadcastRoomPresence(currentRoomId)
+        // 注意：上线/下线不产生“进入/离开房间”消息（视为一直在该房间）
+      }
     } catch (e) {
       console.error('[BBHouse] Connection init error:', e)
     }
@@ -129,20 +139,30 @@ function initBBHouseSocket(io) {
     socket.on('house:send-message', async ({ roomId, content }) => {
       try {
         if (!content || !content.trim()) return
+        if (!roomId) return socket.emit('house:error', { error: '请选择房间' })
 
-        // 校验玩家是否在该房间
-        const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
-        if (!loc || loc.currentRoomId !== roomId) {
-          return socket.emit('house:error', { error: '你不在这个房间' })
+        const isAdmin = socket.userRole === 'admin'
+
+        // 管理员上帝视角，可在任意房间发言；房客必须身处该房间
+        if (!isAdmin) {
+          const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
+          if (!loc || loc.currentRoomId !== roomId) {
+            return socket.emit('house:error', { error: '你不在这个房间' })
+          }
+        } else {
+          const room = await BBHouseRoom.findOne({ id: roomId, gameId })
+          if (!room) return socket.emit('house:error', { error: '房间不存在' })
         }
 
-        // 睡眠/洗澡状态限制
+        // 睡眠/洗澡状态限制（管理员不受限）
         const senderGuest = await BBHouseguest.findOne({ id: socket.userId, gameId })
-        if (senderGuest?.isSleeping) {
-          return socket.emit('house:error', { error: '睡眠中无法发送消息' })
-        }
-        if (senderGuest?.isShowering && roomId !== 'bathroom') {
-          return socket.emit('house:error', { error: '洗澡中只能在浴室发言' })
+        if (!isAdmin) {
+          if (senderGuest?.isSleeping) {
+            return socket.emit('house:error', { error: '睡眠中无法发送消息' })
+          }
+          if (senderGuest?.isShowering && roomId !== 'bathroom') {
+            return socket.emit('house:error', { error: '洗澡中只能在浴室发言' })
+          }
         }
 
         // 保存消息
@@ -177,8 +197,10 @@ function initBBHouseSocket(io) {
     // === 加载更多历史消息 ===
     socket.on('house:load-more', async ({ roomId, before }) => {
       try {
-        const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
-        if (!loc || loc.currentRoomId !== roomId) return
+        if (socket.userRole !== 'admin') {
+          const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
+          if (!loc || loc.currentRoomId !== roomId) return
+        }
 
         const all = await BBChatMessage.find({ gameId, chatType: 'room', roomId })
         all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
@@ -628,11 +650,10 @@ async function movePlayerSockets(playerId, oldRoomId, newRoomId, reason = '管�
 
 // 把「在线」玩家（活跃房客 + 已登录管理员）统一移动到指定房间（仪式开始等场景）
 async function moveAllToRoom(targetRoomId, reason = '仪式开始') {
-  const guests = await BBHouseguest.find({ gameId })
+  // 管理员不进入任何房间，只移动活跃房客
+  const guests = await BBHouseguest.find({ gameId, role: 'houseguest', status: 'active' })
   const moved = []
   for (const g of guests) {
-    if (g.role === 'admin' && !g.hasLogin) continue
-    if (g.role === 'houseguest' && g.status !== 'active') continue
     const loc = await BBPlayerLocation.findOne({ playerId: g.id, gameId })
     const oldRoomId = loc?.currentRoomId || 'living_room'
     if (oldRoomId === targetRoomId) continue

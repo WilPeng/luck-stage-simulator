@@ -52,6 +52,30 @@
       </div>
     </div>
 
+    <!-- 管理员房间发言（上帝视角） -->
+    <div class="control-card">
+      <div class="control-header">
+        <h3>💬 房间发言（上帝视角）</h3>
+      </div>
+      <div class="broadcast-form">
+        <select v-model="chatTargetRoom" class="bb-select">
+          <option value="">选择房间…</option>
+          <option v-for="r in allRooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
+        </select>
+        <input
+          v-model="chatContent"
+          class="bb-input"
+          placeholder="以管理员身份在所选房间发言…"
+          @keyup.enter="sendAdminMessage"
+        />
+        <button
+          class="bb-btn bb-btn-primary"
+          :disabled="!chatTargetRoom || !chatContent.trim()"
+          @click="sendAdminMessage"
+        >发言</button>
+      </div>
+    </div>
+
     <!-- 房间人数/床位/睡觉 & 作息规则 -->
     <div class="control-card">
       <div class="control-header">
@@ -148,6 +172,7 @@ import {
   bbAdminEvictBackyard,
   bbAdminMovePlayer,
   bbAdminBroadcast,
+  bbAdminSendMessage,
   bbAdminSetRoom,
   bbAdminSetSeason,
   bbAdminChatLogs,
@@ -187,6 +212,9 @@ async function savePhotoWallOrder() {
 const broadcastType = ref<'notice' | 'invite'>('notice')
 const broadcastRoom = ref('')
 const broadcastMessage = ref('')
+
+const chatTargetRoom = ref('')
+const chatContent = ref('')
 
 const sleepDurationMinutes = ref(360)
 const sleepWindowStart = ref('22:00')
@@ -262,6 +290,18 @@ async function sendBroadcast() {
     alert('广播已发送')
   } catch (e: any) {
     alert(e?.message || '发送失败')
+  }
+}
+
+async function sendAdminMessage() {
+  const roomId = chatTargetRoom.value
+  const content = chatContent.value.trim()
+  if (!roomId || !content) return
+  try {
+    await bbAdminSendMessage(roomId, content)
+    chatContent.value = ''
+  } catch (e: any) {
+    alert(e?.message || '发言失败')
   }
 }
 

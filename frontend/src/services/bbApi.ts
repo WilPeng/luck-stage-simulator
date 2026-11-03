@@ -237,10 +237,11 @@ export async function bbVoteNominees(votes: { voterId: string; voterName: string
 }
 
 // ===== 房客管理 =====
-export async function bbGetHouseguests(params?: { keyword?: string; status?: string; page?: number; pageSize?: number }): Promise<BBHouseguestListResponse> {
+export async function bbGetHouseguests(params?: { keyword?: string; status?: string; role?: string; page?: number; pageSize?: number }): Promise<BBHouseguestListResponse> {
   const query = new URLSearchParams()
   if (params?.keyword) query.append('keyword', params.keyword)
   if (params?.status) query.append('status', params.status)
+  if (params?.role) query.append('role', params.role)
   if (params?.page) query.append('page', String(params.page))
   if (params?.pageSize) query.append('pageSize', String(params.pageSize))
   const qs = query.toString()
@@ -263,14 +264,14 @@ export async function bbGetHohEligible(): Promise<{
   return doRequest('/hoh/eligible')
 }
 
-export async function bbCreateHouseguest(data: { name: string; username?: string; password?: string; role?: string; permissions?: string[] }): Promise<BBHouseguest> {
+export async function bbCreateHouseguest(data: { name: string; username?: string; password?: string; role?: string; permissions?: string[]; isSuperAdmin?: boolean }): Promise<BBHouseguest> {
   return doRequest<BBHouseguest>('/houseguests', {
     method: 'POST',
     body: JSON.stringify(data)
   })
 }
 
-export async function bbUpdateHouseguest(id: string, data: { name?: string; username?: string; password?: string; status?: string; isHaveNot?: boolean; role?: string; permissions?: string[] }): Promise<BBHouseguest> {
+export async function bbUpdateHouseguest(id: string, data: { name?: string; username?: string; password?: string; status?: string; isHaveNot?: boolean; role?: string; permissions?: string[]; isSuperAdmin?: boolean }): Promise<BBHouseguest> {
   return doRequest<BBHouseguest>(`/houseguests/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data)

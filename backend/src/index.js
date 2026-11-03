@@ -80,7 +80,7 @@ app.get('/api', (req, res) => {
 async function initBBData() {
   const BBHouseguest = require('./games/bigbrother/models/BBHouseguest')
   const BBSeason = require('./games/bigbrother/models/BBSeason')
-  const { generateId } = require('./games/bigbrother/helpers')
+  const { generateId, ensureSuperAdmin } = require('./games/bigbrother/helpers')
 
   const existing = await BBHouseguest.countDocuments({ gameId: 'bigbrother' })
   if (existing > 0) {
@@ -138,6 +138,18 @@ async function initBBData() {
       if (adminDoc.password !== desiredAdminPassword) { adminDoc.password = desiredAdminPassword; changed = true }
       if (changed) await adminDoc.save()
       console.log(`[Big Brother] Admin account ready: username=admin (password ${changed ? 'reset' : 'unchanged'})`)
+    }
+    // 保证始终存在唯一的总管理员
+    await ensureSuperAdmin()
+    // 管理员不进入任何房间：清理历史遗留的管理员位置记录
+    const BBPlayerLocation = require('./games/bigbrother/models/BBPlayerLocation')
+    const admins = await BBHouseguest.find({ gameId: 'bigbrother', role: 'admin' })
+    const adminIds = admins.map(a => a.id)
+    if (adminIds.length) {
+      await BBPlayerLocation.deleteMany({ gameId: 'bigbrother', playerId: { $in: adminIds } })
+      for (const a of admins) {
+        if (a.currentRoomId) { a.currentRoomId = null; await a.save() }
+      }
     }
     return
   }
@@ -200,13 +212,7 @@ async function initBBData() {
     })
     await loc.save()
   }
-  // 管理员也创建位置记录
-  const adminLoc = new BBPlayerLocation({
-    id: admin.id, playerId: admin.id, playerName: admin.name,
-    currentRoomId: 'living_room', enteredAt: new Date().toISOString(),
-    gameId: 'bigbrother'
-  })
-  await adminLoc.save()
+  // 管理员不进入任何房间（上帝视角），因此不创建位置记录
 
   console.log('[Big Brother] Seed data initialized:')
   console.log(`  - 1 admin (账号: admin / 密码: ADMIN2026)`)
@@ -215,6 +221,8 @@ async function initBBData() {
   console.log(`  - 1 season (Round 1, Stage: HOH Competition)`)
   const { removeCustomGameExamples } = require('./games/bigbrother/seedCustomGames')
   await removeCustomGameExamples()
+  // 保证始终存在唯一的总管理员
+  await ensureSuperAdmin()
 }
 
 const PORT = process.env.PORT || 3000

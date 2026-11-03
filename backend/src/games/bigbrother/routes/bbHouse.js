@@ -24,7 +24,7 @@ const {
 } = require('../houseRules')
 const locationHistory = require('../locationHistory')
 const { getCollection } = require('../../../config/db')
-const { broadcastDoorUpdate, movePlayerSockets, takePendingInvite, broadcastHouse } = require('../../../socket/bbHouse')
+const { broadcastDoorUpdate, movePlayerSockets, takePendingInvite, broadcastHouse, postRoomMessage } = require('../../../socket/bbHouse')
 const { broadcastBBGame } = require('../../../socket/bbGame')
 
 // ===== 公共 API =====
@@ -256,6 +256,9 @@ router.post('/move', auth, async (req, res) => {
   try {
     const { targetRoomId } = req.body
     if (!targetRoomId) return res.status(400).json({ success: false, error: '缺少目标房间' })
+    if (req.user.role === 'admin') {
+      return res.status(403).json({ success: false, error: '管理员不进入任何房间（上帝视角）' })
+    }
 
     const gameId = 'bigbrother'
 
@@ -690,6 +693,9 @@ router.post('/admin/move-player', auth, requireAdmin, async (req, res) => {
     const gameId = 'bigbrother'
     const player = await BBHouseguest.findOne({ id: playerId, gameId })
     if (!player) return res.status(404).json({ success: false, error: '玩家不存在' })
+    if (player.role === 'admin') {
+      return res.status(400).json({ success: false, error: '管理员不进入任何房间（上帝视角）' })
+    }
 
     const targetRoom = await BBHouseRoom.findOne({ id: targetRoomId, gameId })
     if (!targetRoom) return res.status(404).json({ success: false, error: '目标房间不存在' })
@@ -727,7 +733,8 @@ router.post('/admin/move-player', auth, requireAdmin, async (req, res) => {
 router.post('/admin/init-locations', auth, requireAdmin, async (req, res) => {
   try {
     const gameId = 'bigbrother'
-    const activePlayers = await BBHouseguest.find({ gameId, status: 'active' })
+    // 管理员不进入任何房间，仅为房客初始化位置
+    const activePlayers = await BBHouseguest.find({ gameId, status: 'active', role: 'houseguest' })
     let created = 0
     for (const p of activePlayers) {
       const existing = await BBPlayerLocation.findOne({ playerId: p.id, gameId })
@@ -1055,6 +1062,33 @@ router.post('/admin/photo-wall-order', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '保存照片墙顺序失败' })
+  }
+})
+
+// POST /admin/send-message - 管理员（上帝视角）向指定房间发言
+router.post('/admin/send-message', auth, requireAdmin, async (req, res) => {
+  try {
+    const { roomId, content } = req.body || {}
+    if (!roomId) return res.status(400).json({ success: false, error: '缺少目标房间' })
+    if (!content || !String(content).trim()) {
+      return res.status(400).json({ success: false, error: '消息内容不能为空' })
+    }
+    const room = await BBHouseRoom.findOne({ id: roomId, gameId: 'bigbrother' })
+    if (!room) return res.status(404).json({ success: false, error: '房间不存在' })
+
+    const adminUser = await BBHouseguest.findOne({ id: req.user.userId, gameId: 'bigbrother' })
+    const message = await postRoomMessage(roomId, {
+      senderId: req.user.userId,
+      senderName: adminUser?.name || req.user.name || '管理员',
+      senderRole: 'admin',
+      senderAvatar: adminUser?.avatar || null,
+      content: String(content).trim()
+    })
+    if (!message) return res.status(500).json({ success: false, error: '发送失败' })
+    res.json({ success: true, data: message })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '发送失败' })
   }
 })
 

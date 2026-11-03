@@ -317,6 +317,7 @@ export interface BBHouseguest {
   password?: string
   loginCode?: string
   role: 'admin' | 'houseguest'
+  isSuperAdmin?: boolean
   status: 'active' | 'evicted' | 'jury' | 'f2'
   permissions?: string[]
   hasLogin: boolean

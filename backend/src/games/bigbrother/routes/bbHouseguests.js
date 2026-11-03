@@ -28,7 +28,7 @@ const avatarUpload = multer({
 // GET / - 获取所有房客（支持分页和搜索）
 router.get('/', async (req, res) => {
   try {
-    const { keyword, status, page = '1', pageSize = '20' } = req.query
+    const { keyword, status, role, page = '1', pageSize = '20' } = req.query
     const filter = { gameId: 'bigbrother' }
     if (keyword) {
       filter.$or = [
@@ -38,6 +38,7 @@ router.get('/', async (req, res) => {
       ]
     }
     if (status) filter.status = status
+    if (role === 'admin' || role === 'houseguest') filter.role = role
     const currentPage = Math.max(1, parseInt(page) || 1)
     const currentPageSize = Math.max(1, Math.min(100, parseInt(pageSize) || 20))
     const skip = (currentPage - 1) * currentPageSize
@@ -108,19 +109,28 @@ router.get('/:id', async (req, res) => {
 // POST / - 创建房客（管理员为选手开账号：姓名 + 账号 + 密码）
 router.post('/', async (req, res) => {
   try {
-    const { name, username, password, role, permissions } = req.body
+    const { name, username, password, role, permissions, isSuperAdmin } = req.body
     if (!name) return res.status(400).json({ success: false, error: '姓名不能为空', code: 'INVALID_NAME' })
     const uname = String(username || '').trim() || `houseguest${Date.now().toString().slice(-6)}`
     const exists = await BBHouseguest.findOne({ username: uname, gameId: 'bigbrother' })
     if (exists) return res.status(400).json({ success: false, error: '该账号已存在', code: 'USERNAME_TAKEN' })
     const pwd = String(password || '').trim() || Math.random().toString(36).slice(2, 8)
+    const makeSuper = isSuperAdmin === true
+    if (makeSuper) {
+      // 总管理员唯一：先取消其他人的标记
+      const admins = await BBHouseguest.find({ gameId: 'bigbrother', role: 'admin' })
+      for (const a of admins) {
+        if (a.isSuperAdmin) { a.isSuperAdmin = false; await a.save() }
+      }
+    }
     const houseguest = new BBHouseguest({
       id: generateId(),
       name,
       username: uname,
       password: pwd,
-      role: role === 'admin' ? 'admin' : 'houseguest',
-      permissions: Array.isArray(permissions) ? permissions : [],
+      role: makeSuper ? 'admin' : (role === 'admin' ? 'admin' : 'houseguest'),
+      isSuperAdmin: makeSuper,
+      permissions: makeSuper ? [] : (Array.isArray(permissions) ? permissions : []),
       status: 'active',
       gameId: 'bigbrother'
     })
@@ -137,7 +147,7 @@ router.put('/:id', async (req, res) => {
   try {
     const houseguest = await BBHouseguest.findOne({ id: req.params.id, gameId: 'bigbrother' })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
-    const { name, username, password, status, isHaveNot, role, permissions } = req.body
+    const { name, username, password, status, isHaveNot, role, permissions, isSuperAdmin } = req.body
     if (name) houseguest.name = name
     if (username && String(username).trim() !== houseguest.username) {
       const uname = String(username).trim()
@@ -148,8 +158,27 @@ router.put('/:id', async (req, res) => {
       houseguest.username = uname
     }
     if (password) houseguest.password = String(password)
+    // 总管理员身份不可直接被撤销；如需更换，请把另一位管理员设为总管理员
+    if (isSuperAdmin === false && houseguest.isSuperAdmin) {
+      return res.status(400).json({ success: false, error: '不能直接取消总管理员，请先将其他管理员设为总管理员', code: 'SUPER_ADMIN_REQUIRED' })
+    }
+    // 总管理员不可降级为普通房客
+    if (houseguest.isSuperAdmin && role === 'houseguest') {
+      return res.status(400).json({ success: false, error: '总管理员不能改为普通房客', code: 'SUPER_ADMIN_ROLE_LOCKED' })
+    }
     if (role === 'admin' || role === 'houseguest') houseguest.role = role
-    if (Array.isArray(permissions)) houseguest.permissions = permissions
+    if (isSuperAdmin === true) {
+      // 转移总管理员：取消其他管理员的标记，并强制为管理员、拥有全部权限
+      const admins = await BBHouseguest.find({ gameId: 'bigbrother', role: 'admin' })
+      for (const a of admins) {
+        if (a.id !== houseguest.id && a.isSuperAdmin) { a.isSuperAdmin = false; await a.save() }
+      }
+      houseguest.isSuperAdmin = true
+      houseguest.role = 'admin'
+      houseguest.permissions = []
+    } else if (Array.isArray(permissions)) {
+      houseguest.permissions = permissions
+    }
     if (status) houseguest.status = status
     if (typeof isHaveNot === 'boolean') houseguest.isHaveNot = isHaveNot
     houseguest.updatedAt = new Date().toISOString()
@@ -166,6 +195,9 @@ router.delete('/:id', async (req, res) => {
   try {
     const houseguest = await BBHouseguest.findOne({ id: req.params.id, gameId: 'bigbrother' })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
+    if (houseguest.isSuperAdmin) {
+      return res.status(400).json({ success: false, error: '总管理员不可删除，请先转移总管理员身份', code: 'SUPER_ADMIN_PROTECTED' })
+    }
     await BBHouseguest.deleteOne({ id: req.params.id })
     res.json({ success: true, data: null })
   } catch (e) {

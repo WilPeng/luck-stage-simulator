@@ -127,6 +127,14 @@ export async function bbAdminSetSeason(data: {
   return doRequest<any>('/house/admin/season', { method: 'POST', body: JSON.stringify(data) })
 }
 
+// 管理员：以管理员身份向指定房间发言（上帝视角）
+export async function bbAdminSendMessage(roomId: string, content: string) {
+  return doRequest<any>('/house/admin/send-message', {
+    method: 'POST',
+    body: JSON.stringify({ roomId, content })
+  })
+}
+
 // 管理员：查看所有房间聊天记录（含每条消息被谁看到）
 export async function bbAdminChatLogs(roomId?: string) {
   const qs = roomId ? `?roomId=${encodeURIComponent(roomId)}` : ''
