@@ -724,10 +724,10 @@ export async function bbUploadGameMedia(file: File): Promise<{ url: string; kind
   return json.data
 }
 
-export async function bbStartMinigame(roomId: string): Promise<void> {
+export async function bbStartMinigame(roomId: string, countdownSeconds: number = 10): Promise<void> {
   return doRequest<void>('/minigame/start', {
     method: 'POST',
-    body: JSON.stringify({ roomId })
+    body: JSON.stringify({ roomId, countdownSeconds })
   })
 }
 

@@ -130,7 +130,7 @@
           <span class="status-badge">{{ statusText }}</span>
           <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人<template v-if="activeRoom.targetScore"> · 目标 {{ activeRoom.targetScore }}</template></span>
           <div class="room-actions">
-            <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-primary" @click="startMinigame">▶ 开始比赛</button>
+            <MinigameStartButton v-if="activeRoom.status === 'waiting'" label="▶ 开始比赛" @start="startMinigame" />
             <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-danger" @click="stopMinigame">✕ 取消房间</button>
             <button v-if="activeRoom.status === 'playing'" class="bb-btn bb-btn-warn" @click="pauseMinigame">⏸ 暂停</button>
             <button v-if="activeRoom.status === 'paused'" class="bb-btn bb-btn-primary" @click="resumeMinigame">▶ 恢复</button>
@@ -233,6 +233,7 @@ import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import VetoCardDraw from '../../../components/bigbrother/VetoCardDraw.vue'
 import MinigameReadyPanel from '../../../components/bigbrother/MinigameReadyPanel.vue'
+import MinigameStartButton from '../../../components/bigbrother/admin/MinigameStartButton.vue'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
 import type { BBVetoRecord, MinigameRoom, MinigameProgress } from '../../../types/bigbrother'
 
@@ -639,10 +640,10 @@ async function summonPlayers() {
   }
 }
 
-async function startMinigame() {
+async function startMinigame(countdownSeconds: number) {
   if (!activeRoom.value) return
   try {
-    await bbStartMinigame(activeRoom.value.roomId)
+    await bbStartMinigame(activeRoom.value.roomId, countdownSeconds)
     activeRoom.value = { ...activeRoom.value, status: 'playing' }
   } catch (e: any) {
     alert(e.message)

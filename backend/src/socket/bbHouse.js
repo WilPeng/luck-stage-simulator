@@ -453,18 +453,22 @@ async function runHouseTimers() {
     const season = await BBSeason.findOne({ gameId })
     const now = new Date()
 
-    // 自动睡眠：睡眠时间窗结束后仍未完成本轮睡觉 -> 被动入睡
+    // 自动睡眠：睡眠时间窗结束时仍未完成本轮睡觉 -> 被动入睡
+    // 仅在结束时间点附近触发，避免服务重启/长时间延迟后在白天“突然”强制入睡
+    const FORCE_GRACE_MS = 2 * 60 * 1000
     const guests = await BBHouseguest.find({ gameId, status: 'active' })
     for (const g of guests) {
       if (g.isSleeping) continue
       const sleepState = getSleepState(season, now, g.lastSleepDate)
       if (!sleepState.shouldForce) continue
+      if (now.getTime() - sleepState.endAt > FORCE_GRACE_MS) continue
       // 玩家在窗口结束后才创建时，不追溯上一个周期
       const createdAt = g.createdAt ? new Date(g.createdAt).getTime() : 0
       if (createdAt > sleepState.endAt) continue
+      const sleepStartedAt = new Date(sleepState.endAt)
       g.isSleeping = true
-      g.sleepStartedAt = now.toISOString()
-      g.wakeAt = new Date(now.getTime() + sleepState.sleepDurationMinutes * 60 * 1000).toISOString()
+      g.sleepStartedAt = sleepStartedAt.toISOString()
+      g.wakeAt = new Date(sleepStartedAt.getTime() + sleepState.sleepDurationMinutes * 60 * 1000).toISOString()
       g.lastSleepDate = sleepState.cycleDate
       await g.save()
       for (const [, s] of bbHouseNamespace.sockets) {

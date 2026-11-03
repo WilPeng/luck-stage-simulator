@@ -18,7 +18,7 @@
       <div class="game-icon">🎮</div>
       <h2>{{ gameTitle }}</h2>
       <p>等待管理员开始比赛...</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
+      <div v-if="countdown > 0" class="countdown-big"><CountdownDisplay :value="countdown" /></div>
     </div>
 
     <div v-else class="game-playing">

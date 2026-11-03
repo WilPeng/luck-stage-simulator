@@ -44,7 +44,7 @@
       <div v-if="activeRoom" class="room-status" :class="activeRoom.status">
         <span class="status-badge">{{ statusText }}</span>
         <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人</span>
-        <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-primary" @click="startMinigame">▶ 开始比赛</button>
+        <MinigameStartButton v-if="activeRoom.status === 'waiting'" label="▶ 开始比赛" @start="startMinigame" />
         <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-danger" @click="stopMinigame">✕ 取消房间</button>
       </div>
     </div>
@@ -105,6 +105,7 @@ import {
   bbGetHohEligible, bbCreateMinigameRoom, bbStartMinigame, bbGetActiveMinigameRoom, bbStopMinigame
 } from '../../../services/bbApi'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
+import MinigameStartButton from '../../../components/bigbrother/admin/MinigameStartButton.vue'
 import type { BBHohRecord, MinigameRoom } from '../../../types/bigbrother'
 
 const route = useRoute()
@@ -179,10 +180,10 @@ async function onSelectMinigame(minigameId: string, options?: Record<string, any
   }
 }
 
-async function startMinigame() {
+async function startMinigame(countdownSeconds: number) {
   if (!activeRoom.value) return
   try {
-    await bbStartMinigame(activeRoom.value.roomId)
+    await bbStartMinigame(activeRoom.value.roomId, countdownSeconds)
     activeRoom.value = { ...activeRoom.value, status: 'playing' }
   } catch (e: any) {
     alert(e.message)

@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import router from './router'
 import App from './App.vue'
+import CountdownDisplay from './components/bigbrother/minigames/CountdownDisplay.vue'
 import TDesign from 'tdesign-vue-next'
 import './assets/styles/global.scss'
 import 'tdesign-vue-next/es/style/index.css'
@@ -18,6 +19,8 @@ window.setInterval = ((handler: TimerHandler, timeout?: number, ...args: any[]) 
 }) as typeof window.setInterval
 
 const app = createApp(App)
+
+app.component('CountdownDisplay', CountdownDisplay)
 
 app.use(createPinia())
 app.use(router)

@@ -297,17 +297,19 @@ router.post('/create-room', async (req, res) => {
 // POST /start - 管理员开始比赛
 router.post('/start', async (req, res) => {
   try {
-    const { roomId } = req.body
+    const { roomId, countdownSeconds } = req.body
     if (!roomId) {
       return res.status(400).json({ success: false, error: '缺少房间ID' })
     }
+    const allowedCountdowns = [0, 10, 30]
+    const seconds = allowedCountdowns.includes(Number(countdownSeconds)) ? Number(countdownSeconds) : 10
 
     const minigameNs = req.app.get('io')?.of('/bigbrother-minigame')
     if (!minigameNs) {
       return res.status(500).json({ success: false, error: '小游戏服务未就绪' })
     }
 
-    minigameNs.startGame(roomId, (result) => {
+    minigameNs.startGame(roomId, { countdownSeconds: seconds }, (result) => {
       if (!result.success) {
         return res.status(400).json(result)
       }

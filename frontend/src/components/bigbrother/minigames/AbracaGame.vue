@@ -17,7 +17,7 @@
       <div class="ab-finish-icon">🎩</div>
       <h2>出包魔法师</h2>
       <p>猜测自己持有的法术编号并施放，连锁自增，先达到 {{ target || 8 }} 分者获胜！</p>
-      <div v-if="countdown > 0" class="ab-countdown">{{ countdown.toFixed(1) }}</div>
+      <div v-if="countdown > 0" class="ab-countdown"><CountdownDisplay :value="countdown" /></div>
       <p v-else class="ab-wait-text">等待管理员开始比赛...</p>
     </div>
 

@@ -15,7 +15,7 @@
       <p>观察桌面上的水果牌：当<strong>恰好出现 5 个相同水果</strong>时，最快抢铃者 +1 分。</p>
       <p>没有 5 个相同水果时抢铃视为错误，每次 -3 分（每人每轮仅可抢一次）。</p>
       <p>先得到 <strong>{{ targetPoints }}</strong> 分获胜；或只剩一人得分为正数时获胜。</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
+      <div v-if="countdown > 0" class="countdown-big"><CountdownDisplay :value="countdown" /></div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

@@ -13,7 +13,8 @@
  * 说明：
  *  - 通过远程后端的 REST API（/api/bigbrother/custom-game）创建，幂等（同名已存在则跳过）。
  *  - 若远程后端尚未部署「支持新模式（elim-last/first-pick/duel/survive-tb/score-tb）」的最新代码，
- *    创建会因「游戏类型无效」失败——此时请先部署最新代码，重启后后端会自动 seed（ensureCustomGameExamples）。
+ *    创建会因「游戏类型无效」失败——此时请先部署最新代码后再重新运行本脚本。
+ *  - 注意：后端启动时不再自动补种示例，并会清除历史示例游戏。
  */
 const { EXAMPLES } = require('../src/games/bigbrother/seedCustomGames')
 

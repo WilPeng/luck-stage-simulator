@@ -90,7 +90,7 @@
         <div v-if="activeRoom" class="room-status" :class="activeRoom.status">
           <span class="room-badge">第 {{ roomPickerRound }} 场房间</span>
           <span class="room-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人 · {{ statusText }}</span>
-          <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-primary" @click="startRoom">▶ 开始比赛</button>
+          <MinigameStartButton v-if="activeRoom.status === 'waiting'" label="▶ 开始比赛" @start="startRoom" />
           <button v-if="roomWinner && !roomRoundRegistered" class="bb-btn bb-btn-primary"
             @click="registerRoomWinner">✅ 登记胜者 {{ roomWinner.playerName }}</button>
         </div>
@@ -243,6 +243,7 @@ import {
 import type { BBEndgameStatus } from '../../../types/bigbrother'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
 import MinigameReadyPanel from '../../../components/bigbrother/MinigameReadyPanel.vue'
+import MinigameStartButton from '../../../components/bigbrother/admin/MinigameStartButton.vue'
 import JuryQA from '../../../components/bigbrother/JuryQA.vue'
 
 const seasonStore = useBbSeasonStore()
@@ -447,10 +448,10 @@ async function onRoomMinigameSelect(minigameId: string, options?: Record<string,
   } catch (e: any) { alert(e.message) }
 }
 
-async function startRoom() {
+async function startRoom(countdownSeconds: number) {
   if (!activeRoom.value) return
   try {
-    await bbStartMinigame(activeRoom.value.roomId)
+    await bbStartMinigame(activeRoom.value.roomId, countdownSeconds)
     activeRoom.value = { ...activeRoom.value, status: 'playing' }
   } catch (e: any) { alert(e.message) }
 }

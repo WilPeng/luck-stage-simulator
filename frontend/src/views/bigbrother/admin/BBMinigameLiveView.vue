@@ -32,7 +32,7 @@
         <div v-else class="empty-hint">选择左侧房间开始观战</div>
 
         <div v-if="selectedRoomId" class="controls">
-          <button v-if="selectedRoom?.status === 'waiting'" class="bb-btn bb-btn-primary" @click="start">▶ 开始比赛</button>
+          <MinigameStartButton v-if="selectedRoom?.status === 'waiting'" label="▶ 开始比赛" @start="start" />
           <button v-if="selectedRoom?.status === 'playing'" class="bb-btn bb-btn-warn" @click="pause">⏸ 暂停</button>
           <button v-if="selectedRoom?.status === 'paused'" class="bb-btn bb-btn-primary" @click="resume">▶ 恢复</button>
           <button v-if="selectedRoom && ['waiting','playing','paused'].includes(selectedRoom.status)" class="bb-btn bb-btn-danger" @click="stop">⏹ 停止</button>
@@ -46,6 +46,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { bbGetActiveMinigameRooms, bbStartMinigame, bbPauseMinigame, bbResumeMinigame, bbStopMinigame } from '../../../services/bbApi'
 import MinigameObserver from '../../../components/bigbrother/MinigameObserver.vue'
+import MinigameStartButton from '../../../components/bigbrother/admin/MinigameStartButton.vue'
 
 const rooms = ref<any[]>([])
 const selectedRoomId = ref<string | null>(null)
@@ -76,9 +77,9 @@ async function refresh() {
 
 function selectRoom(r: any) { selectedRoomId.value = r.roomId }
 
-async function start() {
+async function start(countdownSeconds: number) {
   if (!selectedRoomId.value) return
-  try { await bbStartMinigame(selectedRoomId.value); await refresh() } catch (e: any) { alert(e?.message || '失败') }
+  try { await bbStartMinigame(selectedRoomId.value, countdownSeconds); await refresh() } catch (e: any) { alert(e?.message || '失败') }
 }
 async function pause() {
   if (!selectedRoomId.value) return

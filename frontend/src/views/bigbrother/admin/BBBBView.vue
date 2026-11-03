@@ -33,7 +33,7 @@
       <div v-else class="room-status">
         <span class="status-badge">{{ statusText }}</span>
         <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants?.length || 0 }}人</span>
-        <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-primary" @click="startRoom">▶ 开始</button>
+        <MinigameStartButton v-if="activeRoom.status === 'waiting'" label="▶ 开始" @start="startRoom" />
         <button v-if="activeRoom.status === 'playing' || activeRoom.status === 'paused'" class="bb-btn bb-btn-danger" @click="stopRoom">⏹ 停止</button>
       </div>
       <div v-if="activeRoom && progress" class="progress">
@@ -59,6 +59,7 @@ import {
   bbGetActiveMinigameRoom, bbGetMinigameRoomProgress, bbStopMinigame, bbSummonMinigamePlayers
 } from '../../../services/bbApi'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
+import MinigameStartButton from '../../../components/bigbrother/admin/MinigameStartButton.vue'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import MinigameReadyPanel from '../../../components/bigbrother/MinigameReadyPanel.vue'
 
@@ -125,9 +126,9 @@ async function onSelectMinigame(minigameId: string, options?: Record<string, any
   } catch (e: any) { alert(e?.message || '创建失败') }
 }
 
-async function startRoom() {
+async function startRoom(countdownSeconds: number) {
   if (!activeRoom.value) return
-  try { await bbStartMinigame(activeRoom.value.roomId); activeRoom.value = { ...activeRoom.value, status: 'playing' } } catch (e: any) { alert(e?.message) }
+  try { await bbStartMinigame(activeRoom.value.roomId, countdownSeconds); activeRoom.value = { ...activeRoom.value, status: 'playing' } } catch (e: any) { alert(e?.message) }
 }
 
 async function stopRoom() {

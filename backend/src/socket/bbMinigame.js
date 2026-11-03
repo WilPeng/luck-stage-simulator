@@ -310,7 +310,13 @@ const initBBMinigameSocket = (io) => {
     return room
   }
 
-  minigameNs.startGame = async (roomId, callback) => {
+  minigameNs.startGame = async (roomId, options, callback) => {
+    // 兼容旧调用：startGame(roomId, callback)
+    if (typeof options === 'function') {
+      callback = options
+      options = {}
+    }
+    options = options || {}
     const room = activeRooms.get(roomId)
     if (!room) return callback({ success: false, error: '房间不存在' })
 
@@ -340,14 +346,15 @@ const initBBMinigameSocket = (io) => {
     room.gameState = gameState
     room.status = 'countdown'
 
-    // 倒计时 10 秒（每 0.1 秒更新一次，显示到小数点后一位）
-    const countdownStartAt = Date.now() + 10000
+    // 倒计时（管理员可选择 10 秒 / 30 秒 / 直接开始；每 0.1 秒更新，显示到小数点后一位）
+    const countdownSeconds = Math.max(0, Number(options.countdownSeconds ?? 10))
+    const countdownStartAt = Date.now() + countdownSeconds * 1000
     const emitCountdown = () => {
       const remaining = Math.max(0, (countdownStartAt - Date.now()) / 1000)
       minigameNs.to(roomId).emit('game_countdown', { seconds: Number(remaining.toFixed(1)) })
       return remaining
     }
-    emitCountdown()
+    if (countdownSeconds > 0) emitCountdown()
     const countdownTimer = setInterval(() => {
       const remaining = emitCountdown()
       if (remaining <= 0) {
@@ -438,7 +445,7 @@ const initBBMinigameSocket = (io) => {
           }
         }
       }
-    }, 100)
+    }, countdownSeconds > 0 ? 100 : 0)
 
     callback({ success: true })
   }

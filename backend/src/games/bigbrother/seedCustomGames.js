@@ -129,4 +129,38 @@ async function ensureCustomGameExamples() {
   return created
 }
 
-module.exports = { ensureCustomGameExamples, EXAMPLES }
+/**
+ * 清除示例自定义游戏（按示例名称精确匹配），并同步清理游戏库中的排序/文件夹引用。
+ * 用于移除历史遗留或自动补种的示例，不影响管理员自建游戏。
+ */
+async function removeCustomGameExamples() {
+  const names = EXAMPLES.map(e => e.name)
+  let removed = 0
+  try {
+    const games = await BBCustomGame.find({ name: { $in: names } })
+    if (games.length) {
+      const ids = new Set(games.map(g => g.id))
+      await BBCustomGame.deleteMany({ name: { $in: names } })
+      removed = games.length
+      try {
+        const BBGameLibrary = require('./models/BBGameLibrary')
+        const library = await BBGameLibrary.findOne({ id: BBGameLibrary.LIBRARY_ID })
+        if (library) {
+          library.order = (library.order || []).filter(key => !ids.has(key))
+          library.folders = (library.folders || []).map(f => ({
+            ...f,
+            games: (f.games || []).filter(key => !ids.has(key))
+          }))
+          library.updatedAt = new Date().toISOString()
+          await library.save()
+        }
+      } catch (e) { /* ignore */ }
+    }
+  } catch (e) {
+    console.error('[CustomGameSeed] failed to remove example games', e)
+  }
+  if (removed > 0) console.log(`[CustomGameSeed] removed ${removed} example games`)
+  return removed
+}
+
+module.exports = { ensureCustomGameExamples, removeCustomGameExamples, EXAMPLES }

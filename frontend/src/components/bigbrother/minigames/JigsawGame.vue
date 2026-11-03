@@ -13,7 +13,7 @@
       <div class="game-icon">🧩</div>
       <h2>拼图</h2>
       <p>把打乱的 5×5 拼图还原成完整图片，点击「提交」；提交错误将锁定 15 秒。第一个拼对者获胜！</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
+      <div v-if="countdown > 0" class="countdown-big"><CountdownDisplay :value="countdown" /></div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

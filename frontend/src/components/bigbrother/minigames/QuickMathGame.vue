@@ -4,7 +4,7 @@
       <div class="game-icon">🧮</div>
       <h2>快速算术</h2>
       <p>完成10道两位数加减法，用时最短者获胜！</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
+      <div v-if="countdown > 0" class="countdown-big"><CountdownDisplay :value="countdown" /></div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

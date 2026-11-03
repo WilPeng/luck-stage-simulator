@@ -13,7 +13,7 @@
       <div class="game-icon">🧩</div>
       <h2>华容道 4×4</h2>
       <p>将所有数字按 1~15 顺序复原，空格留在右下角，用时最短者获胜！</p>
-      <div v-if="countdown > 0" class="countdown-big">{{ countdown.toFixed(1) }}</div>
+      <div v-if="countdown > 0" class="countdown-big"><CountdownDisplay :value="countdown" /></div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
 

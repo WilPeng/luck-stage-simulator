@@ -88,9 +88,9 @@ async function initBBData() {
     // 老库可能缺少 House 空间数据，幂等补齐
     const { ensureBBHouseData } = require('./games/bigbrother/houseMap')
     await ensureBBHouseData()
-    // 幂等补齐新增模式的示例题目
-    const { ensureCustomGameExamples } = require('./games/bigbrother/seedCustomGames')
-    await ensureCustomGameExamples()
+    // 清除自动补种的示例游戏，避免云端游戏库反复出现示例
+    const { removeCustomGameExamples } = require('./games/bigbrother/seedCustomGames')
+    await removeCustomGameExamples()
     // 幂等补齐账号密码（老数据迁移：从登录码迁移为「账号+密码」）
     const allGuests = await BBHouseguest.find({ gameId: 'bigbrother' })
     const usedNames = new Set(allGuests.map(g => g.username).filter(Boolean))
@@ -213,8 +213,8 @@ async function initBBData() {
   console.log(`  - ${houseguests.length} houseguests`)
   houseguests.forEach(h => console.log(`    ${h.name} (账号: ${h.username} / 密码: ${h.password})`))
   console.log(`  - 1 season (Round 1, Stage: HOH Competition)`)
-  const { ensureCustomGameExamples } = require('./games/bigbrother/seedCustomGames')
-  await ensureCustomGameExamples()
+  const { removeCustomGameExamples } = require('./games/bigbrother/seedCustomGames')
+  await removeCustomGameExamples()
 }
 
 const PORT = process.env.PORT || 3000
