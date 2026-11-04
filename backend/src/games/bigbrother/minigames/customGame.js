@@ -64,6 +64,20 @@ function createCustomGameHandler(gameDef) {
 
   // 单题：与正确答案比较；无答案（管理员评判）返回 null
   function grade(q, userAnswer) {
+    if (q.qtype === 'match') {
+      const leftOrder = q.matchLeftOrder || []
+      const rightOrder = q.matchRightOrder || []
+      if (leftOrder.length === 0 || rightOrder.length !== leftOrder.length) return false
+      let mapping
+      try { mapping = JSON.parse(userAnswer) } catch { return false }
+      if (!mapping || typeof mapping !== 'object') return false
+      for (let li = 0; li < leftOrder.length; li++) {
+        const ri = Number(mapping[li])
+        if (!Number.isInteger(ri) || ri < 0 || ri >= rightOrder.length) return false
+        if (leftOrder[li] !== rightOrder[ri]) return false
+      }
+      return true
+    }
     if (q.qtype === 'number') {
       const a = Number(userAnswer)
       const c = Number(q.correctAnswer)
@@ -75,6 +89,10 @@ function createCustomGameHandler(gameDef) {
 
   // 题目是否设置了明确答案（有答案的题目可自动判定）
   function hasCorrectAnswer(q) {
+    if (q.qtype === 'match') {
+      return Array.isArray(q.pairs) && q.pairs.length >= 2 &&
+        q.pairs.every(p => String(p && p.left || '').trim() && String(p && p.right || '').trim())
+    }
     if (q.qtype === 'number') {
       return q.correctAnswer !== '' && q.correctAnswer !== null && q.correctAnswer !== undefined && !Number.isNaN(Number(q.correctAnswer))
     }
@@ -85,7 +103,10 @@ function createCustomGameHandler(gameDef) {
     return {
       questions: gameDef.questions.map(q => ({
         ...q,
-        shuffledOptions: q.options.length > 0 ? shuffleArray(q.options) : []
+        shuffledOptions: q.options.length > 0 ? shuffleArray(q.options) : [],
+        // 连线题：左右两列分别打乱，答案按原始配对下标校验
+        matchLeftOrder: q.qtype === 'match' ? shuffleArray(q.pairs.map((_, i) => i)) : [],
+        matchRightOrder: q.qtype === 'match' ? shuffleArray(q.pairs.map((_, i) => i)) : []
       })),
       currentIndex: 0,
       answers: {},          // qid -> { userAnswer, correct, points, submitTime }
@@ -430,21 +451,32 @@ function createCustomGameHandler(gameDef) {
               : (q.qtype === 'judge' ? (q.options && q.options.length ? q.options : ['对', '错']) : []),
             points: q.points,
             userAnswer: rec ? rec.userAnswer : '',
-            locked: !!ps.locked[q.id]
+            locked: !!ps.locked[q.id],
+            media: q.media || null
+          }
+          if (q.qtype === 'match') {
+            item.leftItems = (q.matchLeftOrder || []).map(i => (q.pairs[i] ? q.pairs[i].left : ''))
+            item.rightItems = (q.matchRightOrder || []).map(i => (q.pairs[i] ? q.pairs[i].right : ''))
           }
           if (revealPerQuestion) item.correct = rec ? !!rec.correct : false
           return item
         })
       } else {
         const q = ps.currentIndex < ps.questions.length ? ps.questions[ps.currentIndex] : null
-        base.currentQuestion = q ? {
+        const current = q ? {
           id: q.id,
           text: q.text,
           qtype: q.qtype || 'text',
           options: q.qtype === 'choice' ? (q.shuffledOptions || q.options)
             : (q.qtype === 'judge' ? (q.options && q.options.length ? q.options : ['对', '错']) : []),
-          points: q.points
+          points: q.points,
+          media: q.media || null
         } : null
+        if (current && q && q.qtype === 'match') {
+          current.leftItems = (q.matchLeftOrder || []).map(i => (q.pairs[i] ? q.pairs[i].left : ''))
+          current.rightItems = (q.matchRightOrder || []).map(i => (q.pairs[i] ? q.pairs[i].right : ''))
+        }
+        base.currentQuestion = current
       }
 
       return base
@@ -497,7 +529,11 @@ function createCustomGameHandler(gameDef) {
               text: q.text,
               qtype: q.qtype,
               options: q.qtype === 'choice' ? (q.options || []) : [],
-              correctAnswer: q.correctAnswer,
+              correctAnswer: q.qtype === 'match'
+                ? (q.pairs || []).map(p => `${p.left} → ${p.right}`).join('；')
+                : q.correctAnswer,
+              pairs: q.pairs || [],
+              media: q.media || null,
               userAnswer: a ? a.userAnswer : null,
               correct: a ? a.correct : null
             }
@@ -509,7 +545,17 @@ function createCustomGameHandler(gameDef) {
         type: 'custom',
         gameType: gameDef.type,
         winCondition: gameDef.winCondition,
-        questions: gameDef.questions.map(q => ({ id: q.id, text: q.text, qtype: q.qtype, options: q.options || [], correctAnswer: q.correctAnswer })),
+        questions: gameDef.questions.map(q => ({
+          id: q.id,
+          text: q.text,
+          qtype: q.qtype,
+          options: q.options || [],
+          correctAnswer: q.qtype === 'match'
+            ? (q.pairs || []).map(p => `${p.left} → ${p.right}`).join('；')
+            : q.correctAnswer,
+          pairs: q.pairs || [],
+          media: q.media || null
+        })),
         players
       }
     }

@@ -15,7 +15,13 @@ function buildAdminView(minigameId, state) {
       const first = pids.length ? src[pids[0]] : null
       const summary = {}
       if (first && Array.isArray(first.questions)) {
-        summary['题目（含正确答案）'] = first.questions.map(q => `${q.text}（${q.correctAnswer ?? '—'}）`)
+        summary['题目（含正确答案）'] = first.questions.map(q => {
+          if (q.qtype === 'match') {
+            const pairs = (q.pairs || []).map(p => `${p.left}→${p.right}`).join('；')
+            return `${q.text}（${pairs || '—'}）`
+          }
+          return `${q.text}（${q.correctAnswer ?? '—'}）`
+        })
       }
       if (state.phase) summary['阶段'] = state.phase
       if (state.round != null) summary['轮次'] = state.round

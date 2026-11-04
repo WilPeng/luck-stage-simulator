@@ -655,7 +655,7 @@ export interface BBHohMonitorRoom {
 
 export type CustomGameType = 'quiz' | 'score' | 'elim-last' | 'first-pick' | 'duel' | 'survive-tb' | 'score-tb'
 export type CustomGameWinCondition = 'first_correct' | 'highest_score' | 'most_correct' | 'all_correct' | 'target_correct' | 'admin_judge'
-export type CustomGameQType = 'text' | 'choice' | 'number' | 'judge'
+export type CustomGameQType = 'text' | 'choice' | 'number' | 'judge' | 'match'
 export type CustomGameScoringRule = 'correct_only' | 'timed_bonus'
 export type CustomGameSubmitMode = 'single' | 'batch'
 export type CustomGameWrongFeedback = 'none' | 'count' | 'reveal' | 'all_correct_only'
@@ -668,6 +668,8 @@ export interface CustomGameQuestion {
   correctAnswer: string | number
   points: number
   tb?: boolean
+  pairs?: { left: string; right: string }[]
+  media?: { url: string; kind: 'audio' | 'video'; name?: string } | null
 }
 
 export interface BBCustomGameDef {
@@ -717,11 +719,15 @@ export interface BBGameLibrary {
 export interface CustomGameBatchQuestion {
   id: string
   text: string
+  qtype?: CustomGameQType
   options: string[]
   points: number
   userAnswer: string
   correct: boolean
   locked: boolean
+  leftItems?: string[]
+  rightItems?: string[]
+  media?: { url: string; kind: 'audio' | 'video'; name?: string } | null
 }
 
 export interface CustomGamePlayerState {
@@ -732,8 +738,12 @@ export interface CustomGamePlayerState {
   currentQuestion: {
     id: string
     text: string
+    qtype?: CustomGameQType
     options: string[]
     points: number
+    leftItems?: string[]
+    rightItems?: string[]
+    media?: { url: string; kind: 'audio' | 'video'; name?: string } | null
   } | null
   questions?: CustomGameBatchQuestion[]
   currentIndex: number

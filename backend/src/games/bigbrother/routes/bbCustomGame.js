@@ -13,11 +13,15 @@ const ALLOWED_TYPES = ['quiz', 'score', 'elim-last', 'first-pick', 'duel', 'surv
 const MODE_TYPES = ['elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb']
 
 function normalizeQtype(q) {
-  if (q.qtype && ['text', 'choice', 'number', 'judge'].includes(q.qtype)) return q.qtype
+  if (q.qtype && ['text', 'choice', 'number', 'judge', 'match'].includes(q.qtype)) return q.qtype
   return (q.options && q.options.length) ? 'choice' : 'text'
 }
 
 function hasAnswer(q) {
+  if (q.qtype === 'match') {
+    return Array.isArray(q.pairs) && q.pairs.length >= 2 &&
+      q.pairs.every(p => String(p && p.left || '').trim() && String(p && p.right || '').trim())
+  }
   if (q.qtype === 'number') {
     return q.correctAnswer !== '' && q.correctAnswer !== null && q.correctAnswer !== undefined && !Number.isNaN(Number(q.correctAnswer))
   }
@@ -28,14 +32,25 @@ function mapQuestion(q, idx) {
   const qtype = normalizeQtype(q)
   let options = (q.options || []).map(o => String(o).trim()).filter(Boolean)
   if (qtype === 'judge' && options.length === 0) options = ['对', '错']
+  const pairs = qtype === 'match' && Array.isArray(q.pairs)
+    ? q.pairs
+        .map(p => ({ left: String(p && p.left || '').trim(), right: String(p && p.right || '').trim() }))
+        .filter(p => p.left && p.right)
+    : []
   return {
     id: q.id || `q-${idx + 1}`,
     text: String(q.text || '').trim(),
     qtype,
-    options: qtype === 'number' ? [] : options,
-    correctAnswer: qtype === 'number' ? Number(q.correctAnswer) : String(q.correctAnswer == null ? '' : q.correctAnswer).trim(),
+    options: (qtype === 'number' || qtype === 'match') ? [] : options,
+    correctAnswer: qtype === 'match'
+      ? ''
+      : (qtype === 'number' ? Number(q.correctAnswer) : String(q.correctAnswer == null ? '' : q.correctAnswer).trim()),
     points: q.points || 1,
-    tb: !!q.tb
+    tb: !!q.tb,
+    pairs,
+    media: q.media && q.media.url
+      ? { url: String(q.media.url), kind: q.media.kind === 'video' ? 'video' : 'audio', name: String(q.media.name || '') }
+      : null
   }
 }
 

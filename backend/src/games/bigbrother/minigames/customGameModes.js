@@ -16,6 +16,20 @@ function normalize(v) {
 
 function gradeQuestion(q, answer) {
   if (!q) return false
+  if (q.qtype === 'match') {
+    const leftOrder = q._matchLeftOrder || []
+    const rightOrder = q._matchRightOrder || []
+    if (leftOrder.length === 0 || rightOrder.length !== leftOrder.length) return false
+    let mapping
+    try { mapping = JSON.parse(answer) } catch { return false }
+    if (!mapping || typeof mapping !== 'object') return false
+    for (let li = 0; li < leftOrder.length; li++) {
+      const ri = Number(mapping[li])
+      if (!Number.isInteger(ri) || ri < 0 || ri >= rightOrder.length) return false
+      if (leftOrder[li] !== rightOrder[ri]) return false
+    }
+    return true
+  }
   if (q.qtype === 'number') {
     const a = Number(answer)
     const c = Number(q.correctAnswer)
@@ -53,13 +67,19 @@ function createModeHandler(gameDef) {
 
   function publicQuestion(q) {
     if (!q) return null
-    return {
+    const out = {
       id: q.id,
       text: q.text,
       qtype: q.qtype || 'text',
       options: q.qtype === 'choice' ? q.options : (q.qtype === 'judge' ? (q.options.length ? q.options : ['对', '错']) : []),
-      points: q.points || 1
+      points: q.points || 1,
+      media: q.media || null
     }
+    if (q.qtype === 'match') {
+      out.leftItems = (q._matchLeftOrder || []).map(i => (q.pairs[i] ? q.pairs[i].left : ''))
+      out.rightItems = (q._matchRightOrder || []).map(i => (q.pairs[i] ? q.pairs[i].right : ''))
+    }
+    return out
   }
 
   function init(participants) {
@@ -139,8 +159,13 @@ function createModeHandler(gameDef) {
 
   function beginQuestion(state, q) {
     resetRoundAnswers(state)
-    state._q = q
-    state.question = publicQuestion(q)
+    let active = q
+    if (q && q.qtype === 'match' && Array.isArray(q.pairs)) {
+      const indices = q.pairs.map((_, i) => i)
+      active = { ...q, _matchLeftOrder: shuffle(indices), _matchRightOrder: shuffle(indices) }
+    }
+    state._q = active
+    state.question = publicQuestion(active)
     state.phase = 'answering'
     state.deadline = Date.now() + limitFor(state)
     state.nextAt = 0

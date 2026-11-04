@@ -59,6 +59,7 @@
 
     <template v-else-if="state.question">
       <div class="q-text" v-html="sanitizeRichText(state.question.text)"></div>
+      <MediaPlayer v-if="state.question.media" :media="state.question.media" />
       <div v-if="state.question.points > 1" class="points-hint">本题 {{ state.question.points }} 分</div>
 
       <template v-if="canInput">
@@ -76,6 +77,14 @@
           v-model="padValue"
           @submit="submitNumber"
         />
+        <template v-else-if="state.question.qtype === 'match'">
+          <MatchAnswer
+            v-model="matchAnswer"
+            :leftItems="state.question.leftItems || []"
+            :rightItems="state.question.rightItems || []"
+          />
+          <button class="submit-btn" :disabled="!matchComplete" @click="submitMatch">提交连线答案</button>
+        </template>
         <div v-else class="answer-input">
           <input
             v-model="textAnswer"
@@ -96,6 +105,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import NumberPad from './NumberPad.vue'
+import MatchAnswer from './MatchAnswer.vue'
+import MediaPlayer from './MediaPlayer.vue'
 import { sanitizeRichText } from '../../../utils/richText'
 
 const props = defineProps<{ state: any; myId: string }>()
@@ -118,11 +129,31 @@ const modeName = computed(() => ({
 const myAnswer = computed(() => props.state.my?.myAnswer ?? null)
 const textAnswer = ref('')
 const padValue = ref(0)
+const matchAnswer = ref('')
 
 watch(() => props.state.my?.myAnswer, (v) => {
   if (v == null) return
   if (typeof v === 'number' || /^\d+$/.test(String(v))) padValue.value = Number(v) || 0
   textAnswer.value = String(v)
+  if (props.state.question?.qtype === 'match') matchAnswer.value = String(v)
+})
+
+watch(() => props.state.question?.id, () => {
+  matchAnswer.value = ''
+})
+
+const matchComplete = computed(() => {
+  const total = (props.state.question?.leftItems || []).length
+  if (!total) return false
+  try {
+    const mapping = JSON.parse(matchAnswer.value || '{}')
+    for (let i = 0; i < total; i++) {
+      if (!(i in mapping)) return false
+    }
+    return true
+  } catch {
+    return false
+  }
 })
 
 const timerActive = computed(() =>
@@ -154,6 +185,10 @@ function submitNumber(v: number) {
 function submitText() {
   if (!textAnswer.value) return
   emit('action', { type: 'answer', answer: textAnswer.value })
+}
+function submitMatch() {
+  if (!matchComplete.value) return
+  emit('action', { type: 'answer', answer: matchAnswer.value })
 }
 </script>
 

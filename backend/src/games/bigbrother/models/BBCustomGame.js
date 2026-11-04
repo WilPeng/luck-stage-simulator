@@ -17,7 +17,7 @@ class BBCustomGame extends BaseModel {
     this.type = data.type || 'quiz'
 
     // 题目列表（admin_judge 模式下 correctAnswer 可为空）
-    // qtype: text(填空) | choice(选择) | number(数字) | judge(判断)
+    // qtype: text(填空) | choice(选择) | number(数字) | judge(判断) | match(连线)
     // tb: 是否为数字加时题（模式4/5使用）
     this.questions = (data.questions || []).map(q => ({
       id: q.id || crypto.randomUUID(),
@@ -26,7 +26,15 @@ class BBCustomGame extends BaseModel {
       options: q.options || [],
       correctAnswer: q.correctAnswer === 0 ? 0 : (q.correctAnswer || ''),
       points: q.points || 1,
-      tb: !!q.tb
+      tb: !!q.tb,
+      // 连线题配对：[{ left, right }]
+      pairs: Array.isArray(q.pairs)
+        ? q.pairs.map(p => ({ left: String(p.left || ''), right: String(p.right || '') }))
+        : [],
+      // 题目附件：视频 / 音频
+      media: q.media && q.media.url
+        ? { url: q.media.url, kind: q.media.kind === 'video' ? 'video' : 'audio', name: q.media.name || '' }
+        : null
     }))
 
     // ===== 模式1/2/3 =====

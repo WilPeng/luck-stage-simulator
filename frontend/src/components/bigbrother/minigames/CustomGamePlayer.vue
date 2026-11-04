@@ -72,6 +72,7 @@
                 <span v-if="q.locked" class="q-locked">🔒 已锁定</span>
               </div>
               <div class="batch-q-text" v-html="sanitizeRichText(q.text)"></div>
+              <MediaPlayer v-if="q.media" :media="q.media" />
               <div v-if="q.options && q.options.length" class="options-grid">
                 <button
                   v-for="opt in q.options"
@@ -87,6 +88,14 @@
                 :modelValue="Number(batchAnswers[q.id] || 0)"
                 :disabled="q.locked || cooldownRemaining > 0"
                 @update:modelValue="batchAnswers[q.id] = String($event)"
+              />
+              <MatchAnswer
+                v-else-if="q.qtype === 'match'"
+                :leftItems="q.leftItems || []"
+                :rightItems="q.rightItems || []"
+                :modelValue="batchAnswers[q.id] || ''"
+                :disabled="q.locked || cooldownRemaining > 0"
+                @update:modelValue="batchAnswers[q.id] = $event"
               />
               <input
                 v-else
@@ -113,6 +122,7 @@
         </div>
         <div v-else-if="currentQuestion" class="question-area">
           <div class="question-text" v-html="sanitizeRichText(currentQuestion.text)"></div>
+          <MediaPlayer v-if="currentQuestion.media" :media="currentQuestion.media" />
           <div v-if="currentQuestion.points > 1" class="points-hint">本题 {{ currentQuestion.points }} 分</div>
 
           <div v-if="currentQuestion.options && currentQuestion.options.length" class="options-grid">
@@ -131,6 +141,17 @@
             :disabled="cooldownRemaining > 0"
             @submit="submitNumberAnswer"
           />
+          <template v-else-if="currentQuestion.qtype === 'match'">
+            <MatchAnswer
+              v-model="userAnswer"
+              :leftItems="currentQuestion.leftItems || []"
+              :rightItems="currentQuestion.rightItems || []"
+              :disabled="cooldownRemaining > 0"
+            />
+            <button class="submit-btn" :disabled="!matchAnswerComplete || cooldownRemaining > 0" @click="submitAnswer">
+              {{ cooldownRemaining > 0 ? `冷却中 ${cooldownRemaining}s` : '提交连线答案' }}
+            </button>
+          </template>
           <div v-else class="answer-input">
             <input ref="inputRef" v-model="userAnswer" class="bb-input" placeholder="输入答案"
               :disabled="cooldownRemaining > 0" @keyup.enter="submitAnswer" />
@@ -157,6 +178,8 @@ import { useMinigameSocket } from '../../../composables/useMinigameSocket'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import CustomModeArena from './CustomModeArena.vue'
 import NumberPad from './NumberPad.vue'
+import MatchAnswer from './MatchAnswer.vue'
+import MediaPlayer from './MediaPlayer.vue'
 import { sanitizeRichText } from '../../../utils/richText'
 
 const props = defineProps<{ roomId: string; participants: { playerId: string; playerName: string }[]; gameTitle?: string }>()
@@ -230,7 +253,26 @@ const timeRemaining = computed(() => {
   return Math.max(0, Math.ceil((timerEndTime.value - Date.now()) / 1000))
 })
 
-const hasBatchAnswer = computed(() => Object.values(batchAnswers.value).some(v => v && String(v).trim()))
+const hasBatchAnswer = computed(() => Object.values(batchAnswers.value).some(v => {
+  const s = String(v == null ? '' : v).trim()
+  return !!s && s !== '{}'
+}))
+
+const matchAnswerComplete = computed(() => {
+  const q = currentQuestion.value
+  if (!q || q.qtype !== 'match') return false
+  const total = (q.leftItems || []).length
+  if (total === 0) return false
+  try {
+    const mapping = JSON.parse(userAnswer.value || '{}')
+    for (let i = 0; i < total; i++) {
+      if (!(i in mapping)) return false
+    }
+    return true
+  } catch {
+    return false
+  }
+})
 
 function formatTime(sec: number) {
   const m = Math.floor(sec / 60)

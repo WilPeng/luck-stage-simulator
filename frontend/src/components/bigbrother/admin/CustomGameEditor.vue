@@ -223,7 +223,24 @@
                 <option value="choice">选择</option>
                 <option value="number">数字</option>
                 <option value="judge">判断</option>
+                <option value="match">连线</option>
               </select>
+            </div>
+            <div class="form-row">
+              <label>题目媒体（视频 / 音频，可选）</label>
+              <div v-if="q.media && q.media.url" class="media-preview">
+                <span>{{ q.media.kind === 'video' ? '🎬' : '🎵' }} {{ q.media.name || q.media.url }}</span>
+                <button type="button" class="mini-btn" @click="q.media = null">移除</button>
+              </div>
+              <BBUploadBox
+                v-else
+                accept="audio/*,video/*"
+                icon="🎵🎬"
+                label="点击或拖拽上传视频 / 音频"
+                hint="支持 MP3 / MP4 等"
+                :busy="!!uploadingQuestionMedia[q.id]"
+                @file="onQuestionMediaFile(q, $event)"
+              />
             </div>
             <div class="form-row" v-if="q.qtype === 'choice'">
               <label>选项（每行一个）</label>
@@ -233,8 +250,20 @@
               <label>选项（每行一个，默认 对/错）</label>
               <input v-model="q.optionsText" class="bb-input" placeholder="对&#10;错" @blur="parseOptions(q)" />
             </div>
+            <div class="form-row" v-else-if="q.qtype === 'match'">
+              <label>连线配对（左 → 右，至少 2 组）</label>
+              <div class="match-editor">
+                <div v-for="(pair, pi) in q.pairs" :key="pi" class="match-edit-row">
+                  <input v-model="pair.left" class="bb-input" placeholder="左侧项" />
+                  <span class="match-arrow">→</span>
+                  <input v-model="pair.right" class="bb-input" placeholder="右侧项" />
+                  <button type="button" class="mini-btn" @click="removePair(q, pi)">删除</button>
+                </div>
+                <button type="button" class="mini-btn" @click="addPair(q)">+ 添加配对</button>
+              </div>
+            </div>
             <div class="form-row-inline">
-              <div class="form-row">
+              <div class="form-row" v-if="q.qtype !== 'match'">
                 <label>正确答案 {{ isAdminJudge ? '（可留空）' : '*' }}</label>
                 <input v-if="q.qtype === 'number'" v-model.number="q.correctAnswer" type="number" class="bb-input" placeholder="目标数字" />
                 <input v-else v-model="q.correctAnswer" class="bb-input" :placeholder="isAdminJudge ? '可留空' : '正确答案'" />
@@ -302,6 +331,8 @@ const emojiOptions = [
 
 interface QuestionForm extends CustomGameQuestion {
   optionsText: string
+  pairs: { left: string; right: string }[]
+  media: { url: string; kind: 'audio' | 'video'; name?: string } | null
 }
 
 function createBlankQuestion(idx: number): QuestionForm {
@@ -313,7 +344,9 @@ function createBlankQuestion(idx: number): QuestionForm {
     optionsText: '',
     correctAnswer: '',
     points: 1,
-    tb: false
+    tb: false,
+    pairs: [],
+    media: null
   }
 }
 
@@ -344,6 +377,7 @@ const form = reactive({
 })
 
 const uploadingMedia = ref(false)
+const uploadingQuestionMedia = ref<Record<string, boolean>>({})
 
 async function onMediaFile(file: File) {
   uploadingMedia.value = true
@@ -354,6 +388,18 @@ async function onMediaFile(file: File) {
     alert(e?.message || '上传失败')
   } finally {
     uploadingMedia.value = false
+  }
+}
+
+async function onQuestionMediaFile(q: QuestionForm, file: File) {
+  uploadingQuestionMedia.value = { ...uploadingQuestionMedia.value, [q.id]: true }
+  try {
+    const res = await bbUploadGameMedia(file)
+    q.media = { url: res.url, kind: res.kind, name: res.name }
+  } catch (e: any) {
+    alert(e?.message || '上传失败')
+  } finally {
+    uploadingQuestionMedia.value = { ...uploadingQuestionMedia.value, [q.id]: false }
   }
 }
 
@@ -384,6 +430,19 @@ function onQtypeChange(q: QuestionForm) {
     q.options = ['对', '错']
   }
   if (q.qtype === 'number') q.options = []
+  if (q.qtype === 'match' && (!Array.isArray(q.pairs) || q.pairs.length < 2)) {
+    q.pairs = [{ left: '', right: '' }, { left: '', right: '' }]
+  }
+}
+
+function addPair(q: QuestionForm) {
+  if (!Array.isArray(q.pairs)) q.pairs = []
+  q.pairs.push({ left: '', right: '' })
+}
+
+function removePair(q: QuestionForm, index: number) {
+  if (!Array.isArray(q.pairs)) return
+  q.pairs.splice(index, 1)
 }
 
 onMounted(() => {
@@ -414,6 +473,10 @@ onMounted(() => {
       ...q,
       qtype: (q as any).qtype || ((q.options && q.options.length) ? 'choice' : 'text'),
       tb: !!(q as any).tb,
+      pairs: Array.isArray((q as any).pairs)
+        ? (q as any).pairs.map((p: any) => ({ left: p.left || '', right: p.right || '' }))
+        : [],
+      media: (q as any).media || null,
       optionsText: q.options.join('\n')
     }))
   }
@@ -447,6 +510,11 @@ const isValid = computed(() => {
   }
   return form.questions.every(q => {
     if (!hasRichContent(q.text)) return false
+    if (q.qtype === 'match') {
+      if (!Array.isArray(q.pairs) || q.pairs.length < 2) return false
+      if (!q.pairs.every(p => String(p.left).trim() && String(p.right).trim())) return false
+      return true
+    }
     if (!isAdminJudge.value) {
       if (q.qtype === 'number') {
         if (q.correctAnswer === '' || q.correctAnswer === null || Number.isNaN(Number(q.correctAnswer))) return false
@@ -473,7 +541,9 @@ async function save() {
         options: q.options,
         correctAnswer: q.correctAnswer,
         points: q.points,
-        tb: !!q.tb
+        tb: !!q.tb,
+        pairs: q.qtype === 'match' ? q.pairs : [],
+        media: q.media || null
       })),
       submitMode: form.questionRelease === 'sequential' ? 'single' : 'batch',
       questionRelease: form.questionRelease,
@@ -545,6 +615,10 @@ textarea.bb-input { resize: vertical; font-family: inherit; }
 .btn-add { border-color: #b39bff66; }
 .empty-hint { color: #6b5f92; font-size: 13px; padding: 12px 0; }
 .question-card { border: 1px solid #b39bff22; border-radius: 8px; padding: 12px; margin-bottom: 12px; background: #17112a22; }
+.match-editor { display: flex; flex-direction: column; gap: 8px; }
+.match-edit-row { display: flex; align-items: center; gap: 8px; }
+.match-edit-row .bb-input { flex: 1; min-width: 0; }
+.match-arrow { color: #b39bff; flex-shrink: 0; }
 .question-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .q-num { font-size: 13px; font-weight: 700; color: #b39bff; }
 .q-actions { display: flex; gap: 4px; }
