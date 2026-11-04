@@ -18,7 +18,7 @@
 
     <!-- 比赛进行中：渲染小游戏 -->
     <div v-else-if="gameComponent" class="minigame-section">
-      <component :is="gameComponent" :roomId="activeRoom.roomId" :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
+      <component :is="gameComponent" :roomId="activeRoom.roomId" :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" :roomStatus="activeRoom.status" @finished="onMinigameFinished" />
     </div>
 
     <div class="card">
@@ -67,6 +67,7 @@ import StayOrFoldGame from '../../../components/bigbrother/minigames/StayOrFold.
 import CatchMistressGame from '../../../components/bigbrother/minigames/CatchMistress.vue'
 import GermanHeartGame from '../../../components/bigbrother/minigames/GermanHeartGame.vue'
 import NumberDivinationGame from '../../../components/bigbrother/minigames/NumberDivinationGame.vue'
+import Poker17Game from '../../../components/bigbrother/minigames/Poker17Game.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 
 const route = useRoute()
@@ -108,7 +109,8 @@ const gameComponentMap: Record<string, Component> = {
   'stay-or-fold': markRaw(StayOrFoldGame),
   'catch-mistress': markRaw(CatchMistressGame),
   'german-heart': markRaw(GermanHeartGame),
-  'number-divination': markRaw(NumberDivinationGame)
+  'number-divination': markRaw(NumberDivinationGame),
+  'poker17': markRaw(Poker17Game)
 }
 
 async function fetchData() {

@@ -12,7 +12,7 @@
     <div v-else-if="!gameStarted" class="game-waiting">
       <div class="game-icon">🎭</div>
       <h2>少数决</h2>
-      <p>每轮15秒二选一，多数方与未作答者出局，存活到最后者胜！</p>
+      <p>每轮15秒二选一：未作答/多数方出局，平票或某选项无人时不淘汰，1:1 或 2:0 比手速！</p>
       <div v-if="countdown > 0" class="countdown-big"><CountdownDisplay :value="countdown" /></div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>

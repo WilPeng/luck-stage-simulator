@@ -29,7 +29,7 @@
     <!-- 小游戏模式 -->
     <div v-else-if="showMinigame" class="minigame-section">
       <component :is="gameComponent" :roomId="activeRoom.roomId"
-        :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
+        :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" :roomStatus="activeRoom.status" @finished="onMinigameFinished" />
     </div>
 
     <!-- 等待进入比赛：room 已创建且我是参与者，但尚未开始 -->
@@ -149,6 +149,7 @@ import StayOrFoldGame from '../../../components/bigbrother/minigames/StayOrFold.
 import CatchMistressGame from '../../../components/bigbrother/minigames/CatchMistress.vue'
 import GermanHeartGame from '../../../components/bigbrother/minigames/GermanHeartGame.vue'
 import NumberDivinationGame from '../../../components/bigbrother/minigames/NumberDivinationGame.vue'
+import Poker17Game from '../../../components/bigbrother/minigames/Poker17Game.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import type { BBVetoRecord, MinigameRoom } from '../../../types/bigbrother'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
@@ -228,7 +229,8 @@ const gameComponentMap: Record<string, Component> = {
   'stay-or-fold': markRaw(StayOrFoldGame),
   'catch-mistress': markRaw(CatchMistressGame),
   'german-heart': markRaw(GermanHeartGame),
-  'number-divination': markRaw(NumberDivinationGame)
+  'number-divination': markRaw(NumberDivinationGame),
+  'poker17': markRaw(Poker17Game)
 }
 
 function isMe(name: string): boolean { return name === myName.value }

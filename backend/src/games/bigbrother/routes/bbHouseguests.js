@@ -213,11 +213,11 @@ router.post('/batch-delete', async (req, res) => {
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ success: false, error: '请选择要删除的房客', code: 'INVALID_IDS' })
     }
-    // 过滤掉管理员与不存在的 id
+    // 仅保护总管理员；其余（含普通管理员）都可删除
     const guests = await BBHouseguest.find({ gameId: 'bigbrother' })
-    const adminIds = new Set(guests.filter(g => g.role === 'admin').map(g => g.id))
+    const protectedIds = new Set(guests.filter(g => g.isSuperAdmin).map(g => g.id))
     const idSet = new Set(ids)
-    const targets = guests.filter(g => idSet.has(g.id) && !adminIds.has(g.id))
+    const targets = guests.filter(g => idSet.has(g.id) && !protectedIds.has(g.id))
     let deleted = 0
     for (const g of targets) {
       await BBHouseguest.deleteOne({ id: g.id, gameId: 'bigbrother' })

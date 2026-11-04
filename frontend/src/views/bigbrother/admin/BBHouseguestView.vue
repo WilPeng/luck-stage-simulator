@@ -45,7 +45,7 @@
         <tbody>
           <tr v-for="h in list" :key="h.id">
             <td class="check-col">
-              <input type="checkbox" :value="h.id" v-model="selectedIds" :disabled="h.role === 'admin'" />
+              <input type="checkbox" :value="h.id" v-model="selectedIds" :disabled="h.isSuperAdmin" />
             </td>
             <td><BBAvatar :name="h.name" :avatar="h.avatar" size="sm" /></td>
             <td class="name-cell">{{ h.name }}</td>
@@ -67,7 +67,7 @@
             <td class="actions">
               <button class="bb-btn bb-btn-xs" @click="editHouseguest(h)">编辑</button>
               <button v-if="h.role === 'admin' && !h.isSuperAdmin" class="bb-btn bb-btn-xs" @click="setSuperAdmin(h)">设为总管理员</button>
-              <button v-if="!(h.role === 'admin' && h.username === 'admin') && !h.isSuperAdmin" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
+              <button v-if="!h.isSuperAdmin" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
             </td>
           </tr>
           <tr v-if="list.length === 0"><td colspan="9" class="empty-cell">暂无数据</td></tr>
@@ -213,7 +213,7 @@ const editingSuperAdmin = computed(() => {
   return !!h?.isSuperAdmin
 })
 
-const selectableList = computed(() => list.value.filter(h => h.role !== 'admin'))
+const selectableList = computed(() => list.value.filter(h => !h.isSuperAdmin))
 const allSelected = computed(() => selectableList.value.length > 0 && selectableList.value.every(h => selectedIds.value.includes(h.id)))
 
 function toggleAll(e: Event) {
@@ -228,7 +228,7 @@ async function confirmBatchDelete() {
     const res = await bbBatchDeleteHouseguests(selectedIds.value)
     selectedIds.value = []
     await fetchData()
-    alert(`已删除 ${res.deleted} 位房客${res.skipped ? `，跳过 ${res.skipped} 位（管理员不可删除）` : ''}`)
+    alert(`已删除 ${res.deleted} 位房客${res.skipped ? `，跳过 ${res.skipped} 位（总管理员不可删除）` : ''}`)
   } catch (e: any) {
     alert(e?.message || '批量删除失败')
   }

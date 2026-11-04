@@ -40,7 +40,7 @@
       <div v-else-if="activeRoom && inMe(activeRoom)" class="minigame-section">
         <div class="game-stage-tip">第 {{ currentGameStageText }} 场挑战</div>
         <component :is="gameComponent" :roomId="activeRoom.roomId"
-          :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
+          :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" :roomStatus="activeRoom.status" @finished="onMinigameFinished" />
       </div>
       <div v-else-if="!iAmFhoh || (round3Done && finalTwo.length)" class="pending-card">
         <div class="pending-icon">🎮</div>
@@ -134,6 +134,7 @@ import StayOrFoldGame from '../../../components/bigbrother/minigames/StayOrFold.
 import CatchMistressGame from '../../../components/bigbrother/minigames/CatchMistress.vue'
 import GermanHeartGame from '../../../components/bigbrother/minigames/GermanHeartGame.vue'
 import NumberDivinationGame from '../../../components/bigbrother/minigames/NumberDivinationGame.vue'
+import Poker17Game from '../../../components/bigbrother/minigames/Poker17Game.vue'
 import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
 import JuryQA from '../../../components/bigbrother/JuryQA.vue'
 import type { MinigameRoom, BBEndgameStatus } from '../../../types/bigbrother'
@@ -190,7 +191,8 @@ const gameComponentMap: Record<string, Component> = {
   'stay-or-fold': markRaw(StayOrFoldGame),
   'catch-mistress': markRaw(CatchMistressGame),
   'german-heart': markRaw(GermanHeartGame),
-  'number-divination': markRaw(NumberDivinationGame)
+  'number-divination': markRaw(NumberDivinationGame),
+  'poker17': markRaw(Poker17Game)
 }
 
 function inMe(room: MinigameRoom): boolean {

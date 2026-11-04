@@ -23,7 +23,7 @@
     <!-- 小游戏模式：有活跃房间且玩家在参与者中 -->
     <div v-else-if="showMinigame" class="minigame-section">
       <component :is="gameComponent" :roomId="activeRoom.roomId"
-        :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
+        :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" :roomStatus="activeRoom.status" @finished="onMinigameFinished" />
     </div>
 
     <!-- 已有结果 -->
@@ -92,6 +92,7 @@ import StayOrFoldGame from '../../../components/bigbrother/minigames/StayOrFold.
 import CatchMistressGame from '../../../components/bigbrother/minigames/CatchMistress.vue'
 import GermanHeartGame from '../../../components/bigbrother/minigames/GermanHeartGame.vue'
 import NumberDivinationGame from '../../../components/bigbrother/minigames/NumberDivinationGame.vue'
+import Poker17Game from '../../../components/bigbrother/minigames/Poker17Game.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import type { BBHohRecord, MinigameRoom } from '../../../types/bigbrother'
 
@@ -141,6 +142,7 @@ const gameComponentMap: Record<string, Component> = {
   'catch-mistress': markRaw(CatchMistressGame),
   'german-heart': markRaw(GermanHeartGame),
   'number-divination': markRaw(NumberDivinationGame),
+  'poker17': markRaw(Poker17Game),
   'power-challenge': markRaw(PowerChallengeGame)
 }
 

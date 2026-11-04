@@ -227,6 +227,9 @@ router.post('/create-room', async (req, res) => {
     if (!participants || !Array.isArray(participants) || participants.length < 2) {
       return res.status(400).json({ success: false, error: '参与者至少需要2人' })
     }
+    if (minigameId === 'poker17' && participants.length !== 2) {
+      return res.status(400).json({ success: false, error: '17 Poker 是双人游戏，参与者必须正好2人' })
+    }
 
     const minigameNs = req.app.get('io')?.of('/bigbrother-minigame')
     if (!minigameNs) {

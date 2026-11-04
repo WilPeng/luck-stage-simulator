@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "seed": "node src/seed.js"
+    "seed": "node src/seed.js",
+    "test": "node --test test/poker17.engine.test.js test/poker17.room.test.js"
   },
   "dependencies": {
     "archiver": "^6.0.2",

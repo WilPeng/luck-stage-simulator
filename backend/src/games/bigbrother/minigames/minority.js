@@ -3,9 +3,12 @@ const { registerGame } = require('./index')
 /**
  * 少数决 (Minority)
  * 每轮限时15秒，选手对一个无标准答案的二选一问题作答。
- * 多数答案一方全员出局，未作答者全员出局；两方人数相等则不淘汰。
- * 若最后剩2人未出局，比较他们在该题的作答时间，更早者获胜。
- * 其他情况存活到最后一人获胜。
+ * 结算顺序：
+ *  1) 未作答者优先出局；若剩余仅 1 人，该人直接获胜。
+ *  2) 剩余 >=2 人时按选项人数判定：
+ *     - 平票（1:1 除外）或某选项为 0 人（2:0 除外）→ 本轮不淘汰，继续下一题。
+ *     - 不同票型（双方均有人且不相等）→ 人数多的选项一方全部出局。
+ *     - 1:1 或 2:0 → 作答手速更快者获胜。
  */
 const ROUND_MS = 15000
 
@@ -47,7 +50,7 @@ registerGame({
   id: 'minority',
   name: '少数决',
   icon: '🎭',
-  description: '每轮15秒二选一，多数方与未作答者出局，存活到最后者胜',
+  description: '每轮15秒二选一：未作答/多数方出局，平票或某选项无人时不淘汰，1:1 或 2:0 比手速',
   category: 'strategy',
   playerCount: { min: 2, max: 20 },
   duration: 300,
@@ -137,35 +140,71 @@ registerGame({
 
   _resolveRound(state) {
     state.resolved = true
+    const nameOf = pid => (state.playerStates[pid] && state.playerStates[pid].name) || pid
     const alive = Object.entries(state.playerStates).filter(([, p]) => p.alive)
-    let count0 = 0, count1 = 0
-    for (const [pid] of alive) {
-      const a = state.roundAnswers[pid]
-      if (!a) continue
-      if (a.choice === 0) count0++
-      else count1++
-    }
+    const eliminated = []
 
-    let eliminated = []
-    const noAns = alive.filter(([pid]) => !state.roundAnswers[pid]).map(([pid]) => pid)
-    if (count0 !== count1) {
-      const majority = count0 > count1 ? 0 : 1
-      const majorityIds = alive
-        .filter(([pid]) => state.roundAnswers[pid] && state.roundAnswers[pid].choice === majority)
-        .map(([pid]) => pid)
-      // 未作答者先出局，其次多数方
-      eliminated = [...noAns, ...majorityIds]
-    } else {
-      eliminated = noAns
-    }
-
-    for (const pid of eliminated) {
+    const eliminate = pid => {
+      if (!state.playerStates[pid] || !state.playerStates[pid].alive) return
       state.playerStates[pid].alive = false
       state.playerStates[pid].eliminatedRound = state.round
+      eliminated.push(pid)
     }
+
+    // 1) 未作答者优先出局
+    const noAns = alive.filter(([pid]) => !state.roundAnswers[pid]).map(([pid]) => pid)
+    for (const pid of noAns) eliminate(pid)
+
+    // 剩余已作答且仍存活的玩家
+    let remaining = alive
+      .filter(([pid]) => state.roundAnswers[pid] && state.playerStates[pid].alive)
+      .map(([pid]) => pid)
+
+    // 两人中作答更快者（手速）
+    const fasterOf = ids => {
+      const sorted = [...ids].sort((a, b) => {
+        const ta = state.roundAnswers[a] ? state.roundAnswers[a].time : Number.MAX_SAFE_INTEGER
+        const tb = state.roundAnswers[b] ? state.roundAnswers[b].time : Number.MAX_SAFE_INTEGER
+        return ta - tb
+      })
+      return sorted[0]
+    }
+
+    let winnerId = null
+    let wonBySpeed = false
+
+    if (remaining.length === 1) {
+      // 仅剩 1 人作答 → 直接获胜
+      winnerId = remaining[0]
+    } else if (remaining.length >= 2) {
+      const count0 = remaining.filter(pid => state.roundAnswers[pid].choice === 0).length
+      const count1 = remaining.length - count0
+
+      if (count0 === count1) {
+        // 平票：1:1 比手速，其余平票（如 2:2）本轮不淘汰
+        if (count0 === 1) { winnerId = fasterOf(remaining); wonBySpeed = true }
+      } else if (count0 === 0 || count1 === 0) {
+        // 某选项 0 人：2:0 比手速，其余（如 3:0）本轮不淘汰
+        if (remaining.length === 2) { winnerId = fasterOf(remaining); wonBySpeed = true }
+      } else {
+        // 不同票型：人数多的选项一方全部出局
+        const majority = count0 > count1 ? 0 : 1
+        const majorityIds = remaining.filter(pid => state.roundAnswers[pid].choice === majority)
+        for (const pid of majorityIds) eliminate(pid)
+        remaining = remaining.filter(pid => state.roundAnswers[pid].choice !== majority)
+        if (remaining.length === 1) winnerId = remaining[0]
+      }
+    }
+
+    // 手速获胜时，其余剩余者出局
+    if (winnerId) {
+      for (const pid of remaining) {
+        if (pid !== winnerId) eliminate(pid)
+      }
+    }
+
     state.lastEliminated = eliminated
 
-    const nameOf = pid => (state.playerStates[pid] && state.playerStates[pid].name) || pid
     const choiceText = alive.map(([pid]) => {
       const a = state.roundAnswers[pid]
       return `${nameOf(pid)}:${a ? optionLabel(state.question, a.choice) : '未作答'}`
@@ -180,6 +219,13 @@ registerGame({
 
     const survivors = Object.entries(state.playerStates).filter(([, p]) => p.alive)
 
+    if (winnerId) {
+      state.finished = true
+      state.winner = winnerId
+      pushReplay(state, 'finish', `${nameOf(winnerId)} ${wonBySpeed ? '作答更快，' : ''}获胜`, { winnerId })
+      return
+    }
+
     if (survivors.length === 0) {
       state.finished = true
       state.winner = null
@@ -191,18 +237,6 @@ registerGame({
       state.winner = survivors[0][0]
       pushReplay(state, 'finish', `${nameOf(state.winner)} 获胜`, { winnerId: state.winner })
       return
-    }
-    if (survivors.length === 2) {
-      // 比较两人本轮作答时间，更早者胜；若都没作答则继续下一轮
-      const times = survivors.map(([pid]) => ({ pid, t: state.roundAnswers[pid] ? state.roundAnswers[pid].time : null }))
-      if (times.every(x => x.t != null)) {
-        times.sort((a, b) => a.t - b.t)
-        state.finished = true
-        state.winner = times[0].pid
-        pushReplay(state, 'finish', `${nameOf(state.winner)} 作答更快，获胜`, { winnerId: state.winner })
-        return
-      }
-      // 无法比较则继续
     }
 
     // 继续下一轮

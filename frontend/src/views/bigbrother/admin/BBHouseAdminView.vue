@@ -109,13 +109,13 @@
         <div v-for="r in allRooms" :key="r.id" class="room-edit-row">
           <span class="re-name">{{ r.icon }} {{ r.name }}</span>
           <label class="re-field">人数
-            <input type="number" min="0" v-model.number="roomEdits[r.id].capacity" class="bb-input re-input" />
+            <input type="number" min="0" v-model.number="ensureRoomEdit(r).capacity" class="bb-input re-input" />
           </label>
           <label class="re-field">床位
-            <input type="number" min="0" v-model.number="roomEdits[r.id].bedLimit" class="bb-input re-input" />
+            <input type="number" min="0" v-model.number="ensureRoomEdit(r).bedLimit" class="bb-input re-input" />
           </label>
           <label class="re-field re-check">
-            <input type="checkbox" v-model="roomEdits[r.id].canSleep" /> 可睡觉
+            <input type="checkbox" v-model="ensureRoomEdit(r).canSleep" /> 可睡觉
           </label>
           <button class="bb-btn bb-btn-xs" @click="saveRoom(r.id)">保存</button>
         </div>
@@ -262,6 +262,20 @@ async function saveSeason() {
   }
 }
 
+// 保证房间编辑表单对象一定存在（避免渲染期访问 undefined.capacity）
+function ensureRoomEdit(room: any) {
+  const id = room?.id
+  if (!id) return { capacity: null, bedLimit: null, canSleep: false }
+  if (!roomEdits[id]) {
+    roomEdits[id] = {
+      capacity: room.capacity ?? null,
+      bedLimit: room.bedLimit ?? null,
+      canSleep: !!room.canSleep
+    }
+  }
+  return roomEdits[id]
+}
+
 async function saveRoom(roomId: string) {
   const e = roomEdits[roomId]
   if (!e) return
@@ -330,11 +344,7 @@ async function loadData() {
     allRooms.value = roomsRes || []
     rooms.value = allRooms.value
     locations.value = locRes || {}
-    // 获取后院门状态
-    backyardDoorOpen.value = mapRes?.backyardDoorOpen ?? true
-    await loadPhotoWall()
-
-    // 初始化房间编辑表单
+    // 先同步初始化房间编辑表单，避免渲染时访问未定义的 roomEdits[id]
     for (const r of allRooms.value) {
       if (!roomEdits[r.id]) {
         roomEdits[r.id] = {
@@ -344,6 +354,9 @@ async function loadData() {
         }
       }
     }
+    // 获取后院门状态
+    backyardDoorOpen.value = mapRes?.backyardDoorOpen ?? true
+    await loadPhotoWall()
     // 作息规则（仅首次加载，避免覆盖正在编辑的值）
     if (!rulesLoaded) {
       try {

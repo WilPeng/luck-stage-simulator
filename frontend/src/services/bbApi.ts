@@ -785,6 +785,68 @@ export async function bbSummonMinigamePlayers(roomId: string): Promise<any> {
   })
 }
 
+// ===== 17 Poker 休闲房 =====
+export interface Poker17RoomPlayer {
+  playerId: string
+  playerName: string
+  avatar?: string | null
+  connected?: boolean
+  ready?: boolean
+}
+
+export interface Poker17RoomSummary {
+  roomId: string
+  gameType: string
+  minigameId: string
+  minigameName: string
+  status: string
+  hostId: string | null
+  participants: Poker17RoomPlayer[]
+  playerCount: number
+  maxPlayers: number
+  createdAt: number | null
+  options: Record<string, any>
+}
+
+export async function bbGetPoker17Rooms(): Promise<Poker17RoomSummary[]> {
+  return doRequest<Poker17RoomSummary[]>('/poker17/rooms')
+}
+
+export async function bbGetPoker17MyRoom(): Promise<Poker17RoomSummary | null> {
+  return doRequest<Poker17RoomSummary | null>('/poker17/my-room')
+}
+
+export async function bbGetPoker17Room(roomId: string): Promise<Poker17RoomSummary> {
+  return doRequest<Poker17RoomSummary>(`/poker17/rooms/${roomId}`)
+}
+
+export async function bbCreatePoker17Room(): Promise<Poker17RoomSummary> {
+  return doRequest<Poker17RoomSummary>('/poker17/rooms', { method: 'POST' })
+}
+
+export async function bbJoinPoker17Room(roomId: string): Promise<Poker17RoomSummary> {
+  return doRequest<Poker17RoomSummary>(`/poker17/rooms/${roomId}/join`, { method: 'POST' })
+}
+
+export async function bbLeavePoker17Room(roomId: string): Promise<void> {
+  return doRequest<void>(`/poker17/rooms/${roomId}/leave`, { method: 'POST' })
+}
+
+export async function bbStartPoker17Room(roomId: string, countdownSeconds = 3): Promise<Poker17RoomSummary> {
+  return doRequest<Poker17RoomSummary>(`/poker17/rooms/${roomId}/start`, {
+    method: 'POST',
+    body: JSON.stringify({ countdownSeconds })
+  })
+}
+
+export async function bbRematchPoker17Room(roomId: string): Promise<Poker17RoomSummary> {
+  return doRequest<Poker17RoomSummary>(`/poker17/rooms/${roomId}/rematch`, { method: 'POST' })
+}
+
+export async function bbGetPoker17Records(limit = 10): Promise<any[]> {
+  return doRequest<any[]>(`/poker17/records?limit=${limit}`)
+}
+
 // ===== 小游戏实时观战 & 复盘 =====
 export async function bbGetActiveMinigameRooms(): Promise<any[]> {
   return doRequest<any[]>('/minigame/active-rooms')

@@ -59,6 +59,7 @@ app.use('/api/bigbrother/custom-game', bbGameIdMiddleware, require('./games/bigb
 app.use('/api/bigbrother/game-library', bbGameIdMiddleware, require('./games/bigbrother/routes/bbGameLibrary'))
 app.use('/api/bigbrother/power-challenge', bbGameIdMiddleware, require('./games/bigbrother/routes/bbPowerChallenge'))
 app.use('/api/bigbrother/house', bbGameIdMiddleware, require('./games/bigbrother/routes/bbHouse'))
+app.use('/api/bigbrother/poker17', bbGameIdMiddleware, require('./games/bigbrother/routes/bbPoker17'))
 
 // 请求体过大等解析错误统一返回 JSON，避免前端只收到 413 HTML
 app.use((err, req, res, next) => {
