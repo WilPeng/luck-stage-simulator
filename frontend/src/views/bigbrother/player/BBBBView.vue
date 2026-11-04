@@ -18,7 +18,7 @@
 
     <!-- 比赛进行中：渲染小游戏 -->
     <div v-else-if="gameComponent" class="minigame-section">
-      <component :is="gameComponent" :roomId="activeRoom.roomId" :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" :roomStatus="activeRoom.status" @finished="onMinigameFinished" />
+      <component :is="gameComponent" :roomId="activeRoom.roomId" :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
     </div>
 
     <div class="card">

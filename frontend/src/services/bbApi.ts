@@ -481,6 +481,13 @@ export async function bbVetoCeremonyStart(): Promise<BBVetoRecord> {
   return doRequest<BBVetoRecord>('/veto/ceremony-start', { method: 'POST' })
 }
 
+export async function bbVetoSaveDrafts(drafts: { opening?: string; use?: string; skip?: string; closing?: string }): Promise<BBVetoRecord> {
+  return doRequest<BBVetoRecord>('/veto/drafts', {
+    method: 'POST',
+    body: JSON.stringify({ drafts })
+  })
+}
+
 export async function bbVetoSpeech(phase: 'opening' | 'closing', text?: string): Promise<BBVetoRecord> {
   return doRequest<BBVetoRecord>('/veto/speech', {
     method: 'POST',
@@ -786,66 +793,12 @@ export async function bbSummonMinigamePlayers(roomId: string): Promise<any> {
   })
 }
 
-// ===== 17 Poker 休闲房 =====
 export interface Poker17RoomPlayer {
   playerId: string
   playerName: string
   avatar?: string | null
   connected?: boolean
   ready?: boolean
-}
-
-export interface Poker17RoomSummary {
-  roomId: string
-  gameType: string
-  minigameId: string
-  minigameName: string
-  status: string
-  hostId: string | null
-  participants: Poker17RoomPlayer[]
-  playerCount: number
-  maxPlayers: number
-  createdAt: number | null
-  options: Record<string, any>
-}
-
-export async function bbGetPoker17Rooms(): Promise<Poker17RoomSummary[]> {
-  return doRequest<Poker17RoomSummary[]>('/poker17/rooms')
-}
-
-export async function bbGetPoker17MyRoom(): Promise<Poker17RoomSummary | null> {
-  return doRequest<Poker17RoomSummary | null>('/poker17/my-room')
-}
-
-export async function bbGetPoker17Room(roomId: string): Promise<Poker17RoomSummary> {
-  return doRequest<Poker17RoomSummary>(`/poker17/rooms/${roomId}`)
-}
-
-export async function bbCreatePoker17Room(): Promise<Poker17RoomSummary> {
-  return doRequest<Poker17RoomSummary>('/poker17/rooms', { method: 'POST' })
-}
-
-export async function bbJoinPoker17Room(roomId: string): Promise<Poker17RoomSummary> {
-  return doRequest<Poker17RoomSummary>(`/poker17/rooms/${roomId}/join`, { method: 'POST' })
-}
-
-export async function bbLeavePoker17Room(roomId: string): Promise<void> {
-  return doRequest<void>(`/poker17/rooms/${roomId}/leave`, { method: 'POST' })
-}
-
-export async function bbStartPoker17Room(roomId: string, countdownSeconds = 3): Promise<Poker17RoomSummary> {
-  return doRequest<Poker17RoomSummary>(`/poker17/rooms/${roomId}/start`, {
-    method: 'POST',
-    body: JSON.stringify({ countdownSeconds })
-  })
-}
-
-export async function bbRematchPoker17Room(roomId: string): Promise<Poker17RoomSummary> {
-  return doRequest<Poker17RoomSummary>(`/poker17/rooms/${roomId}/rematch`, { method: 'POST' })
-}
-
-export async function bbGetPoker17Records(limit = 10): Promise<any[]> {
-  return doRequest<any[]>(`/poker17/records?limit=${limit}`)
 }
 
 // ===== 小游戏实时观战 & 复盘 =====
@@ -878,8 +831,11 @@ export async function bbBatchDeleteMinigameReplays(ids: string[]): Promise<{ del
 }
 
 // ===== 钥匙仪式（提名） =====
-export async function bbKeySetup(nominees: string[], order: string[]): Promise<any> {
-  return doRequest<any>('/nomination/key-setup', { method: 'POST', body: JSON.stringify({ nominees, order }) })
+export async function bbKeySetup(nominees: string[], order: string[], extra?: { openingText?: string; closingReason?: string }): Promise<any> {
+  return doRequest<any>('/nomination/key-setup', { method: 'POST', body: JSON.stringify({ nominees, order, ...(extra || {}) }) })
+}
+export async function bbKeyStart(): Promise<any> {
+  return doRequest<any>('/nomination/key-start', { method: 'POST', body: JSON.stringify({}) })
 }
 export async function bbKeyDraw(): Promise<any> {
   return doRequest<any>('/nomination/key-draw', { method: 'POST', body: JSON.stringify({}) })

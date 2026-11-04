@@ -24,19 +24,53 @@
       <p>暂无否决权记录</p>
     </div>
 
-    <!-- POV 仪式发言区 -->
+    <!-- POV 发言稿：仪式开始前可提前编辑模拟，仪式开始后仍可继续修改 -->
+    <div v-if="veto && isVetoHolder && !isFuture" class="draft-panel">
+      <div class="cer-title">🎤 POV 发言稿（可提前编辑，开始后也可修改）</div>
+      <div class="draft-field">
+        <label>开场发言</label>
+        <textarea v-model="draftOpening" class="draft-textarea" rows="2"
+          placeholder="现在是POV仪式，我作为否决权获得者，将决定是否使用否决权。"></textarea>
+      </div>
+      <div class="draft-field">
+        <label>使用否决权发言 <span class="draft-hint">可用 {name} 代表被拯救者</span></label>
+        <textarea v-model="draftUse" class="draft-textarea" rows="3"
+          placeholder="我决定对{name}使用POV。因为我对{name}使用了POV，所以HOH需要选择1名其他房客进行替补。"></textarea>
+      </div>
+      <div class="draft-field">
+        <label>不使用否决权发言</label>
+        <textarea v-model="draftSkip" class="draft-textarea" rows="2"
+          placeholder="我决定不使用POV"></textarea>
+      </div>
+      <div class="draft-field">
+        <label>结束发言</label>
+        <textarea v-model="draftClosing" class="draft-textarea" rows="2"
+          placeholder="POV仪式结束。"></textarea>
+      </div>
+      <div class="draft-actions">
+        <button class="bb-btn bb-btn-primary" :disabled="savingDrafts" @click="saveDrafts()">
+          {{ savingDrafts ? '保存中…' : '保存发言稿' }}
+        </button>
+        <span v-if="draftSavedTip" class="draft-saved-tip">已保存</span>
+      </div>
+    </div>
+
+    <!-- POV 仪式发言区：管理员点击「仪式开始」后，POV 获得者才能开始流程 -->
     <div v-if="veto && isVetoHolder && !isFuture" class="ceremony-panel">
       <div class="cer-title">🎤 POV 仪式发言（客厅）</div>
-      <CeremonyChat room-id="living_room" title="💬 POV 仪式记录（客厅）" empty-text="暂无发言" />
-      <div v-if="!veto.ceremony?.openingSpoken" class="cer-actions">
-        <input v-model="openingText" class="bb-input" placeholder="开场发言（留空使用默认）" />
-        <button class="bb-btn bb-btn-primary" :disabled="speaking" @click="speak('opening')">发表开场发言</button>
+      <div v-if="!veto.ceremony?.started" class="cer-waiting">
+        等待管理员在管理员端点击「仪式开始」…
       </div>
-      <div v-else-if="veto.status === 'skipped' && !veto.ceremony?.closingSpoken" class="cer-actions">
-        <input v-model="closingText" class="bb-input" placeholder="结束发言（留空默认：POV仪式结束。）" />
-        <button class="bb-btn bb-btn-primary" :disabled="speaking" @click="speak('closing')">发表结束发言</button>
-      </div>
-      <div v-else-if="veto.ceremony?.closingSpoken" class="cer-done">POV 仪式已结束</div>
+      <template v-else>
+        <CeremonyChat room-id="living_room" title="💬 POV 仪式记录（客厅）" empty-text="暂无发言" />
+        <div v-if="!veto.ceremony?.openingSpoken" class="cer-actions">
+          <button class="bb-btn bb-btn-primary" :disabled="speaking" @click="speak('opening')">发表开场发言</button>
+        </div>
+        <div v-else-if="veto.status === 'skipped' && !veto.ceremony?.closingSpoken" class="cer-actions">
+          <button class="bb-btn bb-btn-primary" :disabled="speaking" @click="speak('closing')">发表结束发言</button>
+        </div>
+        <div v-else-if="veto.ceremony?.closingSpoken" class="cer-done">POV 仪式已结束</div>
+      </template>
     </div>
 
     <!-- 提名信息 -->
@@ -138,7 +172,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetVetoHistory, bbGetCurrentNomination, bbUseVeto, bbSkipVeto, bbVetoSpeech } from '../../../services/bbApi'
+import { bbGetVetoHistory, bbGetCurrentNomination, bbUseVeto, bbSkipVeto, bbVetoSpeech, bbVetoSaveDrafts } from '../../../services/bbApi'
 import type { BBVetoRecord, BBNomination } from '../../../types/bigbrother'
 import CeremonyChat from '../../../components/bigbrother/CeremonyChat.vue'
 
@@ -165,6 +199,8 @@ const canOperate = computed(() => {
   if (!isVetoHolder.value) return false
   if (veto.value?.status !== 'pending') return false
   if (isFuture.value) return false
+  // 管理员点击「仪式开始」后才能操作
+  if (!veto.value?.ceremony?.started) return false
   // 当前必须是 veto_ceremony 阶段
   return seasonStore.currentStage === 'veto_ceremony'
 })
@@ -191,18 +227,56 @@ const showSkipModal = ref(false)
 const savePlayerId = ref('')
 const using = ref(false)
 const skipping = ref(false)
-const openingText = ref('')
-const closingText = ref('')
 const speaking = ref(false)
+const draftOpening = ref('')
+const draftUse = ref('')
+const draftSkip = ref('')
+const draftClosing = ref('')
+const draftsReady = ref(false)
+const savingDrafts = ref(false)
+const draftSavedTip = ref(false)
+
+function syncDrafts(record: BBVetoRecord | null) {
+  if (draftsReady.value) return
+  const d: any = record?.ceremony?.drafts
+  if (!d) return
+  draftOpening.value = d.opening || ''
+  draftUse.value = d.use || ''
+  draftSkip.value = d.skip || ''
+  draftClosing.value = d.closing || ''
+  draftsReady.value = true
+}
+
+async function saveDrafts(showTip = true): Promise<boolean> {
+  if (savingDrafts.value) return false
+  savingDrafts.value = true
+  try {
+    await bbVetoSaveDrafts({
+      opening: draftOpening.value,
+      use: draftUse.value,
+      skip: draftSkip.value,
+      closing: draftClosing.value
+    })
+    draftsReady.value = true
+    if (showTip) {
+      draftSavedTip.value = true
+      setTimeout(() => { draftSavedTip.value = false }, 2000)
+    }
+    return true
+  } catch (e: any) {
+    if (showTip) alert(e?.message || '保存发言稿失败')
+    return false
+  } finally {
+    savingDrafts.value = false
+  }
+}
 
 async function speak(phase: 'opening' | 'closing') {
   if (speaking.value) return
   speaking.value = true
   try {
-    const text = phase === 'opening' ? openingText.value : closingText.value
+    const text = phase === 'opening' ? draftOpening.value : draftClosing.value
     await bbVetoSpeech(phase, text)
-    if (phase === 'opening') openingText.value = ''
-    else closingText.value = ''
     await fetchData()
   } catch (e: any) {
     alert(e?.message || '发言失败')
@@ -215,6 +289,7 @@ async function useVeto() {
   if (!savePlayerId.value || using.value) return
   using.value = true
   try {
+    if (!(await saveDrafts(false))) return
     const p = nomineeOptions.value.find(n => n.id === savePlayerId.value)
     await bbUseVeto(savePlayerId.value, p?.name || '')
     showUseModal.value = false
@@ -231,6 +306,7 @@ async function skipVeto() {
   if (skipping.value) return
   skipping.value = true
   try {
+    if (!(await saveDrafts(false))) return
     await bbSkipVeto()
     showSkipModal.value = false
     await fetchData()
@@ -246,6 +322,7 @@ async function fetchData() {
     const history = await bbGetVetoHistory()
     const roundKey = `round-${roundNum.value}`
     veto.value = history.find(h => h.roundId === roundKey) || null
+    syncDrafts(veto.value)
   } catch {}
   try {
     nomination.value = await bbGetCurrentNomination()
@@ -372,6 +449,13 @@ onMounted(async () => {
 .nominee-radio { accent-color: #b39bff; }
 .nominee-name { font-size: 14px; color: #ece7fb; font-weight: 500; }
 .no-nominees { text-align: center; color: #6b5f92; font-size: 13px; padding: 16px; }
+.draft-panel { background: #1b1130; border: 1px solid #4488ff44; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.draft-field { margin-bottom: 12px; }
+.draft-field label { display: block; font-size: 13px; color: #7fb0ff; margin-bottom: 6px; }
+.draft-hint { color: #8f83b8; font-size: 12px; margin-left: 6px; }
+.draft-textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; background: #0a0a24; border: 1px solid #4488ff44; border-radius: 8px; color: #ece7fb; font-size: 14px; line-height: 1.5; outline: none; resize: vertical; font-family: inherit; }
+.draft-actions { display: flex; align-items: center; gap: 12px; }
+.draft-saved-tip { color: #6ee7a8; font-size: 13px; }
 .ceremony-panel { background: #1b1130; border: 1px solid #e6c98844; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
 .cer-title { font-size: 15px; font-weight: 700; color: #e6c988; margin-bottom: 10px; }
 .cer-msgs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
@@ -381,4 +465,5 @@ onMounted(async () => {
 .cer-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .cer-actions .bb-input { flex: 1; min-width: 180px; background: #0a0a24; border: 1px solid #e6c98844; color: #ece7fb; padding: 8px 12px; border-radius: 6px; outline: none; }
 .cer-done { color: #b39bff; font-size: 13px; }
+.cer-waiting { color: #b3a6d6; font-size: 14px; padding: 8px 0; }
 </style>

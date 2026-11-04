@@ -238,7 +238,6 @@ const totalRounds = computed(() => seasonStore.totalRounds)
 
 const fixedItems = [
   { icon: '🏠', text: '首页', path: '/games/bigbrother/player/home' },
-  { icon: '🃏', text: '17 Poker', path: '/games/bigbrother/player/poker17' },
   { icon: '👤', text: '我的资料', path: '/games/bigbrother/player/profile' },
   { icon: '🏡', text: 'BB House', path: '/games/bigbrother/player/house' },
   { icon: '📝', text: '历史记录', path: '/games/bigbrother/player/history' },

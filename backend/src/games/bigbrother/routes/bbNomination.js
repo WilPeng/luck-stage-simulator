@@ -209,7 +209,7 @@ router.post('/replace', async (req, res) => {
           try { await postRoomMessage('living_room', { senderId: existing?.hohId, senderName: existing?.hohName || 'HOH', content: hohMsg }) } catch (e) { /* ignore */ }
         }
         if (!ceremony.closingSpoken) {
-          const content = 'POV仪式结束。'
+          const content = (ceremony.drafts?.closing || '').trim() || 'POV仪式结束。'
           ceremony.messages.push({ playerId: vetoRec.winnerId, playerName: vetoRec.winnerName, text: content, type: 'closing', at: new Date().toISOString() })
           ceremony.closingSpoken = true
           await vetoCol.updateOne({ gameId: 'bigbrother', roundId }, { $set: { ceremony, updatedAt: new Date().toISOString() } })
@@ -410,10 +410,11 @@ router.post('/bbbb-winner', auth, async (req, res) => {
   }
 })
 
-// POST /key-setup - HOH 先选出被提名者，再安排其余（安全）选手的揭晓顺序
+// POST /key-setup - HOH 预先准备提名：选出被提名者、安排揭晓顺序、编辑发言文案并保存
+// 管理员点击「仪式开始」前不进入抽钥匙流程
 router.post('/key-setup', auth, async (req, res) => {
   try {
-    const { nominees, order } = req.body || {}
+    const { nominees, order, openingText, closingReason } = req.body || {}
     const season = await getCurrentSeason()
     if (season.currentStage !== 'nomination') {
       return res.status(400).json({ success: false, error: '当前不是提名阶段', code: 'WRONG_STAGE' })
@@ -425,6 +426,10 @@ router.post('/key-setup', auth, async (req, res) => {
     const isAdmin = req.user?.role === 'admin'
     if (!isAdmin && req.user?.userId !== hohId) {
       return res.status(403).json({ success: false, error: '只有 HOH 或管理员可以设置提名仪式' })
+    }
+    const existingDoc = await BBNomination.findOne({ gameId: 'bigbrother', roundId })
+    if (existingDoc?.keyCeremony?.started) {
+      return res.status(400).json({ success: false, error: '仪式已开始，无法修改准备内容', code: 'CEREMONY_STARTED' })
     }
     const active = await BBHouseguest.find({ gameId: 'bigbrother', status: 'active', role: 'houseguest' })
     const eligible = active.filter(g => g.id !== hohId)
@@ -455,12 +460,19 @@ router.post('/key-setup', auth, async (req, res) => {
       hohId,
       hohName: hoh?.winnerName || '',
       keyCeremony: {
-        active: true,
+        prepared: true,
+        started: false,
+        active: false,
         hohId,
         hohName: hoh?.winnerName || '',
         eligible: eligible.map(g => ({ playerId: g.id, playerName: g.name })),
         nominees: nominees.map(id => ({ playerId: id, playerName: nameOf(id) })),
         order: order.map(id => ({ playerId: id, playerName: nameOf(id) })),
+        openingText: typeof openingText === 'string' ? openingText : '',
+        closingReason: typeof closingReason === 'string' ? closingReason : '',
+        openingSpoken: false,
+        closingSpoken: false,
+        ended: false,
         drawnCount: 0,
         announcedCount: 0,
         messages: []
@@ -469,13 +481,49 @@ router.post('/key-setup', auth, async (req, res) => {
       createdAt: new Date().toISOString()
     })
     await doc.save()
-    // 提名仪式在餐厅进行：把在线玩家移动到餐厅（后台执行，不阻塞设置接口响应）
-    moveAllToRoom('dining_room', '提名仪式开始').catch(() => {})
+    // 仅保存准备内容，等管理员点击「仪式开始」后再移动玩家并进入抽钥匙流程
     broadcastBBGame('bb:key-ceremony', { roundId, keyCeremony: doc.keyCeremony, nomineeIds: doc.nomineeIds, nomineeNames: doc.nomineeNames })
     res.json({ success: true, data: doc.toObject() })
   } catch (e) {
     console.error(e)
-    res.status(500).json({ success: false, error: '设置提名仪式失败', code: 'SERVER_ERROR' })
+    res.status(500).json({ success: false, error: '保存提名准备失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /key-start - 管理员开始提名仪式：进入抽钥匙流程并把在线玩家移动到餐厅
+router.post('/key-start', auth, async (req, res) => {
+  try {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ success: false, error: '只有管理员可以开始仪式', code: 'ADMIN_ONLY' })
+    }
+    const season = await getCurrentSeason()
+    if (season.currentStage !== 'nomination') {
+      return res.status(400).json({ success: false, error: '当前不是提名阶段', code: 'WRONG_STAGE' })
+    }
+    const roundId = `round-${season.currentRound}`
+    const doc = await BBNomination.findOne({ gameId: 'bigbrother', roundId })
+    if (!doc || !doc.keyCeremony) {
+      return res.status(400).json({ success: false, error: 'HOH 尚未完成提名准备', code: 'NOT_PREPARED' })
+    }
+    const kc = doc.keyCeremony
+    if (!kc.prepared) {
+      return res.status(400).json({ success: false, error: 'HOH 尚未完成提名准备', code: 'NOT_PREPARED' })
+    }
+    if (!kc.started) {
+      kc.started = true
+      kc.active = true
+      doc.keyCeremony = kc
+      doc.updatedAt = new Date().toISOString()
+      await doc.save()
+      // 提名仪式在餐厅进行：把在线玩家移动到餐厅（后台执行）
+      moveAllToRoom('dining_room', '提名仪式开始').catch(() => {})
+      broadcastBBGame('bb:key-ceremony', { roundId, keyCeremony: kc, nomineeIds: doc.nomineeIds, nomineeNames: doc.nomineeNames })
+      broadcastBBGame('bb:update', { path: '/api/bigbrother/nomination/key-start', method: 'POST' })
+    }
+    res.json({ success: true, data: doc.toObject() })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '开始提名仪式失败', code: 'SERVER_ERROR' })
   }
 })
 
@@ -487,6 +535,9 @@ router.post('/key-draw', auth, async (req, res) => {
     const doc = await BBNomination.findOne({ gameId: 'bigbrother', roundId })
     if (!doc || !doc.keyCeremony) return res.status(400).json({ success: false, error: '尚未开始钥匙仪式' })
     const kc = doc.keyCeremony
+    if (!kc.started) {
+      return res.status(400).json({ success: false, error: '请等待管理员点击「仪式开始」', code: 'CEREMONY_NOT_STARTED' })
+    }
     if (!kc.openingSpoken) {
       return res.status(400).json({ success: false, error: '请先由 HOH 发表开场发言，再抽取钥匙', code: 'OPENING_NOT_SPOKEN' })
     }
@@ -522,6 +573,9 @@ router.post('/key-announce', auth, async (req, res) => {
     const doc = await BBNomination.findOne({ gameId: 'bigbrother', roundId })
     if (!doc || !doc.keyCeremony) return res.status(400).json({ success: false, error: '尚未开始钥匙仪式' })
     const kc = doc.keyCeremony
+    if (!kc.started) {
+      return res.status(400).json({ success: false, error: '请等待管理员点击「仪式开始」', code: 'CEREMONY_NOT_STARTED' })
+    }
     if ((kc.announcedCount || 0) >= (kc.drawnCount || 0)) {
       return res.status(400).json({ success: false, error: '暂无可宣布的钥匙' })
     }
@@ -560,6 +614,9 @@ router.post('/key-speech', auth, async (req, res) => {
     const doc = await BBNomination.findOne({ gameId: 'bigbrother', roundId })
     if (!doc || !doc.keyCeremony) return res.status(400).json({ success: false, error: '尚未开始钥匙仪式' })
     const kc = doc.keyCeremony
+    if (!kc.started) {
+      return res.status(400).json({ success: false, error: '请等待管理员点击「仪式开始」', code: 'CEREMONY_NOT_STARTED' })
+    }
     const isAdmin = req.user?.role === 'admin'
     if (!isAdmin && req.user?.userId !== kc.hohId) {
       return res.status(403).json({ success: false, error: '只有 HOH 可以发言' })
@@ -588,10 +645,12 @@ router.post('/key-speech', auth, async (req, res) => {
     let content = text && String(text).trim() ? String(text).trim() : ''
     if (!content) {
       const names = (kc.nominees || []).map(x => x.playerName).join('、')
+      const savedText = phase === 'opening' ? kc.openingText : ''
+      const reasonText = reason || kc.closingReason || ''
       if (phase === 'opening') {
-        content = `现在是提名仪式。作为房主，我有权利提名${n}位房客候选淘汰。我将从箱子中逐个抽出钥匙，最后没有获得钥匙的房客将成为本轮的淘汰候选。`
+        content = savedText || `现在是提名仪式。作为房主，我有权利提名${n}位房客候选淘汰。我将从箱子中逐个抽出钥匙，最后没有获得钥匙的房客将成为本轮的淘汰候选。`
       } else {
-        content = `我选择提名的房客分别是${names}${reason ? `，原因是${reason}` : '，原因是……'}。提名仪式到此结束。`
+        content = `我选择提名的房客分别是${names}${reasonText ? `，原因是${reasonText}` : '，原因是……'}。提名仪式到此结束。`
       }
     }
 

@@ -38,7 +38,7 @@
       <div class="cer-title">🎤 POV 仪式（将全员移动到客厅）</div>
       <CeremonyChat room-id="living_room" title="💬 POV 仪式记录（客厅）" empty-text="暂无发言" />
       <div class="cer-actions">
-        <button v-if="!veto.ceremony?.started" class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="startCeremony">▶ 开始仪式并移动到客厅</button>
+        <button v-if="!veto.ceremony?.started" class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="startCeremony">▶ 仪式开始（移动到客厅）</button>
         <template v-else-if="!veto.ceremony?.openingSpoken">
           <input v-model="ceremonyText" class="cer-input" placeholder="POV 开场发言（留空默认）" />
           <button class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="speak('opening')">发表开场发言</button>
@@ -82,8 +82,8 @@
     <div class="action-section">
       <h3>操作 - 否决权使用</h3>
       <div class="action-buttons">
-        <button class="bb-btn" :disabled="!veto || veto.status !== 'pending'" @click="showUseModal = true">✅ 使用否决权</button>
-        <button class="bb-btn" :disabled="!veto || veto.status !== 'pending'" @click="showSkipModal = true">⏭️ 不使用否决权</button>
+        <button class="bb-btn" :disabled="!veto || veto.status !== 'pending' || !veto.ceremony?.started" @click="showUseModal = true">✅ 使用否决权</button>
+        <button class="bb-btn" :disabled="!veto || veto.status !== 'pending' || !veto.ceremony?.started" @click="showSkipModal = true">⏭️ 不使用否决权</button>
       </div>
     </div>
 

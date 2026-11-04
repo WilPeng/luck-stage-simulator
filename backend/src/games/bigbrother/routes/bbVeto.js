@@ -342,6 +342,9 @@ router.post('/use', async (req, res) => {
     const vetoCol = getCollection('BBVetoRecord')
     const record = await vetoCol.findOne({ gameId: 'bigbrother', roundId })
     if (!record) return res.status(404).json({ success: false, error: '否决权记录不存在', code: 'NOT_FOUND' })
+    if (!record.ceremony?.started) {
+      return res.status(400).json({ success: false, error: '请等待管理员点击「仪式开始」', code: 'CEREMONY_NOT_STARTED' })
+    }
 
     // Twist #1 回旋镖护符：使用时所有被提名者全救
     const roundConfigs = season.roundConfigs || []
@@ -359,10 +362,18 @@ router.post('/use', async (req, res) => {
         const ceremony = ensureCeremony(vetoRec)
         if (!ceremony.messages.some(m => m.type === 'decision')) {
           const nm = targetPlayerName || '被提名者'
-          ceremony.messages.push({ playerId: vetoRec.winnerId, playerName: vetoRec.winnerName, text: `我决定对${nm}使用POV`, type: 'decision', at: new Date().toISOString() })
-          ceremony.messages.push({ playerId: vetoRec.winnerId, playerName: vetoRec.winnerName, text: `因为我对${nm}使用了POV，所以HOH需要选择1名其他房客进行替补。`, type: 'decision', at: new Date().toISOString() })
-          await vetoCol.updateOne({ gameId: 'bigbrother', roundId }, { $set: { ceremony, updatedAt: new Date().toISOString() } })
-          try { await postRoomMessage('living_room', { senderId: vetoRec.winnerId, senderName: vetoRec.winnerName, content: `我决定对${nm}使用POV。因为我对${nm}使用了POV，所以HOH需要选择1名其他房客进行替补。` }) } catch (e) { /* ignore */ }
+          const draftUse = (ceremony.drafts?.use || '').trim()
+          if (draftUse) {
+            const speech = draftUse.replace(/\{name\}|\{nominee\}|\{被提名者\}/g, nm)
+            ceremony.messages.push({ playerId: vetoRec.winnerId, playerName: vetoRec.winnerName, text: speech, type: 'decision', at: new Date().toISOString() })
+            await vetoCol.updateOne({ gameId: 'bigbrother', roundId }, { $set: { ceremony, updatedAt: new Date().toISOString() } })
+            try { await postRoomMessage('living_room', { senderId: vetoRec.winnerId, senderName: vetoRec.winnerName, content: speech }) } catch (e) { /* ignore */ }
+          } else {
+            ceremony.messages.push({ playerId: vetoRec.winnerId, playerName: vetoRec.winnerName, text: `我决定对${nm}使用POV`, type: 'decision', at: new Date().toISOString() })
+            ceremony.messages.push({ playerId: vetoRec.winnerId, playerName: vetoRec.winnerName, text: `因为我对${nm}使用了POV，所以HOH需要选择1名其他房客进行替补。`, type: 'decision', at: new Date().toISOString() })
+            await vetoCol.updateOne({ gameId: 'bigbrother', roundId }, { $set: { ceremony, updatedAt: new Date().toISOString() } })
+            try { await postRoomMessage('living_room', { senderId: vetoRec.winnerId, senderName: vetoRec.winnerName, content: `我决定对${nm}使用POV。因为我对${nm}使用了POV，所以HOH需要选择1名其他房客进行替补。` }) } catch (e) { /* ignore */ }
+          }
           broadcastBBGame('bb:veto-ceremony', { roundId, ceremony })
         }
       }
@@ -422,14 +433,18 @@ router.post('/skip', async (req, res) => {
       return res.status(400).json({ success: false, error: '当前不是否决权会议阶段，无法操作', code: 'WRONG_STAGE' })
     }
     const record = await BBVetoRecord.findOne({ gameId: 'bigbrother', roundId: `round-${season.currentRound}` })
+    if (record && !record.ceremony?.started) {
+      return res.status(400).json({ success: false, error: '请等待管理员点击「仪式开始」', code: 'CEREMONY_NOT_STARTED' })
+    }
     if (record) {
       record.used = false
       record.status = 'skipped'
       // 未使用否决权：POV 获得者先发言「我决定不使用POV」
       const ceremony = ensureCeremony(record)
       if (!ceremony.messages.some(m => m.type === 'decision')) {
-        ceremony.messages.push({ playerId: record.winnerId, playerName: record.winnerName, text: '我决定不使用POV', type: 'decision', at: new Date().toISOString() })
-        try { await postRoomMessage('living_room', { senderId: record.winnerId, senderName: record.winnerName, content: '我决定不使用POV' }) } catch (e) { /* ignore */ }
+        const speech = (ceremony.drafts?.skip || '').trim() || '我决定不使用POV'
+        ceremony.messages.push({ playerId: record.winnerId, playerName: record.winnerName, text: speech, type: 'decision', at: new Date().toISOString() })
+        try { await postRoomMessage('living_room', { senderId: record.winnerId, senderName: record.winnerName, content: speech }) } catch (e) { /* ignore */ }
       }
       record.updatedAt = new Date().toISOString()
       await record.save()
@@ -560,8 +575,43 @@ function ensureCeremony(record) {
     record.ceremony = { started: false, openingSpoken: false, closingSpoken: false, messages: [] }
   }
   if (!Array.isArray(record.ceremony.messages)) record.ceremony.messages = []
+  if (!record.ceremony.drafts || typeof record.ceremony.drafts !== 'object') {
+    record.ceremony.drafts = { opening: '', use: '', skip: '', closing: '' }
+  }
+  for (const key of ['opening', 'use', 'skip', 'closing']) {
+    if (typeof record.ceremony.drafts[key] !== 'string') record.ceremony.drafts[key] = ''
+  }
   return record.ceremony
 }
+
+// POST /drafts - POV 获得者编辑自己的仪式发言稿（仪式开始前后均可修改）
+router.post('/drafts', auth, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const roundId = `round-${season.currentRound}`
+    const record = await BBVetoRecord.findOne({ gameId: 'bigbrother', roundId })
+    if (!record) return res.status(404).json({ success: false, error: '否决权记录不存在', code: 'NOT_FOUND' })
+    const isAdmin = req.user?.role === 'admin'
+    if (!isAdmin && req.user?.userId !== record.winnerId) {
+      return res.status(403).json({ success: false, error: '只有 POV 获得者可以编辑发言稿' })
+    }
+    if (!record.winnerId) {
+      return res.status(400).json({ success: false, error: '尚未产生 POV 获得者', code: 'NO_WINNER' })
+    }
+    const { drafts } = req.body || {}
+    const ceremony = ensureCeremony(record)
+    for (const key of ['opening', 'use', 'skip', 'closing']) {
+      if (typeof drafts?.[key] === 'string') ceremony.drafts[key] = drafts[key]
+    }
+    record.updatedAt = new Date().toISOString()
+    await record.save()
+    broadcastBBGame('bb:veto-ceremony', { roundId, ceremony })
+    res.json({ success: true, data: record.toObject() })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '保存发言稿失败', code: 'SERVER_ERROR' })
+  }
+})
 
 // POST /ceremony-start - 开始 POV 仪式：把在线玩家移动到客厅
 router.post('/ceremony-start', auth, async (req, res) => {
@@ -570,8 +620,8 @@ router.post('/ceremony-start', auth, async (req, res) => {
     const roundId = `round-${season.currentRound}`
     const record = await BBVetoRecord.findOne({ gameId: 'bigbrother', roundId })
     if (!record) return res.status(404).json({ success: false, error: '否决权记录不存在', code: 'NOT_FOUND' })
-    if (req.user?.role !== 'admin' && req.user?.userId !== record.winnerId) {
-      return res.status(403).json({ success: false, error: '只有 POV 获得者或管理员可以开始仪式' })
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ success: false, error: '只有管理员可以开始仪式', code: 'ADMIN_ONLY' })
     }
     const ceremony = ensureCeremony(record)
     ceremony.started = true
@@ -599,6 +649,9 @@ router.post('/speech', auth, async (req, res) => {
       return res.status(403).json({ success: false, error: '只有 POV 获得者可以发言' })
     }
     const ceremony = ensureCeremony(record)
+    if (!ceremony.started) {
+      return res.status(400).json({ success: false, error: '请等待管理员点击「仪式开始」', code: 'CEREMONY_NOT_STARTED' })
+    }
     if (phase === 'opening' && ceremony.openingSpoken) {
       return res.status(400).json({ success: false, error: '开场发言已发表', code: 'ALREADY_SPOKEN' })
     }
@@ -607,9 +660,10 @@ router.post('/speech', auth, async (req, res) => {
     }
     let content = text && String(text).trim() ? String(text).trim() : ''
     if (!content) {
-      content = phase === 'opening'
+      const draft = phase === 'opening' ? ceremony.drafts?.opening : ceremony.drafts?.closing
+      content = (draft || '').trim() || (phase === 'opening'
         ? '现在是POV仪式，我作为否决权获得者，将决定是否使用否决权。'
-        : 'POV仪式结束。'
+        : 'POV仪式结束。')
     }
     ceremony.messages.push({ playerId: record.winnerId, playerName: record.winnerName, text: content, type: phase || 'speech', at: new Date().toISOString() })
     if (phase === 'opening') ceremony.openingSpoken = true

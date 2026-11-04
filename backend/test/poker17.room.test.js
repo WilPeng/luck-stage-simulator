@@ -6,7 +6,7 @@ const http = require('http')
 const { Server } = require('socket.io')
 const { initBBMinigameSocket } = require('../src/socket/bbMinigame')
 
-test('17 Poker room lifecycle: create, join, start and rematch', async (t) => {
+test('17 Poker starts inside the existing admin minigame room system', async (t) => {
   const server = http.createServer()
   const io = new Server(server)
   initBBMinigameSocket(io)
@@ -17,41 +17,30 @@ test('17 Poker room lifecycle: create, join, start and rematch', async (t) => {
     try { server.close() } catch {}
   })
 
-  const room = ns.createPoker17Room({ playerId: 'p1', playerName: '玩家A' })
-  assert.equal(room.status, 'waiting')
-  assert.equal(room.hostId, 'p1')
-  assert.equal(room.participants.length, 1)
-  assert.equal(ns.listPoker17Rooms().length, 1)
+  const room = ns.createRoom('hoh', 'poker17', [
+    { playerId: 'p1', playerName: '玩家A', avatar: '/uploads/bbavatars/a.png' },
+    { playerId: 'p2', playerName: '玩家B', avatar: '/uploads/bbavatars/b.png' }
+  ], null, { name: '17 Poker' })
 
-  const joined = ns.joinPoker17Room(room.roomId, { playerId: 'p2', playerName: '玩家B' })
-  assert.equal(joined.success, true)
-  const summary = ns.getPoker17Room(room.roomId)
-  assert.equal(summary.participants.length, 2)
-  assert.equal(summary.maxPlayers, 2)
-  assert.equal(summary.hostId, 'p1')
+  assert.equal(room.minigameId, 'poker17')
+  assert.equal(room.participants.length, 2)
+  assert.equal(room.participants[0].avatar, '/uploads/bbavatars/a.png')
 
   room.setConnected('p1', true)
   room.setConnected('p2', true)
   const startResult = await new Promise((resolve) => {
-    ns.startPoker17Room(room.roomId, 'p1', 0, resolve)
+    ns.startGame(room.roomId, { countdownSeconds: 0 }, resolve)
   })
   assert.equal(startResult.success, true)
   await new Promise(resolve => setTimeout(resolve, 40))
+
   assert.equal(room.status, 'playing')
   assert.ok(room.gameState)
   assert.equal(room.gameState.phase, 'cut')
+  assert.equal(room.gameState.players[0].avatar, '/uploads/bbavatars/a.png')
+  assert.equal(room.gameState.players[1].avatar, '/uploads/bbavatars/b.png')
 
-  // Avoid writing to MongoDB in this unit test; emulate a finished room.
   room.cleanup()
-  room.status = 'finished'
-
-  const rematch = ns.rematchPoker17Room(room.roomId, 'p1')
-  assert.equal(rematch.success, true)
-  assert.ok(rematch.data.roomId)
-  assert.equal(rematch.data.participants.length, 2)
-  assert.equal(rematch.data.hostId, 'p1')
-
-  rematch.room.cleanup()
   io.close()
   server.close()
 })

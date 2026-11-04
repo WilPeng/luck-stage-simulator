@@ -35,8 +35,6 @@ class GameRoom {
     this.summoned = false         // 是否已召集选手
     this.ready = {}               // playerId -> 是否已准备
     this.options = {}             // 管理员创建房间时的额外配置（如拼图 imageUrl、限时等）
-    this.hostId = null            // 玩家自建房间的房主（17 Poker 等）
-    this.createdAt = Date.now()
   }
 
   getParticipant(playerId) {
@@ -464,164 +462,6 @@ const initBBMinigameSocket = (io) => {
     return null
   }
 
-  // ===== 17 Poker 玩家自建休闲房 =====
-  minigameNs.createPoker17Room = (host) => {
-    const roomId = uuidv4()
-    const room = new GameRoom(roomId, 'poker17', 'poker17', [{
-      playerId: host.playerId,
-      playerName: host.playerName || '',
-      avatar: host.avatar || null,
-      connected: false
-    }], null)
-    room.hostId = host.playerId
-    room.minigameName = '17 Poker'
-    room.category = 'strategy'
-    room.roundIndex = null
-    room.roundId = ''
-    room.options = {}
-    room.status = 'waiting'
-    activeRooms.set(roomId, room)
-    startSession(room)
-    return room
-  }
-
-  minigameNs.joinPoker17Room = (roomId, guest) => {
-    const room = activeRooms.get(roomId)
-    if (!room || room.gameType !== 'poker17') {
-      return { success: false, error: '房间不存在或已结束' }
-    }
-    if (room.getParticipant(guest.playerId)) return { success: true, room }
-    if (room.status !== 'waiting') return { success: false, error: '比赛已经开始' }
-    if (room.participants.length >= 2) return { success: false, error: '房间已满' }
-    room.participants.push({
-      playerId: guest.playerId,
-      playerName: guest.playerName || '',
-      avatar: guest.avatar || null,
-      connected: false
-    })
-    minigameNs.to(roomId).emit('participant_joined', {
-      playerId: guest.playerId,
-      playerName: guest.playerName || '',
-      participants: publicParticipants(room)
-    })
-    const summary = poker17Summary(room)
-    minigameNs.to(roomId).emit('poker17_room_update', summary)
-    broadcastProgress(room, minigameNs)
-    return { success: true, room }
-  }
-
-  minigameNs.leavePoker17Room = (roomId, playerId) => {
-    const room = activeRooms.get(roomId)
-    if (!room || room.gameType !== 'poker17') {
-      return { success: false, error: '房间不存在' }
-    }
-    if (room.status === 'waiting') {
-      const leaving = room.getParticipant(playerId)
-      room.participants = room.participants.filter(p => p.playerId !== playerId)
-      delete room.ready[playerId]
-      if (!room.participants.length) {
-        room.cleanup()
-        activeRooms.delete(roomId)
-        return { success: true, removed: true }
-      }
-      if (room.hostId === playerId) room.hostId = room.participants[0].playerId
-      minigameNs.to(roomId).emit('participant_left', {
-        playerId,
-        playerName: leaving ? leaving.playerName : ''
-      })
-      const summary = poker17Summary(room)
-      minigameNs.to(roomId).emit('poker17_room_update', summary)
-      broadcastProgress(room, minigameNs)
-      return { success: true, room }
-    }
-    room.setConnected(playerId, false)
-    return { success: true, room }
-  }
-
-  minigameNs.startPoker17Room = (roomId, playerId, countdownSeconds, callback) => {
-    const respond = typeof callback === 'function' ? callback : () => {}
-    const room = activeRooms.get(roomId)
-    if (!room || room.gameType !== 'poker17') {
-      return respond({ success: false, error: '房间不存在或已结束' })
-    }
-    if (room.hostId !== playerId) {
-      return respond({ success: false, error: '只有房主可以开始比赛' })
-    }
-    if (room.status !== 'waiting') {
-      return respond({ success: false, error: '比赛已经开始' })
-    }
-    if (room.participants.length !== 2) {
-      return respond({ success: false, error: '需要两名玩家才能开始' })
-    }
-    if (!room.participants.every(p => p.connected)) {
-      return respond({ success: false, error: '双方都连接后才可以开始' })
-    }
-    const seconds = [0, 3, 5, 10].includes(Number(countdownSeconds)) ? Number(countdownSeconds) : 3
-    minigameNs.startGame(roomId, { countdownSeconds: seconds }, respond)
-  }
-
-  minigameNs.getPoker17Room = (roomId) => {
-    const room = activeRooms.get(roomId)
-    return room && room.gameType === 'poker17' ? poker17Summary(room) : null
-  }
-
-  minigameNs.listPoker17Rooms = () => {
-    const rooms = []
-    const now = Date.now()
-    for (const room of activeRooms.values()) {
-      if (room.gameType !== 'poker17') continue
-      if (!['waiting', 'countdown', 'playing', 'paused'].includes(room.status)) continue
-      if (room.status === 'waiting') {
-        const age = now - (room.createdAt || now)
-        if (age > 30 * 60 * 1000 && !room.participants.some(p => p.connected)) continue
-      }
-      rooms.push(poker17Summary(room))
-    }
-    return rooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-  }
-
-  minigameNs.findPoker17RoomForPlayer = (playerId) => {
-    for (const room of activeRooms.values()) {
-      if (room.gameType !== 'poker17') continue
-      if (!['waiting', 'countdown', 'playing', 'paused'].includes(room.status)) continue
-      if (room.getParticipant(playerId)) return poker17Summary(room)
-    }
-    return null
-  }
-
-  minigameNs.rematchPoker17Room = (roomId, playerId) => {
-    const oldRoom = activeRooms.get(roomId)
-    if (!oldRoom || oldRoom.gameType !== 'poker17') {
-      return { success: false, error: '房间不存在' }
-    }
-    if (oldRoom.status !== 'finished') {
-      return { success: false, error: '当前比赛尚未结束' }
-    }
-    if (!oldRoom.getParticipant(playerId)) {
-      return { success: false, error: '你不在该房间中' }
-    }
-    if (oldRoom.participants.length !== 2) {
-      return { success: false, error: '需要两名玩家才能再来一局' }
-    }
-    const me = oldRoom.getParticipant(playerId)
-    const newRoom = minigameNs.createPoker17Room({
-      playerId: me.playerId,
-      playerName: me.playerName,
-      avatar: me.avatar
-    })
-    const other = oldRoom.participants.find(p => p.playerId !== playerId)
-    if (other) {
-      minigameNs.joinPoker17Room(newRoom.roomId, {
-        playerId: other.playerId,
-        playerName: other.playerName,
-        avatar: other.avatar
-      })
-    }
-    const summary = poker17Summary(newRoom)
-    minigameNs.to(roomId).emit('poker17_rematch', { room: summary })
-    return { success: true, room: newRoom, data: summary }
-  }
-
   minigameNs.cleanupRoom = (roomId) => {
     const room = activeRooms.get(roomId)
     if (room) {
@@ -840,25 +680,6 @@ function publicParticipants(room) {
   }))
 }
 
-// 17 Poker 房间公开摘要（不含手牌）
-function poker17Summary(room) {
-  if (!room) return null
-  return {
-    roomId: room.roomId,
-    gameType: room.gameType,
-    minigameId: room.minigameId,
-    minigameName: room.minigameName || '17 Poker',
-    status: room.status,
-    hostId: room.hostId || null,
-    participants: publicParticipants(room),
-    playerCount: room.participants.length,
-    maxPlayers: 2,
-    createdAt: room.createdAt || null,
-    options: room.options || {}
-  }
-}
-
-// 广播实时进度到房间（管理员观察 + 供前端刷新）
 function broadcastProgress(room, minigameNs) {
   if (!room || room.status === 'finished') return
   try { minigameNs.to(room.roomId).emit('game_progress', buildProgress(room)) } catch (e) { /* ignore */ }

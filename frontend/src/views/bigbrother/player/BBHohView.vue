@@ -23,7 +23,7 @@
     <!-- 小游戏模式：有活跃房间且玩家在参与者中 -->
     <div v-else-if="showMinigame" class="minigame-section">
       <component :is="gameComponent" :roomId="activeRoom.roomId"
-        :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" :roomStatus="activeRoom.status" @finished="onMinigameFinished" />
+        :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
     </div>
 
     <!-- 已有结果 -->

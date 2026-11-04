@@ -40,7 +40,7 @@
       <div v-else-if="activeRoom && inMe(activeRoom)" class="minigame-section">
         <div class="game-stage-tip">第 {{ currentGameStageText }} 场挑战</div>
         <component :is="gameComponent" :roomId="activeRoom.roomId"
-          :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" :roomStatus="activeRoom.status" @finished="onMinigameFinished" />
+          :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
       </div>
       <div v-else-if="!iAmFhoh || (round3Done && finalTwo.length)" class="pending-card">
         <div class="pending-icon">🎮</div>

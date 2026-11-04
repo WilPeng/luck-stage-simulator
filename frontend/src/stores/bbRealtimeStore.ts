@@ -73,7 +73,7 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
       // 避免“每次有人投票，所有客户端都各发 2 个请求”的请求风暴导致卡顿
       const isKeyWrite = /\/nomination\/key-/.test(p)
       const isHighFreq = isVoteWrite || isRevealWrite || isKeyWrite
-        || /\/(minigame|house|chat|poker17)\b/.test(p) || /\/jury-qa\b/.test(p)
+        || /\/(minigame|house|chat)\b/.test(p) || /\/jury-qa\b/.test(p)
 
       if (!isHighFreq) {
         const season = useBbSeasonStore()

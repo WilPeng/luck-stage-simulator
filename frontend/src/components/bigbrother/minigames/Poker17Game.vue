@@ -2,56 +2,8 @@
   <div class="poker17">
     <div v-if="combinedError" class="p17-error">⚠️ {{ combinedError }}</div>
 
-    <!-- 已结束房间回访 -->
-    <div v-if="showRoomFinished" class="p17-waiting">
-      <div class="p17-waiting-icon">🏁</div>
-      <h2>本局比赛已结束</h2>
-      <p class="p17-waiting-sub">房间已经关闭，你可以返回大厅查看战绩，或等待房主开启新房间。</p>
-      <button v-if="standalone" class="p17-btn ghost" @click="leave">返回大厅</button>
-    </div>
-
-    <!-- 等待房 / 大厅 -->
-    <div v-else-if="showWaitingRoom" class="p17-waiting">
-      <div class="p17-waiting-icon">🃏</div>
-      <h2>17 Poker</h2>
-      <p class="p17-waiting-sub">双人 · 10局 · 初始100筹码 · 每局底注5</p>
-
-      <div class="p17-room-code">
-        <span>房间号</span>
-        <code>{{ activeRoomId }}</code>
-      </div>
-
-      <div class="p17-waiting-players">
-        <div v-for="p in displayParticipants" :key="p.playerId" class="p17-seat" :class="{ online: p.connected }">
-          <BBAvatar :name="p.playerName" :avatar="avatarOf(p.playerId)" size="md" />
-          <div class="p17-seat-info">
-            <div class="p17-seat-name">{{ p.playerName }}<span v-if="p.playerId === myId" class="p17-me">（你）</span></div>
-            <div class="p17-seat-meta">
-              <span v-if="p.playerId === effectiveHostId" class="p17-host">房主</span>
-              <span :class="p.connected ? 'p17-online' : 'p17-offline'">{{ p.connected ? '在线' : '连接中' }}</span>
-            </div>
-          </div>
-        </div>
-        <div v-if="displayParticipants.length < 2" class="p17-seat empty">
-          <div class="p17-empty-avatar">＋</div>
-          <div class="p17-seat-info">
-            <div class="p17-seat-name">等待对手加入</div>
-            <div class="p17-seat-meta">分享房间号邀请好友</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="p17-waiting-actions">
-        <button v-if="isHost" class="p17-btn primary" :disabled="!canStart || starting" @click="startGame">
-          {{ starting ? '开始中…' : canStart ? '开始比赛' : '等待双方连接' }}
-        </button>
-        <div v-else class="p17-wait-hint">等待房主开始比赛…</div>
-        <button v-if="standalone" class="p17-btn ghost" @click="leave">返回大厅</button>
-      </div>
-    </div>
-
     <!-- 倒计时 -->
-    <div v-else-if="showCountdown" class="p17-countdown">
+    <div v-if="showCountdown" class="p17-countdown">
       <div class="p17-countdown-label">比赛即将开始</div>
       <div class="p17-countdown-value">{{ Math.ceil(countdown) }}</div>
     </div>
@@ -257,50 +209,36 @@
         <div class="p17-final-total">
           双方总筹码 {{ finalResult?.totalChips ?? gs.totalChips ?? 200 }} 枚
         </div>
-        <div v-if="standalone" class="p17-btn-row">
-          <button class="p17-btn" @click="leave">返回大厅</button>
-          <button v-if="isHost" class="p17-btn primary" :disabled="rematching" @click="rematch">
-            {{ rematching ? '创建中…' : '再来一局' }}
-          </button>
-          <span v-else class="p17-muted">等待房主发起再来一局…</span>
-        </div>
       </div>
+    </div>
+
+    <div v-else class="p17-countdown">
+      <div class="p17-countdown-label">等待比赛数据…</div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import BBAvatar from '../BBAvatar.vue'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useMinigameSocket } from '../../../composables/useMinigameSocket'
 import {
-  bbStartPoker17Room,
-  bbRematchPoker17Room,
   bbGetActiveHouseguests,
-  type Poker17RoomPlayer,
-  type Poker17RoomSummary
+  type Poker17RoomPlayer
 } from '../../../services/bbApi'
 
 const props = withDefaults(defineProps<{
   roomId: string
   participants?: Poker17RoomPlayer[]
   gameTitle?: string
-  hostId?: string | null
-  standalone?: boolean
-  roomStatus?: string
 }>(), {
   participants: () => [],
-  gameTitle: '17 Poker',
-  hostId: null,
-  standalone: false,
-  roomStatus: ''
+  gameTitle: '17 Poker'
 })
 
 const emit = defineEmits<{
   (e: 'finished', winner: { playerId: string; playerName: string }): void
-  (e: 'leave'): void
-  (e: 'room-changed', room: any): void
 }>()
 
 const authStore = useBbAuthStore()
@@ -308,23 +246,14 @@ const myId = computed(() => authStore.currentUser?.id || '')
 const myName = computed(() => authStore.currentUser?.name || '我')
 
 const activeRoomId = ref<string | null>(props.roomId)
-const roomMeta = ref<any>({
-  roomId: props.roomId,
-  hostId: props.hostId,
-  participants: props.participants || [],
-  status: props.roomStatus || ''
-})
-const starting = ref(false)
-const rematching = ref(false)
-const apiError = ref('')
 const selectedIndices = ref<number[]>([])
 const wager = ref(5)
 const finishedEmitted = ref(false)
 const avatarDirectory = ref<Record<string, string | null>>({})
 
 const {
-  connected, gameState: gs, countdown, participants: sockParticipants,
-  winner, scores, finished, error, connect, joinRoom, sendAction, disconnect, socket
+  gameState: gs, countdown, participants: sockParticipants,
+  winner, scores, finished, error, connect, joinRoom, sendAction, disconnect
 } = useMinigameSocket(activeRoomId)
 
 const phase = computed(() => gs.value?.phase || '')
@@ -351,41 +280,14 @@ const finalResult = computed(() => gs.value?.finalResult || null)
 const matchOver = computed(() => !!gs.value?.matchOver || !!finished.value)
 const inGame = computed(() => !!gs.value?.phase)
 const showCountdown = computed(() => !inGame.value && countdown.value > 0)
-const effectiveStatus = computed(() => roomMeta.value?.status || props.roomStatus || '')
-const roomIsActive = computed(() => {
-  return ['countdown', 'playing', 'paused'].includes(effectiveStatus.value) ||
-    countdown.value > 0 || countdown.value === -1 ||
-    gs.value?.status === 'playing'
-})
-const showRoomFinished = computed(() => !inGame.value && !matchOver.value && effectiveStatus.value === 'finished')
-const showWaitingRoom = computed(() => !inGame.value && !showCountdown.value && !matchOver.value && !roomIsActive.value && !showRoomFinished.value)
-const showSyncing = computed(() => !inGame.value && !showCountdown.value && !matchOver.value && roomIsActive.value)
+const showSyncing = computed(() => !inGame.value && !showCountdown.value && !matchOver.value)
 
-const combinedError = computed(() => apiError.value || error.value || '')
+const combinedError = computed(() => error.value || '')
 
-const effectiveHostId = computed(() => roomMeta.value?.hostId || props.hostId || '')
-const isHost = computed(() => !!props.standalone && !!effectiveHostId.value && effectiveHostId.value === myId.value)
 const displayParticipants = computed<Poker17RoomPlayer[]>(() => {
   const live = (sockParticipants.value || []) as Poker17RoomPlayer[]
-  const liveById = new Map(live.map(p => [p.playerId, p]))
-  let base: Poker17RoomPlayer[]
-  if (effectiveStatus.value === 'waiting' && roomMeta.value?.participants?.length) {
-    base = roomMeta.value.participants as Poker17RoomPlayer[]
-  } else if (live.length) {
-    base = live
-  } else if (roomMeta.value?.participants?.length) {
-    base = roomMeta.value.participants as Poker17RoomPlayer[]
-  } else {
-    base = (props.participants || []) as Poker17RoomPlayer[]
-  }
-  return base.map(p => {
-    const l = liveById.get(p.playerId)
-    return l ? { ...p, connected: l.connected } : p
-  })
-})
-const canStart = computed(() => {
-  const list = displayParticipants.value
-  return effectiveStatus.value === 'waiting' && list.length === 2 && list.every(p => p.connected)
+  if (live.length) return live
+  return (props.participants || []) as Poker17RoomPlayer[]
 })
 
 const wagerMin = computed(() => {
@@ -530,83 +432,15 @@ function nextRound() {
   sendAction({ type: 'next_round' })
 }
 
-async function startGame() {
-  if (starting.value || !activeRoomId.value) return
-  starting.value = true
-  apiError.value = ''
-  try {
-    await bbStartPoker17Room(activeRoomId.value, 3)
-    roomMeta.value = { ...roomMeta.value, status: 'countdown' }
-  } catch (e: any) {
-    apiError.value = e?.message || '开始比赛失败'
-  } finally {
-    starting.value = false
-  }
-}
-
-async function rematch() {
-  if (rematching.value || !activeRoomId.value) return
-  rematching.value = true
-  apiError.value = ''
-  try {
-    const room = await bbRematchPoker17Room(activeRoomId.value)
-    if (room?.roomId) applyRoom(room, true)
-  } catch (e: any) {
-    apiError.value = e?.message || '再来一局失败'
-  } finally {
-    rematching.value = false
-  }
-}
-
-function leave() {
-  emit('leave')
-}
-
-function attachSocketEvents() {
-  const s = socket.value
-  if (!s) return
-  s.on('poker17_rematch', (payload: any) => {
-    if (payload?.room?.roomId) applyRoom(payload.room, true)
-  })
-  s.on('poker17_room_update', (summary: Poker17RoomSummary) => {
-    if (summary?.roomId) roomMeta.value = summary
-  })
-}
-
-function applyRoom(room: Poker17RoomSummary, emitChange: boolean) {
-  if (!room?.roomId) return
-  roomMeta.value = room
-  if (room.roomId === activeRoomId.value) return
-  activeRoomId.value = room.roomId
-  selectedIndices.value = []
-  wager.value = 5
-  finishedEmitted.value = false
-  apiError.value = ''
-  disconnect()
-  connect()
-  attachSocketEvents()
-  nextTick(() => joinRoom(room.roomId))
-  if (emitChange) emit('room-changed', room)
-}
-
-function switchByProp(roomId: string) {
-  if (!roomId || roomId === activeRoomId.value) return
-  activeRoomId.value = roomId
-  selectedIndices.value = []
-  wager.value = 5
-  finishedEmitted.value = false
-  disconnect()
-  connect()
-  attachSocketEvents()
-  nextTick(() => joinRoom(roomId))
-}
-
 watch(() => props.roomId, (value) => {
-  if (value) switchByProp(value)
-})
-
-watch(() => props.hostId, (value) => {
-  if (value) roomMeta.value = { ...roomMeta.value, hostId: value }
+  if (!value || value === activeRoomId.value) return
+  activeRoomId.value = value
+  selectedIndices.value = []
+  wager.value = 5
+  finishedEmitted.value = false
+  disconnect()
+  connect()
+  nextTick(() => joinRoom(value))
 })
 
 watch(() => [wagerMin.value, wagerMax.value], () => {
@@ -632,12 +466,7 @@ watch(finished, (value) => {
 onMounted(() => {
   loadAvatarDirectory()
   connect()
-  attachSocketEvents()
   nextTick(() => { if (activeRoomId.value) joinRoom(activeRoomId.value) })
-})
-
-onUnmounted(() => {
-  // useMinigameSocket 内部会 disconnect；这里只清理引用即可
 })
 </script>
 

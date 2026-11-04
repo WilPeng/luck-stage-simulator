@@ -1,9 +1,10 @@
 <template>
   <div class="key-ceremony">
-    <!-- 设置阶段：先选被提名者，再安排安全顺序 -->
-    <template v-if="!keyCeremony">
+    <!-- 准备阶段：HOH 预先决定提名、排序、编辑文案并保存；等待管理员开始仪式 -->
+    <template v-if="!isStarted">
       <div v-if="canSetup" class="kc-setup">
         <div class="kc-title">🔑 提名仪式 · 准备</div>
+        <div v-if="prepared" class="kc-saved">✅ 准备内容已保存，等待管理员点击「仪式开始」</div>
         <div class="kc-step">① 选择 {{ nomineeCount }} 名被提名者（点击选择）</div>
         <div class="kc-eligible">
           <button v-for="h in eligible" :key="h.id" class="kc-pick"
@@ -20,10 +21,12 @@
           </div>
         </div>
         <button class="kc-submit" :disabled="selectedNominees.length !== nomineeCount || submitting" @click="submit">
-          {{ submitting ? '提交中…' : '开始提名仪式' }}
+          {{ submitting ? '保存中…' : prepared ? '重新保存准备' : '确定保存' }}
         </button>
       </div>
-      <div v-else class="kc-waiting">等待 HOH 开始提名仪式…</div>
+      <div v-else class="kc-waiting">
+        {{ prepared ? 'HOH 已完成提名准备，等待管理员开始仪式…' : '等待 HOH 准备提名仪式…' }}
+      </div>
     </template>
 
     <!-- 仪式阶段 -->
@@ -92,15 +95,15 @@
       </div>
     </template>
 
-    <!-- 发言稿：始终展示给 HOH/管理员，按状态禁用发送按钮 -->
+    <!-- 发言稿：始终展示给 HOH/管理员，准备阶段随「确定保存」一并保存 -->
     <div v-if="canSetup" class="kc-speech-panel">
-      <div class="kc-speech-title">🎤 发言稿（浏览器本地保存）</div>
+      <div class="kc-speech-title">🎤 发言稿{{ isStarted ? '' : '（准备好后点击上方「确定保存」）' }}</div>
 
       <div class="kc-speech-sub">开场发言
         <button class="kc-mini-btn" @click="genOpeningTemplate">生成模板</button>
       </div>
       <textarea v-model="openingText" class="kc-textarea" rows="2"></textarea>
-      <button v-if="keyCeremony" class="kc-btn"
+      <button v-if="isStarted" class="kc-btn"
         :disabled="!isFirstMoment || keyCeremony.openingSpoken"
         @click="emitSpeech('opening')">
         {{ keyCeremony.openingSpoken ? '开场发言已发表' : '发表开场发言' }}
@@ -121,11 +124,19 @@
       </div>
       <textarea v-model="closingReason" class="kc-textarea kc-reason-textarea" rows="4" placeholder="填写提名原因…"></textarea>
       <div class="kc-closing-line">提名仪式到此结束。</div>
-      <button v-if="keyCeremony" class="kc-btn"
+      <button v-if="isStarted" class="kc-btn"
         :disabled="!allKeysDone || keyCeremony.closingSpoken"
         @click="emitSpeech('closing')">
         {{ keyCeremony.closingSpoken ? '结束发言已发表' : '发表结束发言并结束仪式' }}
       </button>
+    </div>
+
+    <!-- 管理员开始仪式（HOH 保存准备后可用） -->
+    <div v-if="canStartCeremony && !isStarted" class="kc-start-panel">
+      <button class="kc-submit" :disabled="!prepared || starting" @click="emit('start')">
+        {{ starting ? '开始中…' : prepared ? '▶ 仪式开始' : '等待 HOH 完成准备' }}
+      </button>
+      <div v-if="!prepared" class="kc-start-hint">HOH 尚未保存提名准备</div>
     </div>
   </div>
 </template>
@@ -146,10 +157,13 @@ const props = defineProps<{
   submitting?: boolean
   drawing?: boolean
   announcing?: boolean
+  canStartCeremony?: boolean
+  starting?: boolean
 }>()
 
 const emit = defineEmits<{
-  (e: 'setup', payload: { nominees: string[]; order: string[] }): void
+  (e: 'setup', payload: { nominees: string[]; order: string[]; openingText?: string; closingReason?: string }): void
+  (e: 'start'): void
   (e: 'draw'): void
   (e: 'announce', text: string): void
   (e: 'speech', payload: { phase: 'opening' | 'closing'; text?: string; reason?: string; nomineeOrder?: string[] }): void
@@ -177,11 +191,27 @@ watch(openingText, v => { try { localStorage.setItem(LS_OPEN, v) } catch {} })
 watch(closingReason, v => { try { localStorage.setItem(LS_REASON, v) } catch {} })
 
 const canSetup = computed(() => props.isAdmin || props.isHoh)
+// 兼容旧数据：没有 started 字段的仪式视为已开始
+const isStarted = computed(() => !!props.keyCeremony && props.keyCeremony.started !== false)
+const prepared = computed(() => !!props.keyCeremony && props.keyCeremony.started === false)
 const nameOf = (id: string) => props.eligible.find(h => h.id === id)?.name || id
 
 function initOrder() {
   const ids = props.eligible.map(h => h.id)
   safeOrder.value = ids.filter(id => !selectedNominees.value.includes(id))
+}
+
+let initializedPrepId = ''
+function initFromPrepared() {
+  const kc = props.keyCeremony
+  if (!kc || kc.started !== false) return false
+  if (initializedPrepId === kc.id) return true
+  initializedPrepId = kc.id || 'prepared'
+  selectedNominees.value = (kc.nominees || []).map((n: any) => n.playerId)
+  safeOrder.value = (kc.order || []).map((o: any) => o.playerId)
+  if (kc.openingText) openingText.value = kc.openingText
+  if (kc.closingReason) closingReason.value = kc.closingReason
+  return true
 }
 
 function toggleNominee(id: string) {
@@ -204,7 +234,12 @@ function moveSafe(index: number, dir: -1 | 1) {
 }
 function submit() {
   if (selectedNominees.value.length !== props.nomineeCount) return
-  emit('setup', { nominees: [...selectedNominees.value], order: [...safeOrder.value] })
+  emit('setup', {
+    nominees: [...selectedNominees.value],
+    order: [...safeOrder.value],
+    openingText: openingText.value,
+    closingReason: closingReason.value
+  })
 }
 
 // ===== 仪式阶段 =====
@@ -261,7 +296,10 @@ const isFirstMoment = computed(() => !!props.keyCeremony && (props.keyCeremony.d
 
 watch(() => props.keyCeremony, (kc) => {
   if (!kc) return
-  if (!nomineeOrderList.value.length) nomineeOrderList.value = [...(kc.nominees || [])]
+  if (kc.started === false) initFromPrepared()
+  if (kc.started !== false && !nomineeOrderList.value.length) nomineeOrderList.value = [...(kc.nominees || [])]
+  if (kc.openingText && !openingText.value) openingText.value = kc.openingText
+  if (kc.closingReason && !closingReason.value) closingReason.value = kc.closingReason
   if (!openingText.value) {
     const n = (kc.nominees || []).length
     const text = `现在是提名仪式。作为房主，我有权利提名${n}位房客候选淘汰。我将从箱子中逐个抽出钥匙，最后没有获得钥匙的房客将成为本轮的淘汰候选。`
@@ -272,14 +310,14 @@ watch(() => props.keyCeremony, (kc) => {
 
 // 发言稿中的被提名者：仪式阶段用已确定的提名名单，准备阶段用当前所选
 const speechNominees = computed<any[]>(() => {
-  if (props.keyCeremony) return nomineeOrderList.value
+  if (isStarted.value) return nomineeOrderList.value
   return selectedNominees.value.map(id => ({ playerId: id, playerName: nameOf(id) }))
 })
 const speechNomineeNames = computed(() => speechNominees.value.map(n => n.playerName).join('、') || '……')
 function moveSpeechNominee(index: number, dir: -1 | 1) {
   const t = index + dir
   if (t < 0 || t >= speechNominees.value.length) return
-  if (props.keyCeremony) {
+  if (isStarted.value) {
     const a = [...nomineeOrderList.value]
     ;[a[index], a[t]] = [a[t], a[index]]
     nomineeOrderList.value = a
@@ -316,7 +354,8 @@ function emitSpeech(phase: 'opening' | 'closing') {
 
 watch(() => props.eligible, () => { if (!props.keyCeremony) initOrder() }, { immediate: true })
 onMounted(() => {
-  if (!props.keyCeremony) initOrder()
+  if (props.keyCeremony?.started === false) initFromPrepared()
+  else if (!props.keyCeremony) initOrder()
   if (!openingText.value) genOpeningTemplate()
 })
 </script>
@@ -336,6 +375,9 @@ onMounted(() => {
 .kc-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
 .kc-submit { width: 100%; padding: 12px; border: 1px solid #e6c988; background: #e6c98822; color: #e6c988; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; }
 .kc-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+.kc-saved { margin-bottom: 10px; padding: 8px 12px; border: 1px solid #44cc8844; background: #44cc8812; color: #6ee7a8; border-radius: 8px; font-size: 13px; }
+.kc-start-panel { margin-top: 14px; padding-top: 14px; border-top: 1px solid #ffffff12; }
+.kc-start-hint { margin-top: 8px; text-align: center; font-size: 12px; color: #6b5f92; }
 .kc-waiting { text-align: center; color: #b3a6d6; font-size: 14px; padding: 20px 0; }
 .kc-box { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
 .box-icon { font-size: 44px; }

@@ -144,10 +144,13 @@ const ceremonyDone = computed(() => {
   if (!kc) return true // 无钥匙仪式（旧流程）时直接展示
   return !!kc.ended
 })
-async function onKeySetup(payload: { nominees: string[]; order: string[] }) {
+async function onKeySetup(payload: { nominees: string[]; order: string[]; openingText?: string; closingReason?: string }) {
   submittingKey.value = true
   try {
-    await bbKeySetup(payload.nominees, payload.order)
+    await bbKeySetup(payload.nominees, payload.order, {
+      openingText: payload.openingText,
+      closingReason: payload.closingReason
+    })
     await refreshNomination()
   } catch (e: any) {
     alert(e?.message || '提交失败')

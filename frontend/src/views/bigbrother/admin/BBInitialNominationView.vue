@@ -43,7 +43,10 @@
         :submitting="submittingKey"
         :drawing="drawingKey"
         :announcing="announcingKey"
+        :canStartCeremony="true"
+        :starting="startingKey"
         @setup="onKeySetup"
+        @start="onKeyStart"
         @draw="onKeyDraw"
         @announce="onKeyAnnounce"
         @speech="onKeySpeech"
@@ -132,7 +135,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
-import { bbGetCurrentNomination, bbSetNomination, bbGetNominationHistory, bbGetActiveHouseguests, bbVoteNominees, bbGetCurrentHoh, bbGetCurrentVeto, bbKeySetup, bbKeyDraw, bbKeyAnnounce, bbKeySpeech, bbGetSeasonConfig, bbUndoNomination } from '../../../services/bbApi'
+import { bbGetCurrentNomination, bbSetNomination, bbGetNominationHistory, bbGetActiveHouseguests, bbVoteNominees, bbGetCurrentHoh, bbGetCurrentVeto, bbKeySetup, bbKeyStart, bbKeyDraw, bbKeyAnnounce, bbKeySpeech, bbGetSeasonConfig, bbUndoNomination } from '../../../services/bbApi'
 import type { BBNomination, BBRoundConfig } from '../../../types/bigbrother'
 import KeyCeremony from '../../../components/bigbrother/KeyCeremony.vue'
 
@@ -144,6 +147,7 @@ const keyCeremony = ref<any>(null)
 const submittingKey = ref(false)
 const drawingKey = ref(false)
 const announcingKey = ref(false)
+const startingKey = ref(false)
 const keyEligible = computed(() => activeList.value.filter(h => h.id !== currentHoh.value?.winnerId))
 // 提名仪式是否已结束（HOH 结束发言后才公布被提名者）
 const ceremonyDone = computed(() => {
@@ -152,9 +156,19 @@ const ceremonyDone = computed(() => {
   return !!kc.ended
 })
 
-async function onKeySetup(payload: { nominees: string[]; order: string[] }) {
+async function onKeySetup(payload: { nominees: string[]; order: string[]; openingText?: string; closingReason?: string }) {
   submittingKey.value = true
-  try { await bbKeySetup(payload.nominees, payload.order); await fetchData() } catch (e: any) { alert(e?.message || '提交失败') } finally { submittingKey.value = false }
+  try {
+    await bbKeySetup(payload.nominees, payload.order, {
+      openingText: payload.openingText,
+      closingReason: payload.closingReason
+    })
+    await fetchData()
+  } catch (e: any) { alert(e?.message || '保存失败') } finally { submittingKey.value = false }
+}
+async function onKeyStart() {
+  startingKey.value = true
+  try { await bbKeyStart(); await fetchData() } catch (e: any) { alert(e?.message || '开始仪式失败') } finally { startingKey.value = false }
 }
 async function onKeyDraw() {
   drawingKey.value = true

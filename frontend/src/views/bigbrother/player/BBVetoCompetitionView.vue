@@ -29,7 +29,7 @@
     <!-- 小游戏模式 -->
     <div v-else-if="showMinigame" class="minigame-section">
       <component :is="gameComponent" :roomId="activeRoom.roomId"
-        :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" :roomStatus="activeRoom.status" @finished="onMinigameFinished" />
+        :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
     </div>
 
     <!-- 等待进入比赛：room 已创建且我是参与者，但尚未开始 -->
