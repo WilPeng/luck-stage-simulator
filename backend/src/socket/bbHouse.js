@@ -27,8 +27,17 @@ let bbHouseNamespace = null
 
 // 待处理的 HOH 邀请（targetPlayerId -> { hohId, hohName, at }）
 const pendingInvites = new Map()
+// 待处理的同行邀请（targetPlayerId -> { inviterId, inviterName, fromRoomId, targetRoomId, ... })
+const pendingMoveInvites = new Map()
 
 function getNamespace() { return bbHouseNamespace }
+
+function emitToUser(userId, event, payload) {
+  if (!bbHouseNamespace) return
+  for (const [, s] of bbHouseNamespace.sockets) {
+    if (s.userId === userId) s.emit(event, payload)
+  }
+}
 
 // 头像查询
 async function getAvatarMap() {
@@ -62,6 +71,7 @@ async function postRoomMessage(roomId, { senderId, senderName, senderRole = 'hou
       for (const s of roomSockets) {
         const g = await BBHouseguest.findOne({ id: s.userId, gameId })
         if (g?.isSleeping) continue
+        if (g?.isMoving) continue
         if (g?.isShowering && roomId !== 'bathroom') continue
         s.emit('house:new-message', { roomId, message: msg.toObject() })
       }
@@ -93,10 +103,11 @@ function initBBHouseSocket(io) {
 
   bbHouseNamespace.on('connection', async (socket) => {
     // 用数据库中的房客姓名/头像覆盖 token 中可能缺失的信息
+    let connectedGuest = null
     try {
-      const guest = await BBHouseguest.findOne({ id: socket.userId, gameId })
-      if (guest?.name) socket.userName = guest.name
-      if (guest?.role) socket.userRole = guest.role
+      connectedGuest = await BBHouseguest.findOne({ id: socket.userId, gameId })
+      if (connectedGuest?.name) socket.userName = connectedGuest.name
+      if (connectedGuest?.role) socket.userRole = connectedGuest.role
     } catch (e) { /* ignore */ }
     console.log(`[BBHouse] Player connected: ${socket.userName} (${socket.userId})`)
 
@@ -108,6 +119,16 @@ function initBBHouseSocket(io) {
         socket.currentRoomId = null
         socket.emit('house:god-view', { rooms: rooms.map(r => ({ id: r.id, name: r.name, icon: r.icon })) })
         console.log(`[BBHouse] Admin ${socket.userName} entered god view (all rooms)`)
+      } else if (connectedGuest?.isMoving) {
+        // 移动中的玩家不加入任何房间，也不接收任何房间消息
+        socket.currentRoomId = null
+        socket.emit('house:move-started', {
+          fromRoomId: connectedGuest.moveFromRoomId,
+          toRoomId: connectedGuest.moveToRoomId,
+          durationSeconds: connectedGuest.moveDurationSeconds,
+          endsAt: connectedGuest.moveEndsAt,
+          reason: '移动中'
+        })
       } else {
         // 获取玩家当前位置
         const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
@@ -157,12 +178,15 @@ function initBBHouseSocket(io) {
         // 睡眠/洗澡状态限制（管理员不受限）
         const senderGuest = await BBHouseguest.findOne({ id: socket.userId, gameId })
         if (!isAdmin) {
-          if (senderGuest?.isSleeping) {
-            return socket.emit('house:error', { error: '睡眠中无法发送消息' })
-          }
-          if (senderGuest?.isShowering && roomId !== 'bathroom') {
-            return socket.emit('house:error', { error: '洗澡中只能在浴室发言' })
-          }
+        if (senderGuest?.isSleeping) {
+          return socket.emit('house:error', { error: '睡眠中无法发送消息' })
+        }
+        if (senderGuest?.isMoving) {
+          return socket.emit('house:error', { error: '移动中无法发送消息' })
+        }
+        if (senderGuest?.isShowering && roomId !== 'bathroom') {
+          return socket.emit('house:error', { error: '洗澡中只能在浴室发言' })
+        }
         }
 
         // 保存消息
@@ -185,6 +209,7 @@ function initBBHouseSocket(io) {
         for (const s of roomSockets) {
           const g = await BBHouseguest.findOne({ id: s.userId, gameId })
           if (g?.isSleeping) continue
+          if (g?.isMoving) continue
           if (g?.isShowering && roomId !== 'bathroom') continue
           s.emit('house:new-message', { roomId, message: msg.toObject() })
         }
@@ -198,6 +223,8 @@ function initBBHouseSocket(io) {
     socket.on('house:load-more', async ({ roomId, before }) => {
       try {
         if (socket.userRole !== 'admin') {
+          const guest = await BBHouseguest.findOne({ id: socket.userId, gameId })
+          if (guest?.isMoving) return
           const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
           if (!loc || loc.currentRoomId !== roomId) return
         }
@@ -224,12 +251,20 @@ function initBBHouseSocket(io) {
     // === 房间移动通知（由 REST API 触发，通过 socket 广播） ===
     socket.on('house:moved', async ({ oldRoomId, newRoomId }) => {
       try {
+        // 移动必须由服务端计时完成，客户端不能直接切换房间
+        const guest = await BBHouseguest.findOne({ id: socket.userId, gameId })
+        if (guest?.isMoving) return
+        const currentLoc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
+        if (!currentLoc || currentLoc.currentRoomId !== newRoomId) {
+          return socket.emit('house:error', { error: '当前位置不匹配，无法切换房间' })
+        }
         // 离开旧房间
         if (oldRoomId) {
           socket.leave(`room:${oldRoomId}`)
           bbHouseNamespace.to(`room:${oldRoomId}`).emit('house:player-left', {
             roomId: oldRoomId,
-            playerName: socket.userName
+            playerName: socket.userName,
+            at: new Date().toISOString()
           })
           await broadcastRoomPresence(oldRoomId)
         }
@@ -242,7 +277,8 @@ function initBBHouseSocket(io) {
           await locationHistory.recordMove(socket.userId, socket.userName, oldRoomId, newRoomId)
           bbHouseNamespace.to(`room:${newRoomId}`).emit('house:player-joined', {
             roomId: newRoomId,
-            playerName: socket.userName
+            playerName: socket.userName,
+            at: new Date().toISOString()
           })
           await broadcastRoomPresence(newRoomId)
 
@@ -337,43 +373,31 @@ function initBBHouseSocket(io) {
         }
         pendingInvites.delete(socket.userId)
 
+        const hg = await BBHouseguest.findOne({ id: socket.userId, gameId })
+        if (!hg || hg.status !== 'active') {
+          return socket.emit('house:error', { error: '非活跃玩家' })
+        }
+        if (hg.isSleeping) {
+          return socket.emit('house:error', { error: '睡眠中无法移动' })
+        }
+        if (hg.isShowering) {
+          return socket.emit('house:error', { error: '洗澡中无法移动' })
+        }
+        if (hg.isMoving) {
+          return socket.emit('house:error', { error: '移动中' })
+        }
+
         const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
         const oldRoomId = loc?.currentRoomId || 'living_room'
-
-        // 移动到 HOH Room
-        if (loc) {
-          loc.currentRoomId = 'hoh_room'
-          loc.enteredAt = new Date().toISOString()
-          await loc.save()
-        } else {
-          const newLoc = new BBPlayerLocation({
-            id: socket.userId, playerId: socket.userId, playerName: socket.userName,
-            currentRoomId: 'hoh_room', enteredAt: new Date().toISOString(), gameId
-          })
-          await newLoc.save()
-        }
-
-        const hg = await BBHouseguest.findOne({ id: socket.userId, gameId })
-        if (hg) {
-          hg.currentRoomId = 'hoh_room'
-          await hg.save()
-        }
-
-        // 广播旧房间离开
-        socket.leave(`room:${oldRoomId}`)
-        bbHouseNamespace.to(`room:${oldRoomId}`).emit('house:player-left', {
-          roomId: oldRoomId, playerName: socket.userName
+        const targetRoom = await BBHouseRoom.findOne({ id: 'hoh_room', gameId })
+        const durationSeconds = Math.max(0, Number(targetRoom?.moveDuration ?? 10))
+        await startTimedMove({
+          playerId: socket.userId,
+          fromRoomId: oldRoomId,
+          toRoomId: 'hoh_room',
+          durationSeconds,
+          reason: '接受 HOH 邀请'
         })
-        await broadcastRoomPresence(oldRoomId)
-
-        // 进入新房间
-        socket.join(`room:hoh_room`)
-        socket.currentRoomId = 'hoh_room'
-        await locationHistory.recordMove(socket.userId, socket.userName, oldRoomId, 'hoh_room')
-        bbHouseNamespace.to(`room:hoh_room`).emit('house:player-joined', {
-          roomId: 'hoh_room', playerName: socket.userName
-        })
-        await broadcastRoomPresence('hoh_room')
 
         // 通知 HOH：邀请已被接受
         const hoh = await getCurrentHoh()
@@ -388,13 +412,108 @@ function initBBHouseSocket(io) {
             }
           }
         }
-
-        const allMessages = await BBChatMessage.find({ gameId, chatType: 'room', roomId: 'hoh_room' })
-        allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-        const visible = await locationHistory.filterVisibleMessages(socket.userId, 'hoh_room', allMessages)
-        socket.emit('house:history', { roomId: 'hoh_room', messages: visible.slice(-50).map(m => m.toObject()) })
       } catch (e) {
         console.error('[BBHouse] Accept invite error:', e)
+      }
+    })
+
+    // === 邀请同房间玩家一起移动 ===
+    socket.on('house:invite-move', async ({ targetPlayerId, targetRoomId }) => {
+      try {
+        if (!targetPlayerId || !targetRoomId) {
+          return socket.emit('house:error', { error: '缺少邀请对象或目标房间' })
+        }
+        if (targetPlayerId === socket.userId) {
+          return socket.emit('house:error', { error: '不能邀请自己' })
+        }
+        const ctx = await validateCoMove(socket.userId, targetPlayerId, targetRoomId)
+        if (ctx.error) return socket.emit('house:error', { error: ctx.error })
+
+        const invite = {
+          inviterId: socket.userId,
+          inviterName: socket.userName,
+          targetPlayerId,
+          targetPlayerName: ctx.target.name,
+          fromRoomId: ctx.fromRoomId,
+          targetRoomId,
+          targetRoomName: ctx.targetRoom.name,
+          targetRoomIcon: ctx.targetRoom.icon,
+          at: Date.now()
+        }
+        pendingMoveInvites.set(targetPlayerId, invite)
+        emitToUser(targetPlayerId, 'house:move-invite-received', {
+          inviterId: socket.userId,
+          inviterName: socket.userName,
+          fromRoomId: ctx.fromRoomId,
+          targetRoomId,
+          roomName: ctx.targetRoom.name,
+          roomIcon: ctx.targetRoom.icon
+        })
+        socket.emit('house:move-invite-sent', {
+          targetPlayerId,
+          targetPlayerName: ctx.target.name,
+          targetRoomId,
+          roomName: ctx.targetRoom.name
+        })
+      } catch (e) {
+        console.error('[BBHouse] Invite move error:', e)
+      }
+    })
+
+    socket.on('house:accept-move-invite', async () => {
+      try {
+        const invite = pendingMoveInvites.get(socket.userId)
+        if (!invite) return socket.emit('house:error', { error: '没有待处理的同行邀请' })
+        if (Date.now() - invite.at > 2 * 60 * 1000) {
+          pendingMoveInvites.delete(socket.userId)
+          return socket.emit('house:error', { error: '同行邀请已过期' })
+        }
+
+        const ctx = await validateCoMove(invite.inviterId, socket.userId, invite.targetRoomId)
+        if (ctx.error) {
+          pendingMoveInvites.delete(socket.userId)
+          return socket.emit('house:error', { error: ctx.error })
+        }
+        pendingMoveInvites.delete(socket.userId)
+
+        const durationSeconds = Math.max(0, Number(ctx.targetRoom.moveDuration ?? 10))
+        await startTimedMove({
+          playerId: invite.inviterId,
+          fromRoomId: ctx.fromRoomId,
+          toRoomId: invite.targetRoomId,
+          durationSeconds,
+          reason: `与 ${ctx.target.name} 同行`
+        })
+        await startTimedMove({
+          playerId: socket.userId,
+          fromRoomId: ctx.fromRoomId,
+          toRoomId: invite.targetRoomId,
+          durationSeconds,
+          reason: `与 ${ctx.inviter.name} 同行`
+        })
+
+        emitToUser(invite.inviterId, 'house:move-invite-accepted', {
+          playerId: socket.userId,
+          playerName: ctx.target.name,
+          targetRoomId: invite.targetRoomId,
+          roomName: invite.targetRoomName
+        })
+      } catch (e) {
+        console.error('[BBHouse] Accept move invite error:', e)
+      }
+    })
+
+    socket.on('house:decline-move-invite', async () => {
+      try {
+        const invite = pendingMoveInvites.get(socket.userId)
+        if (!invite) return
+        pendingMoveInvites.delete(socket.userId)
+        emitToUser(invite.inviterId, 'house:move-invite-declined', {
+          playerId: socket.userId,
+          playerName: socket.userName
+        })
+      } catch (e) {
+        console.error('[BBHouse] Decline move invite error:', e)
       }
     })
 
@@ -460,14 +579,21 @@ function initBBHouseSocket(io) {
   startHouseTimers()
 }
 
-// ===== 定时任务：自动睡眠 / 洗澡自动结束 =====
+// ===== 定时任务：移动完成 / 自动睡眠 / 洗澡自动结束 =====
 let houseTimer = null
+let moveTimer = null
+const processingMoves = new Set()
 
 function startHouseTimers() {
-  if (houseTimer) return
-  houseTimer = setInterval(runHouseTimers, 60 * 1000)
-  // 启动后先跑一次
-  runHouseTimers()
+  if (!houseTimer) {
+    houseTimer = setInterval(runHouseTimers, 60 * 1000)
+    // 启动后先跑一次
+    runHouseTimers()
+  }
+  if (!moveTimer) {
+    moveTimer = setInterval(processPendingMoves, 1000)
+    processPendingMoves()
+  }
 }
 
 async function runHouseTimers() {
@@ -532,16 +658,206 @@ async function runHouseTimers() {
   }
 }
 
+// ===== 带移动时间的房间移动 =====
+
+async function validateCoMove(inviterId, targetPlayerId, targetRoomId) {
+  const [inviter, target] = await Promise.all([
+    BBHouseguest.findOne({ id: inviterId, gameId }),
+    BBHouseguest.findOne({ id: targetPlayerId, gameId })
+  ])
+  if (!inviter || inviter.status !== 'active') return { error: '邀请者不在游戏中' }
+  if (!target || target.status !== 'active') return { error: '目标玩家不在游戏中' }
+  if (inviter.isSleeping || target.isSleeping) return { error: '睡眠中无法移动' }
+  if (inviter.isShowering || target.isShowering) return { error: '洗澡中无法移动' }
+  if (inviter.isMoving) return { error: '邀请者正在移动中' }
+  if (target.isMoving) return { error: '对方正在移动中' }
+
+  const [inviterLoc, targetLoc] = await Promise.all([
+    BBPlayerLocation.findOne({ playerId: inviterId, gameId }),
+    BBPlayerLocation.findOne({ playerId: targetPlayerId, gameId })
+  ])
+  const fromRoomId = inviterLoc?.currentRoomId || 'living_room'
+  if (!targetLoc || targetLoc.currentRoomId !== fromRoomId) {
+    return { error: '你们不在同一个房间' }
+  }
+  if (targetRoomId === fromRoomId) return { error: '已经在这个房间了' }
+
+  const targetRoom = await BBHouseRoom.findOne({ id: targetRoomId, gameId })
+  if (!targetRoom) return { error: '目标房间不存在' }
+  if (targetRoom.accessRule === 'admin_only') return { error: '该区域只能由管理员安排进入' }
+
+  const passages = await BBHousePassage.find({ gameId })
+  const passage = passages.find(p =>
+    (p.from === fromRoomId && p.to === targetRoomId) ||
+    (p.to === fromRoomId && p.from === targetRoomId)
+  )
+  if (!passage) return { error: '不可达：两个房间之间没有通道' }
+  if (passage.type === 'door' && passage.doorId) {
+    const door = await BBHouseDoor.findOne({ id: passage.doorId, gameId })
+    if (door && !door.isOpen) return { error: '门已关闭' }
+  }
+
+  const hoh = await getCurrentHoh()
+  if (targetRoom.accessRule === 'hoh_only' && hoh?.id !== inviterId && hoh?.id !== targetPlayerId) {
+    return { error: '仅 HOH 可进入' }
+  }
+  if (targetRoom.accessRule === 'hoh_or_invited' && hoh?.id !== inviterId && hoh?.id !== targetPlayerId) {
+    return { error: '需要 HOH 邀请' }
+  }
+  if (targetRoom.accessRule === 'single') {
+    const count = await BBPlayerLocation.countDocuments({ currentRoomId: targetRoomId, gameId })
+    if (count >= 1) return { error: '房间已有人在内' }
+  }
+  if (targetRoom.capacity) {
+    const [count, movingCount] = await Promise.all([
+      BBPlayerLocation.countDocuments({ currentRoomId: targetRoomId, gameId }),
+      BBHouseguest.countDocuments({ gameId, isMoving: true, moveToRoomId: targetRoomId })
+    ])
+    if (count + movingCount + 2 > targetRoom.capacity) {
+      return { error: '人数已满请稍后重试' }
+    }
+  }
+
+  return { inviter, target, fromRoomId, targetRoom }
+}
+
+/** 开始一次计时移动：关闭旧房间历史区间，离开旧房间 socket，到达后由定时器完成 */
+async function startTimedMove({ playerId, fromRoomId, toRoomId, durationSeconds = 10, reason = '移动中' }) {
+  const hg = await BBHouseguest.findOne({ id: playerId, gameId })
+  if (!hg) return null
+  const duration = Math.max(0, Math.round(Number(durationSeconds) || 0))
+  const now = new Date()
+  const endsAt = new Date(now.getTime() + duration * 1000).toISOString()
+  const targetRoom = await BBHouseRoom.findOne({ id: toRoomId, gameId })
+
+  hg.isMoving = true
+  hg.moveFromRoomId = fromRoomId
+  hg.moveToRoomId = toRoomId
+  hg.moveStartedAt = now.toISOString()
+  hg.moveEndsAt = endsAt
+  hg.moveDurationSeconds = duration
+  await hg.save()
+
+  // 移动期间不属于任何房间：立即结束旧房间的可见区间
+  await locationHistory.recordMove(playerId, hg.name, fromRoomId, null, now.toISOString())
+
+  const payload = {
+    fromRoomId,
+    toRoomId,
+    roomName: targetRoom?.name || '',
+    roomIcon: targetRoom?.icon || '🏠',
+    durationSeconds: duration,
+    endsAt,
+    reason
+  }
+
+  if (bbHouseNamespace) {
+    for (const [, s] of bbHouseNamespace.sockets) {
+      if (s.userId === playerId) {
+        s.leave(`room:${fromRoomId}`)
+        s.currentRoomId = null
+        s.emit('house:move-started', payload)
+      }
+    }
+    if (fromRoomId) {
+      bbHouseNamespace.to(`room:${fromRoomId}`).emit('house:player-left', {
+        roomId: fromRoomId, playerName: hg.name, moving: true,
+        at: new Date().toISOString()
+      })
+      await broadcastRoomPresence(fromRoomId)
+    }
+  }
+
+  if (duration <= 0) {
+    await completeTimedMove(hg, reason)
+  }
+  return { ...payload, isMoving: duration > 0 }
+}
+
+/** 完成移动：更新位置、恢复 socket 房间、推送新房间历史 */
+async function completeTimedMove(guest, reason = '移动完成') {
+  const g = await BBHouseguest.findOne({ id: guest.id, gameId })
+  if (!g || !g.isMoving) return
+  const fromRoomId = g.moveFromRoomId
+  const toRoomId = g.moveToRoomId
+  if (!fromRoomId || !toRoomId) {
+    clearGuestMoveState(g)
+    await g.save()
+    return
+  }
+
+  const now = new Date()
+  let loc = await BBPlayerLocation.findOne({ playerId: g.id, gameId })
+  if (!loc) {
+    loc = new BBPlayerLocation({
+      id: g.id, playerId: g.id, playerName: g.name,
+      currentRoomId: toRoomId, enteredAt: now.toISOString(), gameId
+    })
+    await loc.save()
+  } else {
+    loc.currentRoomId = toRoomId
+    loc.enteredAt = now.toISOString()
+    await loc.save()
+  }
+
+  g.currentRoomId = toRoomId
+  clearGuestMoveState(g)
+
+  // 到达浴室即开始洗澡
+  if (toRoomId === 'bathroom') {
+    g.isShowering = true
+    g.showerStartedAt = now.toISOString()
+    g.lastShowerDate = localDateStr(now)
+    g.showerCooldownUntil = null
+  }
+  await g.save()
+
+  // 移动开始阶段已经广播过离开旧房间，这里不再重复
+  await movePlayerSockets(g.id, fromRoomId, toRoomId, reason, { announceOldLeave: false })
+}
+
+function clearGuestMoveState(g) {
+  g.isMoving = false
+  g.moveFromRoomId = null
+  g.moveToRoomId = null
+  g.moveStartedAt = null
+  g.moveEndsAt = null
+  g.moveDurationSeconds = null
+}
+
+async function processPendingMoves() {
+  try {
+    const now = Date.now()
+    const movingGuests = await BBHouseguest.find({ gameId, isMoving: true })
+    for (const g of movingGuests) {
+      if (processingMoves.has(g.id)) continue
+      if (!g.moveEndsAt || new Date(g.moveEndsAt).getTime() > now) continue
+      processingMoves.add(g.id)
+      try {
+        await completeTimedMove(g, '移动完成')
+      } finally {
+        processingMoves.delete(g.id)
+      }
+    }
+  } catch (e) {
+    console.error('[BBHouse] Move timer error:', e)
+  }
+}
+
 // 广播房间内玩家列表
 async function broadcastRoomPresence(roomId) {
   if (!bbHouseNamespace) return
   const locations = await BBPlayerLocation.find({ currentRoomId: roomId, gameId })
+  const movingGuests = await BBHouseguest.find({ gameId, isMoving: true })
+  const movingIds = new Set(movingGuests.map(g => g.id))
   const avatars = await getAvatarMap()
-  const players = locations.map(l => ({
-    playerId: l.playerId,
-    playerName: l.playerName,
-    avatar: avatars[l.playerId] || null
-  }))
+  const players = locations
+    .filter(l => !movingIds.has(l.playerId))
+    .map(l => ({
+      playerId: l.playerId,
+      playerName: l.playerName,
+      avatar: avatars[l.playerId] || null
+    }))
   bbHouseNamespace.to(`room:${roomId}`).emit('house:room-presence', {
     roomId,
     players
@@ -612,7 +928,7 @@ function notifyForceMove(playerId, targetRoomId, reason) {
 }
 
 // 管理员强制移动/清空后院：服务端权威地切换玩家 socket 房间并实时广播
-async function movePlayerSockets(playerId, oldRoomId, newRoomId, reason = '管理员移动') {
+async function movePlayerSockets(playerId, oldRoomId, newRoomId, reason = '管理员移动', options = {}) {
   if (!bbHouseNamespace) return
   const hg = await BBHouseguest.findOne({ id: playerId, gameId })
   // 记录位置历史（消息可见性核心）
@@ -629,15 +945,17 @@ async function movePlayerSockets(playerId, oldRoomId, newRoomId, reason = '管�
 
   for (const s of targets) {
     s.leave(`room:${oldRoomId}`)
-    if (oldRoomId) {
+    if (oldRoomId && options.announceOldLeave !== false) {
       bbHouseNamespace.to(`room:${oldRoomId}`).emit('house:player-left', {
-        roomId: oldRoomId, playerName: s.userName
+        roomId: oldRoomId, playerName: s.userName,
+        at: new Date().toISOString()
       })
     }
     s.join(`room:${newRoomId}`)
     s.currentRoomId = newRoomId
     bbHouseNamespace.to(`room:${newRoomId}`).emit('house:player-joined', {
-      roomId: newRoomId, playerName: s.userName
+      roomId: newRoomId, playerName: s.userName,
+      at: new Date().toISOString()
     })
     // 先通知客户端切换，再补发新房间历史（保证顺序）
     s.emit('house:force-moved', { targetRoomId: newRoomId, reason })
@@ -668,6 +986,7 @@ async function moveAllToRoom(targetRoomId, reason = '仪式开始') {
       })
     }
     g.currentRoomId = targetRoomId
+    clearGuestMoveState(g)
     await g.save()
     try { await movePlayerSockets(g.id, oldRoomId, targetRoomId, reason) } catch (e) { /* ignore */ }
     moved.push(g.name)
@@ -692,5 +1011,7 @@ module.exports = {
   broadcastMonitorUpdate,
   movePlayerSockets,
   moveAllToRoom,
+  startTimedMove,
+  clearGuestMoveState,
   takePendingInvite
 }

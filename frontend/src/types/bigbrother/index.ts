@@ -591,6 +591,7 @@ export interface BBHouseRoomDef {
   icon: string
   type: HouseRoomType
   capacity: number | null
+  moveDuration?: number
   accessRule: HouseAccessRule
   gameId: string
 }

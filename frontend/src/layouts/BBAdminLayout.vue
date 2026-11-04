@@ -10,6 +10,8 @@
           <span class="stage-tag">{{ stageDisplay }}</span>
           <span class="user-name">{{ authStore.currentUser?.name }}</span>
           <button class="bb-btn bb-btn-sm bb-btn-summon" @click="summonPlayers">📢 召集</button>
+          <button class="bb-btn bb-btn-sm" @click="openBroadcast">📣 广播</button>
+          <button class="bb-btn bb-btn-sm" @click="openBroadcastHistory">📜 广播记录</button>
           <button class="bb-btn bb-btn-sm" @click="handleLogout">退出</button>
         </div>
         <button class="mobile-menu-btn" @click="mobileMenuOpen = !mobileMenuOpen">
@@ -75,6 +77,103 @@
         <router-view />
       </main>
     </div>
+
+    <!-- 管理员广播弹窗 -->
+    <Teleport to="body">
+      <div v-if="broadcastOpen" class="bb-modal-overlay" @click.self="broadcastOpen = false">
+        <div class="bb-modal">
+          <div class="bb-modal-header">
+            <h3>📣 管理员广播</h3>
+            <button class="close-btn" @click="broadcastOpen = false">✕</button>
+          </div>
+          <div class="bb-modal-body">
+            <div class="form-group">
+              <label>广播类型</label>
+              <select v-model="broadcastType" class="bb-select">
+                <option value="notice">通知</option>
+                <option value="invite">邀请所有人到房间</option>
+              </select>
+            </div>
+            <div v-if="broadcastType === 'invite'" class="form-group">
+              <label>目标房间</label>
+              <select v-model="broadcastRoom" class="bb-select">
+                <option value="">选择房间…</option>
+                <option v-for="r in broadcastRooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>快速模板</label>
+              <select v-model="broadcastTemplate" class="bb-select" @change="applyBroadcastTemplate">
+                <option value="">选择模板…</option>
+                <option value="hoh">开始 HOH 比赛</option>
+                <option value="pov">开始 POV 比赛</option>
+                <option value="bbbb">开始 BBBB 比赛</option>
+                <option value="finale">开始终局比赛</option>
+                <option value="end">今日比赛结束</option>
+                <option value="nomination">开始提名仪式</option>
+                <option value="veto_ceremony">开始否决权仪式</option>
+                <option value="eviction_vote">开始淘汰投票</option>
+                <option value="eviction">开始淘汰仪式</option>
+                <option value="gather">请全体房客到客厅集合</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>{{ broadcastType === 'invite' ? '附言（可选）' : '通知内容' }}</label>
+              <textarea
+                v-model="broadcastMessage"
+                class="bb-input"
+                rows="3"
+                :placeholder="broadcastType === 'invite' ? '例如：请全体到客厅集合' : '输入要发送的通知内容'"
+              ></textarea>
+            </div>
+            <div class="form-actions">
+              <button class="bb-btn" @click="broadcastOpen = false">取消</button>
+              <button
+                class="bb-btn bb-btn-primary"
+                :disabled="broadcastSending || (broadcastType === 'invite' ? !broadcastRoom : !broadcastMessage.trim())"
+                @click="sendBroadcast"
+              >{{ broadcastSending ? '发送中…' : '发送' }}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 广播记录弹窗 -->
+    <Teleport to="body">
+      <div v-if="broadcastHistoryOpen" class="bb-modal-overlay" @click.self="broadcastHistoryOpen = false">
+        <div class="bb-modal">
+          <div class="bb-modal-header">
+            <h3>📜 广播通知记录</h3>
+            <button class="close-btn" @click="broadcastHistoryOpen = false">✕</button>
+          </div>
+          <div class="bb-modal-body">
+            <div class="bh-actions">
+              <button
+                class="bb-btn bb-btn-danger bb-btn-sm"
+                :disabled="!broadcastHistory.length || broadcastHistoryLoading"
+                @click="clearBroadcastHistory"
+              >🗑 清空全部</button>
+            </div>
+            <div class="bh-list">
+              <div v-for="b in broadcastHistory" :key="b.id" class="bh-item">
+                <div class="bh-top">
+                  <span class="bh-time">{{ formatBroadcastTime(b.createdAt) }}</span>
+                  <button class="bh-del" title="删除这条记录" @click="deleteBroadcast(b)">删除</button>
+                </div>
+                <div class="bh-message">
+                  {{ b.message }}
+                  <span v-if="b.type === 'invite' && b.roomName" class="bh-room">（邀请至 {{ b.roomName }}）</span>
+                </div>
+                <div class="bh-from">—— {{ b.from || '管理员' }}</div>
+              </div>
+              <div v-if="broadcastHistoryLoading" class="bh-empty">加载中…</div>
+              <div v-else-if="!broadcastHistory.length" class="bh-empty">暂无广播记录</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -87,6 +186,7 @@ import { useBbRealtimeStore } from '../stores/bbRealtimeStore'
 import { BB_STAGE_NAME, type BBStageType } from '../types/bigbrother'
 import { applyGamePageMeta } from '../router'
 import { bbSummonPage } from '../services/bbApi'
+import { bbGetHouseRooms, bbAdminBroadcast, bbGetBroadcastHistory, bbDeleteBroadcast, bbClearBroadcasts } from '../services/bbHouseApi'
 
 const router = useRouter()
 const route = useRoute()
@@ -96,6 +196,20 @@ const realtime = useBbRealtimeStore()
 
 const mobileMenuOpen = ref(false)
 const collapsedRounds = ref<Set<number>>(new Set())
+
+// 顶部广播弹窗
+const broadcastOpen = ref(false)
+const broadcastType = ref<'notice' | 'invite'>('notice')
+const broadcastRoom = ref('')
+const broadcastMessage = ref('')
+const broadcastRooms = ref<any[]>([])
+const broadcastSending = ref(false)
+const broadcastTemplate = ref('')
+
+// 广播记录
+const broadcastHistoryOpen = ref(false)
+const broadcastHistory = ref<any[]>([])
+const broadcastHistoryLoading = ref(false)
 
 // 初始化折叠状态：除了当前轮次外全部折叠
 function initCollapsed() {
@@ -280,6 +394,99 @@ async function summonPlayers() {
   }
   try { await bbSummonPage(playerPath); alert('已召集所有选手前往该页面') }
   catch (e: any) { alert(e?.message || '召集失败') }
+}
+
+async function openBroadcast() {
+  broadcastOpen.value = true
+  if (!broadcastRooms.value.length) {
+    try { broadcastRooms.value = await bbGetHouseRooms() || [] } catch { broadcastRooms.value = [] }
+  }
+}
+
+function applyBroadcastTemplate() {
+  const key = broadcastTemplate.value
+  if (!key) return
+  const now = new Date()
+  const t = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  const map: Record<string, string> = {
+    hoh: `${t}开始HOH比赛`,
+    pov: `${t}开始POV比赛`,
+    bbbb: `${t}开始BBBB比赛`,
+    finale: `${t}开始终局比赛`,
+    end: '今日比赛结束',
+    nomination: `${t}开始提名仪式`,
+    veto_ceremony: `${t}开始否决权仪式`,
+    eviction_vote: `${t}开始淘汰投票`,
+    eviction: `${t}开始淘汰仪式`,
+    gather: '请全体房客到客厅集合'
+  }
+  broadcastMessage.value = map[key] || ''
+  broadcastTemplate.value = ''
+}
+
+function formatBroadcastTime(t: string) {
+  if (!t) return ''
+  const d = new Date(t)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+async function loadBroadcastHistory() {
+  broadcastHistoryLoading.value = true
+  try {
+    broadcastHistory.value = await bbGetBroadcastHistory(100) || []
+  } catch {
+    broadcastHistory.value = []
+  } finally {
+    broadcastHistoryLoading.value = false
+  }
+}
+
+async function openBroadcastHistory() {
+  broadcastHistoryOpen.value = true
+  await loadBroadcastHistory()
+}
+
+async function deleteBroadcast(b: any) {
+  if (!confirm('确定删除这条广播记录吗？')) return
+  try {
+    await bbDeleteBroadcast(b.id)
+    broadcastHistory.value = broadcastHistory.value.filter(x => x.id !== b.id)
+  } catch (e: any) {
+    alert(e?.message || '删除失败')
+  }
+}
+
+async function clearBroadcastHistory() {
+  if (!broadcastHistory.value.length) return
+  if (!confirm(`确定清空全部 ${broadcastHistory.value.length} 条广播记录吗？此操作不可恢复。`)) return
+  try {
+    await bbClearBroadcasts()
+    broadcastHistory.value = []
+  } catch (e: any) {
+    alert(e?.message || '清空失败')
+  }
+}
+
+async function sendBroadcast() {
+  if (broadcastType.value === 'invite' && !broadcastRoom.value) return
+  if (broadcastType.value === 'notice' && !broadcastMessage.value.trim()) return
+  if (broadcastSending.value) return
+  broadcastSending.value = true
+  try {
+    await bbAdminBroadcast({
+      type: broadcastType.value,
+      roomId: broadcastType.value === 'invite' ? broadcastRoom.value : null,
+      message: broadcastMessage.value
+    })
+    broadcastMessage.value = ''
+    broadcastOpen.value = false
+    alert('广播已发送')
+  } catch (e: any) {
+    alert(e?.message || '发送失败')
+  } finally {
+    broadcastSending.value = false
+  }
 }
 
 async function handleLogout() {
@@ -479,6 +686,58 @@ onUnmounted(() => {
   min-height: calc(100vh - 60px);
   overflow-y: auto;
 }
+/* 顶部广播弹窗 */
+.bb-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7);
+  display: flex; align-items: center; justify-content: center; z-index: 2000;
+}
+.bb-modal {
+  background: #2a1a4a; border: 1px solid #b39bff44;
+  border-radius: 12px; width: 420px; max-width: 92vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.bb-modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid #b39bff22;
+}
+.bb-modal-header h3 { margin: 0; color: #e6c988; font-size: 16px; }
+.close-btn { background: none; border: none; color: #8f83b8; cursor: pointer; font-size: 18px; }
+.bb-modal-body { padding: 20px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; color: #a99bd0; margin-bottom: 6px; }
+.bb-select, .bb-input {
+  width: 100%; box-sizing: border-box;
+  background: #1b1130; border: 1px solid #b39bff33; color: #ece7fb;
+  padding: 8px 12px; border-radius: 6px; font-size: 14px; outline: none;
+  font-family: inherit; resize: vertical;
+}
+.bb-select:focus, .bb-input:focus { border-color: #b39bff; }
+.form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
+.bb-btn-primary { background: #b39bff22; border-color: #b39bff; }
+.bb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 广播记录 */
+.bh-actions { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.bh-list { max-height: 60vh; overflow-y: auto; }
+.bh-item {
+  padding: 10px 12px; margin-bottom: 8px;
+  background: #ffffff06; border: 1px solid #ffffff10; border-radius: 8px;
+}
+.bh-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bh-time { font-size: 11px; color: #7fb0ff; font-variant-numeric: tabular-nums; }
+.bh-del {
+  background: transparent; border: 1px solid #ff444455; color: #ff6b6b;
+  border-radius: 5px; padding: 1px 8px; font-size: 11px; cursor: pointer;
+}
+.bh-del:hover { background: #ff444422; }
+.bb-btn-sm { padding: 4px 10px; font-size: 12px; }
+.bb-btn-danger { border-color: #ff444466; color: #ff6b6b; }
+.bb-btn-danger:hover { background: #ff444422; }
+.bh-message { font-size: 13px; color: #ece7fb; margin-top: 3px; line-height: 1.45; word-break: break-word; }
+.bh-room { color: #e6c988; }
+.bh-from { font-size: 11px; color: #6b5f92; margin-top: 4px; text-align: right; }
+.bh-empty { color: #6b5f92; font-size: 13px; text-align: center; padding: 24px 0; }
+
 @media (max-width: 768px) {
   .mobile-menu-btn { display: flex; }
   .bb-sider {
@@ -489,6 +748,21 @@ onUnmounted(() => {
   }
   .bb-sider.open { transform: translateX(0); }
   .bb-main { padding: 16px; }
-  .header-info .stage-tag { display: none; }
+  .header-content { padding: 0 12px; }
+  .header-info { gap: 6px; }
+  .header-info .stage-tag,
+  .header-info .user-name { display: none; }
+  .header-info .bb-btn { padding: 6px 9px; font-size: 12px; white-space: nowrap; }
+  .logo-text { font-size: 15px; }
+  .bb-modal-body { padding: 14px; }
+  .bh-list { max-height: 52vh; }
+}
+@media (max-width: 430px) {
+  .logo-text { display: none; }
+  .logo-icon { font-size: 20px; }
+  .header-info .bb-btn { padding: 5px 7px; font-size: 11px; }
+  .bb-modal { width: 94vw; }
+  .bb-modal-header { padding: 12px 14px; }
+  .bb-modal-body { padding: 12px; }
 }
 </style>

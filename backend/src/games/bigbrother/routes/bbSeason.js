@@ -376,6 +376,12 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
         h.isShowering = false
         h.showerStartedAt = null
         h.showerCooldownUntil = null
+        h.isMoving = false
+        h.moveFromRoomId = null
+        h.moveToRoomId = null
+        h.moveStartedAt = null
+        h.moveEndsAt = null
+        h.moveDurationSeconds = null
         await h.save()
       }
     }

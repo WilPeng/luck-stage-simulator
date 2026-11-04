@@ -336,7 +336,8 @@ const initBBMinigameSocket = (io) => {
     // 初始化游戏状态（支持异步加载题目池）
     const participants = room.participants.map(p => ({
       playerId: p.playerId,
-      playerName: p.playerName
+      playerName: p.playerName,
+      avatar: p.avatar || null
     }))
     let gameState
     if (handler.loadQuestions) {

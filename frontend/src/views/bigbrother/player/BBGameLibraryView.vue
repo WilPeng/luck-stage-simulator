@@ -18,12 +18,12 @@
       />
     </div>
 
-    <!-- 游戏库大厅 -->
+    <!-- 17 Poker 牌桌大厅 -->
     <div v-else class="lobby">
       <div class="page-head">
         <div>
-          <h1>游戏库</h1>
-          <p class="page-sub">选择游戏，创建房间，邀请一位对手开始对战。</p>
+          <h1>17 Poker</h1>
+          <p class="page-sub">双人牌桌 · 10 局 · 初始 100 筹码</p>
         </div>
         <button class="bb-btn bb-btn-sm" @click="refreshAll">刷新</button>
       </div>
@@ -43,13 +43,18 @@
           </div>
           <h2>17 Poker</h2>
           <p class="game-desc">
-            17 张特殊牌库（A/K/Q/J 四花色 + Joker）。每人初始 100 筹码，每局底注 5，
-            两轮下注与换牌后摊牌比牌型，10 局后净收益高者获胜。
+            17 张特殊牌库（A/K/Q/J 四花色 + Joker）。每人初始 100 筹码，每局底注 5 直接进入底池，
+            系统不抽水。两轮下注与换牌后摊牌比牌型。
+          </p>
+          <p class="game-desc">
+            胜负判定：10 局内一方筹码归零，另一方直接获胜；10 局后筹码更多者获胜；
+            若筹码相同，则第 10 局筹码增加的一方获胜。
           </p>
           <div class="game-rules">
             <span>🃏 Joker 万能</span>
-            <span>🪙 底注 5</span>
+            <span>🪙 底注进底池</span>
             <span>🔁 最多换 7 张</span>
+            <span>🚫 无抽水</span>
           </div>
           <div class="game-actions">
             <button v-if="myRoom" class="bb-btn bb-btn-primary" @click="openRoom(myRoom.roomId)">
@@ -84,7 +89,7 @@
                 v-for="p in r.participants"
                 :key="p.playerId"
                 :name="p.playerName"
-                :avatar="p.avatar"
+                :avatar="p.avatar || avatarDirectory[p.playerId]"
                 size="sm"
               />
               <div v-if="r.participants.length < 2" class="room-empty-slot">＋</div>
@@ -152,7 +157,7 @@ import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import {
   bbGetPoker17Rooms, bbGetPoker17MyRoom, bbGetPoker17Room,
   bbCreatePoker17Room, bbJoinPoker17Room, bbLeavePoker17Room,
-  bbGetPoker17Records, type Poker17RoomSummary
+  bbGetPoker17Records, bbGetActiveHouseguests, type Poker17RoomSummary
 } from '../../../services/bbApi'
 
 const route = useRoute()
@@ -168,6 +173,7 @@ const joinCode = ref('')
 const creating = ref(false)
 const joining = ref(false)
 const error = ref('')
+const avatarDirectory = ref<Record<string, string | null>>({})
 
 const activeRoomId = computed(() => {
   const value = route.query.room
@@ -232,8 +238,18 @@ async function fetchMyRoom() {
 async function fetchRecords() {
   try { records.value = await bbGetPoker17Records(10) } catch {}
 }
+async function fetchAvatarDirectory() {
+  try {
+    const list = await bbGetActiveHouseguests()
+    const map: Record<string, string | null> = {}
+    for (const h of (list || [])) {
+      if (h?.id) map[h.id] = h.avatar || null
+    }
+    avatarDirectory.value = map
+  } catch {}
+}
 async function refreshAll() {
-  await Promise.all([fetchRooms(), fetchMyRoom(), fetchRecords()])
+  await Promise.all([fetchRooms(), fetchMyRoom(), fetchRecords(), fetchAvatarDirectory()])
 }
 
 async function fetchActiveRoom(roomId: string) {

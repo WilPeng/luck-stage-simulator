@@ -6,7 +6,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { bbGetAvatarUrl } from '../../services/bbApi'
 
 const props = withDefaults(defineProps<{
@@ -23,6 +23,8 @@ const avatarUrl = computed(() => {
   if (imgError.value) return undefined
   return bbGetAvatarUrl(props.avatar)
 })
+
+watch(() => props.avatar, () => { imgError.value = false })
 
 const sizeClass = computed(() => `size-${props.size}`)
 

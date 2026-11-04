@@ -23,7 +23,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../layouts/BBPlayerLayout.vue'),
     children: [
       { path: 'home', name: 'BBPlayerHome', component: () => import('../views/bigbrother/player/BBHomeView.vue') },
-      { path: 'game-library', name: 'BBPlayerGameLibrary', component: () => import('../views/bigbrother/player/BBGameLibraryView.vue') },
+      { path: 'poker17', name: 'BBPlayerPoker17', component: () => import('../views/bigbrother/player/BBGameLibraryView.vue') },
       { path: 'profile', name: 'BBPlayerProfile', component: () => import('../views/bigbrother/player/BBProfileView.vue') },
       { path: 'house', name: 'BBPlayerHouse', component: () => import('../views/bigbrother/player/BBHouseView.vue') },
       { path: 'history', name: 'BBPlayerHistory', component: () => import('../views/bigbrother/player/BBHistoryView.vue') },

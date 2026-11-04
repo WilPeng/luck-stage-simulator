@@ -54,6 +54,7 @@
         <div class="header-info">
           <span class="stage-tag">{{ seasonStore.stageName }}</span>
           <span class="user-name">{{ currentUser?.name }}</span>
+          <button class="bb-btn bb-btn-sm" @click="toggleBroadcastHistory">🔔 广播记录</button>
           <button class="bb-btn bb-btn-sm" @click="handleLogout">退出</button>
         </div>
         <button class="menu-toggle" @click="mobileMenuOpen = !mobileMenuOpen">
@@ -63,6 +64,28 @@
         </button>
       </div>
     </header>
+
+    <!-- 管理员广播通知记录（可展开） -->
+    <div v-if="broadcastHistoryOpen" class="bh-overlay" @click.self="broadcastHistoryOpen = false">
+      <div class="bh-panel">
+        <div class="bh-head">
+          <span>🔔 管理员广播记录</span>
+          <button class="bh-close" @click="broadcastHistoryOpen = false">✕</button>
+        </div>
+        <div class="bh-list">
+          <div v-for="b in broadcastHistory" :key="b.id" class="bh-item">
+            <div class="bh-time">{{ formatBroadcastTime(b.createdAt) }}</div>
+            <div class="bh-message">
+              {{ b.message }}
+              <span v-if="b.type === 'invite' && b.roomName" class="bh-room">（邀请至 {{ b.roomName }}）</span>
+            </div>
+            <div class="bh-from">—— {{ b.from || '管理员' }}</div>
+          </div>
+          <div v-if="broadcastHistoryLoading" class="bh-empty">加载中…</div>
+          <div v-else-if="!broadcastHistory.length" class="bh-empty">暂无广播记录</div>
+        </div>
+      </div>
+    </div>
 
     <div class="layout-body">
       <aside class="bb-sidebar" :class="{ open: mobileMenuOpen }">
@@ -112,7 +135,7 @@ import { useBbAuthStore } from '../stores/bbAuthStore'
 import { useBbSeasonStore } from '../stores/bbSeasonStore'
 import { useBbRealtimeStore } from '../stores/bbRealtimeStore'
 import { BB_STAGE_NAME } from '../types/bigbrother'
-import { bbGetMyState, bbSleepWake } from '../services/bbHouseApi'
+import { bbGetMyState, bbSleepWake, bbGetBroadcastHistory } from '../services/bbHouseApi'
 import { applyGamePageMeta } from '../router'
 
 const router = useRouter()
@@ -155,6 +178,34 @@ watch(() => realtime.lastSummon, (s) => {
 const mobileMenuOpen = ref(false)
 const collapsedRounds = ref<Set<number>>(new Set())
 
+// 广播通知记录
+const broadcastHistoryOpen = ref(false)
+const broadcastHistory = ref<any[]>([])
+const broadcastHistoryLoading = ref(false)
+
+function formatBroadcastTime(t: string) {
+  if (!t) return ''
+  const d = new Date(t)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+async function loadBroadcastHistory() {
+  broadcastHistoryLoading.value = true
+  try {
+    broadcastHistory.value = await bbGetBroadcastHistory(50) || []
+  } catch {
+    broadcastHistory.value = []
+  } finally {
+    broadcastHistoryLoading.value = false
+  }
+}
+
+async function toggleBroadcastHistory() {
+  broadcastHistoryOpen.value = !broadcastHistoryOpen.value
+  if (broadcastHistoryOpen.value) await loadBroadcastHistory()
+}
+
 // 睡眠全局状态
 const myState = ref<any>({ isSleeping: false, wakeAt: null, sleepDurationMinutes: 360 })
 const nowTs = ref(Date.now())
@@ -187,7 +238,7 @@ const totalRounds = computed(() => seasonStore.totalRounds)
 
 const fixedItems = [
   { icon: '🏠', text: '首页', path: '/games/bigbrother/player/home' },
-  { icon: '🎮', text: '游戏库', path: '/games/bigbrother/player/game-library' },
+  { icon: '🃏', text: '17 Poker', path: '/games/bigbrother/player/poker17' },
   { icon: '👤', text: '我的资料', path: '/games/bigbrother/player/profile' },
   { icon: '🏡', text: 'BB House', path: '/games/bigbrother/player/house' },
   { icon: '📝', text: '历史记录', path: '/games/bigbrother/player/history' },
@@ -469,6 +520,37 @@ onUnmounted(() => {
 .player-info .player-name { font-size: 14px; color: #ece7fb; }
 .player-info .player-code { font-size: 12px; color: #8f83b8; }
 .empty-tip { text-align: center; color: #6b5f92; padding: 24px; font-size: 14px; }
+/* 广播通知记录 */
+.bh-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex; justify-content: flex-end; align-items: flex-start;
+}
+.bh-panel {
+  margin: 68px 16px 16px;
+  width: 380px; max-width: 92vw; max-height: 72vh;
+  display: flex; flex-direction: column;
+  background: #1b1130; border: 1px solid #b39bff44;
+  border-radius: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.bh-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid #ffffff12;
+  color: #e6c988; font-size: 14px; font-weight: 600;
+}
+.bh-close { background: none; border: none; color: #8f83b8; cursor: pointer; font-size: 16px; }
+.bh-list { padding: 8px 12px 12px; overflow-y: auto; }
+.bh-item {
+  padding: 9px 10px; margin-top: 8px;
+  background: #ffffff06; border: 1px solid #ffffff10; border-radius: 8px;
+}
+.bh-time { font-size: 11px; color: #7fb0ff; font-variant-numeric: tabular-nums; }
+.bh-message { font-size: 13px; color: #ece7fb; margin-top: 3px; line-height: 1.4; word-break: break-word; }
+.bh-room { color: #e6c988; }
+.bh-from { font-size: 11px; color: #6b5f92; margin-top: 4px; text-align: right; }
+.bh-empty { color: #6b5f92; font-size: 13px; text-align: center; padding: 24px 0; }
+
 @media (max-width: 768px) {
   .menu-toggle { display: block; }
   .bb-sidebar {
@@ -477,6 +559,18 @@ onUnmounted(() => {
   }
   .bb-sidebar.open { transform: translateX(0); }
   .bb-main { padding: 16px; }
-  .header-info .stage-tag { display: none; }
+  .header-content { padding: 0 12px; }
+  .header-info { gap: 8px; }
+  .header-info .stage-tag,
+  .header-info .user-name { display: none; }
+  .header-info .bb-btn { padding: 6px 10px; font-size: 12px; white-space: nowrap; }
+  .bh-panel { margin: 64px 10px 10px; width: 100%; max-width: calc(100vw - 20px); max-height: 76vh; }
+}
+@media (max-width: 430px) {
+  .logo-text { display: none; }
+  .logo-icon { font-size: 20px; }
+  .header-info .bb-btn { padding: 5px 8px; font-size: 11px; }
+  .bb-broadcast-modal { padding: 20px 18px; }
+  .bh-panel { margin: 60px 8px 8px; max-width: calc(100vw - 16px); }
 }
 </style>

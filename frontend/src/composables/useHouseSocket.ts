@@ -52,16 +52,21 @@ export function useHouseSocket() {
   const onHistory = ref<((data: { roomId: string; messages: HouseMessage[] }) => void) | null>(null)
   const onNewMessage = ref<((data: { roomId: string; message: HouseMessage }) => void) | null>(null)
   const onOlderMessages = ref<((data: { roomId: string; messages: HouseMessage[] }) => void) | null>(null)
-  const onPlayerJoined = ref<((data: { roomId: string; playerName: string }) => void) | null>(null)
-  const onPlayerLeft = ref<((data: { roomId: string; playerName: string }) => void) | null>(null)
+  const onPlayerJoined = ref<((data: { roomId: string; playerName: string; at?: string }) => void) | null>(null)
+  const onPlayerLeft = ref<((data: { roomId: string; playerName: string; at?: string }) => void) | null>(null)
   const onRoomPresence = ref<((data: { roomId: string; players: HousePlayer[] }) => void) | null>(null)
   const onDoorUpdate = ref<((data: { doorId: string; isOpen: boolean }) => void) | null>(null)
   const onInviteReceived = ref<((data: { hohName: string; hohId: string; roomId: string }) => void) | null>(null)
   const onInviteAccepted = ref<((data: { playerId: string; playerName: string }) => void) | null>(null)
   const onInviteDeclined = ref<((data: { playerId: string; playerName: string }) => void) | null>(null)
   const onInviteCancelled = ref<((data: { playerId?: string; hohId?: string }) => void) | null>(null)
+  const onMoveInviteReceived = ref<((data: { inviterId: string; inviterName: string; fromRoomId: string; targetRoomId: string; roomName: string; roomIcon: string }) => void) | null>(null)
+  const onMoveInviteSent = ref<((data: { targetPlayerId: string; targetPlayerName: string; targetRoomId: string; roomName: string }) => void) | null>(null)
+  const onMoveInviteAccepted = ref<((data: { playerId: string; playerName: string; targetRoomId: string; roomName: string }) => void) | null>(null)
+  const onMoveInviteDeclined = ref<((data: { playerId: string; playerName: string }) => void) | null>(null)
   const onBroadcast = ref<((data: { type: string; roomId: string | null; message: string; from: string; at: string }) => void) | null>(null)
   const onSleepForced = ref<((data: { wakeAt: string; sleepCycleDate?: string; sleepDurationMinutes?: number }) => void) | null>(null)
+  const onMoveStarted = ref<((data: { fromRoomId: string; toRoomId: string; roomName?: string; roomIcon?: string; durationSeconds: number; endsAt: string; reason?: string }) => void) | null>(null)
   const onForceMoved = ref<((data: { targetRoomId: string; reason: string }) => void) | null>(null)
   const onMonitorUpdate = ref<((data: HohMonitorRoom[]) => void) | null>(null)
   const onHohDoorbell = ref<((data: { playerId: string; playerName: string }) => void) | null>(null)
@@ -101,8 +106,13 @@ export function useHouseSocket() {
     s.on('house:invite-accepted', (data) => onInviteAccepted.value?.(data))
     s.on('house:invite-declined', (data) => onInviteDeclined.value?.(data))
     s.on('house:invite-cancelled', (data) => onInviteCancelled.value?.(data))
+    s.on('house:move-invite-received', (data) => onMoveInviteReceived.value?.(data))
+    s.on('house:move-invite-sent', (data) => onMoveInviteSent.value?.(data))
+    s.on('house:move-invite-accepted', (data) => onMoveInviteAccepted.value?.(data))
+    s.on('house:move-invite-declined', (data) => onMoveInviteDeclined.value?.(data))
     s.on('house:broadcast', (data) => onBroadcast.value?.(data))
     s.on('house:sleep-forced', (data) => onSleepForced.value?.(data))
+    s.on('house:move-started', (data) => onMoveStarted.value?.(data))
     s.on('house:force-moved', (data) => onForceMoved.value?.(data))
     s.on('house:monitor-update', (data) => onMonitorUpdate.value?.(data))
     s.on('house:hoh-doorbell', (data) => onHohDoorbell.value?.(data))
@@ -147,6 +157,18 @@ export function useHouseSocket() {
     socket.value?.emit('house:cancel-invite', { targetPlayerId })
   }
 
+  function inviteMove(targetPlayerId: string, targetRoomId: string) {
+    socket.value?.emit('house:invite-move', { targetPlayerId, targetRoomId })
+  }
+
+  function acceptMoveInvite() {
+    socket.value?.emit('house:accept-move-invite')
+  }
+
+  function declineMoveInvite() {
+    socket.value?.emit('house:decline-move-invite')
+  }
+
   function setHohDoor(isOpen: boolean) {
     socket.value?.emit('house:hoh-door-set', { isOpen })
   }
@@ -171,6 +193,9 @@ export function useHouseSocket() {
     acceptInvite,
     declineInvite,
     cancelInvite,
+    inviteMove,
+    acceptMoveInvite,
+    declineMoveInvite,
     setHohDoor,
     ringHohDoorbell,
     onHistory,
@@ -184,8 +209,13 @@ export function useHouseSocket() {
     onInviteAccepted,
     onInviteDeclined,
     onInviteCancelled,
+    onMoveInviteReceived,
+    onMoveInviteSent,
+    onMoveInviteAccepted,
+    onMoveInviteDeclined,
     onBroadcast,
     onSleepForced,
+    onMoveStarted,
     onForceMoved,
     onMonitorUpdate,
     onHohDoorbell,

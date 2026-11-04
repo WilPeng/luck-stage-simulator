@@ -12,7 +12,8 @@ const BBPlayerLocation = require('../models/BBPlayerLocation')
 const BBHouseguest = require('../models/BBHouseguest')
 const BBChatMessage = require('../models/BBChatMessage')
 const BBLocationHistory = require('../models/BBLocationHistory')
-const { getCurrentSeason, logAction, BB_ACTION_TYPES } = require('../helpers')
+const BBBroadcast = require('../models/BBBroadcast')
+const { generateId, getCurrentSeason, logAction, BB_ACTION_TYPES } = require('../helpers')
 const { getReachableRooms, getCurrentHoh } = require('../houseMap')
 const {
   localDateStr,
@@ -22,9 +23,8 @@ const {
   getSleepState,
   getShowerCooldownUntil
 } = require('../houseRules')
-const locationHistory = require('../locationHistory')
 const { getCollection } = require('../../../config/db')
-const { broadcastDoorUpdate, movePlayerSockets, takePendingInvite, broadcastHouse, postRoomMessage } = require('../../../socket/bbHouse')
+const { broadcastDoorUpdate, movePlayerSockets, takePendingInvite, broadcastHouse, postRoomMessage, startTimedMove, clearGuestMoveState } = require('../../../socket/bbHouse')
 const { broadcastBBGame } = require('../../../socket/bbGame')
 
 // ===== 公共 API =====
@@ -275,6 +275,9 @@ router.post('/move', auth, async (req, res) => {
     if (player.isShowering) {
       return res.status(403).json({ success: false, error: '洗澡中无法离开浴室' })
     }
+    if (player.isMoving) {
+      return res.status(403).json({ success: false, error: '移动中' })
+    }
 
     // 进入浴室：需确认已过洗澡冷却
     if (targetRoomId === 'bathroom' && player.showerCooldownUntil) {
@@ -350,39 +353,31 @@ router.post('/move', auth, async (req, res) => {
       }
     }
 
-    // 7. 容量检查
+    // 7. 容量检查（包含正在前往该房间的玩家，避免同时移动超员）
     if (targetRoom.capacity) {
-      const count = await BBPlayerLocation.countDocuments({ currentRoomId: targetRoomId, gameId })
-      if (count >= targetRoom.capacity) {
+      const [count, movingCount] = await Promise.all([
+        BBPlayerLocation.countDocuments({ currentRoomId: targetRoomId, gameId }),
+        BBHouseguest.countDocuments({ gameId, isMoving: true, moveToRoomId: targetRoomId })
+      ])
+      if (count + movingCount >= targetRoom.capacity) {
         return res.status(403).json({ success: false, error: '人数已满请稍后重试' })
       }
     }
 
-    // 执行移动
+    // 执行计时移动（到达时间由服务端控制）
     const oldRoomId = loc.currentRoomId
-    loc.currentRoomId = targetRoomId
-    loc.enteredAt = new Date().toISOString()
-    await loc.save()
-
-    // 同步 BBHouseguest.currentRoomId
-    player.currentRoomId = targetRoomId
-    await player.save()
-
-    // 记录位置历史（消息可见性核心）
-    await locationHistory.recordMove(req.user.userId, player.name, oldRoomId, targetRoomId)
-
-    // 进入浴室即自动开始洗澡（不可中途退出，10 分钟后自动结束并移动到洗漱间）
-    if (targetRoomId === 'bathroom') {
-      player.isShowering = true
-      player.showerStartedAt = new Date().toISOString()
-      player.lastShowerDate = todayStr()
-      player.showerCooldownUntil = null
-      await player.save()
-    }
+    const durationSeconds = Math.max(0, Number(targetRoom.moveDuration ?? 10))
+    const moveInfo = await startTimedMove({
+      playerId: player.id,
+      fromRoomId: oldRoomId,
+      toRoomId: targetRoomId,
+      durationSeconds,
+      reason: '移动中'
+    })
 
     res.json({
       success: true,
-      data: { oldRoomId, newRoomId: targetRoomId, playerName: player.name }
+      data: { oldRoomId, newRoomId: targetRoomId, playerName: player.name, ...moveInfo }
     })
   } catch (e) {
     console.error(e)
@@ -434,26 +429,24 @@ router.post('/accept-invite', auth, async (req, res) => {
       return res.status(403).json({ success: false, error: '没有待处理的 HOH 邀请' })
     }
 
+    if (player.isSleeping) return res.status(403).json({ success: false, error: '睡眠中无法移动' })
+    if (player.isShowering) return res.status(403).json({ success: false, error: '洗澡中无法移动' })
+    if (player.isMoving) return res.status(403).json({ success: false, error: '移动中' })
+
     let loc = await BBPlayerLocation.findOne({ playerId: req.user.userId, gameId: 'bigbrother' })
-    if (!loc) {
-      loc = new BBPlayerLocation({
-        id: req.user.userId, playerId: req.user.userId, playerName: player.name,
-        currentRoomId: 'living_room', enteredAt: new Date().toISOString(), gameId: 'bigbrother'
-      })
-    }
+    const oldRoomId = loc?.currentRoomId || 'living_room'
+    const targetRoom = await BBHouseRoom.findOne({ id: 'hoh_room', gameId: 'bigbrother' })
+    const durationSeconds = Math.max(0, Number(targetRoom?.moveDuration ?? 10))
 
-    const oldRoomId = loc.currentRoomId
-    loc.currentRoomId = 'hoh_room'
-    loc.enteredAt = new Date().toISOString()
-    await loc.save()
+    const moveInfo = await startTimedMove({
+      playerId: req.user.userId,
+      fromRoomId: oldRoomId,
+      toRoomId: 'hoh_room',
+      durationSeconds,
+      reason: '接受 HOH 邀请'
+    })
 
-    player.currentRoomId = 'hoh_room'
-    await player.save()
-
-    // 同步 socket 房间与实时广播
-    await movePlayerSockets(req.user.userId, oldRoomId, 'hoh_room', '你接受了 HOH 邀请')
-
-    res.json({ success: true, data: { oldRoomId, newRoomId: 'hoh_room', playerName: player.name } })
+    res.json({ success: true, data: { oldRoomId, newRoomId: 'hoh_room', playerName: player.name, ...moveInfo } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '接受邀请失败' })
@@ -557,6 +550,7 @@ router.post('/admin/evict-backyard', auth, requireAdmin, async (req, res) => {
       const hg = await BBHouseguest.findOne({ id: loc.playerId, gameId })
       if (hg) {
         hg.currentRoomId = 'living_room'
+        clearGuestMoveState(hg)
         await hg.save()
       }
       moved.push(loc.playerName)
@@ -576,6 +570,67 @@ router.post('/admin/evict-backyard', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '清空后院失败' })
+  }
+})
+
+// 保存广播记录（供选手端与管理员端查看历史）
+async function saveBroadcastRecord(payload, roomId = null, room = null) {
+  try {
+    const doc = new BBBroadcast({
+      id: generateId(),
+      type: payload.type || 'notice',
+      roomId: roomId || null,
+      roomName: room?.name || '',
+      roomIcon: room?.icon || '',
+      message: payload.message || '',
+      from: payload.from || '',
+      gameId: 'bigbrother',
+      createdAt: payload.at || new Date().toISOString()
+    })
+    await doc.save()
+  } catch (e) {
+    console.error('[BBBroadcast] save failed:', e)
+  }
+}
+
+// GET /broadcasts - 广播通知历史（选手端 / 管理员端）
+router.get('/broadcasts', auth, async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit) || 50))
+    const docs = await BBBroadcast.find({ gameId: 'bigbrother' })
+    const list = docs
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .slice(0, limit)
+      .map(d => d.toObject())
+    res.json({ success: true, data: list })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取广播记录失败' })
+  }
+})
+
+// DELETE /broadcasts/:id - 管理员删除单条广播记录
+router.delete('/broadcasts/:id', auth, requireAdmin, async (req, res) => {
+  try {
+    const result = await BBBroadcast.deleteOne({ id: req.params.id, gameId: 'bigbrother' })
+    if (!result || !result.deletedCount) {
+      return res.status(404).json({ success: false, error: '广播记录不存在' })
+    }
+    res.json({ success: true, data: null })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '删除广播记录失败' })
+  }
+})
+
+// DELETE /broadcasts - 管理员清空全部广播记录
+router.delete('/broadcasts', auth, requireAdmin, async (req, res) => {
+  try {
+    const result = await BBBroadcast.deleteMany({ gameId: 'bigbrother' })
+    res.json({ success: true, data: { deleted: result?.deletedCount || 0 } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '清空广播记录失败' })
   }
 })
 
@@ -613,6 +668,7 @@ router.post('/admin/broadcast', auth, requireAdmin, async (req, res) => {
           continue // 已在该房间
         }
         p.currentRoomId = roomId
+        clearGuestMoveState(p)
         await p.save()
         // 服务端权威切换 socket 房间 + 记录位置历史 + 实时通知
         await movePlayerSockets(p.id, oldRoomId, roomId, `管理员邀请前往 ${targetRoom.name}`)
@@ -630,6 +686,7 @@ router.post('/admin/broadcast', auth, requireAdmin, async (req, res) => {
       }
       broadcastHouse('house:broadcast', payload)
       broadcastBBGame('bb:broadcast', payload)
+      await saveBroadcastRecord(payload, roomId, targetRoom)
       return res.json({ success: true, data: { ...payload, movedCount: moved.length } })
     }
 
@@ -643,6 +700,7 @@ router.post('/admin/broadcast', auth, requireAdmin, async (req, res) => {
     }
     broadcastHouse('house:broadcast', payload)
     broadcastBBGame('bb:broadcast', payload)
+    await saveBroadcastRecord(payload)
     res.json({ success: true, data: payload })
   } catch (e) {
     console.error(e)
@@ -714,6 +772,7 @@ router.post('/admin/move-player', auth, requireAdmin, async (req, res) => {
     await loc.save()
 
     player.currentRoomId = targetRoomId
+    clearGuestMoveState(player)
     await player.save()
 
     // 服务端权威切换 socket 房间 + 实时广播
@@ -788,6 +847,7 @@ router.get('/my-state', auth, async (req, res) => {
     const now = new Date()
     const sleepState = getSleepState(season, now, g?.lastSleepDate)
     const showerSettings = getShowerSettings(season)
+    const hohApprovedGuest = await BBHouseguest.findOne({ gameId: 'bigbrother', hohSleepApproved: true })
     res.json({
       success: true,
       data: {
@@ -796,10 +856,18 @@ router.get('/my-state', auth, async (req, res) => {
         wakeAt: g?.wakeAt || null,
         lastSleepDate: g?.lastSleepDate || null,
         hohSleepApproved: g?.hohSleepApproved || false,
+        hohApprovedPlayerId: hohApprovedGuest?.id || null,
+        hohApprovedPlayerName: hohApprovedGuest?.name || '',
         isShowering: g?.isShowering || false,
         showerStartedAt: g?.showerStartedAt || null,
         lastShowerDate: g?.lastShowerDate || null,
         showerCooldownUntil: g?.showerCooldownUntil || null,
+        isMoving: g?.isMoving || false,
+        moveFromRoomId: g?.moveFromRoomId || null,
+        moveToRoomId: g?.moveToRoomId || null,
+        moveStartedAt: g?.moveStartedAt || null,
+        moveEndsAt: g?.moveEndsAt || null,
+        moveDurationSeconds: g?.moveDurationSeconds ?? null,
         today: localDateStr(now),
         sleepCycleDate: sleepState.cycleDate,
         sleepCompleted: sleepState.completed,
@@ -896,18 +964,36 @@ router.post('/sleep/wake', auth, async (req, res) => {
   }
 })
 
-// POST /sleep/approve - HOH 同意某玩家在 HOH 房睡觉
+// POST /sleep/approve - HOH 选择唯一获批在 HOH 房睡觉的玩家（playerId 为空表示不选择）
 router.post('/sleep/approve', auth, async (req, res) => {
   try {
     const { playerId } = req.body || {}
-    if (!playerId) return res.status(400).json({ success: false, error: '缺少玩家' })
     const hoh = await getCurrentHoh()
     const isHoh = !!(hoh && hoh.id === req.user.userId)
     if (!isHoh && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, error: '仅 HOH 可同意' })
     }
+
+    if (!playerId) {
+      const approved = await BBHouseguest.find({ gameId: 'bigbrother', hohSleepApproved: true })
+      for (const g of approved) {
+        g.hohSleepApproved = false
+        await g.save()
+      }
+      return res.json({ success: true, data: { playerId: null, playerName: '' } })
+    }
+
     const target = await BBHouseguest.findOne({ id: playerId, gameId: 'bigbrother' })
     if (!target) return res.status(404).json({ success: false, error: '玩家不存在' })
+
+    // 同一时间只允许 1 人获批
+    const approved = await BBHouseguest.find({ gameId: 'bigbrother', hohSleepApproved: true })
+    for (const g of approved) {
+      if (g.id !== target.id) {
+        g.hohSleepApproved = false
+        await g.save()
+      }
+    }
     target.hohSleepApproved = true
     await target.save()
     res.json({ success: true, data: { playerId, playerName: target.name } })
@@ -953,18 +1039,51 @@ router.post('/shower', auth, async (req, res) => {
 // POST /admin/room - 调整房间人数上限 / 床位 / 是否可睡觉
 router.post('/admin/room', auth, requireAdmin, async (req, res) => {
   try {
-    const { roomId, capacity, bedLimit, canSleep } = req.body || {}
+    const { roomId, capacity, bedLimit, canSleep, moveDuration } = req.body || {}
     const room = await BBHouseRoom.findOne({ id: roomId, gameId: 'bigbrother' })
     if (!room) return res.status(404).json({ success: false, error: '房间不存在' })
     if (capacity !== undefined) room.capacity = (capacity === '' || capacity === null) ? null : Number(capacity)
     if (bedLimit !== undefined) room.bedLimit = (bedLimit === '' || bedLimit === null) ? null : Number(bedLimit)
     if (canSleep !== undefined) room.canSleep = !!canSleep
+    if (moveDuration !== undefined) {
+      const n = Number(moveDuration)
+      if (!Number.isFinite(n) || n < 0 || n > 3600) {
+        return res.status(400).json({ success: false, error: '移动耗时应在 0-3600 秒之间' })
+      }
+      room.moveDuration = Math.round(n)
+    }
     room.updatedAt = new Date().toISOString()
     await room.save()
     res.json({ success: true, data: room.toObject() })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '调整失败' })
+  }
+})
+
+// POST /admin/room-move-duration - 批量设置房间移动耗时（roomIds 为空则全部房间）
+router.post('/admin/room-move-duration', auth, requireAdmin, async (req, res) => {
+  try {
+    const { moveDuration, roomIds } = req.body || {}
+    const n = Number(moveDuration)
+    if (!Number.isFinite(n) || n < 0 || n > 3600) {
+      return res.status(400).json({ success: false, error: '移动耗时应在 0-3600 秒之间' })
+    }
+    const value = Math.round(n)
+    const rooms = await BBHouseRoom.find({ gameId: 'bigbrother' })
+    const targetIds = Array.isArray(roomIds) && roomIds.length ? new Set(roomIds) : null
+    let updated = 0
+    for (const room of rooms) {
+      if (targetIds && !targetIds.has(room.id)) continue
+      room.moveDuration = value
+      room.updatedAt = new Date().toISOString()
+      await room.save()
+      updated++
+    }
+    res.json({ success: true, data: { updated, moveDuration: value } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '批量调整失败' })
   }
 })
 

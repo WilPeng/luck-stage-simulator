@@ -23,7 +23,7 @@
 
       <div class="p17-waiting-players">
         <div v-for="p in displayParticipants" :key="p.playerId" class="p17-seat" :class="{ online: p.connected }">
-          <BBAvatar :name="p.playerName" :avatar="p.avatar" size="md" />
+          <BBAvatar :name="p.playerName" :avatar="avatarOf(p.playerId)" size="md" />
           <div class="p17-seat-info">
             <div class="p17-seat-name">{{ p.playerName }}<span v-if="p.playerId === myId" class="p17-me">（你）</span></div>
             <div class="p17-seat-meta">
@@ -100,7 +100,7 @@
 
       <!-- 自己 -->
       <div class="p17-player me" :class="{ active: gs.turnPlayerId === myId }">
-        <BBAvatar :name="myName" :avatar="authStore.currentUser?.avatar" size="md" />
+        <BBAvatar :name="myName" :avatar="avatarOf(myId)" size="md" />
         <div class="p17-player-info">
           <div class="p17-player-name">{{ myName }}<span class="p17-me">（你）</span></div>
           <div class="p17-player-chips">🪙 {{ chipsOf(myId) }}</div>
@@ -214,19 +214,19 @@
                 <div class="p17-showdown-delta" :class="deltaClass(opponentId)">{{ deltaText(opponentId) }}</div>
               </div>
               <div class="p17-result-summary">
-                {{ lastResult.winnerNames.join('、') }} 赢得底池 {{ lastResult.pot }} 枚
+                {{ lastResult.winnerNames.join('、') }} 赢得全部底池 {{ lastResult.pot }} 枚（含双方底注）
               </div>
             </div>
             <div v-else-if="lastResult.type === 'fold'" class="p17-result-simple">
               <div class="p17-result-icon">🏳️</div>
               <div>
                 <strong>{{ lastResult.folderName }}</strong> 弃牌，<strong>{{ lastResult.winnerNames.join('、') }}</strong>
-                赢得下注池 {{ lastResult.pot }} 枚；底注 {{ lastResult.anteToDealer }} 枚由庄家收取。
+                赢得全部底池 {{ lastResult.pot }} 枚（含双方底注）。
               </div>
             </div>
             <div v-else class="p17-result-simple">
               <div class="p17-result-icon">🤝</div>
-              <div>双方连续过牌，本局 No Contest；底注 {{ lastResult.anteToDealer }} 枚由庄家收取。</div>
+              <div>双方连续过牌，本局 No Contest；双方底注共 {{ lastResult.refundedAnte }} 枚已退还。</div>
             </div>
           </div>
           <div class="p17-btn-row">
@@ -253,6 +253,10 @@
         <div class="p17-final-winner">
           {{ finalResult?.isTie ? '双方并列获胜' : `${finalResult?.winnerNames?.join('、') || winner?.playerName || ''} 最终获胜` }}
         </div>
+        <div v-if="finalDecisionText" class="p17-final-reason">{{ finalDecisionText }}</div>
+        <div class="p17-final-total">
+          双方总筹码 {{ finalResult?.totalChips ?? gs.totalChips ?? 200 }} 枚
+        </div>
         <div v-if="standalone" class="p17-btn-row">
           <button class="p17-btn" @click="leave">返回大厅</button>
           <button v-if="isHost" class="p17-btn primary" :disabled="rematching" @click="rematch">
@@ -273,6 +277,7 @@ import { useMinigameSocket } from '../../../composables/useMinigameSocket'
 import {
   bbStartPoker17Room,
   bbRematchPoker17Room,
+  bbGetActiveHouseguests,
   type Poker17RoomPlayer,
   type Poker17RoomSummary
 } from '../../../services/bbApi'
@@ -315,6 +320,7 @@ const apiError = ref('')
 const selectedIndices = ref<number[]>([])
 const wager = ref(5)
 const finishedEmitted = ref(false)
+const avatarDirectory = ref<Record<string, string | null>>({})
 
 const {
   connected, gameState: gs, countdown, participants: sockParticipants,
@@ -401,6 +407,19 @@ const wagerStep = computed(() => {
 const canSelectCards = computed(() => phase.value === 'exchange' && !!gs.value?.exchange?.isMyTurn)
 const maxSelectable = computed(() => gs.value?.exchange?.maxSelectable || 0)
 
+const finalDecisionText = computed(() => {
+  const fr = finalResult.value
+  if (!fr) return ''
+  if (fr.endReason === 'chips_zero') {
+    const loser = (gs.value?.players || []).find((p: any) => (fr.chips?.[p.playerId] ?? 0) <= 0)
+    return `${loser?.playerName || '对手'} 筹码归零，${fr.winnerNames?.[0] || ''} 直接获胜`
+  }
+  if (fr.endReason === 'round10') return '10局后双方筹码相同，按第10局筹码增加判定胜负'
+  if (fr.endReason === 'tie') return '10局后双方筹码相同，且第10局无净增，比赛平局'
+  if (fr.endReason === 'chips') return '10局后筹码更多者获胜'
+  return ''
+})
+
 const finalPlayers = computed(() => {
   const fr = finalResult.value
   const fallbackChips = scores.value || {}
@@ -432,8 +451,21 @@ function betsOf(pid: string): number {
 function avatarOf(pid: string): string | null {
   const p = displayParticipants.value.find(x => x.playerId === pid)
   if (p?.avatar) return p.avatar
+  if (pid && avatarDirectory.value[pid]) return avatarDirectory.value[pid]
+  if (pid === myId.value && authStore.currentUser?.avatar) return authStore.currentUser.avatar
   const gp = (gs.value?.players || []).find((x: any) => x.playerId === pid)
   return gp?.avatar || null
+}
+
+async function loadAvatarDirectory() {
+  try {
+    const list = await bbGetActiveHouseguests()
+    const map: Record<string, string | null> = {}
+    for (const h of (list || [])) {
+      if (h?.id) map[h.id] = h.avatar || null
+    }
+    avatarDirectory.value = map
+  } catch { /* ignore */ }
 }
 function cardText(card: any): string {
   if (!card) return ''
@@ -598,6 +630,7 @@ watch(finished, (value) => {
 })
 
 onMounted(() => {
+  loadAvatarDirectory()
   connect()
   attachSocketEvents()
   nextTick(() => { if (activeRoomId.value) joinRoom(activeRoomId.value) })
@@ -728,7 +761,9 @@ onUnmounted(() => {
 .p17-final-chips strong { color: #e6c988; }
 .p17-final-net { margin-top: 4px; font-size: 15px; font-weight: 700; }
 .p17-final-badge { margin-top: 8px; display: inline-block; font-size: 11px; color: #1b1130; background: #e6c988; border-radius: 999px; padding: 2px 10px; }
-.p17-final-winner { font-size: 16px; color: #ece7fb; margin-bottom: 18px; }
+.p17-final-winner { font-size: 16px; color: #ece7fb; margin-bottom: 6px; }
+.p17-final-reason { font-size: 12px; color: #b39bff; margin-bottom: 6px; }
+.p17-final-total { font-size: 12px; color: #8f83b8; margin-bottom: 18px; }
 
 @media (max-width: 640px) {
   .p17-table { padding: 10px; }

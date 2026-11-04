@@ -128,16 +128,19 @@ test('live replay snapshots never contain hidden cards before showdown', () => {
   }
 })
 
-test('check-check is no contest: antes go to the dealer', () => {
+test('check-check is no contest: both antes are refunded and total chips stay 200', () => {
   const state = newMatch()
   cutBoth(state)
   assert.equal(engine.handleAction(state, 'p1', { type: 'bet', move: 'check' }).updated, true)
   assert.equal(engine.handleAction(state, 'p2', { type: 'bet', move: 'check' }).updated, true)
   assert.equal(state.phase, 'round_result')
   assert.equal(state.lastResult.type, 'no_contest')
-  assert.equal(state.chips.p1, 95)
-  assert.equal(state.chips.p2, 95)
-  assert.equal(state.dealerCollected, 10)
+  assert.equal(state.chips.p1, 100)
+  assert.equal(state.chips.p2, 100)
+  assert.equal(state.dealerCollected, 0)
+  assert.equal(state.lastResult.refundedAnte, 10)
+  assert.deepEqual(state.lastResult.payouts, { p1: 5, p2: 5 })
+  assert.equal(Object.values(state.chips).reduce((a, b) => a + b, 0), 200)
   assert.equal(state.history.length, 1)
 })
 
@@ -180,10 +183,11 @@ test('round two calls lead to showdown and conserve chips', () => {
   assert.equal(state.phase, 'round_result')
   assert.equal(state.lastResult.type, 'showdown')
   assert.equal(state.lastResult.pot, 30)
-  assert.equal(Object.values(state.chips).reduce((a, b) => a + b, 0) + state.dealerCollected, 200)
+  assert.equal(state.dealerCollected, 0)
+  assert.equal(Object.values(state.chips).reduce((a, b) => a + b, 0), 200)
 })
 
-test('fold awards the betting pot and sends antes to the dealer', () => {
+test('fold awards the entire pot including both antes, with no rake', () => {
   const state = newMatch()
   cutBoth(state)
   engine.handleAction(state, 'p1', { type: 'bet', move: 'bet', amount: 5 })
@@ -196,14 +200,96 @@ test('fold awards the betting pot and sends antes to the dealer', () => {
   const other = state.turn
   engine.handleAction(state, other, { type: 'bet', move: 'fold' })
 
+  const winnerId = state.lastResult.winnerIds[0]
+  const folderId = state.lastResult.folderId
   assert.equal(state.phase, 'round_result')
   assert.equal(state.lastResult.type, 'fold')
-  assert.equal(state.lastResult.pot, 35)
-  assert.equal(state.dealerCollected, 10)
-  assert.equal(Object.values(state.chips).reduce((a, b) => a + b, 0) + state.dealerCollected, 200)
+  // antes 10 + round1 bets 10 + round2 raise 25 = 45
+  assert.equal(state.lastResult.pot, 45)
+  assert.equal(state.dealerCollected, 0)
+  assert.equal(state.lastResult.payouts[winnerId], 45)
+  assert.equal(state.chips[winnerId], 110)
+  assert.equal(state.chips[folderId], 90)
+  assert.equal(Object.values(state.chips).reduce((a, b) => a + b, 0), 200)
 })
 
-test('a full ten-round match finishes and never produces negative chips', () => {
+test('final winner rule 1: a player reaching zero chips loses immediately', () => {
+  const state = newMatch()
+  state.players[0].chips = 5
+  state.players[1].chips = 195
+  state.chips = { p1: 5, p2: 195 }
+  cutBoth(state)
+
+  // p1 pays the 5-chip ante and is left with 0 chips.
+  assert.equal(state.chips.p1, 0)
+  assert.equal(engine.handleAction(state, 'p1', { type: 'bet', move: 'check' }).updated, true)
+  assert.equal(engine.handleAction(state, 'p2', { type: 'bet', move: 'bet', amount: 5 }).updated, true)
+  const result = engine.handleAction(state, 'p1', { type: 'bet', move: 'fold' })
+
+  assert.equal(result.finished, true)
+  assert.equal(state.matchOver, true)
+  assert.equal(state.finalResult.endReason, 'chips_zero')
+  assert.deepEqual(state.finalResult.winnerIds, ['p2'])
+  assert.equal(state.chips.p1, 0)
+  assert.equal(state.chips.p2, 200)
+  assert.equal(state.finalResult.totalChips, 200)
+})
+
+test('final winner rule 2: after ten rounds the player with more chips wins', () => {
+  const state = newMatch()
+  state.round = 10
+  state.history = new Array(10).fill({})
+  state.players[0].chips = 120
+  state.players[1].chips = 80
+  state.chips = { p1: 120, p2: 80 }
+  engine.finalizeMatch(state, 'rounds_complete')
+
+  assert.equal(state.finalResult.endReason, 'chips')
+  assert.deepEqual(state.finalResult.winnerIds, ['p1'])
+  assert.equal(state.finalResult.isTie, false)
+})
+
+test('final winner rule 3: equal chips after ten rounds uses round-10 chip increase', () => {
+  const state = newMatch()
+  state.round = 10
+  state.history = new Array(10).fill({})
+  state.players[0].chips = 100
+  state.players[1].chips = 100
+  state.chips = { p1: 100, p2: 100 }
+  state.lastResult = {
+    type: 'showdown',
+    round: 10,
+    winnerIds: ['p1'],
+    chipDeltas: { p1: 10, p2: -10 }
+  }
+  engine.finalizeMatch(state, 'rounds_complete')
+
+  assert.equal(state.finalResult.endReason, 'round10')
+  assert.deepEqual(state.finalResult.winnerIds, ['p1'])
+  assert.equal(state.finalResult.tiebreak, 'round10_chip_increase')
+})
+
+test('final winner rule 3: equal chips and no round-10 increase is a tie', () => {
+  const state = newMatch()
+  state.round = 10
+  state.history = new Array(10).fill({})
+  state.players[0].chips = 100
+  state.players[1].chips = 100
+  state.chips = { p1: 100, p2: 100 }
+  state.lastResult = {
+    type: 'no_contest',
+    round: 10,
+    winnerIds: [],
+    chipDeltas: { p1: 0, p2: 0 }
+  }
+  engine.finalizeMatch(state, 'rounds_complete')
+
+  assert.equal(state.finalResult.endReason, 'tie')
+  assert.equal(state.finalResult.isTie, true)
+  assert.deepEqual(state.finalResult.winnerIds.sort(), ['p1', 'p2'])
+})
+
+test('a match finishes within ten rounds and never produces negative chips', () => {
   const state = newMatch()
 
   function takeTurn() {
@@ -225,7 +311,7 @@ test('a full ten-round match finishes and never produces negative chips', () => 
     throw new Error('no available action: ' + JSON.stringify(actions))
   }
 
-  for (let round = 1; round <= 10; round++) {
+  for (let round = 1; round <= 10 && !state.matchOver; round++) {
     cutBoth(state)
     assert.equal(state.phase, 'bet1')
     assert.equal(takeTurn().updated, true)
@@ -241,17 +327,20 @@ test('a full ten-round match finishes and never produces negative chips', () => 
     }
     assert.equal(state.phase === 'round_result' || state.phase === 'match_over', true)
     for (const p of state.players) assert.equal(p.chips >= 0, true)
-    if (round < 10) {
+    assert.equal(Object.values(state.chips).reduce((a, b) => a + b, 0), 200)
+    if (!state.matchOver) {
       assert.equal(state.phase, 'round_result')
       assert.equal(engine.handleAction(state, 'p1', { type: 'next_round' }).updated, true)
     }
   }
   assert.equal(state.matchOver, true)
   assert.equal(state.phase, 'match_over')
-  assert.equal(state.history.length, 10)
+  assert.ok(state.history.length >= 1 && state.history.length <= 10)
   assert.ok(state.finalResult)
   assert.equal(state.finalResult.initialChips, 100)
-  assert.equal(Object.values(state.chips).reduce((a, b) => a + b, 0) + state.dealerCollected, 200)
+  assert.equal(state.finalResult.totalChips, 200)
+  assert.equal(state.finalResult.dealerCollected, 0)
+  assert.equal(Object.values(state.chips).reduce((a, b) => a + b, 0), 200)
   assert.equal(engine.isFinished(state), true)
 })
 

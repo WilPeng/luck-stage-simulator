@@ -90,6 +90,21 @@ export async function bbAdminBroadcast(data: { type: 'notice' | 'invite'; roomId
   })
 }
 
+// 广播通知历史（选手端 / 管理员端）
+export async function bbGetBroadcastHistory(limit = 50) {
+  return doRequest<any[]>(`/house/broadcasts?limit=${encodeURIComponent(String(limit))}`)
+}
+
+// 管理员删除单条广播记录
+export async function bbDeleteBroadcast(id: string) {
+  return doRequest<any>(`/house/broadcasts/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+// 管理员清空全部广播记录
+export async function bbClearBroadcasts() {
+  return doRequest<any>('/house/broadcasts', { method: 'DELETE' })
+}
+
 // ===== 睡眠 / 洗澡 / 状态 =====
 export async function bbGetMyState() {
   return doRequest<any>('/house/my-state')
@@ -112,8 +127,12 @@ export async function bbShower() {
 }
 
 // 管理员：房间人数/床位、赛季时间
-export async function bbAdminSetRoom(data: { roomId: string; capacity?: number | null; bedLimit?: number | null; canSleep?: boolean }) {
+export async function bbAdminSetRoom(data: { roomId: string; capacity?: number | null; bedLimit?: number | null; canSleep?: boolean; moveDuration?: number }) {
   return doRequest<any>('/house/admin/room', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export async function bbAdminBulkMoveDuration(moveDuration: number, roomIds?: string[]) {
+  return doRequest<any>('/house/admin/room-move-duration', { method: 'POST', body: JSON.stringify({ moveDuration, roomIds }) })
 }
 
 export async function bbAdminSetSeason(data: {

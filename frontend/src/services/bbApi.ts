@@ -294,10 +294,11 @@ export async function bbBatchDeleteHouseguests(ids: string[]): Promise<{ deleted
 /** 将存储路径转为可访问的完整 URL */
 export function bbGetAvatarUrl(avatar: string | null | undefined): string | null {
   if (!avatar) return null
-  if (avatar.startsWith('http')) return avatar
-  // 云端（Render）时拼接完整地址，本地开发时直接使用相对路径走 Vite proxy
+  if (avatar.startsWith('http') || avatar.startsWith('data:') || avatar.startsWith('blob:')) return avatar
+  // 云端（Render）时拼接完整地址，本地开发时直接使用相对路径，走 Vite proxy
   const base = API_BASE.startsWith('http') ? API_BASE.replace('/api/bigbrother', '') : ''
-  return `${base}${avatar}`
+  const path = avatar.startsWith('/') ? avatar : `/${avatar}`
+  return `${base}${path}`
 }
 
 /** 选手自行上传头像 */

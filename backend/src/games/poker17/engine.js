@@ -742,6 +742,10 @@ function computeDeltas(state) {
   return deltas
 }
 
+function totalChipCount(state) {
+  return state.players.reduce((sum, p) => sum + p.chips, 0)
+}
+
 function applyPayout(state, playerId, amount) {
   const p = getPlayer(state, playerId)
   if (!p) return
@@ -769,12 +773,29 @@ function finishRound(state, result) {
   state.turn = null
   state.exchangeTurn = null
   state.resultEndsAt = Date.now() + RESULT_DELAY_MS
-  if (state.round >= state.totalRounds) finalizeMatch(state)
+
+  // 10局内任意一方筹码归零：另一方直接获胜。
+  if (state.players.some(p => p.chips <= 0)) {
+    finalizeMatch(state, 'chips_zero')
+    return
+  }
+  if (state.round >= state.totalRounds) finalizeMatch(state, 'rounds_complete')
 }
 
 function settleNoContest(state) {
-  const ante = state.antePot
-  state.dealerCollected += ante
+  const refunds = {}
+  let totalRefund = 0
+
+  // 双方连续过牌：底注原路退还，不产生抽水，也不改变双方总筹码。
+  for (const p of state.players) {
+    const paid = state.antePaid[p.id] || 0
+    if (paid > 0) {
+      applyPayout(state, p.id, paid)
+      refunds[p.id] = paid
+      totalRefund += paid
+    }
+  }
+
   state.antePot = 0
   state.betPot = 0
 
@@ -782,14 +803,15 @@ function settleNoContest(state) {
     type: 'no_contest',
     round: state.round,
     pot: 0,
-    anteToDealer: ante,
+    refundedAnte: totalRefund,
+    anteToDealer: 0,
     winnerIds: [],
     winnerNames: [],
-    payouts: {},
+    payouts: refunds,
     chipDeltas: computeDeltas(state),
     revealed: false
   }
-  pushEvent(state, `第 ${state.round} 局双方连续过牌，No Contest，底注由庄家收取`)
+  pushEvent(state, `第 ${state.round} 局双方连续过牌，No Contest，底注 ${totalRefund} 枚已退还`)
   finishRound(state, result)
 }
 
@@ -797,12 +819,10 @@ function settleFold(state, folderId) {
   const winnerId = otherId(state, folderId)
   const winner = getPlayer(state, winnerId)
   const folder = getPlayer(state, folderId)
-  const betPot = state.betPot
-  const ante = state.antePot
+  const pot = state.antePot + state.betPot
 
-  // Per the 17 Poker rules: the opponent wins the betting pot; antes go to the house.
-  applyPayout(state, winnerId, betPot)
-  state.dealerCollected += ante
+  // 一方弃牌：赢家获得全部底池（含双方底注），不抽水。
+  applyPayout(state, winnerId, pot)
   state.antePot = 0
   state.betPot = 0
 
@@ -813,13 +833,14 @@ function settleFold(state, folderId) {
     folderName: folder ? folder.name : '',
     winnerIds: winnerId ? [winnerId] : [],
     winnerNames: winner ? [winner.name] : [],
-    pot: betPot,
-    anteToDealer: ante,
-    payouts: winnerId ? { [winnerId]: betPot } : {},
+    pot,
+    refundedAnte: 0,
+    anteToDealer: 0,
+    payouts: winnerId ? { [winnerId]: pot } : {},
     chipDeltas: computeDeltas(state),
     revealed: false
   }
-  pushEvent(state, `${folder ? folder.name : '玩家'} 弃牌，${winner ? winner.name : '对手'} 赢得下注池 ${betPot} 枚，底注由庄家收取`)
+  pushEvent(state, `${folder ? folder.name : '玩家'} 弃牌，${winner ? winner.name : '对手'} 赢得全部底池 ${pot} 枚`)
   finishRound(state, result)
 }
 
@@ -884,18 +905,68 @@ function settleShowdown(state) {
   finishRound(state, result)
 }
 
-function finalizeMatch(state) {
+function finalizeMatch(state, reason = 'rounds_complete') {
   if (state.matchOver) return
+
   const entries = state.players.map(p => ({
     playerId: p.id,
     playerName: p.name,
     chips: p.chips,
     net: p.chips - state.initialChips
   }))
-  const bestNet = Math.max(...entries.map(e => e.net))
-  const winners = entries.filter(e => e.net === bestNet)
-  const winnerIds = winners.map(e => e.playerId)
-  const winnerNames = winners.map(e => e.playerName)
+  const maxChips = Math.max(...entries.map(e => e.chips))
+  const minChips = Math.min(...entries.map(e => e.chips))
+
+  let winnerIds = []
+  let endReason = reason
+  let tiebreak = null
+
+  const zeroPlayers = entries.filter(e => e.chips <= 0)
+  if (zeroPlayers.length === 1) {
+    // 规则1：10局内一方筹码归零，另一方直接获胜。
+    endReason = 'chips_zero'
+    winnerIds = entries.filter(e => e.chips > 0).map(e => e.playerId)
+    tiebreak = 'opponent_chips_zero'
+  } else if (zeroPlayers.length > 1) {
+    endReason = 'tie'
+    winnerIds = entries.map(e => e.playerId)
+    tiebreak = 'both_chips_zero'
+  } else if (reason === 'rounds_complete' || state.round >= state.totalRounds) {
+    if (maxChips !== minChips) {
+      // 规则2：10局后金币更多者获胜。
+      endReason = 'chips'
+      winnerIds = entries.filter(e => e.chips === maxChips).map(e => e.playerId)
+      tiebreak = 'more_chips'
+    } else {
+      // 规则3：10局后金币相等，第10局金币增加者获胜。
+      const deltas = (state.lastResult && state.lastResult.chipDeltas) || {}
+      const increased = entries.filter(e => (deltas[e.playerId] || 0) > 0)
+      if (increased.length === 1) {
+        endReason = 'round10'
+        winnerIds = increased.map(e => e.playerId)
+        tiebreak = 'round10_chip_increase'
+      } else {
+        endReason = 'tie'
+        winnerIds = entries.map(e => e.playerId)
+        tiebreak = 'round10_no_increase'
+      }
+    }
+  } else {
+    // 兜底：按当前筹码领先者。
+    endReason = 'chips'
+    winnerIds = entries.filter(e => e.chips === maxChips).map(e => e.playerId)
+    tiebreak = 'more_chips'
+  }
+
+  if (!winnerIds.length) {
+    winnerIds = entries.filter(e => e.chips === maxChips).map(e => e.playerId)
+    endReason = 'chips'
+    tiebreak = 'more_chips'
+  }
+
+  const winnerNames = entries
+    .filter(e => winnerIds.includes(e.playerId))
+    .map(e => e.playerName)
 
   state.matchOver = true
   state.phase = 'match_over'
@@ -905,22 +976,33 @@ function finalizeMatch(state) {
     net: Object.fromEntries(entries.map(e => [e.playerId, e.net])),
     winnerIds,
     winnerNames,
-    isTie: winnerIds.length > 1,
-    dealerCollected: state.dealerCollected,
+    isTie: endReason === 'tie',
+    endReason,
+    tiebreak,
+    dealerCollected: 0,
+    totalChips: totalChipCount(state),
     roundsPlayed: state.history.length,
     initialChips: state.initialChips
   }
 
-  const text = winnerNames.length > 1
-    ? `比赛结束，双方最终净收益相同（${bestNet}），并列获胜`
-    : `比赛结束，${winnerNames[0]} 以净收益 ${bestNet} 获胜`
+  let text = ''
+  if (endReason === 'chips_zero') {
+    const loser = entries.find(e => e.chips <= 0)
+    text = `比赛结束，${loser ? loser.playerName : '一方'} 筹码归零，${winnerNames[0]} 直接获胜`
+  } else if (endReason === 'round10') {
+    text = `10局结束，双方筹码相同（${maxChips}），${winnerNames[0]} 因第10局筹码增加获胜`
+  } else if (endReason === 'tie') {
+    text = `10局结束，双方筹码相同且第10局无净增，比赛平局`
+  } else {
+    text = `10局结束，${winnerNames[0]} 以更多筹码（${maxChips}）获胜`
+  }
   pushEvent(state, text)
 }
 
 function advanceRound(state) {
   if (state.matchOver) return
   if (state.round >= state.totalRounds) {
-    finalizeMatch(state)
+    finalizeMatch(state, 'rounds_complete')
     return
   }
   startRound(state, state.round + 1)
@@ -975,6 +1057,7 @@ function sanitizeResult(result) {
     type: result.type,
     round: result.round,
     pot: result.pot || 0,
+    refundedAnte: result.refundedAnte || 0,
     anteToDealer: result.anteToDealer || 0,
     winnerIds: result.winnerIds || [],
     winnerNames: result.winnerNames || [],
@@ -1130,7 +1213,7 @@ function serializeForPlayer(state, playerId) {
     antePot: state.antePot,
     betPot: state.betPot,
     pot: state.antePot + state.betPot,
-    dealerCollected: state.dealerCollected,
+    dealerCollected: 0,
     currentBet: state.currentBet,
     round1Matched: state.round1Matched,
     round1: { ...state.round1 },
@@ -1150,6 +1233,7 @@ function serializeForPlayer(state, playerId) {
     resultEndsAt: state.resultEndsAt,
     matchOver: state.matchOver,
     finalResult: state.finalResult,
+    totalChips: totalChipCount(state),
     canNextRound: state.phase === 'round_result' && !state.matchOver
   }
 }
@@ -1194,14 +1278,15 @@ function serializeAdmin(state) {
     pot: state.antePot + state.betPot,
     antePot: state.antePot,
     betPot: state.betPot,
-    dealerCollected: state.dealerCollected,
+    dealerCollected: 0,
     currentBet: state.currentBet,
     round1Matched: state.round1Matched,
     players,
     deckRemaining: state.deck.length,
     discard: state.discard.map(cardLabel),
     lastResult: sanitizeResult(state.lastResult),
-    finalResult: state.finalResult
+    finalResult: state.finalResult,
+    totalChips: totalChipCount(state)
   }
 }
 
@@ -1227,13 +1312,14 @@ function serializeReplaySnapshot(state) {
     phase: state.phase,
     phaseLabel: PHASE_LABEL[state.phase] || state.phase,
     pot: state.antePot + state.betPot,
-    dealerCollected: state.dealerCollected,
+    dealerCollected: 0,
     currentBet: state.currentBet,
     round1Matched: state.round1Matched,
     players,
     deckRemaining: state.deck.length,
     lastResult: sanitizeResult(state.lastResult),
-    finalResult: state.finalResult
+    finalResult: state.finalResult,
+    totalChips: totalChipCount(state)
   }
 }
 
@@ -1244,11 +1330,13 @@ function serializeMeta(state) {
     initialChips: state.initialChips,
     totalRounds: state.totalRounds,
     finalResult: state.finalResult,
-    dealerCollected: state.dealerCollected,
+    dealerCollected: 0,
+    totalChips: totalChipCount(state),
     rounds: state.history.map(r => ({
       round: r.round,
       type: r.type,
       pot: r.pot,
+      refundedAnte: r.refundedAnte || 0,
       winnerIds: r.winnerIds || [],
       winnerNames: r.winnerNames || [],
       payouts: r.payouts || {},

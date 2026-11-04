@@ -25,57 +25,6 @@
       </div>
     </div>
 
-    <!-- 管理员广播 -->
-    <div class="control-card">
-      <div class="control-header">
-        <h3>📣 广播</h3>
-      </div>
-      <div class="broadcast-form">
-        <select v-model="broadcastType" class="bb-select">
-          <option value="notice">通知</option>
-          <option value="invite">邀请所有人到房间</option>
-        </select>
-        <select v-if="broadcastType === 'invite'" v-model="broadcastRoom" class="bb-select">
-          <option value="">选择房间…</option>
-          <option v-for="r in allRooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
-        </select>
-        <input
-          v-model="broadcastMessage"
-          class="bb-input"
-          :placeholder="broadcastType === 'invite' ? '附言（可选）' : '通知内容'"
-        />
-        <button
-          class="bb-btn bb-btn-primary"
-          :disabled="broadcastType === 'invite' && !broadcastRoom"
-          @click="sendBroadcast"
-        >发送</button>
-      </div>
-    </div>
-
-    <!-- 管理员房间发言（上帝视角） -->
-    <div class="control-card">
-      <div class="control-header">
-        <h3>💬 房间发言（上帝视角）</h3>
-      </div>
-      <div class="broadcast-form">
-        <select v-model="chatTargetRoom" class="bb-select">
-          <option value="">选择房间…</option>
-          <option v-for="r in allRooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
-        </select>
-        <input
-          v-model="chatContent"
-          class="bb-input"
-          placeholder="以管理员身份在所选房间发言…"
-          @keyup.enter="sendAdminMessage"
-        />
-        <button
-          class="bb-btn bb-btn-primary"
-          :disabled="!chatTargetRoom || !chatContent.trim()"
-          @click="sendAdminMessage"
-        >发言</button>
-      </div>
-    </div>
-
     <!-- 房间人数/床位/睡觉 & 作息规则 -->
     <div class="control-card">
       <div class="control-header">
@@ -105,6 +54,14 @@
         </div>
       </div>
 
+      <div class="move-rules">
+        <label>批量移动耗时</label>
+        <input type="number" min="0" max="3600" v-model.number="bulkMoveDuration" class="bb-input rule-input" />
+        <span>秒</span>
+        <button class="bb-btn bb-btn-xs" @click="applyBulkMoveDuration">应用到全部房间</button>
+        <span class="rule-hint">进入目标房间所需时间；0 秒表示立即到达（管理员强制移动不受此限制）</span>
+      </div>
+
       <div class="room-editor">
         <div v-for="r in allRooms" :key="r.id" class="room-edit-row">
           <span class="re-name">{{ r.icon }} {{ r.name }}</span>
@@ -113,6 +70,9 @@
           </label>
           <label class="re-field">床位
             <input type="number" min="0" v-model.number="ensureRoomEdit(r).bedLimit" class="bb-input re-input" />
+          </label>
+          <label class="re-field">移动耗时
+            <input type="number" min="0" max="3600" v-model.number="ensureRoomEdit(r).moveDuration" class="bb-input re-input" /> 秒
           </label>
           <label class="re-field re-check">
             <input type="checkbox" v-model="ensureRoomEdit(r).canSleep" /> 可睡觉
@@ -171,9 +131,8 @@ import {
   bbAdminSetDoor,
   bbAdminEvictBackyard,
   bbAdminMovePlayer,
-  bbAdminBroadcast,
-  bbAdminSendMessage,
   bbAdminSetRoom,
+  bbAdminBulkMoveDuration,
   bbAdminSetSeason,
   bbAdminChatLogs,
   bbGetPhotoWall,
@@ -209,19 +168,15 @@ async function savePhotoWallOrder() {
   } catch (e: any) { alert(e?.message || '保存失败') }
 }
 
-const broadcastType = ref<'notice' | 'invite'>('notice')
-const broadcastRoom = ref('')
-const broadcastMessage = ref('')
 
-const chatTargetRoom = ref('')
-const chatContent = ref('')
 
 const sleepDurationMinutes = ref(360)
 const sleepWindowStart = ref('22:00')
 const sleepWindowEnd = ref('02:00')
 const showerCooldownMinutes = ref(30)
+const bulkMoveDuration = ref(10)
 const sleepDurationHoursText = computed(() => (Math.max(1, sleepDurationMinutes.value || 0) / 60).toFixed(1))
-const roomEdits = reactive<Record<string, { capacity: number | null; bedLimit: number | null; canSleep: boolean }>>({})
+const roomEdits = reactive<Record<string, { capacity: number | null; bedLimit: number | null; canSleep: boolean; moveDuration: number }>>({})
 
 // 聊天记录
 const chatRoomFilter = ref('')
@@ -265,15 +220,28 @@ async function saveSeason() {
 // 保证房间编辑表单对象一定存在（避免渲染期访问 undefined.capacity）
 function ensureRoomEdit(room: any) {
   const id = room?.id
-  if (!id) return { capacity: null, bedLimit: null, canSleep: false }
+  if (!id) return { capacity: null, bedLimit: null, canSleep: false, moveDuration: 10 }
   if (!roomEdits[id]) {
     roomEdits[id] = {
       capacity: room.capacity ?? null,
       bedLimit: room.bedLimit ?? null,
-      canSleep: !!room.canSleep
+      canSleep: !!room.canSleep,
+      moveDuration: room.moveDuration ?? 10
     }
   }
   return roomEdits[id]
+}
+
+async function applyBulkMoveDuration() {
+  try {
+    await bbAdminBulkMoveDuration(Math.max(0, Math.round(bulkMoveDuration.value || 0)))
+    for (const r of allRooms.value) {
+      if (roomEdits[r.id]) roomEdits[r.id].moveDuration = Math.max(0, Math.round(bulkMoveDuration.value || 0))
+    }
+    alert('已批量更新所有房间的移动耗时')
+  } catch (e: any) {
+    alert(e?.message || '批量更新失败')
+  }
 }
 
 async function saveRoom(roomId: string) {
@@ -284,38 +252,12 @@ async function saveRoom(roomId: string) {
       roomId,
       capacity: e.capacity === null || e.capacity === ('' as any) ? null : Number(e.capacity),
       bedLimit: e.bedLimit === null || e.bedLimit === ('' as any) ? null : Number(e.bedLimit),
-      canSleep: e.canSleep
+      canSleep: e.canSleep,
+      moveDuration: Math.max(0, Math.round(Number(e.moveDuration) || 0))
     })
     alert('已保存')
   } catch (err: any) {
     alert(err?.message || '保存失败')
-  }
-}
-
-async function sendBroadcast() {
-  if (broadcastType.value === 'invite' && !broadcastRoom.value) return
-  try {
-    await bbAdminBroadcast({
-      type: broadcastType.value,
-      roomId: broadcastType.value === 'invite' ? broadcastRoom.value : null,
-      message: broadcastMessage.value
-    })
-    broadcastMessage.value = ''
-    alert('广播已发送')
-  } catch (e: any) {
-    alert(e?.message || '发送失败')
-  }
-}
-
-async function sendAdminMessage() {
-  const roomId = chatTargetRoom.value
-  const content = chatContent.value.trim()
-  if (!roomId || !content) return
-  try {
-    await bbAdminSendMessage(roomId, content)
-    chatContent.value = ''
-  } catch (e: any) {
-    alert(e?.message || '发言失败')
   }
 }
 
@@ -350,7 +292,8 @@ async function loadData() {
         roomEdits[r.id] = {
           capacity: (r as any).capacity ?? null,
           bedLimit: (r as any).bedLimit ?? null,
-          canSleep: !!(r as any).canSleep
+          canSleep: !!(r as any).canSleep,
+          moveDuration: (r as any).moveDuration ?? 10
         }
       }
     }
@@ -359,6 +302,7 @@ async function loadData() {
     await loadPhotoWall()
     // 作息规则（仅首次加载，避免覆盖正在编辑的值）
     if (!rulesLoaded) {
+      bulkMoveDuration.value = (allRooms.value[0] as any)?.moveDuration ?? 10
       try {
         const s = await bbGetSeason()
         if (s) {
@@ -441,7 +385,6 @@ async function handleForceMove(playerId: string, targetRoomId: string) {
 .door-status.open { color: #b39bff; }
 .control-actions { display: flex; gap: 10px; }
 
-.broadcast-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .bb-select, .bb-input {
   padding: 8px 12px;
   background: #120a22;
@@ -465,6 +408,12 @@ async function handleForceMove(playerId: string, targetRoomId: string) {
 .rule-input { max-width: 90px; flex: none; }
 .rule-time { max-width: 120px; flex: none; }
 .rule-hint { color: #6b5f92; font-size: 12px; }
+.move-rules {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: #120a22; border: 1px solid #b39bff22; border-radius: 8px;
+  padding: 10px 14px; margin-top: 8px; font-size: 13px; color: #a99bd0;
+}
+.move-rules > label { color: #8f83b8; }
 .room-editor { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .room-edit-row {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -558,4 +507,30 @@ async function handleForceMove(playerId: string, targetRoomId: string) {
 .bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 .bb-btn:hover { background: #b39bff22; }
 .bb-btn-primary { border-color: #b39bff; background: #b39bff22; }
+
+@media (max-width: 900px) {
+  .control-card { padding: 14px; }
+  .room-edit-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+    padding: 10px 0;
+  }
+  .re-name { grid-column: 1 / -1; min-width: 0; font-weight: 600; }
+  .re-field { justify-content: space-between; }
+  .re-input { width: 90px; }
+  .room-edit-row > .bb-btn-xs { grid-column: 1 / -1; justify-self: start; }
+  .locations-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .control-card { padding: 12px; }
+  .house-rules, .move-rules { padding: 10px; }
+  .move-rules { align-items: stretch; }
+  .move-rules .rule-hint { flex-basis: 100%; }
+  .rule-row > label { min-width: 0; width: 100%; }
+  .rule-input, .rule-time { max-width: none; width: 100%; }
+  .room-edit-row { grid-template-columns: 1fr; }
+  .locations-grid { grid-template-columns: 1fr; }
+}
 </style>

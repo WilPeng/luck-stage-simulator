@@ -30,7 +30,10 @@
       <div v-for="msg in messages" :key="msg.id" class="message"
         :class="{ 'system-msg': msg.senderId === 'system', 'self-msg': msg.senderId === currentUserId }">
         <template v-if="msg.senderId === 'system'">
-          <div class="system-text">{{ msg.content }}</div>
+          <div class="system-text">
+            <span>{{ msg.content }}</span>
+            <span class="system-time">{{ formatTime(msg.createdAt) }}</span>
+          </div>
         </template>
         <template v-else>
           <div class="msg-row">
@@ -107,7 +110,8 @@ function handleSend() {
 function formatTime(t: string) {
   if (!t) return ''
   const d = new Date(t)
-  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+  const p = (n: number) => n.toString().padStart(2, '0')
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
 function scrollToBottom() {
@@ -236,7 +240,11 @@ import { computed } from 'vue'
   background: #ffffff06;
   padding: 2px 10px;
   border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
+.system-time { color: #4b416b; font-size: 10px; }
 .msg-header {
   display: flex;
   align-items: center;

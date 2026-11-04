@@ -76,6 +76,7 @@ registerGame({
       lastEliminated: [],
       winner: null,
       finished: false,
+      history: [],
       _replayEvents: [],
       questions
     }
@@ -160,6 +161,9 @@ registerGame({
       .filter(([pid]) => state.roundAnswers[pid] && state.playerStates[pid].alive)
       .map(([pid]) => pid)
 
+    const count0 = remaining.filter(pid => state.roundAnswers[pid].choice === 0).length
+    const count1 = remaining.length - count0
+
     // 两人中作答更快者（手速）
     const fasterOf = ids => {
       const sorted = [...ids].sort((a, b) => {
@@ -172,27 +176,45 @@ registerGame({
 
     let winnerId = null
     let wonBySpeed = false
+    let resultType = 'continue'
 
-    if (remaining.length === 1) {
+    if (remaining.length === 0) {
+      resultType = 'all-no-answer'
+    } else if (remaining.length === 1) {
       // 仅剩 1 人作答 → 直接获胜
       winnerId = remaining[0]
-    } else if (remaining.length >= 2) {
-      const count0 = remaining.filter(pid => state.roundAnswers[pid].choice === 0).length
-      const count1 = remaining.length - count0
-
+      resultType = 'single-answered-win'
+    } else {
       if (count0 === count1) {
         // 平票：1:1 比手速，其余平票（如 2:2）本轮不淘汰
-        if (count0 === 1) { winnerId = fasterOf(remaining); wonBySpeed = true }
+        if (count0 === 1) {
+          winnerId = fasterOf(remaining)
+          wonBySpeed = true
+          resultType = 'fastest-win-1v1'
+        } else {
+          resultType = 'tie-no-eliminate'
+        }
       } else if (count0 === 0 || count1 === 0) {
         // 某选项 0 人：2:0 比手速，其余（如 3:0）本轮不淘汰
-        if (remaining.length === 2) { winnerId = fasterOf(remaining); wonBySpeed = true }
+        if (remaining.length === 2) {
+          winnerId = fasterOf(remaining)
+          wonBySpeed = true
+          resultType = 'fastest-win-2-0'
+        } else {
+          resultType = 'zero-no-eliminate'
+        }
       } else {
         // 不同票型：人数多的选项一方全部出局
         const majority = count0 > count1 ? 0 : 1
         const majorityIds = remaining.filter(pid => state.roundAnswers[pid].choice === majority)
         for (const pid of majorityIds) eliminate(pid)
         remaining = remaining.filter(pid => state.roundAnswers[pid].choice !== majority)
-        if (remaining.length === 1) winnerId = remaining[0]
+        if (remaining.length === 1) {
+          winnerId = remaining[0]
+          resultType = 'majority-eliminated-win'
+        } else {
+          resultType = 'majority-eliminated-continue'
+        }
       }
     }
 
@@ -205,19 +227,66 @@ registerGame({
 
     state.lastEliminated = eliminated
 
+    const survivors = Object.entries(state.playerStates).filter(([, p]) => p.alive)
+    const survivorIds = survivors.map(([pid]) => pid)
+
+    const outcomeText = (() => {
+      switch (resultType) {
+        case 'all-no-answer': return '全部未作答，比赛结束（无胜者）'
+        case 'single-answered-win': return `${nameOf(winnerId)} 是唯一作答者，直接获胜`
+        case 'fastest-win-1v1': return `1:1 平票，${nameOf(winnerId)} 作答更快，获胜`
+        case 'fastest-win-2-0': return `2:0，${nameOf(winnerId)} 作答更快，获胜`
+        case 'tie-no-eliminate': return `平票（${count0}:${count1}），本轮不淘汰，继续下一题`
+        case 'zero-no-eliminate': return `某选项 0 人（${count0}:${count1}），本轮不淘汰，继续下一题`
+        case 'majority-eliminated-win': return `多数方全部出局，${nameOf(winnerId)} 成为唯一存活者，获胜`
+        case 'majority-eliminated-continue': return `多数方全部出局，剩余 ${remaining.length} 人，继续下一题`
+        default: return '本轮结束'
+      }
+    })()
+
+    // 详细复盘记录（每轮完整过程）
+    if (!Array.isArray(state.history)) state.history = []
+    state.history.push({
+      round: state.round + 1,
+      question: state.question ? { text: state.question.text, options: [...(state.question.options || [])] } : null,
+      counts: [count0, count1],
+      noAnswer: [...noAns],
+      eliminated: [...eliminated],
+      survivors: survivorIds,
+      resultType,
+      wonBySpeed,
+      winnerId: winnerId || null,
+      outcomeText,
+      participants: alive.map(([pid]) => {
+        const a = state.roundAnswers[pid]
+        return {
+          playerId: pid,
+          playerName: nameOf(pid),
+          choice: a ? a.choice : null,
+          label: a ? optionLabel(state.question, a.choice) : '未作答',
+          timeMs: a ? a.time : null,
+          noAnswer: !a,
+          eliminated: eliminated.includes(pid),
+          aliveAfter: !!(state.playerStates[pid] && state.playerStates[pid].alive)
+        }
+      })
+    })
+
     const choiceText = alive.map(([pid]) => {
       const a = state.roundAnswers[pid]
       return `${nameOf(pid)}:${a ? optionLabel(state.question, a.choice) : '未作答'}`
     }).join('、')
     const elimText = eliminated.length ? eliminated.map(nameOf).join('、') + ' 出局' : '本轮无人出局'
-    pushReplay(state, 'round', `第${state.round + 1}轮「${state.question ? state.question.text : ''}」：${choiceText}；${elimText}`, {
+    pushReplay(state, 'round', `第${state.round + 1}轮「${state.question ? state.question.text : ''}」：${choiceText}；${elimText}；${outcomeText}`, {
       round: state.round,
       question: state.question,
       answers: state.roundAnswers,
-      eliminated
+      counts: [count0, count1],
+      noAnswer: noAns,
+      eliminated,
+      resultType,
+      winnerId: winnerId || null
     })
-
-    const survivors = Object.entries(state.playerStates).filter(([, p]) => p.alive)
 
     if (winnerId) {
       state.finished = true
@@ -233,14 +302,29 @@ registerGame({
       return
     }
     if (survivors.length === 1) {
+      // 兜底（通常已在 winnerId 分支处理）
       state.finished = true
-      state.winner = survivors[0][0]
+      state.winner = survivorIds[0]
       pushReplay(state, 'finish', `${nameOf(state.winner)} 获胜`, { winnerId: state.winner })
       return
     }
 
     // 继续下一轮
     this._startRound(state, state.round + 1)
+  },
+
+  getReplayMeta(state) {
+    const nameOf = pid => (state.playerStates[pid] && state.playerStates[pid].name) || pid
+    return {
+      type: 'minority',
+      totalRounds: (state.history || []).length,
+      rounds: state.history || [],
+      winnerId: state.winner || null,
+      winnerName: state.winner ? nameOf(state.winner) : '',
+      finalAlive: Object.entries(state.playerStates || {})
+        .filter(([, p]) => p.alive)
+        .map(([pid]) => ({ playerId: pid, playerName: nameOf(pid) }))
+    }
   },
 
   computeWinner(state) {

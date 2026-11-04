@@ -11,6 +11,7 @@ class BBHouseRoom extends BaseModel {
     this.capacity = data?.capacity ?? null   // null = 无限（房间人数上限）
     this.bedLimit = data?.bedLimit ?? null   // null = 无床位限制（可睡觉人数上限）
     this.canSleep = data?.canSleep ?? false  // 是否可在此房间睡觉
+    this.moveDuration = data?.moveDuration ?? 10 // 进入该房间所需移动时间（秒）
     this.accessRule = data?.accessRule || 'public' // public | hoh_only | hoh_or_invited | have_not_only | single
     this.gameId = data?.gameId || 'bigbrother'
     this.createdAt = data?.createdAt || new Date().toISOString()

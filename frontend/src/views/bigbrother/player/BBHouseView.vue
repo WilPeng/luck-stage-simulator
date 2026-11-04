@@ -36,6 +36,18 @@
       </div>
     </div>
 
+    <!-- 同行邀请提示 -->
+    <div v-if="moveInviteData" class="invite-banner">
+      <div class="invite-icon">👥</div>
+      <div class="invite-info">
+        <div class="invite-text">{{ moveInviteData.inviterName }} 邀请你一起前往 {{ moveInviteData.roomName }}</div>
+        <div class="invite-actions">
+          <button class="bb-btn bb-btn-sm" @click="handleAcceptMoveInvite">同意</button>
+          <button class="bb-btn bb-btn-sm bb-btn-outline" @click="handleDeclineMoveInvite">拒绝</button>
+        </div>
+      </div>
+    </div>
+
     <!-- HOH 门铃提示（房内的人收到） -->
     <div v-if="doorbellNotice" class="doorbell-banner">
       <span class="doorbell-icon">🔔</span>
@@ -51,7 +63,11 @@
     <!-- 移动中提示 -->
     <div v-if="moving" class="moving-banner">
       <span class="moving-spinner"></span>
-      <span>🚶 你正在前往 {{ movingTargetName }}……</span>
+      <span>
+        🚶 你正在前往 {{ movingTargetName }}……
+        <template v-if="moveSecondsLeft > 0">（剩余 {{ moveSecondsLeft }}s）</template>
+        <span class="moving-hint">移动中无法接收任何房间消息</span>
+      </span>
     </div>
 
     <!-- 餐厅：照片墙（页面顶部整宽展示） -->
@@ -62,7 +78,7 @@
     <div class="house-layout">
       <!-- 左侧：房屋地图 -->
       <div class="house-left">
-        <div class="map-wrap" :class="{ locked: isShowering || isSleeping }">
+        <div class="map-wrap" :class="{ locked: isShowering || isSleeping || moving }">
           <HouseMap
             :rooms="rooms"
             :currentRoomId="currentRoomId"
@@ -116,6 +132,26 @@
           <div v-else class="washroom-empty">浴室目前无人</div>
         </div>
 
+        <!-- 邀请同房间玩家一起移动 -->
+        <div v-if="!isSleeping && !isShowering && !moving && coMoveCandidates.length && coMoveRooms.length" class="comove-panel">
+          <div class="comove-title">👥 邀请同房间玩家一起移动</div>
+          <div class="comove-row">
+            <select v-model="coMoveTargetId" class="invite-select">
+              <option value="">选择玩家…</option>
+              <option v-for="p in coMoveCandidates" :key="p.playerId" :value="p.playerId">{{ p.playerName }}</option>
+            </select>
+            <select v-model="coMoveRoomId" class="invite-select">
+              <option value="">选择目标房间…</option>
+              <option v-for="r in coMoveRooms" :key="r.id" :value="r.id">
+                {{ r.icon }} {{ r.name }}（{{ r.moveDuration ?? 10 }}秒）
+              </option>
+            </select>
+            <button class="bb-btn bb-btn-sm" :disabled="!coMoveTargetId || !coMoveRoomId" @click="handleInviteCoMove">邀请</button>
+          </div>
+          <div v-if="coMovePendingName" class="action-hint">已邀请 {{ coMovePendingName }}，等待同意…</div>
+          <div v-if="coMoveNotice" class="invite-notice">{{ coMoveNotice }}</div>
+        </div>
+
         <!-- HOH 房间：监控（房内所有人可见）+ 邀请/睡眠同意（仅 HOH） -->
         <div v-if="showMonitor" class="hoh-panel">
           <div class="hoh-panel-title">👑 House Monitor</div>
@@ -148,12 +184,12 @@
 
             <div class="hoh-divider"></div>
             <div class="hoh-panel-title">😴 允许在 HOH 房睡觉</div>
-            <div class="approve-list">
-              <div v-for="p in approveCandidates" :key="p.id" class="approve-row">
-                <span>{{ p.name }}</span>
-                <button class="bb-btn bb-btn-xs" @click="approveSleep(p.id)">同意</button>
-              </div>
-              <div v-if="!approveCandidates.length" class="approve-empty">暂无可同意的玩家</div>
+            <div class="hoh-sleep-row">
+              <select v-model="hohApprovedPlayerId" class="invite-select approve-select" @change="handleApprovalChange">
+                <option value="">不选择任何人</option>
+                <option v-for="p in approveCandidates" :key="p.id" :value="p.id">{{ p.name }}</option>
+              </select>
+              <span class="approve-hint">最多只能选择 1 人</span>
             </div>
           </template>
         </div>
@@ -235,6 +271,7 @@ const doorbellNotice = ref('')
 const doorbellSentNotice = ref('')
 const moving = ref(false)
 const movingTargetName = ref('')
+const moveEndsAt = ref<string | null>(null)
 const hasMore = ref(true)
 const loadingMore = ref(false)
 const inviteData = ref<{ hohName: string; hohId: string; roomId: string } | null>(null)
@@ -246,8 +283,10 @@ const myState = ref<any>({
   isSleeping: false, wakeAt: null, sleepStartedAt: null,
   isShowering: false, showerStartedAt: null, lastShowerDate: null,
   showerCooldownUntil: null,
+  isMoving: false, moveToRoomId: null, moveEndsAt: null, moveDurationSeconds: null,
   sleepCompleted: false, canSleepNow: false,
   sleepWindowStart: '22:00', sleepWindowEnd: '02:00', sleepDurationMinutes: 360,
+  hohApprovedPlayerId: null,
   today: '', hohSleepAllowed: true
 })
 const nowTs = ref(Date.now())
@@ -263,6 +302,14 @@ const activePlayers = ref<{ id: string; name: string; avatar: string | null }[]>
 const inviteTargetId = ref('')
 const pendingInvites = ref<string[]>([])
 const declineNotice = ref('')
+const hohApprovedPlayerId = ref('')
+
+// 同行邀请
+const moveInviteData = ref<{ inviterId: string; inviterName: string; targetRoomId: string; roomName: string } | null>(null)
+const coMoveTargetId = ref('')
+const coMoveRoomId = ref('')
+const coMovePendingName = ref('')
+const coMoveNotice = ref('')
 
 const currentRoomDef = computed(() => rooms.value.find(r => r.id === currentRoomId.value))
 const currentRoomName = computed(() => currentRoomDef.value?.name || currentRoomId.value)
@@ -292,6 +339,10 @@ const showerSecondsLeft = computed(() => {
   if (!myState.value.showerStartedAt) return 0
   return Math.max(0, Math.ceil((new Date(myState.value.showerStartedAt).getTime() + 10 * 60 * 1000 - nowTs.value) / 1000))
 })
+const moveSecondsLeft = computed(() => {
+  if (!moveEndsAt.value) return 0
+  return Math.max(0, Math.ceil((new Date(moveEndsAt.value).getTime() - nowTs.value) / 1000))
+})
 const canStartSleep = computed(() => !!myState.value.canSleepNow && !myState.value.sleepCompleted)
 const sleepDurationText = computed(() => {
   const minutes = Math.max(1, Number(myState.value.sleepDurationMinutes) || 360)
@@ -318,6 +369,13 @@ const inviteCandidates = computed(() => {
   const pending = new Set(pendingInvites.value)
   return activePlayers.value.filter(p => p.id !== myId.value && !inRoom.has(p.id) && !pending.has(p.id))
 })
+
+const coMoveCandidates = computed(() =>
+  presencePlayers.value.filter(p => p.playerId !== myId.value)
+)
+const coMoveRooms = computed(() =>
+  (reachableRooms.value as any[]).filter(r => r.canEnter || r.isFull)
+)
 
 // Socket 事件绑定
 house.onHistory.value = (data) => {
@@ -353,7 +411,7 @@ house.onPlayerJoined.value = (data) => {
       chatType: 'room',
       roomId: data.roomId,
       gameId: 'bigbrother',
-      createdAt: new Date().toISOString()
+      createdAt: data.at || new Date().toISOString()
     })
   }
 }
@@ -370,7 +428,7 @@ house.onPlayerLeft.value = (data) => {
       chatType: 'room',
       roomId: data.roomId,
       gameId: 'bigbrother',
-      createdAt: new Date().toISOString()
+      createdAt: data.at || new Date().toISOString()
     })
   }
 }
@@ -436,6 +494,27 @@ house.onInviteCancelled.value = (data) => {
   }
 }
 
+house.onMoveInviteReceived.value = (data) => {
+  moveInviteData.value = data
+}
+
+house.onMoveInviteSent.value = (data) => {
+  coMovePendingName.value = data.targetPlayerName
+  coMoveNotice.value = ''
+}
+
+house.onMoveInviteAccepted.value = (data) => {
+  coMovePendingName.value = ''
+  coMoveNotice.value = `${data.playerName} 同意了同行邀请`
+  window.setTimeout(() => { coMoveNotice.value = '' }, 4000)
+}
+
+house.onMoveInviteDeclined.value = (data) => {
+  coMovePendingName.value = ''
+  coMoveNotice.value = `${data.playerName} 拒绝了同行邀请`
+  window.setTimeout(() => { coMoveNotice.value = '' }, 4000)
+}
+
 house.onBroadcast.value = (data) => {
   broadcastData.value = data
 }
@@ -452,7 +531,13 @@ house.onSleepForced.value = (data) => {
   }
 }
 
+house.onMoveStarted.value = (data) => {
+  beginMoving(data)
+}
+
 house.onForceMoved.value = (data) => {
+  moving.value = false
+  moveEndsAt.value = null
   currentRoomId.value = data.targetRoomId
   house.currentRoomId.value = data.targetRoomId
   messages.value = []
@@ -461,6 +546,17 @@ house.onForceMoved.value = (data) => {
   inviteData.value = null
   // 服务端已切换 socket 房间并推送历史
   loadData()
+}
+
+function beginMoving(data: { toRoomId: string; roomName?: string; endsAt?: string | null; durationSeconds?: number }) {
+  moving.value = true
+  const targetDef = rooms.value.find(r => r.id === data.toRoomId)
+  movingTargetName.value = data.roomName || targetDef?.name || data.toRoomId
+  moveEndsAt.value = data.endsAt || (data.durationSeconds != null ? new Date(Date.now() + data.durationSeconds * 1000).toISOString() : null)
+  messages.value = []
+  presencePlayers.value = []
+  hasMore.value = true
+  myState.value = { ...myState.value, isMoving: true, moveToRoomId: data.toRoomId, moveEndsAt: moveEndsAt.value }
 }
 
 house.onError.value = (data) => {
@@ -484,8 +580,18 @@ async function loadData() {
     house.currentRoomId.value = currentRoomId.value
     locationLoaded.value = true
 
-    // 睡眠/洗澡状态
+    // 睡眠/洗澡/移动状态
     try { myState.value = await bbGetMyState() } catch {}
+    hohApprovedPlayerId.value = myState.value.hohApprovedPlayerId || ''
+    if (myState.value.isMoving && myState.value.moveToRoomId) {
+      const targetDef = rooms.value.find(r => r.id === myState.value.moveToRoomId)
+      beginMoving({
+        toRoomId: myState.value.moveToRoomId,
+        roomName: targetDef?.name,
+        endsAt: myState.value.moveEndsAt,
+        durationSeconds: myState.value.moveDurationSeconds
+      })
+    }
 
     // 洗漱间：查看浴室内有谁
     if (currentRoomId.value === 'washroom') {
@@ -529,27 +635,21 @@ async function handleMove(roomId: string) {
   if (roomId === currentRoomId.value) return
   if (moving.value) return
 
-  moving.value = true
-  const targetDef = rooms.value.find(r => r.id === roomId)
-  movingTargetName.value = targetDef?.name || roomId
-
   try {
-    await bbMoveToRoom(roomId)
-    const oldRoomId = currentRoomId.value
-    currentRoomId.value = roomId
-    messages.value = []
-    presencePlayers.value = []
-    hasMore.value = true
-
-    // 通知 socket
-    house.notifyMoved(oldRoomId, roomId)
-
-    // 重新加载可达房间 / HOH 状态
-    await loadData()
+    const res: any = await bbMoveToRoom(roomId)
+    if (res?.isMoving === false) {
+      // 移动耗时为 0：服务端已完成移动
+      await loadData()
+      return
+    }
+    beginMoving({
+      toRoomId: roomId,
+      roomName: res?.roomName,
+      endsAt: res?.endsAt,
+      durationSeconds: res?.durationSeconds
+    })
   } catch (e: any) {
     alert(e?.message || '移动失败')
-  } finally {
-    moving.value = false
   }
 }
 
@@ -564,15 +664,9 @@ function handleLoadMore() {
 }
 
 async function handleAcceptInvite() {
-  // 走 socket 端（服务端更新位置 + 切换房间 + 通知 HOH + 推历史）
+  // 接受后由服务端开始计时移动，通过 house:move-started / house:force-moved 驱动界面
   house.acceptInvite()
-  currentRoomId.value = 'hoh_room'
-  house.currentRoomId.value = 'hoh_room'
-  messages.value = []
-  presencePlayers.value = []
-  hasMore.value = true
   inviteData.value = null
-  loadData()
 }
 
 function handleDeclineInvite() {
@@ -587,6 +681,23 @@ function handleInvite() {
   house.invitePlayer(inviteTargetId.value)
   pendingInvites.value.push(inviteTargetId.value)
   inviteTargetId.value = ''
+}
+
+function handleInviteCoMove() {
+  if (!coMoveTargetId.value || !coMoveRoomId.value) return
+  house.inviteMove(coMoveTargetId.value, coMoveRoomId.value)
+  coMoveTargetId.value = ''
+  coMoveRoomId.value = ''
+}
+
+function handleAcceptMoveInvite() {
+  house.acceptMoveInvite()
+  moveInviteData.value = null
+}
+
+function handleDeclineMoveInvite() {
+  house.declineMoveInvite()
+  moveInviteData.value = null
 }
 
 function playerName(pid: string): string {
@@ -612,8 +723,15 @@ async function doSleep() {
 async function doWake() {
   try { await bbSleepWake(); await loadData() } catch (e: any) { alert(e?.message || '无法醒来') }
 }
-async function approveSleep(pid: string) {
-  try { await bbSleepApprove(pid) } catch (e: any) { alert(e?.message || '操作失败') }
+async function handleApprovalChange() {
+  try {
+    const res: any = await bbSleepApprove(hohApprovedPlayerId.value || '')
+    hohApprovedPlayerId.value = res?.playerId || ''
+    await loadData()
+  } catch (e: any) {
+    alert(e?.message || '操作失败')
+    await loadData()
+  }
 }
 
 async function loadActivePlayers() {
@@ -717,6 +835,7 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   font-size: 13px;
   color: #b39bff;
 }
+.moving-hint { color: #8f83b8; font-size: 11px; margin-left: 8px; }
 
 .doorbell-banner {
   display: flex;
@@ -780,6 +899,12 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 }
 .action-hint { font-size: 11px; color: #8f83b8; }
 
+.comove-panel { background: #1b1130; border: 1px solid #b39bff33; border-radius: 10px; padding: 14px; }
+.comove-title { font-size: 14px; color: #b39bff; font-weight: 600; margin-bottom: 10px; }
+.comove-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.comove-row .invite-select { flex: 1; min-width: 120px; }
+.comove-row .bb-btn-sm { flex: none; }
+
 .washroom-panel { background: #1b1130; border: 1px solid #4488ff33; border-radius: 10px; padding: 14px; }
 .washroom-title { font-size: 14px; color: #7fb0ff; font-weight: 600; margin-bottom: 10px; }
 .washroom-list { display: flex; flex-direction: column; gap: 8px; }
@@ -787,9 +912,9 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 .washroom-empty { color: #6b5f92; font-size: 12px; }
 .washroom-cooldown { color: #e6c988; font-size: 12px; margin-bottom: 10px; }
 
-.approve-list { display: flex; flex-direction: column; gap: 6px; }
-.approve-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #cfc4ea; }
-.approve-empty { color: #6b5f92; font-size: 12px; }
+.hoh-sleep-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.approve-select { max-width: 220px; }
+.approve-hint { color: #6b5f92; font-size: 11px; }
 
 .shower-banner {
   padding: 10px 16px; margin-bottom: 16px;

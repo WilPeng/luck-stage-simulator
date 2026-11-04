@@ -23,6 +23,7 @@ const COLLECTIONS = [
   'BBGameLibrary',    // 游戏库排序 / 文件夹
   'BBPowerChallenge', // 实力大挑战题目池
   'BBMinigameReplay', // 小游戏对局回放/复盘
+  'BBBroadcast',      // 管理员广播记录
   'BBJuryQA'          // 陪审团问答（冠军投票前）
 ]
 

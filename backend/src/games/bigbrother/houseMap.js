@@ -102,6 +102,8 @@ async function seedHouseData({ BBHouseRoom, BBHousePassage, BBHouseDoor }) {
       existing.accessRule = r.accessRule
       existing.bedLimit = r.bedLimit
       existing.canSleep = r.canSleep
+      // 迁移旧数据：未配置移动耗时时初始化为 10 秒
+      if (existing.moveDuration == null) existing.moveDuration = 10
       // 容量：若旧值缺失则补默认；不覆盖管理员已调整的值
       if (existing.capacity == null) existing.capacity = r.capacity
       await existing.save()
@@ -174,8 +176,10 @@ async function ensureBBHouseData() {
       await loc.save()
       created++
     }
-    // 位置历史：确保有当前所在区间
-    await ensureOpenInterval(p.id, p.name, loc.currentRoomId, loc.enteredAt)
+    // 位置历史：移动中的玩家不重建区间，等移动完成后再开启新房间区间
+    if (!p.isMoving) {
+      await ensureOpenInterval(p.id, p.name, loc.currentRoomId, loc.enteredAt)
+    }
   }
   if (created > 0) console.log(`[HouseMap] ensureBBHouseData created ${created} missing locations`)
 }

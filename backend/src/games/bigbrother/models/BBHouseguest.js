@@ -19,6 +19,13 @@ class BBHouseguest extends BaseModel {
     this.avatar = data?.avatar || null
     this.currentRoomId = data?.currentRoomId || 'living_room'
     this.isHaveNot = data?.isHaveNot || false
+    // 移动状态（服务端计时，移动中无法收发任何房间消息）
+    this.isMoving = data?.isMoving || false
+    this.moveFromRoomId = data?.moveFromRoomId || null
+    this.moveToRoomId = data?.moveToRoomId || null
+    this.moveStartedAt = data?.moveStartedAt || null
+    this.moveEndsAt = data?.moveEndsAt || null
+    this.moveDurationSeconds = data?.moveDurationSeconds ?? null
     // 睡眠状态
     this.isSleeping = data?.isSleeping || false
     this.sleepStartedAt = data?.sleepStartedAt || null

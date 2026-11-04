@@ -12,7 +12,7 @@ registerGame({
   id: 'poker17',
   name: '17 Poker',
   icon: '🃏',
-  description: '双人17张特殊牌库，10局对战。初始100筹码，每局底注5，两轮下注与换牌后摊牌比牌型，最终净收益高者获胜。',
+  description: '双人17张特殊牌库，10局对战。初始100筹码，每局底注5直接进入底池，不抽水；两轮下注与换牌后摊牌比牌型，最终净收益高者获胜。',
   category: 'strategy',
   playerCount: { min: 2, max: 2 },
   duration: 7200,

@@ -4,11 +4,14 @@
       <h1>💬 房间聊天记录</h1>
       <div class="filters">
         <input v-model="keyword" class="bb-input" placeholder="搜索内容 / 发送者…" />
-        <select v-model="roomFilter" class="bb-select" @change="loadLogs">
+        <select v-model="roomFilter" class="bb-select" @change="onRoomFilterChange">
           <option value="">全部房间</option>
           <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
         </select>
         <button class="bb-btn" @click="loadLogs">刷新</button>
+        <button class="bb-btn" :class="{ active: composerVisible }" @click="toggleComposer">
+          💬 房间发言{{ composerVisible ? ' ▲' : ' ▼' }}
+        </button>
       </div>
     </div>
 
@@ -50,6 +53,24 @@
           </template>
           <div v-if="!filteredLogs.length" class="empty">暂无聊天记录</div>
         </div>
+
+        <!-- 管理员上帝视角发言 -->
+        <div v-if="composerVisible" class="composer">
+          <select v-model="composerRoom" class="bb-select composer-room">
+            <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
+          </select>
+          <input
+            v-model="composerText"
+            class="composer-input"
+            placeholder="以管理员身份在所选房间发言…"
+            @keyup.enter="sendMessage"
+          />
+          <button
+            class="bb-btn bb-btn-primary"
+            :disabled="sending || !composerRoom || !composerText.trim()"
+            @click="sendMessage"
+          >{{ sending ? '发送中…' : '发送' }}</button>
+        </div>
       </section>
     </div>
   </div>
@@ -57,7 +78,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { bbGetHouseRooms, bbAdminChatLogs } from '../../../services/bbHouseApi'
+import { bbGetHouseRooms, bbAdminChatLogs, bbAdminSendMessage } from '../../../services/bbHouseApi'
 import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 
@@ -69,6 +90,35 @@ const keyword = ref('')
 const scrollEl = ref<HTMLElement | null>(null)
 let timer: ReturnType<typeof setInterval> | null = null
 const realtime = useBbRealtimeStore()
+
+// 管理员上帝视角发言
+const composerVisible = ref(true)
+const composerRoom = ref('')
+const composerText = ref('')
+const sending = ref(false)
+
+function toggleComposer() {
+  composerVisible.value = !composerVisible.value
+  if (composerVisible.value && !composerRoom.value && rooms.value.length) {
+    composerRoom.value = rooms.value[0].id
+  }
+}
+
+async function sendMessage() {
+  const roomId = composerRoom.value
+  const content = composerText.value.trim()
+  if (!roomId || !content || sending.value) return
+  sending.value = true
+  try {
+    await bbAdminSendMessage(roomId, content)
+    composerText.value = ''
+    if (!roomFilter.value || roomFilter.value === roomId) await loadLogs()
+  } catch (e: any) {
+    alert(e?.message || '发言失败')
+  } finally {
+    sending.value = false
+  }
+}
 
 function roomName(id: string) {
   return rooms.value.find(r => r.id === id)?.name || id
@@ -108,7 +158,16 @@ const grouped = computed(() => {
   return groups
 })
 
-function selectRoom(id: string) { roomFilter.value = id; loadLogs() }
+function selectRoom(id: string) {
+  roomFilter.value = id
+  if (id) composerRoom.value = id
+  loadLogs()
+}
+
+function onRoomFilterChange() {
+  if (roomFilter.value) composerRoom.value = roomFilter.value
+  loadLogs()
+}
 
 async function loadLogs() {
   try {
@@ -120,7 +179,10 @@ async function loadLogs() {
 }
 
 async function loadRooms() {
-  try { rooms.value = await bbGetHouseRooms() || [] } catch {}
+  try {
+    rooms.value = await bbGetHouseRooms() || []
+    if (!composerRoom.value && rooms.value.length) composerRoom.value = rooms.value[0].id
+  } catch {}
 }
 
 onMounted(async () => {
@@ -166,4 +228,42 @@ onUnmounted(() => {
 .seen-avatar { display: inline-flex; }
 .seen-empty { color: #b3a6d6; }
 .empty { color: #6b5f92; padding: 40px; text-align: center; }
+.bb-btn.active { border-color: #e6c988; color: #e6c988; background: #e6c98818; }
+.bb-btn-primary { background: #b39bff22; border-color: #b39bff; }
+.bb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid #ffffff12;
+  background: #150e28;
+}
+.composer-room { width: 160px; flex: none; }
+.composer-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  background: #120a22;
+  border: 1px solid #b39bff33;
+  border-radius: 8px;
+  color: #ece7fb;
+  font-size: 14px;
+  outline: none;
+}
+.composer-input:focus { border-color: #b39bff; }
+@media (max-width: 820px) {
+  .bb-chat-logs { padding: 14px; }
+  .page-header { flex-direction: column; align-items: stretch; }
+  .filters { flex-wrap: wrap; }
+  .filters .bb-input { width: 100%; }
+  .chat-layout { grid-template-columns: 1fr; }
+  .room-list { height: auto; max-height: 24vh; }
+  .chat-scroll { height: 55vh; }
+}
+@media (max-width: 640px) {
+  .composer { flex-wrap: wrap; }
+  .composer-room { width: 100%; }
+  .filters .bb-btn { flex: 1; }
+}
 </style>

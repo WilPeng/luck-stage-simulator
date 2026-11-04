@@ -350,6 +350,46 @@
               </table>
             </template>
 
+            <!-- 少数决 -->
+            <template v-else-if="meta.type === 'minority'">
+              <div class="reveal-big">
+                共 <strong>{{ meta.totalRounds || 0 }}</strong> 轮
+                <span v-if="meta.winnerName"> · 胜者：<strong>{{ meta.winnerName }}</strong></span>
+              </div>
+              <div class="race-list">
+                <div v-for="r in meta.rounds || []" :key="r.round" class="race-item">
+                  <div class="race-head">
+                    第 {{ r.round }} 轮 · {{ r.question?.text || '' }}
+                    <span v-if="r.wonBySpeed" class="mc ok">（比手速）</span>
+                  </div>
+                  <div class="snap-sub">
+                    票数：
+                    <strong>{{ r.question?.options?.[0] ?? 'A' }} {{ r.counts?.[0] ?? 0 }}</strong>
+                    :
+                    <strong>{{ r.counts?.[1] ?? 0 }} {{ r.question?.options?.[1] ?? 'B' }}</strong>
+                    <span v-if="r.noAnswer?.length"> · 未作答：{{ r.noAnswer.map(playerName).join('、') }}</span>
+                    <span v-if="r.eliminated?.length"> · 本轮出局：{{ r.eliminated.map(playerName).join('、') }}</span>
+                  </div>
+                  <table class="meta-table">
+                    <thead><tr><th>选手</th><th>选择</th><th>作答用时</th><th>本轮结果</th></tr></thead>
+                    <tbody>
+                      <tr v-for="p in r.participants || []" :key="p.playerId">
+                        <td class="mc-name">{{ p.playerName }}</td>
+                        <td>{{ p.noAnswer ? '未作答' : p.label }}</td>
+                        <td>{{ p.timeMs == null ? '-' : (p.timeMs / 1000).toFixed(2) + 's' }}</td>
+                        <td>
+                          <span v-if="r.winnerId === p.playerId" class="mc ok">🏆 获胜</span>
+                          <span v-else-if="p.eliminated || !p.aliveAfter" class="mc bad">出局</span>
+                          <span v-else class="mc ok">存活</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div class="snap-sub" style="margin-top: 6px">判定：{{ r.outcomeText }}</div>
+                </div>
+              </div>
+            </template>
+
             <!-- 自定义游戏 -->
             <template v-else-if="meta.type === 'custom'">
               <table class="meta-table">
@@ -464,6 +504,7 @@ const filteredEvents = computed(() => {
   const evs = detail.value?.events || []
   if (eventFilter.value === 'all') return evs
   if (eventFilter.value === 'finish') return evs.filter((e: any) => e.type === 'finish' || e.type === 'game_end' || e.type === 'game_stop')
+  if (eventFilter.value === 'answer') return evs.filter((e: any) => e.type === 'answer' || e.type === 'choose')
   return evs.filter((e: any) => e.type === eventFilter.value)
 })
 

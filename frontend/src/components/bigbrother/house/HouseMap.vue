@@ -28,6 +28,7 @@
           <span class="room-icon">{{ r.icon }}</span>
           <span class="room-name">{{ r.name }}</span>
           <span v-if="countOf(r.id) !== null" class="room-count">{{ countOf(r.id) }}人</span>
+          <span class="room-move-time">移动耗时 {{ r.moveDuration ?? 10 }} 秒</span>
         </button>
         <div v-if="!reachableEnterable.length" class="empty">当前没有可进入的相邻房间</div>
       </div>
@@ -178,6 +179,7 @@ function countOf(roomId: string) {
 .room-icon { font-size: 22px; }
 .room-name { font-size: 12px; color: #cfc4ea; font-weight: 500; }
 .room-count { font-size: 10px; color: #b39bff; background: #b39bff15; padding: 1px 6px; border-radius: 8px; position: absolute; top: -6px; right: -6px; }
+.room-move-time { font-size: 9px; color: #8f83b8; }
 .deny-reason { font-size: 10px; color: #e6c988; }
 
 .door-indicator {
