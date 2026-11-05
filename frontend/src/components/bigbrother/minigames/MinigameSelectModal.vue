@@ -132,6 +132,22 @@
                 </div>
               </template>
 
+              <!-- 毒酒：分配时长 / 转盘时长 / 结算展示 -->
+              <template v-if="pendingGame.id === 'poison-drink'">
+                <p class="opt-hint">每位玩家 3 点生命，座位随机固定。每轮庄家为所有存活玩家分配酒杯（毒酒位置仅庄家可见），非庄家秘密选择转盘旋转 0 / 1 / 2 格，统一结算。喝到毒酒 -1 生命，最后存活者获胜。</p>
+                <div class="opt-row">
+                  <label class="opt-label">庄家分配时长（秒）
+                    <input v-model.number="options.assignTime" type="number" min="10" max="600" class="opt-number" />
+                  </label>
+                  <label class="opt-label">转盘选择时长（秒）
+                    <input v-model.number="options.rotateTime" type="number" min="5" max="600" class="opt-number" />
+                  </label>
+                  <label class="opt-label">结算展示时长（秒）
+                    <input v-model.number="options.revealTime" type="number" min="2" max="60" class="opt-number" />
+                  </label>
+                </div>
+              </template>
+
               <!-- 数字占卜术：轮数 / 每轮时长 / 结算展示 -->
               <template v-if="pendingGame.id === 'number-divination'">
                 <p class="opt-hint">每人持有数字 1–10，每轮同时打出 1 个未使用过的数字。未重复的数字获得该数字分数，其中最大的数字双倍；重复数字中重复次数最多者，其所有玩家扣除该数字分数。共 N 轮，最终最高分且不并列者获胜。</p>
@@ -240,6 +256,8 @@ function onSelect(id: string, game?: MinigameDef) {
     options.gridSize = 400
     options.hideTime = 30
     options.turnTime = 20
+    options.assignTime = 90
+    options.rotateTime = 60
     options.questions = [{ text: '', optionA: '', optionB: '' }]
     if (game.id === 'describe-guess') {
       options.revealTime = 8
@@ -248,6 +266,9 @@ function onSelect(id: string, game?: MinigameDef) {
       options.roundCount = 10
       options.roundTime = 15
       options.revealTime = 5
+    }
+    if (game.id === 'poison-drink') {
+      options.revealTime = 8
     }
     uploadError.value = ''
     return

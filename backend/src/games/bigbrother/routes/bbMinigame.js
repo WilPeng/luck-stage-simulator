@@ -17,11 +17,35 @@ const BBMinigameReplay = require('../models/BBMinigameReplay')
 // 小游戏图片（拼图等）上传目录
 const BBGAME_DIR = path.join(__dirname, '..', '..', '..', '..', 'uploads', 'bbgame')
 try { if (!fs.existsSync(BBGAME_DIR)) fs.mkdirSync(BBGAME_DIR, { recursive: true }) } catch (e) { /* ignore */ }
+// 大文件分片上传临时目录
+const BBGAME_CHUNK_DIR = path.join(BBGAME_DIR, '.chunks')
+try { if (!fs.existsSync(BBGAME_CHUNK_DIR)) fs.mkdirSync(BBGAME_CHUNK_DIR, { recursive: true }) } catch (e) { /* ignore */ }
+
+// multer/busboy 默认按 latin1 解析文件名，中文文件名会乱码；这里尽量还原 UTF-8
+function decodeUploadName(name) {
+  if (!name) return ''
+  if ([...String(name)].some(ch => ch.charCodeAt(0) > 255)) return String(name)
+  try {
+    const decoded = Buffer.from(String(name), 'latin1').toString('utf8')
+    if (!decoded.includes('\uFFFD')) return decoded
+  } catch (e) { /* ignore */ }
+  return String(name)
+}
+
+function mediaKindOf(mime, filename) {
+  const m = String(mime || '')
+  if (m.startsWith('video/')) return 'video'
+  if (m.startsWith('audio/')) return 'audio'
+  const ext = path.extname(String(filename || '')).toLowerCase()
+  if (['.mp4', '.mov', '.webm', '.mkv', '.avi', '.m4v'].includes(ext)) return 'video'
+  if (['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'].includes(ext)) return 'audio'
+  return ''
+}
 const gameImageUpload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, BBGAME_DIR),
     filename: (req, file, cb) => {
-      const ext = (path.extname(file.originalname) || '.png').toLowerCase()
+      const ext = (path.extname(decodeUploadName(file.originalname)) || '.png').toLowerCase()
       cb(null, `bbgame-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`)
     }
   }),
@@ -44,13 +68,14 @@ const gameMediaUpload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, BBGAME_DIR),
     filename: (req, file, cb) => {
-      const ext = (path.extname(file.originalname) || '').toLowerCase()
+      const ext = (path.extname(decodeUploadName(file.originalname)) || '').toLowerCase()
       cb(null, `bbmedia-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`)
     }
   }),
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/')) return cb(null, true)
+    const kind = mediaKindOf(file.mimetype, file.originalname)
+    if (kind) return cb(null, true)
     cb(new Error('仅支持音频或视频文件'))
   }
 })
@@ -58,11 +83,131 @@ const gameMediaUpload = multer({
 router.post('/upload-media', auth, requireAdmin, gameMediaUpload.single('media'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, error: '未收到文件' })
-    const kind = req.file.mimetype.startsWith('video/') ? 'video' : 'audio'
-    res.json({ success: true, data: { url: `/uploads/bbgame/${req.file.filename}`, kind, mime: req.file.mimetype, name: req.file.originalname } })
+    const originalName = decodeUploadName(req.file.originalname)
+    const kind = mediaKindOf(req.file.mimetype, originalName) || 'video'
+    res.json({ success: true, data: { url: `/uploads/bbgame/${req.file.filename}`, kind, mime: req.file.mimetype, name: originalName } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '媒体上传失败' })
+  }
+})
+
+// ===== 大文件分片上传：绕过反向代理 1MB / 413 限制 =====
+const MEDIA_CHUNK_SIZE = 800 * 1024
+const mediaChunkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MEDIA_CHUNK_SIZE + 256 * 1024 }
+})
+
+function chunkDirOf(uploadId) {
+  return path.join(BBGAME_CHUNK_DIR, String(uploadId || '').replace(/[^a-zA-Z0-9_-]/g, ''))
+}
+
+// POST /upload-media/init - 初始化分片上传
+router.post('/upload-media/init', auth, requireAdmin, async (req, res) => {
+  try {
+    const { name, mime, size } = req.body || {}
+    const kind = mediaKindOf(mime, name)
+    if (!kind) return res.status(400).json({ success: false, error: '仅支持音频或视频文件' })
+    const maxSize = 2 * 1024 * 1024 * 1024
+    if (!size || Number(size) > maxSize) {
+      return res.status(400).json({ success: false, error: '文件过大（最大支持 2GB）' })
+    }
+    const uploadId = `mu-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    const dir = chunkDirOf(uploadId)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify({
+      name: decodeUploadName(name || ''),
+      mime: String(mime || ''),
+      size: Number(size) || 0,
+      createdAt: Date.now()
+    }), 'utf8')
+    res.json({ success: true, data: { uploadId, chunkSize: MEDIA_CHUNK_SIZE } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '初始化分片上传失败' })
+  }
+})
+
+// POST /upload-media/chunk - 上传单个分片
+router.post('/upload-media/chunk', auth, requireAdmin, mediaChunkUpload.single('chunk'), async (req, res) => {
+  try {
+    const { uploadId, index } = req.body || {}
+    if (!uploadId || index === undefined || index === null) {
+      return res.status(400).json({ success: false, error: '缺少分片信息' })
+    }
+    const dir = chunkDirOf(uploadId)
+    if (!fs.existsSync(path.join(dir, 'meta.json'))) {
+      return res.status(400).json({ success: false, error: '上传会话不存在或已过期' })
+    }
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ success: false, error: '未收到分片数据' })
+    }
+    const idx = parseInt(index, 10)
+    if (!Number.isInteger(idx) || idx < 0 || idx > 100000) {
+      return res.status(400).json({ success: false, error: '分片序号无效' })
+    }
+    fs.writeFileSync(path.join(dir, `${idx}.part`), req.file.buffer)
+    res.json({ success: true, data: { index: idx } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '分片上传失败' })
+  }
+})
+
+// POST /upload-media/complete - 合并分片并生成最终文件
+router.post('/upload-media/complete', auth, requireAdmin, async (req, res) => {
+  try {
+    const { uploadId, totalChunks } = req.body || {}
+    if (!uploadId) return res.status(400).json({ success: false, error: '缺少上传会话' })
+    const dir = chunkDirOf(uploadId)
+    const metaPath = path.join(dir, 'meta.json')
+    if (!fs.existsSync(metaPath)) {
+      return res.status(400).json({ success: false, error: '上传会话不存在或已过期' })
+    }
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'))
+    const total = parseInt(totalChunks, 10)
+    if (!Number.isInteger(total) || total <= 0) {
+      return res.status(400).json({ success: false, error: '分片数量无效' })
+    }
+    const parts = []
+    for (let i = 0; i < total; i++) {
+      const part = path.join(dir, `${i}.part`)
+      if (!fs.existsSync(part)) {
+        return res.status(400).json({ success: false, error: `缺少第 ${i + 1} 个分片` })
+      }
+      parts.push(part)
+    }
+    const originalName = decodeUploadName(meta.name || '')
+    const kind = mediaKindOf(meta.mime, originalName) || 'video'
+    const ext = (path.extname(originalName) || (kind === 'video' ? '.mp4' : '.mp3')).toLowerCase()
+    const filename = `bbmedia-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`
+    const finalPath = path.join(BBGAME_DIR, filename)
+
+    const out = fs.createWriteStream(finalPath)
+    for (const part of parts) {
+      await new Promise((resolve, reject) => {
+        const rs = fs.createReadStream(part)
+        rs.on('error', reject)
+        rs.on('end', resolve)
+        rs.pipe(out, { end: false })
+      })
+    }
+    await new Promise((resolve, reject) => {
+      out.on('error', reject)
+      out.on('finish', resolve)
+      out.end()
+    })
+    try { fs.rmSync(dir, { recursive: true, force: true }) } catch (e) { /* ignore */ }
+    res.json({ success: true, data: {
+      url: `/uploads/bbgame/${filename}`,
+      kind,
+      mime: meta.mime || '',
+      name: originalName
+    } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '合并分片失败' })
   }
 })
 
@@ -171,7 +316,9 @@ router.get('/list', async (req, res) => {
           icon: obj.icon,
           category: 'custom',
           playerCount: obj.playerCount,
-          duration: obj.type === 'score' ? obj.timeLimit : Math.max(60, obj.questions.length * 15),
+          duration: (obj.type === 'lives-build' || obj.type === 'race-score')
+            ? 3600
+            : (obj.type === 'score' ? obj.timeLimit : Math.max(60, obj.questions.length * 15)),
           type: obj.type,
           isCustom: true,
           _libraryKey: obj.id
@@ -490,6 +637,19 @@ router.post('/stop', async (req, res) => {
     console.error(e)
     res.status(500).json({ success: false, error: '停止游戏失败' })
   }
+})
+
+// 统一处理 multer 上传错误，返回 JSON 而不是 HTML 413
+router.use((err, req, res, next) => {
+  if (!err) return next()
+  if (err.code === 'LIMIT_FILE_SIZE' || err.name === 'MulterError') {
+    return res.status(413).json({ success: false, error: '上传内容过大，请使用分片上传或压缩文件' })
+  }
+  if (err.message === '仅支持音频或视频文件' || err.message === '仅支持图片文件') {
+    return res.status(400).json({ success: false, error: err.message })
+  }
+  console.error(err)
+  res.status(500).json({ success: false, error: '上传失败' })
 })
 
 module.exports = router

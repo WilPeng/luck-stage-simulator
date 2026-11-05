@@ -388,7 +388,41 @@ async function exportCsv() {
 
 // ===== 导入表格：CSV 列名 名称/姓名 + 登录码（可带 状态/角色）=====
 const importBusy = ref(false)
-function parseCsv(text: string): string[][] {
+
+// 兼容 UTF-8 / UTF-16 / GBK / GB18030 编码，避免中文姓名乱码
+async function readTextFileCompat(file: File): Promise<string> {
+  const buf = await file.arrayBuffer()
+  const bytes = new Uint8Array(buf)
+  if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    return new TextDecoder('utf-16le').decode(bytes)
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+    return new TextDecoder('utf-16be').decode(bytes)
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '')
+  } catch { /* not UTF-8 */ }
+  for (const enc of ['gb18030', 'gbk']) {
+    try {
+      return new TextDecoder(enc).decode(bytes).replace(/^\uFEFF/, '')
+    } catch { /* try next */ }
+  }
+  return new TextDecoder('utf-8').decode(bytes).replace(/^\uFEFF/, '')
+}
+
+function detectDelimiter(text: string): string {
+  const firstLine = text.split(/\r?\n/).find(line => line.trim() !== '') || ''
+  const candidates = [',', '\t', ';', '，']
+  let best = ','
+  let bestCount = -1
+  for (const d of candidates) {
+    const count = firstLine.split(d).length - 1
+    if (count > bestCount) { bestCount = count; best = d }
+  }
+  return best
+}
+
+function parseCsv(text: string, delimiter = ','): string[][] {
   const rows: string[][] = []
   let row: string[] = []
   let cur = ''
@@ -402,7 +436,7 @@ function parseCsv(text: string): string[][] {
       } else cur += ch
     } else if (ch === '"') {
       inQuote = true
-    } else if (ch === ',') {
+    } else if (ch === delimiter) {
       row.push(cur); cur = ''
     } else if (ch === '\n' || ch === '\r') {
       if (ch === '\r' && src[i + 1] === '\n') i++
@@ -418,6 +452,10 @@ function parseCsv(text: string): string[][] {
   return rows
 }
 
+function cleanCell(v: string | undefined): string {
+  return String(v == null ? '' : v).replace(/[\u200B-\u200D\uFEFF]/g, '').trim()
+}
+
 async function onImportFile(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
@@ -425,30 +463,38 @@ async function onImportFile(e: Event) {
   if (importBusy.value) return
   importBusy.value = true
   try {
-    const text = await file.text()
-    const rows = parseCsv(text)
+    const text = await readTextFileCompat(file)
+    const rows = parseCsv(text, detectDelimiter(text))
     if (rows.length === 0) { alert('文件为空或格式错误'); return }
-    // 找表头/列位置
+    // 找表头/列位置（兼容中文表头：姓名/名字/名称/账号/登录码/密码/状态/角色）
     let nameIdx = 0, usernameIdx = 1, passwordIdx = 2, statusIdx = -1, roleIdx = -1
-    const first = rows[0].map(c => c.trim().toLowerCase())
-    if (first.some(c => c.includes('名'))) {
-      nameIdx = first.findIndex(c => c.includes('名')) >= 0 ? first.findIndex(c => c.includes('名')) : 0
-      usernameIdx = first.findIndex(c => c.includes('账号')) >= 0
-        ? first.findIndex(c => c.includes('账号'))
-        : first.findIndex(c => c.includes('登录'))
-      passwordIdx = first.findIndex(c => c.includes('密码'))
-      statusIdx = first.findIndex(c => c.includes('状态'))
-      roleIdx = first.findIndex(c => c.includes('角色'))
+    const first = rows[0].map(c => cleanCell(c).toLowerCase())
+    const hasHeader = first.some(c =>
+      ['姓名', '名字', '名称', '房客', '昵称', '账号', '登录', '密码', '状态', '角色', 'username', 'name'].some(k => c.includes(k))
+    )
+    if (hasHeader) {
+      const find = (...keys: string[]) => first.findIndex(c => keys.some(k => c.includes(k)))
+      const ni = find('姓名', '名字', '名称', '房客', '昵称', 'name', '名')
+      const ui = find('账号', '登录码', '登录', '用户名', 'username')
+      nameIdx = ni >= 0 ? ni : 0
+      usernameIdx = ui >= 0 ? ui : -1
+      passwordIdx = find('密码', 'password')
+      statusIdx = find('状态', 'status')
+      roleIdx = find('角色', 'role')
       rows.shift()
+    }
+    if (usernameIdx < 0) {
+      alert('未找到账号列，请确认表格包含「账号」或「登录码」列')
+      return
     }
     const existing = await fetchAllHouseguests()
     const existingUsers = new Set(existing.map(h => h.username))
     let ok = 0, skip = 0, fail = 0
     const messages: string[] = []
     for (const r of rows) {
-      const name = (r[nameIdx] || '').trim()
-      const username = (r[usernameIdx] || '').trim()
-      const password = (passwordIdx >= 0 ? (r[passwordIdx] || '').trim() : '')
+      const name = cleanCell(r[nameIdx])
+      const username = cleanCell(r[usernameIdx])
+      const password = passwordIdx >= 0 ? cleanCell(r[passwordIdx]) : ''
       if (!name) { skip++; continue }
       if (!username) { fail++; messages.push(`「${name}」缺少账号`); continue }
       if (existingUsers.has(username)) { skip++; messages.push(`账号 ${username} 已存在，跳过 ${name}`); continue }

@@ -143,8 +143,18 @@ function createCustomGameHandler(gameDef) {
   }
 
   function canSubmit(ps) {
-    if (maxAttempts > 0 && ps.attemptsUsed >= maxAttempts) return { ok: false, error: '提交次数已用完' }
-    if (ps.cooldownUntil > Date.now()) return { ok: false, error: `冷却中，还需 ${cooldownRemaining(ps)} 秒` }
+    if (maxAttempts > 0 && ps.attemptsUsed >= maxAttempts) {
+      return { ok: false, error: '提交次数已用完', code: 'attempts_exhausted' }
+    }
+    if (ps.cooldownUntil > Date.now()) {
+      return {
+        ok: false,
+        error: `冷却中，还需 ${cooldownRemaining(ps)} 秒`,
+        code: 'cooldown',
+        cooldown: true,
+        cooldownRemaining: cooldownRemaining(ps)
+      }
+    }
     return { ok: true }
   }
 
@@ -167,21 +177,34 @@ function createCustomGameHandler(gameDef) {
   }
 
   // 批量反馈（严格执行答错反馈设置，不向选手透露正确答案）
-  function batchFeedback(ps, gradedCorrect, gradedCount, wrongAnswers) {
+  // 例外：批量提交 + 首个全对即胜（first_correct）时，必须告知本次提交中哪些题答错了，
+  // 否则选手无法判断距离「全部正确」还差多少题。
+  function batchFeedback(ps, gradedCorrect, gradedCount, wrongQuestionIds, correctQuestionIds) {
     const fb = gameDef.wrongFeedback
-    // 不告知：不透露本次提交中任何题目的对错
-    if (fb === 'none') return { submitted: true }
+    const mustRevealWrong = gameDef.winCondition === 'first_correct'
+    const wrongIds = Array.isArray(wrongQuestionIds) ? wrongQuestionIds : []
+    const correctIds = Array.isArray(correctQuestionIds) ? correctQuestionIds : []
+    // 不告知：不透露本次提交中任何题目的对错（first_correct 除外）
+    if (fb === 'none' && !mustRevealWrong) return { submitted: true }
     // 仅全部答对时告知：未全部答对前保持中立
-    if (fb === 'all_correct_only') {
+    if (fb === 'all_correct_only' && !mustRevealWrong) {
       if (ps.correctCount >= totalQuestions) {
         return { correct: true, correctCount: ps.correctCount, totalQuestions }
       }
       return { submitted: true }
     }
     // 告知答对数量（不告知具体题目）
-    if (fb === 'count') return { submitted: true, correctCount: ps.correctCount }
-    // reveal 及其他：保留原有反馈
-    return { correct: gradedCorrect > 0, gradedCorrect, gradedCount, correctCount: ps.correctCount }
+    if (fb === 'count' && !mustRevealWrong) return { submitted: true, correctCount: ps.correctCount }
+    // reveal / first_correct：告知本次提交中每题的对错（仍不透露正确答案）
+    return {
+      correct: gradedCorrect > 0,
+      gradedCorrect,
+      gradedCount,
+      correctCount: ps.correctCount,
+      wrongQuestionIds: wrongIds,
+      correctQuestionIds: correctIds,
+      wrongCount: wrongIds.length
+    }
   }
 
   return {
@@ -233,7 +256,7 @@ function createCustomGameHandler(gameDef) {
       if (isAdminJudge) {
         if (action.type !== 'answer' && action.type !== 'submit_all') return { updated: false }
         const c = canSubmit(ps)
-        if (!c.ok) return { updated: false, result: { error: c.error } }
+        if (!c.ok) return { updated: false, result: { error: c.error, code: c.code, cooldown: !!c.cooldown, cooldownRemaining: c.cooldownRemaining } }
         if (!ps.startTime) ps.startTime = Date.now()
         ps.attemptsUsed++
         ps.cooldownUntil = Date.now() + cooldownMs
@@ -280,14 +303,15 @@ function createCustomGameHandler(gameDef) {
       if (action.type === 'submit_all' || (submitMode === 'batch' && action.type === 'answer')) {
         const input = action.answers || (action.type === 'answer' ? { [action.questionId]: action.answer } : {})
         const c = canSubmit(ps)
-        if (!c.ok) return { updated: false, result: { error: c.error } }
+        if (!c.ok) return { updated: false, result: { error: c.error, code: c.code, cooldown: !!c.cooldown, cooldownRemaining: c.cooldownRemaining } }
         if (!ps.startTime) ps.startTime = Date.now()
         ps.attemptsUsed++
         ps.cooldownUntil = Date.now() + cooldownMs
 
         let gradedCorrect = 0
         let gradedCount = 0
-        const wrongAnswers = {}
+        const wrongQuestionIds = []
+        const correctQuestionIds = []
         for (const q of ps.questions) {
           if (ps.locked[q.id]) continue
           if (ps.answers[q.id] && ps.answers[q.id].correct) continue
@@ -300,20 +324,26 @@ function createCustomGameHandler(gameDef) {
             gradedCorrect++
             ps.correctCount++
             ps.score += q.points
+            correctQuestionIds.push(q.id)
           } else if (gameDef.lockOnWrong) {
             ps.locked[q.id] = true
+            wrongQuestionIds.push(q.id)
           } else {
-            wrongAnswers[q.id] = q.correctAnswer
+            wrongQuestionIds.push(q.id)
           }
         }
 
         let finished = false
-        if (isWinAchieved(ps)) {
+        // 批量提交 + 首个全部答对即胜：只要本题集全部答对，立即结束比赛
+        const batchFirstCorrectWin = gameDef.winCondition === 'first_correct'
+          && totalQuestions > 0
+          && ps.correctCount >= totalQuestions
+        if (isWinAchieved(ps) || batchFirstCorrectWin) {
           ps.done = true
           ps.finishTime = Date.now()
           finished = true
         }
-        const result = batchFeedback(ps, gradedCorrect, gradedCount, wrongAnswers)
+        const result = batchFeedback(ps, gradedCorrect, gradedCount, wrongQuestionIds, correctQuestionIds)
         return { updated: true, finished, winner: finished ? playerId : undefined, result }
       }
 
@@ -324,16 +354,17 @@ function createCustomGameHandler(gameDef) {
         if (ps.locked[q.id]) { advanceIndex(ps); return { updated: false, result: { error: '该题已锁定' } } }
 
         const c = canSubmit(ps)
-        if (!c.ok) return { updated: false, result: { error: c.error } }
+        if (!c.ok) return { updated: false, result: { error: c.error, code: c.code, cooldown: !!c.cooldown, cooldownRemaining: c.cooldownRemaining } }
         if (!ps.startTime) ps.startTime = Date.now()
         ps.attemptsUsed++
-        ps.cooldownUntil = Date.now() + cooldownMs
 
         const userAnswer = String(action.answer == null ? '' : action.answer).trim()
         const correct = grade(q, userAnswer)
         ps.answers[q.id] = { userAnswer, correct, points: correct ? q.points : 0, submitTime: Date.now() }
 
         if (correct) {
+          // 答对切换下一题时不再进入冷却，逐题模式可以立刻继续作答
+          ps.cooldownUntil = 0
           ps.correctCount++
           ps.score += q.points
           advanceIndex(ps)
@@ -348,12 +379,23 @@ function createCustomGameHandler(gameDef) {
             ps.finishTime = Date.now()
             return { updated: true, finished: true, winner: playerId, result: { correct: true } }
           }
-        } else if (gameDef.lockOnWrong) {
-          ps.locked[q.id] = true
-          advanceIndex(ps)
+        } else {
+          // 只有答错才进入提交冷却
+          if (cooldownMs > 0) ps.cooldownUntil = Date.now() + cooldownMs
+          if (gameDef.lockOnWrong) {
+            ps.locked[q.id] = true
+            advanceIndex(ps)
+          }
         }
 
-        return { updated: true, finished: false, result: singleFeedback(ps, q, correct) }
+        return {
+          updated: true,
+          finished: false,
+          result: {
+            ...singleFeedback(ps, q, correct),
+            cooldownRemaining: cooldownRemaining(ps)
+          }
+        }
       }
 
       return { updated: false }
@@ -439,8 +481,10 @@ function createCustomGameHandler(gameDef) {
 
       if (submitMode === 'batch' || isAdminJudge) {
         const allCorrect = ps.correctCount >= totalQuestions
-        // 仅“告知正确答案”模式下才下发每题对错，避免其他反馈设置泄露结果
+        // 仅“告知正确答案”模式，或批量提交+首个全对即胜时下发每题对错，
+        // 避免其他反馈设置泄露结果；first_correct 需要让选手知道错在哪几题。
         const revealPerQuestion = gameDef.wrongFeedback === 'reveal'
+          || (gameDef.winCondition === 'first_correct' && !isAdminJudge)
         base.questions = ps.questions.map(q => {
           const rec = ps.answers[q.id]
           const item = {

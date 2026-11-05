@@ -51,6 +51,21 @@ class BBCustomGame extends BaseModel {
     // 数字加时题限时（秒）
     this.tiebreakTimeLimit = data.tiebreakTimeLimit ?? 30
 
+    // ===== 模式6：记忆回溯（生命值） =====
+    // 每位选手初始生命值
+    this.lives = data.lives ?? 2
+
+    // ===== 模式7：众里寻他千百度（抢分赛） =====
+    // 目标总分（先到者胜）
+    this.raceTarget = data.raceTarget ?? 10
+    // 每题按答对顺序获得的分数，如 [4, 2, 1]
+    this.racePoints = Array.isArray(data.racePoints) && data.racePoints.length
+      ? data.racePoints.map(n => Math.max(0, parseInt(n, 10) || 0))
+      : [4, 2, 1]
+
+    // 模式6/7 每轮结算展示时长（秒）
+    this.revealTime = data.revealTime ?? 5
+
     // ===== 通用规则 =====
     // 提交方式：single=单题提交，batch=全部一起提交
     this.submitMode = data.submitMode || 'single'

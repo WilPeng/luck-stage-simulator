@@ -8,7 +8,7 @@
  *  score-tb    模式5：限时可切换答案，正确积 1 分，基本题结束后唯一最高分获胜，否则数字加时题
  */
 
-const MODE_TYPES = ['elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb']
+const MODE_TYPES = ['elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb', 'lives-build', 'race-score']
 
 function normalize(v) {
   return String(v == null ? '' : v).trim().toLowerCase()
@@ -58,6 +58,15 @@ function createModeHandler(gameDef) {
   // 模式1/2/3 的每题限时（管理员可设置，默认 30s）
   const answerLimitMs = (gameDef.answerTimeLimit || gameDef.basicTimeLimit || 30) * 1000
   const REVEAL_MS = 3000
+  // 模式6（记忆回溯）：初始生命值
+  const initialLives = Math.max(1, parseInt(gameDef.lives, 10) || 2)
+  // 模式7（众里寻他千百度）：目标分与名次得分
+  const raceTarget = Math.max(1, parseInt(gameDef.raceTarget, 10) || 10)
+  const racePoints = Array.isArray(gameDef.racePoints) && gameDef.racePoints.length
+    ? gameDef.racePoints.map(n => Math.max(0, parseInt(n, 10) || 0))
+    : [4, 2, 1]
+  // 模式6/7 每轮结算展示时长
+  const modeRevealMs = Math.max(1, parseInt(gameDef.revealTime, 10) || 5) * 1000
 
   function limitFor(state) {
     if (state.tiebreak) return tbLimitMs
@@ -91,9 +100,12 @@ function createModeHandler(gameDef) {
         alive: true,
         eliminated: false,
         score: 0,
+        lives: initialLives,
         answer: null,
         answered: false,
         correct: null,
+        correctAt: 0,
+        roundPoints: 0,
         submittedAt: 0,
         locked: false,
         inTiebreak: false
@@ -116,6 +128,13 @@ function createModeHandler(gameDef) {
       finished: false,
       winner: null,
       started: false,
+      // 模式6/7 运行时数据
+      lives: initialLives,
+      raceTarget,
+      racePoints,
+      correctOrder: [],
+      roundAwards: {},
+      pendingWinner: null,
       _replayEvents: [],
       ps
     }
@@ -141,12 +160,17 @@ function createModeHandler(gameDef) {
       p.answer = null
       p.answered = false
       p.correct = null
+      p.correctAt = 0
+      p.roundPoints = 0
       p.submittedAt = 0
       p.locked = false
     })
     state.order = []
     state.roundResult = null
     state.firstId = null
+    state.correctOrder = []
+    state.roundAwards = {}
+    state.pendingWinner = null
   }
 
   function finishWith(state, winnerId) {
@@ -336,6 +360,95 @@ function createModeHandler(gameDef) {
     return false
   }
 
+  // ===================== 模式6：记忆回溯（生命值） =====================
+  function resolveLivesRound(state, timedOut) {
+    if (state.phase !== 'answering') return false
+    const alive = aliveList(state)
+    for (const p of alive) {
+      if (!p.correct) p.correct = false
+    }
+    const correctOnes = alive
+      .filter(p => p.answered && p.correct)
+      .sort((a, b) => (a.correctAt || 0) - (b.correctAt || 0))
+    let loser = null
+    if (correctOnes.length === alive.length) {
+      // 全部答对：最后一个答对（最慢）的选手失去 1 点生命
+      loser = correctOnes[correctOnes.length - 1]
+    } else {
+      // 超时仍有未答对者：最后一个未答对者失去 1 点生命
+      const notCorrect = alive.filter(p => !(p.answered && p.correct))
+      loser = notCorrect.length ? notCorrect[notCorrect.length - 1] : correctOnes[correctOnes.length - 1] || null
+    }
+    let eliminated = false
+    if (loser) {
+      loser.lives = Math.max(0, (loser.lives == null ? initialLives : loser.lives) - 1)
+      if (loser.lives <= 0) {
+        loser.alive = false
+        loser.eliminated = true
+        eliminated = true
+      }
+      pushEvent(state, 'eliminate', `${loser.playerName} 失去 1 点生命${eliminated ? '，生命耗尽出局' : `（剩余 ${loser.lives} 点）`}`, {
+        playerId: loser.playerId, lives: loser.lives, eliminated
+      })
+    }
+    state.roundResult = {
+      lives: true,
+      loserId: loser ? loser.playerId : null,
+      livesLeft: loser ? loser.lives : null,
+      eliminated,
+      timedOut: !!timedOut,
+      correctOrder: correctOnes.map(p => ({ playerId: p.playerId, at: p.correctAt })),
+      livesMap: Object.fromEntries(alive.map(p => [p.playerId, p.lives]))
+    }
+    state.phase = 'reveal'
+    state.nextAt = Date.now() + modeRevealMs
+    return false
+  }
+
+  function advanceLives(state) {
+    const alive = aliveList(state)
+    if (alive.length <= 1) return finishWith(state, alive[0] ? alive[0].playerId : null)
+    state.qIndex = (state.qIndex + 1) % Math.max(1, basicQuestions.length)
+    beginQuestion(state, basicQuestions[state.qIndex])
+    return false
+  }
+
+  // ===================== 模式7：众里寻他千百度（抢分赛） =====================
+  function resolveRaceRound(state, timedOut) {
+    if (state.phase !== 'answering') return false
+    const alive = aliveList(state)
+    let winner = null
+    for (const rec of state.correctOrder) {
+      const p = state.ps[rec.playerId]
+      if (p && (p.score || 0) >= raceTarget) { winner = p.playerId; break }
+    }
+    state.pendingWinner = winner
+    state.roundResult = {
+      race: true,
+      order: state.correctOrder.map(r => ({ ...r })),
+      awards: { ...state.roundAwards },
+      scores: Object.fromEntries(alive.map(p => [p.playerId, p.score || 0])),
+      timedOut: !!timedOut
+    }
+    const detail = state.correctOrder.map(r => {
+      const p = state.ps[r.playerId]
+      return `${nameOf(state, r.playerId)} 第${r.rank}位 +${r.points}`
+    }).join('；')
+    pushEvent(state, 'round', `第${state.qIndex + 1}题结算：${detail || '无人答对'}`, state.roundResult)
+    state.phase = 'reveal'
+    state.nextAt = Date.now() + modeRevealMs
+    return false
+  }
+
+  function advanceRace(state) {
+    if (state.pendingWinner) return finishWith(state, state.pendingWinner)
+    const alive = aliveList(state)
+    if (alive.length <= 1) return finishWith(state, alive[0] ? alive[0].playerId : null)
+    state.qIndex = (state.qIndex + 1) % Math.max(1, basicQuestions.length)
+    beginQuestion(state, basicQuestions[state.qIndex])
+    return false
+  }
+
   // ===================== 模式4 / 模式5 =====================
   function setupTiebreak(state) {
     const alive = aliveList(state)
@@ -487,6 +600,26 @@ function createModeHandler(gameDef) {
       return false
     }
 
+    if (mode === 'lives-build') {
+      if (state.phase === 'answering' && state.deadline && now >= state.deadline) {
+        return resolveLivesRound(state, true)
+      }
+      if (state.phase === 'reveal' && state.nextAt && now >= state.nextAt) {
+        return advanceLives(state)
+      }
+      return false
+    }
+
+    if (mode === 'race-score') {
+      if (state.phase === 'answering' && state.deadline && now >= state.deadline) {
+        return resolveRaceRound(state, true)
+      }
+      if (state.phase === 'reveal' && state.nextAt && now >= state.nextAt) {
+        return advanceRace(state)
+      }
+      return false
+    }
+
     if (mode === 'survive-tb' || mode === 'score-tb') {
       if (state.phase === 'answering' && state.deadline && now >= state.deadline) {
         return lockRound(state)
@@ -533,11 +666,23 @@ function createModeHandler(gameDef) {
           if (state.phase === 'reveal') return { updated: true, finished: advanceDuel(state) }
           return { updated: true }
         }
+        if (mode === 'lives-build') {
+          if (state.phase === 'reveal') return { updated: true, finished: advanceLives(state) }
+          if (state.phase === 'answering') return { updated: true, finished: resolveLivesRound(state, false) }
+          return { updated: true }
+        }
+        if (mode === 'race-score') {
+          if (state.phase === 'reveal') return { updated: true, finished: advanceRace(state) }
+          if (state.phase === 'answering') return { updated: true, finished: resolveRaceRound(state, false) }
+          return { updated: true }
+        }
         if (state.phase === 'reveal') return { updated: true, finished: advanceLimit(state) }
         if (state.phase === 'answering') return { updated: true, finished: lockRound(state) }
         return { updated: true }
       }
       if (action.type === 'lock') {
+        if (mode === 'lives-build') return { updated: true, finished: resolveLivesRound(state, false) }
+        if (mode === 'race-score') return { updated: true, finished: resolveRaceRound(state, false) }
         return { updated: true, finished: lockRound(state) }
       }
       if (mode === 'duel' && action.type === 'pick_pair') {
@@ -586,6 +731,70 @@ function createModeHandler(gameDef) {
         p.submittedAt = Date.now()
         return { updated: true, finished: false }
       }
+      if (mode === 'lives-build') {
+        if (state.phase !== 'answering' || !p.alive) return { updated: false }
+        if (Date.now() >= state.deadline) return { updated: false }
+        if (p.answered && p.correct) return { updated: false }
+        p.answer = action.answer
+        const correct = gradeQuestion(state._q, action.answer)
+        if (!correct) {
+          // 答错：数字清零，可在本轮继续重试（不进入冷却）
+          p.correct = false
+          p.answered = false
+          return { updated: true, finished: false, result: { correct: false, reset: true, retry: true } }
+        }
+        p.correct = true
+        p.answered = true
+        p.correctAt = Date.now()
+        p.submittedAt = p.correctAt
+        const alive = aliveList(state)
+        if (alive.every(x => x.correct)) resolveLivesRound(state, false)
+        return { updated: true, finished: false, result: { correct: true, lives: p.lives } }
+      }
+
+      if (mode === 'race-score') {
+        if (state.phase !== 'answering' || !p.alive) return { updated: false }
+        if (Date.now() >= state.deadline) return { updated: false }
+        if (p.correct) return { updated: false }
+        p.answer = action.answer
+        const correct = gradeQuestion(state._q, action.answer)
+        if (!correct) {
+          // 答错不结束本题，可继续尝试（不公布正确答案）
+          return { updated: true, finished: false, result: { correct: false, retry: true } }
+        }
+        p.correct = true
+        p.answered = true
+        p.correctAt = Date.now()
+        p.submittedAt = p.correctAt
+        const rank = state.correctOrder.length
+        if (rank < racePoints.length) {
+          const points = racePoints[rank]
+          p.roundPoints = points
+          p.score = (p.score || 0) + points
+          state.roundAwards[p.playerId] = points
+          state.correctOrder.push({ playerId, at: p.correctAt, points, rank: rank + 1 })
+          pushEvent(state, 'answer', `${p.playerName} 第${rank + 1}位答对，+${points} 分`, {
+            playerId, rank: rank + 1, points, score: p.score
+          })
+        }
+        const alive = aliveList(state)
+        const allCorrect = alive.every(x => x.correct)
+        // 一旦有人达到目标总分，立即结束本题并进入最终结算
+        if ((p.score || 0) >= raceTarget || state.correctOrder.length >= racePoints.length || allCorrect) {
+          resolveRaceRound(state, false)
+        }
+        return {
+          updated: true,
+          finished: false,
+          result: {
+            correct: true,
+            points: p.roundPoints,
+            score: p.score,
+            rank: state.correctOrder.find(r => r.playerId === playerId)?.rank || null
+          }
+        }
+      }
+
       if (mode === 'survive-tb' || mode === 'score-tb') {
         if (state.phase !== 'answering') return { updated: false }
         if (!p.alive) return { updated: false }
@@ -619,7 +828,7 @@ function createModeHandler(gameDef) {
   }
 
   function buildPlayers(state, viewerId) {
-    const showAnswers = mode === 'survive-tb' || mode === 'score-tb'
+    const showAnswers = mode === 'survive-tb' || mode === 'score-tb' || mode === 'lives-build' || mode === 'race-score'
     const showSubs = gameDef.showSubmissions !== false
     return Object.values(state.ps).map(p => {
       const row = {
@@ -633,11 +842,17 @@ function createModeHandler(gameDef) {
         locked: p.locked,
         inTiebreak: p.inTiebreak
       }
+      if (mode === 'lives-build') {
+        row.lives = p.lives
+      }
+      if (mode === 'race-score') {
+        row.roundPoints = p.roundPoints
+      }
       const revealPhase = state.phase === 'reveal' || state.finished
       // 作答阶段只暴露“是否已提交”，答案/对错仅在揭晓后展示，避免泄露
       if (revealPhase && (showAnswers || showSubs)) {
         row.answer = p.answer
-        if (!showAnswers) row.correct = p.correct
+        if (!showAnswers || mode === 'lives-build' || mode === 'race-score') row.correct = p.correct
       }
       if (mode === 'duel' && state.current) row.inDuel = state.current.includes(p.playerId)
       return row
@@ -652,7 +867,9 @@ function createModeHandler(gameDef) {
       status: state.status,
       phase: state.phase,
       qIndex: state.qIndex,
-      totalQuestions: (mode === 'survive-tb' || mode === 'score-tb') ? basicQuestions.length : allQuestions.length,
+      totalQuestions: (mode === 'survive-tb' || mode === 'score-tb' || mode === 'lives-build' || mode === 'race-score')
+        ? basicQuestions.length
+        : allQuestions.length,
       question: state.question || null,
       deadline: state.deadline || 0,
       serverNow: Date.now(),
@@ -671,15 +888,29 @@ function createModeHandler(gameDef) {
       winner: state.winner || null,
       finished: !!state.finished
     }
+    if (mode === 'lives-build') {
+      base.lives = state.lives
+      base.livesMap = Object.fromEntries(Object.values(state.ps).map(x => [x.playerId, x.lives]))
+    }
+    if (mode === 'race-score') {
+      base.raceTarget = state.raceTarget
+      base.racePoints = state.racePoints
+      base.correctOrder = state.correctOrder.map(r => ({ ...r }))
+      base.roundAwards = { ...state.roundAwards }
+      base.pendingWinner = state.pendingWinner || null
+    }
     if (p) {
       base.my = {
         playerId,
         alive: p.alive,
         eliminated: p.eliminated,
         score: p.score,
+        lives: p.lives,
         answered: p.answered,
         myAnswer: p.answer,
         correct: p.correct,
+        correctAt: p.correctAt,
+        roundPoints: p.roundPoints,
         inTiebreak: p.inTiebreak,
         canAnswer: state.phase === 'answering' && p.alive &&
           (mode !== 'duel' || (state.current && state.current.includes(playerId))) &&
@@ -687,6 +918,8 @@ function createModeHandler(gameDef) {
           !(mode === 'elim-last' && p.answered) &&
           !(mode === 'first-pick' && state.firstId) &&
           !(mode === 'duel' && state.firstId) &&
+          !(mode === 'lives-build' && p.answered && p.correct) &&
+          !(mode === 'race-score' && p.correct) &&
           !(state.deadline && Date.now() >= state.deadline),
         canPick: mode === 'first-pick' && state.phase === 'picking' && playerId === state.pickerId
       }
@@ -700,14 +933,17 @@ function createModeHandler(gameDef) {
       const p = state.ps[pid]
       let label = p.alive ? '存活' : '已出局'
       if (mode === 'score-tb') label += ` · ${p.score}分`
-      if (p.answered) label += ' · 已作答'
+      if (mode === 'race-score') label = `${p.score || 0} 分`
+      if (mode === 'lives-build') label = `❤️ ${p.lives}`
+      if (p.answered && mode !== 'lives-build') label += ' · 已作答'
       out[pid] = {
-        score: mode === 'score-tb' ? p.score : (p.alive ? 1 : 0),
-        progress: p.score,
+        score: (mode === 'score-tb' || mode === 'race-score') ? p.score : (mode === 'lives-build' ? p.lives : (p.alive ? 1 : 0)),
+        progress: mode === 'lives-build' ? p.lives : p.score,
         max: 0,
         done: !p.alive || state.finished,
         label,
         alive: p.alive,
+        lives: p.lives,
         answered: p.answered,
         answer: (state.phase === 'reveal' || state.finished) ? p.answer : undefined
       }
@@ -724,6 +960,9 @@ function createModeHandler(gameDef) {
     const p = state.ps[playerId]
     const pname = p ? p.playerName : playerId
     const t = action && action.type
+    if ((t === 'answer' || t === 'set_answer') && (mode === 'lives-build' || mode === 'race-score')) {
+      return { text: `${pname} 提交了答案`, data: { correct: result ? result.correct : undefined } }
+    }
     if (t === 'answer' || t === 'set_answer') {
       return { text: `${pname} 作答：${action.answer}`, data: { answer: action.answer, correct: result ? result.correct : undefined } }
     }
@@ -736,6 +975,41 @@ function createModeHandler(gameDef) {
       return { text: `${pname} 指定对决：${ids.map(id => nameOf(state, id)).join(' vs ')}`, data: { ids } }
     }
     return null
+  }
+
+  // 管理员完整局面（含隐藏信息）
+  function getReplaySnapshot(state) {
+    const summary = {
+      模式: mode,
+      阶段: state.phase,
+      题号: `${Math.min(state.qIndex + 1, basicQuestions.length || allQuestions.length || 1)}/${basicQuestions.length || allQuestions.length || 1}`
+    }
+    if (mode === 'lives-build') summary['生命值'] = initialLives
+    if (mode === 'race-score') {
+      summary['目标分'] = raceTarget
+      summary['名次得分'] = racePoints.join(' / ')
+      if (state.correctOrder.length) {
+        summary['本题答对顺序'] = state.correctOrder.map(r => `${nameOf(state, r.playerId)} +${r.points}`).join('、')
+      }
+    }
+    if (state.roundResult && state.roundResult.race) {
+      summary['上题结算'] = (state.roundResult.order || []).map(r => `${nameOf(state, r.playerId)} 第${r.rank}位 +${r.points}`).join('、') || '无人答对'
+    }
+    if (state.roundResult && state.roundResult.lives && state.roundResult.loserId) {
+      summary['上轮失去生命'] = nameOf(state, state.roundResult.loserId)
+    }
+    const players = {}
+    for (const p of Object.values(state.ps)) {
+      players[p.playerId] = {
+        分数: p.score || 0,
+        生命: p.lives,
+        存活: !!p.alive,
+        本题状态: p.correct ? '已答对' : (p.answer != null ? '已提交' : '未作答'),
+        本题得分: p.roundPoints || 0,
+        答案: p.answer == null ? '—' : p.answer
+      }
+    }
+    return { type: 'custom-mode', mode, summary, players }
   }
 
   // 复盘：取出处理器内部产生的事件（回合结算/淘汰/加时等）
@@ -751,7 +1025,10 @@ function createModeHandler(gameDef) {
     description: gameDef.description,
     category: 'custom',
     playerCount: gameDef.playerCount,
-    duration: Math.max(300, (basicQuestions.length * (gameDef.basicTimeLimit || 30)) + (gameDef.tiebreakTimeLimit || 30) + 60),
+    duration: (mode === 'lives-build' || mode === 'race-score')
+      ? 3600
+      : Math.max(300, (basicQuestions.length * (gameDef.basicTimeLimit || 30)) + (gameDef.tiebreakTimeLimit || 30) + 60),
+    privateActions: (mode === 'lives-build' || mode === 'race-score') ? ['answer', 'set_answer'] : [],
     needsServerTick: true,
     serverTickMs: 500,
     broadcastState: true,

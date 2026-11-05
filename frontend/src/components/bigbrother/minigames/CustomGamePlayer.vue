@@ -8,7 +8,7 @@
         <span class="winner-label">获胜！</span>
       </div>
       <div v-else class="winner-info"><span class="winner-label">无胜者</span></div>
-      <div class="final-stats">
+      <div v-if="!isModeGame" class="final-stats">
         <div>最终得分: {{ score }}</div>
         <div>答对: {{ correctCount }}/{{ totalQuestions }}</div>
       </div>
@@ -66,10 +66,12 @@
         </div>
         <template v-else>
           <div class="batch-list">
-            <div v-for="(q, qi) in batchQuestions" :key="q.id" class="batch-q" :class="{ locked: q.locked }">
+            <div v-for="(q, qi) in batchQuestions" :key="q.id" class="batch-q" :class="{ locked: q.locked, wrong: wrongQids.includes(q.id), right: q.correct === true }">
               <div class="batch-q-head">
                 <span class="q-index">Q{{ qi + 1 }}</span>
                 <span v-if="q.locked" class="q-locked">🔒 已锁定</span>
+                <span v-if="wrongQids.includes(q.id)" class="q-wrong">❌ 答错</span>
+                <span v-else-if="q.correct === true" class="q-right">✅ 答对</span>
               </div>
               <div class="batch-q-text" v-html="sanitizeRichText(q.text)"></div>
               <MediaPlayer v-if="q.media" :media="q.media" />
@@ -225,6 +227,7 @@ const correctCount = ref(0)
 const attemptsUsed = ref(0)
 const maxAttempts = ref(0)
 const cooldownRemaining = ref(0)
+const wrongQids = ref<string[]>([])
 const timerEndTime = ref(0)
 const done = ref(false)
 const feedback = ref<{ type: string; text: string; detail?: string } | null>(null)
@@ -287,6 +290,7 @@ function selectOption(opt: string) {
 
 function submitAnswer() {
   if (!userAnswer.value || cooldownRemaining.value > 0) return
+  wrongQids.value = []
   sendAction({ type: 'answer', answer: userAnswer.value })
   userAnswer.value = ''
   nextTick(() => inputRef.value?.focus())
@@ -294,6 +298,7 @@ function submitAnswer() {
 
 function submitNumberAnswer(v: number) {
   if (cooldownRemaining.value > 0) return
+  wrongQids.value = []
   sendAction({ type: 'answer', answer: v })
   numberAnswer.value = 0
 }
@@ -306,7 +311,13 @@ function submitBatch() {
     const v = batchAnswers.value[q.id]
     if (v != null && String(v).trim()) payload[q.id] = String(v).trim()
   }
+  wrongQids.value = []
   sendAction({ type: 'submit_all', answers: payload })
+}
+
+function questionLabel(qid: string): string {
+  const idx = batchQuestions.value.findIndex(q => q.id === qid)
+  return idx >= 0 ? `Q${idx + 1}` : qid
 }
 
 function startCooldownTimer() {
@@ -320,7 +331,26 @@ function startCooldownTimer() {
 function buildFeedback(result: any) {
   if (!result) return
   if (result.error) {
+    // 冷却和答错必须区分，避免把“冷却中”误报成“答错”
+    if (result.cooldown || result.code === 'cooldown') {
+      const sec = result.cooldownRemaining ?? cooldownRemaining.value
+      feedback.value = { type: 'info', text: `⏳ 冷却中，还需 ${sec} 秒` }
+      return
+    }
     feedback.value = { type: 'wrong', text: result.error }
+    return
+  }
+  const wrongIds: string[] = Array.isArray(result.wrongQuestionIds) ? result.wrongQuestionIds : []
+  if (wrongIds.length) {
+    // 批量提交中仍有答错：即使本次也答对了一部分，也必须明确提示错在哪里
+    wrongQids.value = wrongIds
+    let detail = ''
+    if (result.gradedCount !== undefined) detail = `本次答对 ${result.gradedCorrect}/${result.gradedCount} 题`
+    feedback.value = {
+      type: 'wrong',
+      text: `已提交，其中 ${wrongIds.length} 题答错（${wrongIds.map(questionLabel).join('、')}）`,
+      detail
+    }
     return
   }
   if (result.submitted) {
@@ -340,15 +370,15 @@ function buildFeedback(result: any) {
     return
   }
   // 错误（不透露正确答案）
-  const parts: string[] = ['❌ 答案错误，请重新检查']
   let detail = ''
   if (result.gradedCount !== undefined) {
     detail = `本次答对 ${result.gradedCorrect}/${result.gradedCount} 题`
+    if (wrongIds.length) detail += `，答错：${wrongIds.map(questionLabel).join('、')}`
     if (result.pendingManual) detail += '，其余提交等待管理员评判'
   } else if (result.correctCount !== undefined) {
     detail = `当前答对 ${result.correctCount} 题`
   }
-  feedback.value = { type: 'wrong', text: parts.join('，'), detail }
+  feedback.value = { type: 'wrong', text: '❌ 答案错误，请重新检查', detail }
 }
 
 watch(gameState, (state: any) => {
@@ -364,6 +394,12 @@ watch(gameState, (state: any) => {
     // 用服务端已保存答案初始化本地输入
     for (const q of state.questions) {
       if (q.userAnswer && batchAnswers.value[q.id] == null) batchAnswers.value[q.id] = q.userAnswer
+    }
+    // 批量提交 + 首个全对即胜：持久标记已提交且答错的题
+    if (state.winCondition === 'first_correct') {
+      wrongQids.value = state.questions
+        .filter((q: any) => q.correct === false && q.userAnswer)
+        .map((q: any) => q.id)
     }
   }
   if (state.currentIndex !== undefined) currentIndex.value = state.currentIndex
@@ -447,9 +483,13 @@ p { color: #8f83b8; margin: 0; }
 .batch-list { display: flex; flex-direction: column; gap: 14px; }
 .batch-q { background: #1b1130; border: 1px solid #ffffff12; border-radius: 10px; padding: 14px; }
 .batch-q.locked { opacity: 0.6; }
+.batch-q.wrong { border-color: #ff444466; background: #ff444410; }
+.batch-q.right { border-color: #7ee0a055; background: #7ee0a00c; }
 .batch-q-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 12px; }
 .q-index { background: #3a3a7a; color: #ddd; border-radius: 6px; padding: 1px 8px; }
 .q-locked { color: #e6c988; }
+.q-wrong { color: #ff6b6b; }
+.q-right { color: #7ee0a0; }
 .q-reveal { color: #b39bff; margin-left: auto; }
 .batch-q-text { color: #e6e6ff; font-size: 16px; margin-bottom: 10px; }
 .batch-q .options-grid { margin-bottom: 0; }

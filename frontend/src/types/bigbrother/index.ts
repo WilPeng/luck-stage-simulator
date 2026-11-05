@@ -505,7 +505,7 @@ export function getEndgameStatus(currentRound: number, currentStage: BBAllStageT
 
 // ===== 小游戏相关类型 =====
 
-export type MinigameId = 'click-speed' | 'memory-match' | 'quick-math' | 'balance-bar' | 'dice-duel' | 'power-challenge' | 'klotski' | 'swing-pointer' | 'minority' | 'spot-difference' | 'reaction' | 'sequence-memory' | 'jigsaw' | 'missing-number' | 'abraca' | 'describe-guess' | 'stay-or-fold' | 'catch-mistress' | 'german-heart' | 'number-divination'
+export type MinigameId = 'click-speed' | 'memory-match' | 'quick-math' | 'balance-bar' | 'dice-duel' | 'power-challenge' | 'klotski' | 'swing-pointer' | 'minority' | 'spot-difference' | 'reaction' | 'sequence-memory' | 'jigsaw' | 'missing-number' | 'abraca' | 'describe-guess' | 'stay-or-fold' | 'catch-mistress' | 'german-heart' | 'number-divination' | 'poison-drink'
 export type MinigameCategory = 'reaction' | 'memory' | 'intellect' | 'skill' | 'strategy'
 
 export interface MinigameDef {
@@ -653,7 +653,7 @@ export interface BBHohMonitorRoom {
 
 // ===== 自定义游戏类型 =====
 
-export type CustomGameType = 'quiz' | 'score' | 'elim-last' | 'first-pick' | 'duel' | 'survive-tb' | 'score-tb'
+export type CustomGameType = 'quiz' | 'score' | 'elim-last' | 'first-pick' | 'duel' | 'survive-tb' | 'score-tb' | 'lives-build' | 'race-score'
 export type CustomGameWinCondition = 'first_correct' | 'highest_score' | 'most_correct' | 'all_correct' | 'target_correct' | 'admin_judge'
 export type CustomGameQType = 'text' | 'choice' | 'number' | 'judge' | 'match'
 export type CustomGameScoringRule = 'correct_only' | 'timed_bonus'
@@ -694,6 +694,10 @@ export interface BBCustomGameDef {
   showSubmissions?: boolean
   basicTimeLimit?: number
   tiebreakTimeLimit?: number
+  lives?: number
+  raceTarget?: number
+  racePoints?: number[]
+  revealTime?: number
   media?: { url: string; kind: 'audio' | 'video'; name?: string; playMode?: 'once' | 'free' } | null
   enabled: boolean
   createdAt: string

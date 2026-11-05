@@ -135,6 +135,8 @@ import CatchMistressGame from '../../../components/bigbrother/minigames/CatchMis
 import GermanHeartGame from '../../../components/bigbrother/minigames/GermanHeartGame.vue'
 import NumberDivinationGame from '../../../components/bigbrother/minigames/NumberDivinationGame.vue'
 import Poker17Game from '../../../components/bigbrother/minigames/Poker17Game.vue'
+import PoisonDrinkGame from '../../../components/bigbrother/minigames/PoisonDrinkGame.vue'
+import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
 import JuryQA from '../../../components/bigbrother/JuryQA.vue'
 import type { MinigameRoom, BBEndgameStatus } from '../../../types/bigbrother'
@@ -192,7 +194,8 @@ const gameComponentMap: Record<string, Component> = {
   'catch-mistress': markRaw(CatchMistressGame),
   'german-heart': markRaw(GermanHeartGame),
   'number-divination': markRaw(NumberDivinationGame),
-  'poker17': markRaw(Poker17Game)
+  'poker17': markRaw(Poker17Game),
+  'poison-drink': markRaw(PoisonDrinkGame)
 }
 
 function inMe(room: MinigameRoom): boolean {
@@ -257,7 +260,9 @@ onMounted(async () => {
       const room = await bbGetActiveMinigameRoom('finale')
       if (room) {
         activeRoom.value = room
-        gameComponent.value = gameComponentMap[room.minigameId] || null
+        gameComponent.value = room.minigameId?.startsWith('custom-')
+          ? markRaw(CustomGamePlayer)
+          : (gameComponentMap[room.minigameId] || null)
       } else {
         activeRoom.value = null
       }

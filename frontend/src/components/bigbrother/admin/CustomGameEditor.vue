@@ -39,6 +39,8 @@
                 <option value="duel">模式3 · 1v1 对决</option>
                 <option value="survive-tb">模式4 · 限时淘汰 + 数字TB</option>
                 <option value="score-tb">模式5 · 限时积分 + 数字TB</option>
+                <option value="lives-build">模式6 · 记忆回溯（生命值）</option>
+                <option value="race-score">模式7 · 众里寻他千百度（抢分赛）</option>
               </select>
             </div>
             <div class="form-row">
@@ -189,6 +191,44 @@
                   <label>数字加时题限时（秒）</label>
                   <input v-model.number="form.tiebreakTimeLimit" type="number" class="bb-input" min="5" max="600" />
                 </div>
+              </div>
+            </template>
+
+            <template v-if="form.type === 'lives-build'">
+              <div class="form-row-inline">
+                <div class="form-row">
+                  <label>初始生命值</label>
+                  <input v-model.number="form.lives" type="number" class="bb-input" min="1" max="10" />
+                </div>
+                <div class="form-row">
+                  <label>每题限时（秒）</label>
+                  <input v-model.number="form.answerTimeLimit" type="number" class="bb-input" min="5" max="600" />
+                </div>
+                <div class="form-row">
+                  <label>每轮结算展示（秒）</label>
+                  <input v-model.number="form.revealTime" type="number" class="bb-input" min="1" max="60" />
+                </div>
+              </div>
+            </template>
+
+            <template v-if="form.type === 'race-score'">
+              <div class="form-row-inline">
+                <div class="form-row">
+                  <label>目标总分（先到者胜）</label>
+                  <input v-model.number="form.raceTarget" type="number" class="bb-input" min="1" max="999" />
+                </div>
+                <div class="form-row">
+                  <label>每题限时（秒）</label>
+                  <input v-model.number="form.answerTimeLimit" type="number" class="bb-input" min="5" max="600" />
+                </div>
+                <div class="form-row">
+                  <label>每轮结算展示（秒）</label>
+                  <input v-model.number="form.revealTime" type="number" class="bb-input" min="1" max="60" />
+                </div>
+              </div>
+              <div class="form-row">
+                <label>每题名次得分（按答对顺序，逗号分隔，如 4,2,1）</label>
+                <input v-model="form.racePointsText" class="bb-input" placeholder="4,2,1" />
               </div>
             </template>
 
@@ -372,6 +412,10 @@ const form = reactive({
   answerTimeLimit: 30,
   basicTimeLimit: 30,
   tiebreakTimeLimit: 30,
+  lives: 2,
+  raceTarget: 10,
+  racePointsText: '4,2,1',
+  revealTime: 5,
   playerCount: { min: 2, max: 20 },
   media: null as any
 })
@@ -413,6 +457,8 @@ const modeHint = computed(() => {
     case 'duel': return '模式3：所有选手进入候选池，每轮由管理员随机/指定 2 人进行 1v1。只检查第一个作答者，答对则对方出局，答错自己出局，未出局者回到候选池，直到剩 2 人进行决赛。'
     case 'survive-tb': return '模式4：每题有限时，限时内可切换答案，结束后锁定。错误和未作答本轮出局（全员错误则无事发生）。基本题用完后进入数字加时题，更接近且不超过目标数字者获胜。'
     case 'score-tb': return '模式5：每题有限时，限时内可切换答案，结束后锁定。正确积 1 分。基本题用完后若唯一最高分则获胜，否则并列最高分者进入数字加时题。'
+    case 'lives-build': return '模式6：每位选手初始拥有 N 点生命。每轮给出 1 道数字题，选手用 +1 / +5 等按钮凑出目标数字并提交；答错后数字清零，可立即重试。每轮最后一个未答对的选手失去 1 点生命，生命耗尽出局，最后存活者获胜。'
+    case 'race-score': return '模式7：题目逐个放出。每题按答对顺序得分（默认第 1 位 +4、第 2 位 +2、第 3 位 +1），满额后本题结束并结算；其余选手不得分。最先累计达到目标总分的选手获胜。'
     default: return ''
   }
 })
@@ -467,6 +513,12 @@ onMounted(() => {
     form.answerTimeLimit = (props.game as any).answerTimeLimit ?? 30
     form.basicTimeLimit = (props.game as any).basicTimeLimit ?? 30
     form.tiebreakTimeLimit = (props.game as any).tiebreakTimeLimit ?? 30
+    form.lives = (props.game as any).lives ?? 2
+    form.raceTarget = (props.game as any).raceTarget ?? 10
+    form.racePointsText = Array.isArray((props.game as any).racePoints)
+      ? (props.game as any).racePoints.join(',')
+      : '4,2,1'
+    form.revealTime = (props.game as any).revealTime ?? 5
     form.playerCount = { ...props.game.playerCount }
     form.media = (props.game as any).media || null
     form.questions = props.game.questions.map(q => ({
@@ -484,6 +536,14 @@ onMounted(() => {
 
 function parseOptions(q: QuestionForm) {
   q.options = q.optionsText.split('\n').map(s => s.trim()).filter(Boolean)
+}
+
+function parseRacePoints(text: string): number[] {
+  const nums = String(text || '')
+    .split(/[\s,，、|/]+/)
+    .map(s => parseInt(s, 10))
+    .filter(n => Number.isFinite(n) && n >= 0)
+  return nums.length ? nums : [4, 2, 1]
 }
 
 function addQuestion() {
@@ -560,6 +620,10 @@ async function save() {
       answerTimeLimit: form.answerTimeLimit,
       basicTimeLimit: form.basicTimeLimit,
       tiebreakTimeLimit: form.tiebreakTimeLimit,
+      lives: form.lives,
+      raceTarget: form.raceTarget,
+      racePoints: parseRacePoints(form.racePointsText),
+      revealTime: form.revealTime,
       playerCount: form.playerCount,
       media: form.media
     }

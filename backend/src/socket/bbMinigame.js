@@ -854,6 +854,16 @@ function finishGame(room, minigameNs) {
           scores[pid] = ps.finishTime - ps.startTime
         }
       }
+    } else if (room.gameState.ps) {
+      // 自定义对战模式（含记忆回溯 / 抢分赛）
+      for (const [pid, ps] of Object.entries(room.gameState.ps)) {
+        scores[pid] = ps.lives != null ? ps.lives : (ps.score || 0)
+      }
+    } else if (room.gameState.players) {
+      // 毒酒：以剩余生命值作为最终分数
+      for (const [pid, ps] of Object.entries(room.gameState.players)) {
+        scores[pid] = ps.hp || 0
+      }
     }
   }
 

@@ -10,11 +10,22 @@ const { generateId, logAction, BB_ACTION_TYPES } = require('../helpers')
 const AVATAR_DIR = path.join(__dirname, '..', '..', '..', '..', 'uploads', 'bbavatars')
 if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true })
 
+// 兼容中文文件名：multer 默认按 latin1 解析 originalname
+function decodeUploadName(name) {
+  if (!name) return ''
+  if ([...String(name)].some(ch => ch.charCodeAt(0) > 255)) return String(name)
+  try {
+    const decoded = Buffer.from(String(name), 'latin1').toString('utf8')
+    if (!decoded.includes('\uFFFD')) return decoded
+  } catch (e) { /* ignore */ }
+  return String(name)
+}
+
 const avatarUpload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, AVATAR_DIR),
     filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname) || '.jpg'
+      const ext = path.extname(decodeUploadName(file.originalname)) || '.jpg'
       cb(null, `bb-avatar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`)
     }
   }),

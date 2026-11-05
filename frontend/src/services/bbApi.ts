@@ -719,7 +719,11 @@ export async function bbUploadGameImage(file: File): Promise<{ url: string }> {
 }
 
 // 上传比赛内容音乐/视频附件
-export async function bbUploadGameMedia(file: File): Promise<{ url: string; kind: 'audio' | 'video'; mime: string; name: string }> {
+// 直接上传在部分反向代理（默认 1MB）下会返回 413 Request Entity Too Large，
+// 因此小文件直传，大文件自动改为分片上传（每片 < 1MB）。
+const MEDIA_DIRECT_MAX = 800 * 1024
+
+async function uploadMediaDirect(file: File): Promise<{ url: string; kind: 'audio' | 'video'; mime: string; name: string }> {
   const fd = new FormData()
   fd.append('media', file)
   const token = getToken()
@@ -729,8 +733,83 @@ export async function bbUploadGameMedia(file: File): Promise<{ url: string; kind
     body: fd
   })
   const json = await res.json().catch(() => ({}))
-  if (!res.ok || json.success === false) throw new Error(json.error || '媒体上传失败')
+  if (!res.ok || json.success === false) {
+    const err: any = new Error(json.error || (res.status === 413 ? '文件过大，正在尝试分片上传' : '媒体上传失败'))
+    err.status = res.status
+    throw err
+  }
   return json.data
+}
+
+async function uploadMediaChunked(file: File): Promise<{ url: string; kind: 'audio' | 'video'; mime: string; name: string }> {
+  const token = getToken()
+  const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+  const initRes = await fetch(`${API_BASE}/minigame/upload-media/init`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders },
+    body: JSON.stringify({ name: file.name, mime: file.type, size: file.size })
+  })
+  const initJson = await initRes.json().catch(() => ({}))
+  if (!initRes.ok || initJson.success === false) {
+    throw new Error(initJson.error || '初始化分片上传失败')
+  }
+  const { uploadId, chunkSize } = initJson.data || {}
+  const size = Math.max(1, Number(chunkSize) || MEDIA_DIRECT_MAX)
+  const totalChunks = Math.max(1, Math.ceil(file.size / size))
+
+  async function sendChunk(index: number): Promise<void> {
+    const start = index * size
+    const blob = file.slice(start, Math.min(file.size, start + size))
+    let lastErr: any = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const fd = new FormData()
+        fd.append('chunk', blob, `chunk-${index}`)
+        fd.append('uploadId', uploadId)
+        fd.append('index', String(index))
+        const res = await fetch(`${API_BASE}/minigame/upload-media/chunk`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: fd
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || json.success === false) throw new Error(json.error || `第 ${index + 1} 个分片上传失败`)
+        return
+      } catch (e) {
+        lastErr = e
+        await new Promise(r => setTimeout(r, 400 * (attempt + 1)))
+      }
+    }
+    throw lastErr || new Error(`第 ${index + 1} 个分片上传失败`)
+  }
+
+  for (let i = 0; i < totalChunks; i++) {
+    await sendChunk(i)
+  }
+
+  const doneRes = await fetch(`${API_BASE}/minigame/upload-media/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders },
+    body: JSON.stringify({ uploadId, totalChunks })
+  })
+  const doneJson = await doneRes.json().catch(() => ({}))
+  if (!doneRes.ok || doneJson.success === false) {
+    throw new Error(doneJson.error || '合并分片失败')
+  }
+  return doneJson.data
+}
+
+export async function bbUploadGameMedia(file: File): Promise<{ url: string; kind: 'audio' | 'video'; mime: string; name: string }> {
+  if (file.size <= MEDIA_DIRECT_MAX) {
+    try {
+      return await uploadMediaDirect(file)
+    } catch (e: any) {
+      // 反向代理限制过小时自动回退到分片上传
+      if (e && e.status === 413) return uploadMediaChunked(file)
+      throw e
+    }
+  }
+  return uploadMediaChunked(file)
 }
 
 export async function bbStartMinigame(roomId: string, countdownSeconds: number = 10): Promise<void> {

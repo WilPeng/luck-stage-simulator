@@ -9,8 +9,16 @@ const BBGameLibrary = require('../models/BBGameLibrary')
 const { getCurrentSeason } = require('../helpers')
 const { clearCustomGameCache } = require('../minigames/customGame')
 
-const ALLOWED_TYPES = ['quiz', 'score', 'elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb']
-const MODE_TYPES = ['elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb']
+const ALLOWED_TYPES = ['quiz', 'score', 'elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb', 'lives-build', 'race-score']
+const MODE_TYPES = ['elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb', 'lives-build', 'race-score']
+
+function normalizeRacePoints(v) {
+  const list = Array.isArray(v)
+    ? v
+    : String(v == null ? '' : v).split(/[\s,，、|/]+/).filter(Boolean)
+  const nums = list.map(n => parseInt(n, 10)).filter(n => Number.isFinite(n) && n >= 0)
+  return nums.length ? nums : [4, 2, 1]
+}
 
 function normalizeQtype(q) {
   if (q.qtype && ['text', 'choice', 'number', 'judge', 'match'].includes(q.qtype)) return q.qtype
@@ -93,7 +101,8 @@ router.post('/', async (req, res) => {
       name, description, rules, icon, type, questions, cooldownSeconds, maxAttempts,
       timeLimit, scoringRule, playerCount, winCondition,
       submitMode, wrongFeedback, lockOnWrong, targetCorrect,
-      eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit, media
+      eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit, media,
+      lives, raceTarget, racePoints, revealTime
     } = req.body
 
     if (!name || !name.trim()) {
@@ -145,6 +154,10 @@ router.post('/', async (req, res) => {
       showSubmissions: showSubmissions !== false,
       basicTimeLimit: basicTimeLimit ?? 30,
       tiebreakTimeLimit: tiebreakTimeLimit ?? 30,
+      lives: lives ?? 2,
+      raceTarget: raceTarget ?? 10,
+      racePoints: normalizeRacePoints(racePoints),
+      revealTime: revealTime ?? 5,
       media: media || null,
       enabled: true
     })
@@ -171,7 +184,8 @@ router.put('/:id', async (req, res) => {
       name, description, rules, icon, type, questions, cooldownSeconds, maxAttempts,
       timeLimit, scoringRule, playerCount, winCondition, enabled,
       submitMode, wrongFeedback, lockOnWrong, targetCorrect,
-      eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit, media
+      eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit, media,
+      lives, raceTarget, racePoints, revealTime
     } = req.body
 
     const finalWin = winCondition !== undefined ? winCondition : existing.winCondition
@@ -211,6 +225,10 @@ router.put('/:id', async (req, res) => {
     if (showSubmissions !== undefined) existing.showSubmissions = !!showSubmissions
     if (basicTimeLimit !== undefined) existing.basicTimeLimit = basicTimeLimit
     if (tiebreakTimeLimit !== undefined) existing.tiebreakTimeLimit = tiebreakTimeLimit
+    if (lives !== undefined) existing.lives = Math.max(1, parseInt(lives, 10) || 2)
+    if (raceTarget !== undefined) existing.raceTarget = Math.max(1, parseInt(raceTarget, 10) || 10)
+    if (racePoints !== undefined) existing.racePoints = normalizeRacePoints(racePoints)
+    if (revealTime !== undefined) existing.revealTime = Math.max(1, parseInt(revealTime, 10) || 5)
     if (media !== undefined) existing.media = media
     if (enabled !== undefined) existing.enabled = enabled
     existing.updatedAt = new Date().toISOString()
