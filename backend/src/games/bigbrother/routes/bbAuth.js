@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken')
 const BBHouseguest = require('../models/BBHouseguest')
 const { auth } = require('../../../middleware/auth')
 const { logAction, BB_ACTION_TYPES } = require('../helpers')
-const { checkPassword, hashPassword, isBcryptHash, isEncryptedPassword, generateStrongPassword } = require('../password')
+const { checkPassword, hashPassword, isBcryptHash, isEncryptedPassword } = require('../password')
 
 function issueToken(user) {
   return jwt.sign(
@@ -61,24 +61,6 @@ router.post('/login', async (req, res) => {
 // POST /auth/admin/login - 管理员登录（独立入口，仅管理员）
 router.post('/admin/login', async (req, res) => {
   try {
-    // 容错：老库可能没有 username='admin' 的记录，用首个管理员账号补齐
-    if (String(req.body?.username || '').trim() === 'admin') {
-      const exists = await BBHouseguest.findOne({ username: 'admin', gameId: 'bigbrother' })
-      if (!exists) {
-        const firstAdmin = await BBHouseguest.findOne({ role: 'admin', gameId: 'bigbrother' })
-        if (firstAdmin) {
-          firstAdmin.username = 'admin'
-          if (!firstAdmin.password) {
-            const pwd = process.env.BB_ADMIN_PASSWORD || generateStrongPassword(16)
-            firstAdmin.password = hashPassword(pwd)
-            if (!process.env.BB_ADMIN_PASSWORD) {
-              console.warn(`[BB Auth] 管理员账号缺少密码，已生成随机密码: ${pwd}（请尽快登录后修改）`)
-            }
-          }
-          await firstAdmin.save()
-        }
-      }
-    }
     return await doLogin(req, res, {
       requireRole: 'admin',
       forbiddenHint: '该账号不是管理员'

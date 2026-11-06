@@ -77,11 +77,49 @@ app.get('/api', (req, res) => {
 })
 
 // ===== Big Brother Seed 数据初始化 =====
+/**
+ * 可选的管理员引导：仅当同时配置 BB_ADMIN_USERNAME 与 BB_ADMIN_PASSWORD，
+ * 且该用户名尚不存在时，才创建一个管理员账号。
+ * 不再自动创建 admin / ADMIN2026 默认账号。
+ */
+async function bootstrapAdminFromEnv(BBHouseguest) {
+  const username = String(process.env.BB_ADMIN_USERNAME || '').trim()
+  const password = process.env.BB_ADMIN_PASSWORD
+  if (!username || !password) return null
+
+  const { generateId } = require('./games/bigbrother/helpers')
+  const { hashPassword, isBcryptHash } = require('./games/bigbrother/password')
+
+  const exists = await BBHouseguest.findOne({ gameId: 'bigbrother', username })
+  if (exists) {
+    // 仅修复“空密码 / 不可查看的 bcrypt”管理员，避免覆盖管理员自行修改过的密码
+    if (exists.role === 'admin' && (!exists.password || isBcryptHash(exists.password))) {
+      exists.password = hashPassword(password)
+      await exists.save()
+      console.log(`[Big Brother] 已根据环境变量重置管理员密码: ${username}`)
+    }
+    return exists
+  }
+
+  const doc = new BBHouseguest({
+    id: generateId(),
+    name: username,
+    username,
+    password: hashPassword(password),
+    role: 'admin',
+    status: 'active',
+    gameId: 'bigbrother'
+  })
+  await doc.save()
+  console.log(`[Big Brother] 已根据环境变量创建管理员账号: ${username}`)
+  return doc
+}
+
 async function initBBData() {
   const BBHouseguest = require('./games/bigbrother/models/BBHouseguest')
   const BBSeason = require('./games/bigbrother/models/BBSeason')
   const { generateId, ensureSuperAdmin } = require('./games/bigbrother/helpers')
-  const { hashPassword, checkPassword, isBcryptHash, isEncryptedPassword, generateStrongPassword } = require('./games/bigbrother/password')
+  const { hashPassword, checkPassword, generateStrongPassword } = require('./games/bigbrother/password')
 
   const existing = await BBHouseguest.countDocuments({ gameId: 'bigbrother' })
   if (existing > 0) {
@@ -92,20 +130,42 @@ async function initBBData() {
     // 清除自动补种的示例游戏，避免云端游戏库反复出现示例
     const { removeCustomGameExamples } = require('./games/bigbrother/seedCustomGames')
     await removeCustomGameExamples()
+    // 先按环境变量引导/修复管理员（仅当配置了 BB_ADMIN_USERNAME + BB_ADMIN_PASSWORD）
+    await bootstrapAdminFromEnv(BBHouseguest)
+
     // 幂等补齐账号密码（老数据迁移：从登录码迁移为「账号+密码」）
     const allGuests = await BBHouseguest.find({ gameId: 'bigbrother' })
-    const usedNames = new Set(allGuests.map(g => g.username).filter(Boolean))
+
+    // 清理历史默认管理员账号 admin/ADMIN2026：仅当还有其他管理员时才删除，避免锁死
+    const otherAdmins = allGuests.filter(g => g.role === 'admin' && g.username !== 'admin')
+    const legacyDefault = allGuests.find(g =>
+      g.role === 'admin' &&
+      g.username === 'admin' &&
+      (!g.password || checkPassword('ADMIN2026', g.password))
+    )
+    if (legacyDefault && otherAdmins.length > 0) {
+      await BBHouseguest.deleteOne({ id: legacyDefault.id, gameId: 'bigbrother' })
+      const BBPlayerLocation = require('./games/bigbrother/models/BBPlayerLocation')
+      await BBPlayerLocation.deleteMany({ gameId: 'bigbrother', playerId: legacyDefault.id })
+      console.log('[Big Brother] 已移除历史默认管理员账号 admin（检测到其他管理员）')
+    }
+    const activeGuests = legacyDefault && otherAdmins.length > 0
+      ? allGuests.filter(g => g.id !== legacyDefault.id)
+      : allGuests
+
+    const usedNames = new Set(activeGuests.map(g => g.username).filter(Boolean))
     let pendingAdminIndex = 0
     let idx = 0
-    for (const h of allGuests) {
+    for (const h of activeGuests) {
       idx++
       let changed = false
       if (!h.username) {
         if (h.role === 'admin') {
-          let candidate = pendingAdminIndex === 0 ? 'admin' : `admin${pendingAdminIndex + 1}`
-          while (usedNames.has(candidate)) { pendingAdminIndex++; candidate = `admin${pendingAdminIndex + 1}` }
-          h.username = candidate
+          // 不再生成名为 admin 的默认账号，使用 admin1/admin2...
           pendingAdminIndex++
+          let candidate = `admin${pendingAdminIndex}`
+          while (usedNames.has(candidate)) { pendingAdminIndex++; candidate = `admin${pendingAdminIndex}` }
+          h.username = candidate
         } else {
           h.username = h.loginCode || `houseguest${String(idx).padStart(2, '0')}`
         }
@@ -113,7 +173,7 @@ async function initBBData() {
         changed = true
       }
       if (!h.password) {
-        // 老库缺失密码：生成随机密码并哈希存储（避免继续使用弱默认密码）
+        // 老库缺失密码：生成随机密码并加密存储（避免继续使用弱默认密码）
         const pwd = generateStrongPassword(16)
         h.password = hashPassword(pwd)
         console.warn(`[Big Brother] 账号 ${h.username} 缺少密码，已生成随机密码: ${pwd}`)
@@ -121,63 +181,28 @@ async function initBBData() {
       }
       if (changed) await h.save()
     }
-    // 管理员账号：优先使用 BB_ADMIN_PASSWORD；若仍在使用旧默认密码则不定期轮换
-    const envAdminPassword = process.env.BB_ADMIN_PASSWORD
-    let adminDoc = await BBHouseguest.findOne({ gameId: 'bigbrother', username: 'admin' })
-    if (!adminDoc) {
-      const pwd = envAdminPassword || generateStrongPassword(16)
-      adminDoc = new BBHouseguest({
-        id: generateId(),
-        name: 'Big Brother 管理员',
-        username: 'admin',
-        password: hashPassword(pwd),
-        role: 'admin',
-        status: 'active',
-        gameId: 'bigbrother'
-      })
-      await adminDoc.save()
-      console.log('[Big Brother] Created admin account (admin)')
-      if (!envAdminPassword) console.warn(`[Big Brother] 已生成管理员随机密码: ${pwd}（请设置 BB_ADMIN_PASSWORD 并妥善保存）`)
-    } else {
-      let changed = false
-      if (adminDoc.role !== 'admin') { adminDoc.role = 'admin'; changed = true }
-      if (!adminDoc.password) {
-        // 密码被清空/缺失：使用环境变量或随机密码恢复，避免管理员无法登录
-        const pwd = envAdminPassword || generateStrongPassword(16)
-        adminDoc.password = hashPassword(pwd)
-        changed = true
-        if (!envAdminPassword) {
-          console.warn('==================================================================')
-          console.warn(`[Big Brother] 管理员密码缺失，已生成随机密码: ${pwd}`)
-          console.warn('[Big Brother] 请立即记录，并在 .env 设置 BB_ADMIN_PASSWORD 后重启。')
-          console.warn('==================================================================')
-        }
-      } else if (envAdminPassword) {
-        if (!checkPassword(envAdminPassword, adminDoc.password) || !isEncryptedPassword(adminDoc.password)) {
-          adminDoc.password = hashPassword(envAdminPassword)
-          changed = true
-          console.log('[Big Brother] Admin password synced from BB_ADMIN_PASSWORD')
-        }
-      } else if (checkPassword('ADMIN2026', adminDoc.password)) {
-        // 仍在用可被公开猜到的旧默认密码 → 自动轮换
+    // 不再自动创建 admin / ADMIN2026 默认账号。
+    // 如需引导创建管理员，可设置 BB_ADMIN_USERNAME + BB_ADMIN_PASSWORD（仅当该用户名不存在时创建）。
+    if (legacyDefault && otherAdmins.length === 0) {
+      // 仅剩默认管理员时保留账号，但轮换掉默认密码，避免继续使用 ADMIN2026
+      const doc = await BBHouseguest.findOne({ id: legacyDefault.id, gameId: 'bigbrother' })
+      if (doc && doc.password && checkPassword('ADMIN2026', doc.password)) {
         const pwd = generateStrongPassword(16)
-        adminDoc.password = hashPassword(pwd)
-        changed = true
+        doc.password = hashPassword(pwd)
+        await doc.save()
         console.warn('==================================================================')
-        console.warn('[Big Brother] 检测到管理员仍使用默认密码 ADMIN2026，已自动轮换！')
+        console.warn('[Big Brother] 检测到唯一管理员仍使用默认密码 ADMIN2026，已自动轮换！')
         console.warn(`[Big Brother] 新的管理员密码: ${pwd}`)
-        console.warn('[Big Brother] 请立即记录，并在 .env 设置 BB_ADMIN_PASSWORD 后重启。')
+        console.warn('[Big Brother] 请立即记录并尽快修改。')
         console.warn('==================================================================')
-      } else if (!isEncryptedPassword(adminDoc.password) && !isBcryptHash(adminDoc.password)) {
-        // 其他历史明文密码：升级为可逆加密，保持原密码可登录且管理员可查看
-        adminDoc.password = hashPassword(adminDoc.password)
-        changed = true
       }
-      if (changed) await adminDoc.save()
-      console.log(`[Big Brother] Admin account ready: username=admin (password ${changed ? 'updated' : 'unchanged'})`)
     }
     // 保证始终存在唯一的总管理员
     await ensureSuperAdmin()
+    const adminCount = await BBHouseguest.countDocuments({ gameId: 'bigbrother', role: 'admin' })
+    if (!adminCount) {
+      console.warn('[Big Brother] 当前没有任何管理员账号。请设置 BB_ADMIN_USERNAME / BB_ADMIN_PASSWORD 后重启，或手动创建。')
+    }
     // 管理员不进入任何房间：清理历史遗留的管理员位置记录
     const BBPlayerLocation = require('./games/bigbrother/models/BBPlayerLocation')
     const admins = await BBHouseguest.find({ gameId: 'bigbrother', role: 'admin' })
@@ -193,24 +218,8 @@ async function initBBData() {
 
   console.log('[Big Brother] Initializing seed data...')
 
-  const envAdminPassword = process.env.BB_ADMIN_PASSWORD
-  const initialAdminPassword = envAdminPassword || generateStrongPassword(16)
-  const admin = new BBHouseguest({
-    id: generateId(),
-    name: 'Big Brother 管理员',
-    username: 'admin',
-    password: hashPassword(initialAdminPassword),
-    role: 'admin',
-    status: 'active',
-    gameId: 'bigbrother'
-  })
-  await admin.save()
-  if (!envAdminPassword) {
-    console.warn('==================================================================')
-    console.warn(`[Big Brother] 已生成管理员随机密码: ${initialAdminPassword}`)
-    console.warn('[Big Brother] 请立即记录，并在 .env 设置 BB_ADMIN_PASSWORD 后重启。')
-    console.warn('==================================================================')
-  }
+  // 不创建默认 admin/ADMIN2026 账号；仅在配置了环境变量时引导创建管理员
+  await bootstrapAdminFromEnv(BBHouseguest)
 
   const houseguestNames = [
     { name: '艾丽斯' }, { name: '鲍勃' }, { name: '查理' },
@@ -260,13 +269,16 @@ async function initBBData() {
   // 管理员不进入任何房间（上帝视角），因此不创建位置记录
 
   console.log('[Big Brother] Seed data initialized:')
-  console.log(`  - 1 admin (账号: admin)`)
   console.log(`  - ${houseguests.length} houseguests`)
   console.log(`  - 1 season (Round 1, Stage: HOH Competition)`)
   const { removeCustomGameExamples } = require('./games/bigbrother/seedCustomGames')
   await removeCustomGameExamples()
-  // 保证始终存在唯一的总管理员
+  // 保证存在唯一的总管理员（若配置了 BB_ADMIN_USERNAME/BB_ADMIN_PASSWORD 则已有管理员）
   await ensureSuperAdmin()
+  const adminCount = await BBHouseguest.countDocuments({ gameId: 'bigbrother', role: 'admin' })
+  if (!adminCount) {
+    console.warn('[Big Brother] 未创建默认管理员。请设置 BB_ADMIN_USERNAME / BB_ADMIN_PASSWORD 后重启，或手动创建管理员。')
+  }
 }
 
 const PORT = process.env.PORT || 3000
