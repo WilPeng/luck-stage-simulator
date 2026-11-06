@@ -81,6 +81,7 @@ async function initBBData() {
   const BBHouseguest = require('./games/bigbrother/models/BBHouseguest')
   const BBSeason = require('./games/bigbrother/models/BBSeason')
   const { generateId, ensureSuperAdmin } = require('./games/bigbrother/helpers')
+  const { hashPassword, checkPassword, isBcryptHash, generateStrongPassword } = require('./games/bigbrother/password')
 
   const existing = await BBHouseguest.countDocuments({ gameId: 'bigbrother' })
   if (existing > 0) {
@@ -112,32 +113,57 @@ async function initBBData() {
         changed = true
       }
       if (!h.password) {
-        h.password = h.role === 'admin' ? 'ADMIN2026' : 'BB1234'
+        // 老库缺失密码：生成随机密码并哈希存储（避免继续使用弱默认密码）
+        const pwd = generateStrongPassword(16)
+        h.password = hashPassword(pwd)
+        console.warn(`[Big Brother] 账号 ${h.username} 缺少密码，已生成随机密码: ${pwd}`)
         changed = true
       }
       if (changed) await h.save()
     }
-    // 保证始终存在可用的 admin / ADMIN2026 账号（每次启动都校正该账号密码）
-    const desiredAdminPassword = process.env.BB_ADMIN_PASSWORD || 'ADMIN2026'
+    // 管理员账号：优先使用 BB_ADMIN_PASSWORD；若仍在使用旧默认密码则不定期轮换
+    const envAdminPassword = process.env.BB_ADMIN_PASSWORD
     let adminDoc = await BBHouseguest.findOne({ gameId: 'bigbrother', username: 'admin' })
     if (!adminDoc) {
+      const pwd = envAdminPassword || generateStrongPassword(16)
       adminDoc = new BBHouseguest({
         id: generateId(),
         name: 'Big Brother 管理员',
         username: 'admin',
-        password: desiredAdminPassword,
+        password: hashPassword(pwd),
         role: 'admin',
         status: 'active',
         gameId: 'bigbrother'
       })
       await adminDoc.save()
       console.log('[Big Brother] Created admin account (admin)')
+      if (!envAdminPassword) console.warn(`[Big Brother] 已生成管理员随机密码: ${pwd}（请设置 BB_ADMIN_PASSWORD 并妥善保存）`)
     } else {
       let changed = false
       if (adminDoc.role !== 'admin') { adminDoc.role = 'admin'; changed = true }
-      if (adminDoc.password !== desiredAdminPassword) { adminDoc.password = desiredAdminPassword; changed = true }
+      if (envAdminPassword) {
+        if (!checkPassword(envAdminPassword, adminDoc.password) || !isBcryptHash(adminDoc.password)) {
+          adminDoc.password = hashPassword(envAdminPassword)
+          changed = true
+          console.log('[Big Brother] Admin password synced from BB_ADMIN_PASSWORD')
+        }
+      } else if (checkPassword('ADMIN2026', adminDoc.password)) {
+        // 仍在用可被公开猜到的旧默认密码 → 自动轮换
+        const pwd = generateStrongPassword(16)
+        adminDoc.password = hashPassword(pwd)
+        changed = true
+        console.warn('==================================================================')
+        console.warn('[Big Brother] 检测到管理员仍使用默认密码 ADMIN2026，已自动轮换！')
+        console.warn(`[Big Brother] 新的管理员密码: ${pwd}`)
+        console.warn('[Big Brother] 请立即记录，并在 .env 设置 BB_ADMIN_PASSWORD 后重启。')
+        console.warn('==================================================================')
+      } else if (!isBcryptHash(adminDoc.password)) {
+        // 其他历史明文密码：升级为 bcrypt，保持原密码可登录
+        adminDoc.password = hashPassword(adminDoc.password)
+        changed = true
+      }
       if (changed) await adminDoc.save()
-      console.log(`[Big Brother] Admin account ready: username=admin (password ${changed ? 'reset' : 'unchanged'})`)
+      console.log(`[Big Brother] Admin account ready: username=admin (password ${changed ? 'updated' : 'unchanged'})`)
     }
     // 保证始终存在唯一的总管理员
     await ensureSuperAdmin()
@@ -156,16 +182,24 @@ async function initBBData() {
 
   console.log('[Big Brother] Initializing seed data...')
 
+  const envAdminPassword = process.env.BB_ADMIN_PASSWORD
+  const initialAdminPassword = envAdminPassword || generateStrongPassword(16)
   const admin = new BBHouseguest({
     id: generateId(),
     name: 'Big Brother 管理员',
     username: 'admin',
-    password: 'ADMIN2026',
+    password: hashPassword(initialAdminPassword),
     role: 'admin',
     status: 'active',
     gameId: 'bigbrother'
   })
   await admin.save()
+  if (!envAdminPassword) {
+    console.warn('==================================================================')
+    console.warn(`[Big Brother] 已生成管理员随机密码: ${initialAdminPassword}`)
+    console.warn('[Big Brother] 请立即记录，并在 .env 设置 BB_ADMIN_PASSWORD 后重启。')
+    console.warn('==================================================================')
+  }
 
   const houseguestNames = [
     { name: '艾丽斯' }, { name: '鲍勃' }, { name: '查理' },
@@ -177,7 +211,7 @@ async function initBBData() {
     id: generateId(),
     name: h.name,
     username: `houseguest${String(i + 1).padStart(2, '0')}`,
-    password: `BB${String(i + 1).padStart(3, '0')}`,
+    password: hashPassword(`BB${String(i + 1).padStart(3, '0')}`),
     role: 'houseguest',
     status: 'active',
     gameId: 'bigbrother'
@@ -215,9 +249,8 @@ async function initBBData() {
   // 管理员不进入任何房间（上帝视角），因此不创建位置记录
 
   console.log('[Big Brother] Seed data initialized:')
-  console.log(`  - 1 admin (账号: admin / 密码: ADMIN2026)`)
+  console.log(`  - 1 admin (账号: admin)`)
   console.log(`  - ${houseguests.length} houseguests`)
-  houseguests.forEach(h => console.log(`    ${h.name} (账号: ${h.username} / 密码: ${h.password})`))
   console.log(`  - 1 season (Round 1, Stage: HOH Competition)`)
   const { removeCustomGameExamples } = require('./games/bigbrother/seedCustomGames')
   await removeCustomGameExamples()
@@ -264,6 +297,33 @@ async function ensureBBIndexes() {
   console.log(`[Big Brother] Indexes ensured (${created})`)
 }
 
+/**
+ * 多实例部署时为 Socket.IO 启用 Redis Adapter。
+ * 未设置 REDIS_URL 时自动退化为单实例内存 Adapter。
+ * 注意：Redis Adapter 只负责跨实例的事件广播；多实例部署仍需要 nginx 配置
+ * sticky session（见 backend/docs/水平扩展部署说明.md），否则轮询握手会落错实例。
+ */
+async function setupRedisAdapter(io) {
+  const url = process.env.REDIS_URL
+  if (!url) {
+    console.log('[Socket.IO] REDIS_URL 未设置，使用单实例内存 Adapter')
+    return
+  }
+  try {
+    const { createClient } = require('redis')
+    const { createAdapter } = require('@socket.io/redis-adapter')
+    const pubClient = createClient({ url })
+    const subClient = pubClient.duplicate()
+    pubClient.on('error', (e) => console.error('[Redis pub]', e.message))
+    subClient.on('error', (e) => console.error('[Redis sub]', e.message))
+    await Promise.all([pubClient.connect(), subClient.connect()])
+    io.adapter(createAdapter(pubClient, subClient))
+    console.log('[Socket.IO] Redis Adapter 已启用')
+  } catch (e) {
+    console.error('[Socket.IO] Redis Adapter 初始化失败，回退为内存 Adapter:', e.message)
+  }
+}
+
 initStore().then(() => {
   initBBData().then(async () => {
     try { await ensureBBIndexes() } catch (e) { console.error('[Big Brother] ensureBBIndexes failed', e) }
@@ -273,6 +333,9 @@ initStore().then(() => {
       cors: { origin: '*', methods: ['GET', 'POST'] }
     })
     app.set('io', io)
+
+    // 多进程/多实例：配置 REDIS_URL 后启用 Redis Adapter（跨实例广播）
+    await setupRedisAdapter(io)
 
     // 初始化 Big Brother 小游戏 WebSocket
     const { initBBMinigameSocket } = require('./socket/bbMinigame')

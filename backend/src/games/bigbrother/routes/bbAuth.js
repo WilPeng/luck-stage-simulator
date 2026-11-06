@@ -1,19 +1,10 @@
 const express = require('express')
 const router = express.Router()
 const jwt = require('jsonwebtoken')
-const bcrypt = require('bcryptjs')
 const BBHouseguest = require('../models/BBHouseguest')
 const { auth } = require('../../../middleware/auth')
 const { logAction, BB_ACTION_TYPES } = require('../helpers')
-
-// 校验密码：支持明文（初始种子）与 bcrypt 哈希两种存储
-function checkPassword(input, stored) {
-  if (!stored) return false
-  if (/^\$2[aby]\$/.test(stored)) {
-    try { return bcrypt.compareSync(input, stored) } catch { return false }
-  }
-  return input === stored
-}
+const { checkPassword, hashPassword, isBcryptHash, generateStrongPassword } = require('../password')
 
 function issueToken(user) {
   return jwt.sign(
@@ -34,7 +25,7 @@ async function doLogin(req, res, { requireRole, forbiddenHint }) {
     if (!user) {
       console.warn(`[BB Auth] login failed: username "${String(username).trim()}" not found`)
     } else {
-      const ptype = !user.password ? 'empty' : (/^\$2[aby]\$/.test(user.password) ? 'bcrypt' : 'plaintext')
+      const ptype = !user.password ? 'empty' : (isBcryptHash(user.password) ? 'bcrypt' : 'plaintext')
       console.warn(`[BB Auth] login failed: username "${user.username}" password mismatch (stored: ${ptype})`)
     }
     return res.status(401).json({ success: false, error: '账号或密码错误', code: 'INVALID_CREDENTIALS' })
@@ -42,11 +33,14 @@ async function doLogin(req, res, { requireRole, forbiddenHint }) {
   if (requireRole && user.role !== requireRole) {
     return res.status(403).json({ success: false, error: forbiddenHint || '无权登录', code: 'FORBIDDEN' })
   }
+  // 老库明文密码：登录成功后自动升级为 bcrypt
+  if (!isBcryptHash(user.password)) {
+    user.password = hashPassword(password)
+  }
   user.hasLogin = true
   await user.save()
   const token = issueToken(user)
   const userObj = user.toObject()
-  delete userObj.password
   await logAction(user.id, user.name, user.role, BB_ACTION_TYPES.LOGIN, 'user', user.id, `用户 ${user.name} 登录`)
   return res.json({ success: true, data: userObj, token })
 }
@@ -74,7 +68,13 @@ router.post('/admin/login', async (req, res) => {
         const firstAdmin = await BBHouseguest.findOne({ role: 'admin', gameId: 'bigbrother' })
         if (firstAdmin) {
           firstAdmin.username = 'admin'
-          if (!firstAdmin.password) firstAdmin.password = 'ADMIN2026'
+          if (!firstAdmin.password) {
+            const pwd = process.env.BB_ADMIN_PASSWORD || generateStrongPassword(16)
+            firstAdmin.password = hashPassword(pwd)
+            if (!process.env.BB_ADMIN_PASSWORD) {
+              console.warn(`[BB Auth] 管理员账号缺少密码，已生成随机密码: ${pwd}（请尽快登录后修改）`)
+            }
+          }
           await firstAdmin.save()
         }
       }
@@ -93,7 +93,7 @@ router.post('/admin/login', async (req, res) => {
 router.get('/admin/status', async (req, res) => {
   try {
     const admin = await BBHouseguest.findOne({ gameId: 'bigbrother', username: 'admin' })
-    const passwordType = !admin ? null : (!admin.password ? 'empty' : (/^\$2[aby]\$/.test(admin.password) ? 'bcrypt' : 'plaintext'))
+    const passwordType = !admin ? null : (!admin.password ? 'empty' : (isBcryptHash(admin.password) ? 'bcrypt' : 'plaintext'))
     res.json({ success: true, data: { hasAdmin: !!admin, username: admin ? admin.username : null, role: admin ? admin.role : null, passwordType } })
   } catch (e) {
     console.error(e)
@@ -133,7 +133,7 @@ router.post('/change-password', auth, async (req, res) => {
     if (!checkPassword(oldPassword, user.password)) {
       return res.status(401).json({ success: false, error: '原密码错误', code: 'INVALID_OLD_PASSWORD' })
     }
-    user.password = String(newPassword)
+    user.password = hashPassword(String(newPassword))
     await user.save()
     await logAction(user.id, user.name, user.role, BB_ACTION_TYPES.UPDATE || 'UPDATE', 'user', user.id, `用户 ${user.name} 修改密码`)
     res.json({ success: true, data: null })

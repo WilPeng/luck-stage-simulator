@@ -35,7 +35,6 @@
             <th>头像</th>
             <th>名称</th>
             <th>账号</th>
-            <th>密码</th>
             <th>状态</th>
             <th>Have-Not</th>
             <th>已登录</th>
@@ -50,7 +49,6 @@
             <td><BBAvatar :name="h.name" :avatar="h.avatar" size="sm" /></td>
             <td class="name-cell">{{ h.name }}</td>
             <td><code class="code-tag">{{ h.username }}</code></td>
-            <td><code class="code-tag">{{ h.password }}</code></td>
             <td>
               <span v-if="h.isSuperAdmin" class="status-tag super">总管理员</span>
               <span v-else class="status-tag" :class="h.role === 'admin' ? 'admin' : h.status">
@@ -70,7 +68,7 @@
               <button v-if="!h.isSuperAdmin" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
             </td>
           </tr>
-          <tr v-if="list.length === 0"><td colspan="9" class="empty-cell">暂无数据</td></tr>
+          <tr v-if="list.length === 0"><td colspan="8" class="empty-cell">暂无数据</td></tr>
         </tbody>
       </table>
     </div>
@@ -100,7 +98,7 @@
             </div>
             <div class="form-group">
               <label>密码</label>
-              <input v-model="formPassword" class="bb-input" placeholder="登录密码" />
+              <input v-model="formPassword" class="bb-input" :placeholder="editingId ? '留空则不修改密码' : '登录密码'" />
             </div>
             <div class="form-group">
               <label>身份</label>
@@ -263,7 +261,8 @@ function editHouseguest(h: BBHouseguest) {
   editingId.value = h.id
   formName.value = h.name
   formUsername.value = h.username
-  formPassword.value = h.password || ''
+  // 密码不再由接口返回；编辑时留空表示不修改
+  formPassword.value = ''
   formRole.value = h.role === 'admin' ? 'admin' : 'houseguest'
   formIsSuperAdmin.value = !!h.isSuperAdmin
   formPermissions.value = Array.isArray(h.permissions) ? [...h.permissions] : []
@@ -314,17 +313,21 @@ async function saveHouseguest() {
     const base: any = {
       name: formName.value,
       username: formUsername.value,
-      password: formPassword.value,
       role: formRole.value,
       isSuperAdmin: formRole.value === 'admin' ? formIsSuperAdmin.value : false,
       permissions: formRole.value === 'admin' && !formIsSuperAdmin.value ? formPermissions.value : []
     }
+    // 编辑时密码留空表示不修改
+    if (!editingId.value || formPassword.value) base.password = formPassword.value
     if (editingId.value) {
       const payload: any = { ...base, status: formRole.value === 'admin' ? 'active' : formStatus.value }
       if (formRole.value !== 'admin' && formStatus.value === 'active') payload.isHaveNot = formIsHaveNot.value
       await bbUpdateHouseguest(editingId.value, payload)
     } else {
-      await bbCreateHouseguest(base)
+      const created: any = await bbCreateHouseguest(base)
+      if (created?.password) {
+        alert(`房客创建成功\n账号：${created.username}\n密码：${created.password}\n请妥善保存，之后接口将不再返回密码。`)
+      }
     }
     showCreateModal.value = false
     editingId.value = null
@@ -365,11 +368,10 @@ function statusLabel(s: string): string {
 async function exportCsv() {
   try {
     const rows = await fetchAllHouseguests()
-    const header = ['名称', '账号', '密码', '角色', '状态', '已登录']
+    const header = ['名称', '账号', '角色', '状态', '已登录']
     const lines = rows.map(h => [
       h.name,
       h.username,
-      h.password || '',
       h.isSuperAdmin ? '总管理员' : (h.role === 'admin' ? '管理员' : '房客'),
       statusLabel(h.status),
       h.hasLogin ? '是' : '否'

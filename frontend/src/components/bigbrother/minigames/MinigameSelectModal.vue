@@ -134,8 +134,11 @@
 
               <!-- 毒酒：分配时长 / 转盘时长 / 结算展示 -->
               <template v-if="pendingGame.id === 'poison-drink'">
-                <p class="opt-hint">每位玩家 3 点生命，座位随机固定。每轮庄家为所有存活玩家分配酒杯（毒酒位置仅庄家可见）；非庄家从庄家下一位开始按顺时针依次选择转盘旋转 0 / 1 / 2 格，选择即时公开并转动转盘，最后统一结算。喝到毒酒 -1 生命，最后存活者获胜。</p>
+                <p class="opt-hint">每位玩家 3 点生命。开局先按随机顺序自由选座，座位固定后随机产生庄家。每轮庄家为所有存活玩家分配酒杯（毒酒位置仅庄家可见）；非庄家从庄家下一位开始按顺时针依次选择转盘旋转 0 / 1 / 2 格，选择即时公开并转动转盘，最后统一结算。喝到毒酒 -1 生命，最后存活者获胜。</p>
                 <div class="opt-row">
+                  <label class="opt-label">每人选座时长（秒）
+                    <input v-model.number="options.seatTime" type="number" min="5" max="300" class="opt-number" />
+                  </label>
                   <label class="opt-label">庄家分配时长（秒）
                     <input v-model.number="options.assignTime" type="number" min="10" max="600" class="opt-number" />
                   </label>
@@ -256,6 +259,7 @@ function onSelect(id: string, game?: MinigameDef) {
     options.gridSize = 400
     options.hideTime = 30
     options.turnTime = 20
+    options.seatTime = 30
     options.assignTime = 90
     options.rotateTime = 60
     options.questions = [{ text: '', optionA: '', optionB: '' }]

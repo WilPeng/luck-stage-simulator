@@ -25,7 +25,7 @@
     <div v-else-if="!started" class="game-waiting">
       <div class="game-icon">🍷</div>
       <h2>毒酒</h2>
-      <p>每位玩家初始 <strong>3 点生命</strong>，座位顺序随机生成后固定，庄家随机产生。</p>
+      <p>每位玩家初始 <strong>3 点生命</strong>。比赛开始前先按<strong>随机顺序自由选座</strong>，选定后座位固定；随后随机产生庄家。</p>
       <p>每轮根据存活人数生成同样数量的酒杯，其中随机 <strong>1 ~ N-1 杯有毒</strong>，只有庄家知道毒酒位置。</p>
       <p>庄家把酒杯分配给所有存活玩家；非庄家玩家从庄家下一位开始，按顺时针依次选择「不动 / 顺时针 1 格 / 顺时针 2 格」，选择结果即时公开并转动转盘。</p>
       <p>喝到毒酒生命 -1，生命归零淘汰；最后存活者获胜。</p>
@@ -35,14 +35,15 @@
 
     <div v-else class="game-playing">
       <div class="game-header">
-        <span>第 {{ state.round }} 轮</span>
-        <span class="dealer-tag">庄家：{{ dealerName }}</span>
+        <span v-if="phase !== 'seat'">第 {{ state.round }} 轮</span>
+        <span v-else>比赛准备</span>
+        <span v-if="phase !== 'seat'" class="dealer-tag">庄家：{{ dealerName }}</span>
         <span class="phase-tag" :class="phase">{{ phaseLabel }}</span>
         <span class="timer" :class="{ urgent: secondsLeft <= 5 }">⏱ {{ secondsLeft }}s</span>
       </div>
 
       <!-- 转盘 -->
-      <div class="turntable-wrap">
+      <div v-if="phase !== 'seat'" class="turntable-wrap">
         <div class="turntable">
           <div class="wheel-disc" :style="{ transform: `rotate(${wheelRotationDeg}deg)` }">
             <div
@@ -89,27 +90,68 @@
         </div>
       </div>
 
-      <div class="players-board">
-        <div
-          v-for="p in state.players || []"
-          :key="p.playerId"
-          class="p-card"
-          :class="{ me: p.playerId === myId, dead: !p.alive, dealer: p.isDealer, acting: p.playerId === state.currentActorId }"
-        >
-          <div class="p-top">
-            <span class="p-name">{{ p.playerName }}</span>
-            <span v-if="p.isDealer" class="crown" title="庄家">👑</span>
+      <div v-if="phase !== 'seat'" class="players-section">
+        <button class="players-toggle" @click="showPlayers = !showPlayers">
+          <span>玩家状态 · {{ alivePlayers.length }}/{{ (state.players || []).length }} 存活</span>
+          <span class="toggle-arrow" :class="{ open: showPlayers }">▾</span>
+        </button>
+        <div v-show="showPlayers" class="players-board">
+          <div
+            v-for="p in state.players || []"
+            :key="p.playerId"
+            class="p-card"
+            :class="{ me: p.playerId === myId, dead: !p.alive, dealer: p.isDealer, acting: p.playerId === state.currentActorId }"
+          >
+            <div class="p-top">
+              <span class="p-name">{{ p.playerName }}</span>
+              <span v-if="p.isDealer" class="crown" title="庄家">👑</span>
+            </div>
+            <div class="p-hp">{{ '❤️'.repeat(Math.max(0, p.hp)) || '💀' }}</div>
+            <div v-if="p.cup" class="p-cup">
+              <span class="cup-emoji">{{ p.cup.emoji }}</span>
+              <span class="cup-name">{{ p.cup.name }}</span>
+            </div>
+            <div v-if="state.phase === 'rotate' && p.alive && !p.isDealer" class="p-rot" :class="{ acting: p.playerId === state.currentActorId }">
+              {{ p.rotation != null ? `旋转 ${p.rotation} 格` : (p.playerId === state.currentActorId ? '轮到选择…' : '等待中') }}
+            </div>
+            <div v-if="!p.alive" class="p-dead">已淘汰</div>
           </div>
-          <div class="p-hp">{{ '❤️'.repeat(Math.max(0, p.hp)) || '💀' }}</div>
-          <div v-if="p.cup" class="p-cup">
-            <span class="cup-emoji">{{ p.cup.emoji }}</span>
-            <span class="cup-name">{{ p.cup.name }}</span>
-          </div>
-          <div v-if="state.phase === 'rotate' && p.alive && !p.isDealer" class="p-rot" :class="{ acting: p.playerId === state.currentActorId }">
-            {{ p.rotation != null ? `旋转 ${p.rotation} 格` : (p.playerId === state.currentActorId ? '轮到选择…' : '等待中') }}
-          </div>
-          <div v-if="!p.alive" class="p-dead">已淘汰</div>
         </div>
+      </div>
+
+      <!-- 自由选座阶段 -->
+      <div v-if="state.phase === 'seat'" class="phase-area seat-phase">
+        <div class="section-title">自由选座 · 按随机顺序依次选择</div>
+        <div class="seat-status" :class="{ mine: state.my?.canPickSeat }">
+          <template v-if="state.my?.canPickSeat">🎯 轮到你选座，请点击一个空座位</template>
+          <template v-else-if="state.currentSeatChooserId">等待 {{ nameOf(state.currentSeatChooserId) }} 选座…</template>
+          <template v-else>选座结束，正在随机庄家…</template>
+          <span class="seat-timer">⏱ {{ secondsLeft }}s</span>
+        </div>
+        <div class="seat-grid">
+          <button
+            v-for="s in state.seats || []"
+            :key="s.seat"
+            class="seat-slot"
+            :class="{ taken: !!s.playerId, mine: s.isMe, selectable: state.my?.canPickSeat && !s.playerId }"
+            :disabled="!state.my?.canPickSeat || !!s.playerId"
+            @click="pickSeat(s.seat)"
+          >
+            <span class="seat-no">座位 {{ s.seat + 1 }}</span>
+            <span v-if="s.playerName" class="seat-occupant">{{ s.playerName }}</span>
+            <span v-else class="seat-empty">空位</span>
+          </button>
+        </div>
+        <div class="seat-order">
+          <span class="seat-order-label">选座顺序：</span>
+          <span
+            v-for="(n, i) in state.seatPickOrderNames || []"
+            :key="i"
+            class="seat-order-item"
+            :class="{ current: i === state.seatPickIndex, done: i < state.seatPickIndex }"
+          >{{ n }}</span>
+        </div>
+        <div class="turn-rule">超时未选择将自动随机安排一个空座位，然后轮到下一位</div>
       </div>
 
       <!-- 分配阶段 -->
@@ -141,9 +183,10 @@
             <button class="bb-btn" @click="randomAssign">随机分配</button>
             <button class="bb-btn bb-btn-primary" :disabled="!allAssigned" @click="confirmAssign">确认分配</button>
           </div>
+          <div class="turn-rule">超时未确认将由系统随机分配酒杯</div>
         </template>
         <template v-else>
-          <div class="waiting-msg">庄家正在分配酒杯，请稍候…</div>
+          <div class="waiting-msg">庄家正在分配酒杯，请稍候…（庄家超时将随机分配）</div>
           <div class="cup-pool">
             <div v-for="c in state.cups || []" :key="c.id" class="cup-chip">
               <span class="cup-emoji">{{ c.emoji }}</span>
@@ -180,11 +223,13 @@
           <div class="waiting-msg">当前轮到 {{ nameOf(state.currentActorId) }} 选择…</div>
         </template>
         <div class="submit-count">{{ chosenCount }} / {{ rotatorCount }} 人已选择</div>
+        <div class="turn-rule">超时未选择将自动「不动」，并把选择权交给下一位</div>
         <div v-if="rotationHistory.length" class="rotation-history">
           <div class="history-title">已公开的选择</div>
           <div class="history-list">
-            <span v-for="(h, i) in rotationHistory" :key="i" class="history-item">
+            <span v-for="(h, i) in rotationHistory" :key="i" class="history-item" :class="{ auto: h.auto }">
               <b>{{ i + 1 }}. {{ h.playerName }}</b> +{{ h.rotation }} 格 → 转盘 {{ h.cumulativeRotation }} 格
+              <em v-if="h.auto">（超时自动不动）</em>
             </span>
           </div>
         </div>
@@ -232,11 +277,13 @@ const { gameState, countdown, winner, finished, connect, sendAction, disconnect 
 
 const state = computed<any>(() => gameState.value || {})
 const started = computed(() => !!state.value.started)
+const showPlayers = ref(false)
 const phase = computed(() => state.value.phase || 'assign')
 const secondsLeft = computed(() => state.value.secondsLeft || 0)
 const dealerName = computed(() => state.value.dealerName || '—')
 
 const phaseLabel = computed(() => ({
+  seat: '自由选座',
   assign: '庄家分配酒杯',
   rotate: '转盘操作',
   reveal: '结算中',
@@ -384,6 +431,11 @@ function chooseRotation(rotation: number) {
   sendAction({ type: 'rotate', rotation })
 }
 
+function pickSeat(seat: number) {
+  if (!state.value.my?.canPickSeat) return
+  sendAction({ type: 'pick_seat', seat })
+}
+
 watch(() => state.value.actionResult, (r: any) => {
   if (!r) return
   if (r.error) showError(r.error)
@@ -413,6 +465,7 @@ p strong { color: #b39bff; }
 .game-header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: #a99bd0; font-size: 14px; margin-bottom: 14px; }
 .dealer-tag { color: #e6c988; }
 .phase-tag { padding: 2px 10px; border-radius: 999px; font-size: 12px; background: #b39bff1a; color: #b39bff; }
+.phase-tag.seat { background: #e6c9881a; color: #e6c988; }
 .phase-tag.rotate { background: #00c8ff1a; color: #7fd8ff; }
 .phase-tag.reveal { background: #e6c9881a; color: #e6c988; }
 .timer { margin-left: auto; font-weight: 700; }
@@ -469,7 +522,16 @@ p strong { color: #b39bff; }
 .seat-poison { font-size: 10px; }
 .turn-banner { margin: 10px auto 0; text-align: center; font-size: 13px; color: #b3a6d6; background: #ffffff08; border: 1px solid #ffffff12; border-radius: 8px; padding: 7px 10px; }
 .turn-banner.mine { color: #00c8ff; border-color: #00c8ff55; background: #00c8ff14; font-weight: 700; }
-.players-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.players-section { margin-bottom: 14px; }
+.players-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 14px; border-radius: 9px; cursor: pointer;
+  background: #1b1130; border: 1px solid #ffffff14; color: #b3a6d6; font-size: 13px;
+}
+.players-toggle:hover { border-color: #b39bff44; color: #e0d7ff; }
+.toggle-arrow { transition: transform 0.2s; color: #8f83b8; }
+.toggle-arrow.open { transform: rotate(180deg); }
+.players-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; margin-bottom: 4px; }
 .p-card { position: relative; background: #1b1130; border: 1px solid #ffffff14; border-radius: 10px; padding: 10px 12px; color: #ddd; }
 .p-card.me { border-color: #b39bff88; box-shadow: 0 0 0 1px #b39bff33; }
 .p-card.dead { opacity: 0.45; }
@@ -490,8 +552,37 @@ p strong { color: #b39bff; }
 .history-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .history-item { font-size: 12px; color: #cfc4ea; background: #ffffff08; border: 1px solid #ffffff12; border-radius: 999px; padding: 3px 9px; }
 .history-item b { color: #e6c988; font-weight: 600; }
+.history-item.auto { border-color: #e6c98844; color: #e6c988; }
+.history-item em { font-style: normal; font-size: 11px; opacity: 0.8; margin-left: 4px; }
+.turn-rule { text-align: center; font-size: 11px; color: #8f83b8; margin: -2px 0 8px; }
 .phase-area { background: #17112a; border: 1px solid #b39bff22; border-radius: 12px; padding: 16px; }
 .section-title { font-size: 14px; font-weight: 600; color: #e6c988; margin-bottom: 12px; }
+.seat-status {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 12px; margin-bottom: 12px; border-radius: 8px;
+  background: #ffffff08; border: 1px solid #ffffff14; color: #b3a6d6; font-size: 13px;
+}
+.seat-status.mine { color: #00c8ff; border-color: #00c8ff55; background: #00c8ff14; font-weight: 700; }
+.seat-timer { color: #e6c988; font-weight: 700; font-size: 12px; }
+.seat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.seat-slot {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 72px; padding: 10px 8px; border-radius: 10px; cursor: not-allowed;
+  background: #0f0a1c; border: 1px solid #ffffff14; color: #8f83b8;
+}
+.seat-slot.selectable { cursor: pointer; border-color: #b39bff66; background: #b39bff10; color: #e0d7ff; }
+.seat-slot.selectable:hover { border-color: #b39bff; background: #b39bff22; }
+.seat-slot.taken { background: #ffffff06; color: #cfc4ea; }
+.seat-slot.mine { border-color: #00c8ff77; box-shadow: 0 0 0 1px #00c8ff33; }
+.seat-no { font-size: 11px; color: #8f83b8; }
+.seat-occupant { font-size: 14px; font-weight: 700; color: #e0d7ff; }
+.seat-slot.mine .seat-occupant { color: #7fd8ff; }
+.seat-empty { font-size: 12px; color: #6b5f92; }
+.seat-order { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.seat-order-label { font-size: 12px; color: #8f83b8; }
+.seat-order-item { font-size: 12px; color: #cfc4ea; background: #ffffff08; border: 1px solid #ffffff12; border-radius: 999px; padding: 2px 9px; }
+.seat-order-item.done { opacity: 0.5; text-decoration: line-through; }
+.seat-order-item.current { color: #00c8ff; border-color: #00c8ff66; background: #00c8ff14; font-weight: 700; }
 .cup-pool { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .cup-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: #ffffff08; border: 1px solid #ffffff14; border-radius: 8px; font-size: 12px; color: #e0d7ff; }
 .cup-chip.poison { border-color: #ff444466; background: #ff444414; }

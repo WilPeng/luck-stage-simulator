@@ -68,7 +68,7 @@ import { ref, computed, onMounted, onUnmounted, markRaw, type Component } from '
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
-import { bbGetHohHistory, bbGetActiveMinigameRoom, bbRunHohCompetition, bbGetHohEligible, bbGetHouseguests } from '../../../services/bbApi'
+import { bbGetHohHistory, bbGetActiveMinigameRoom, bbRunHohCompetition, bbGetHohEligible, bbGetActiveHouseguests } from '../../../services/bbApi'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
@@ -235,8 +235,7 @@ onMounted(async () => {
 
   // 加载房客头像映射
   try {
-    const res: any = await bbGetHouseguests()
-    const list = res?.list || res?.data?.list || res?.data || res || []
+    const list: any = await bbGetActiveHouseguests()
     for (const h of (Array.isArray(list) ? list : [])) {
       if (h?.name) avatarMap.value[h.name] = h.avatar || null
     }

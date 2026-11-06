@@ -112,34 +112,37 @@ registerGame({
 
   init(participants, _pool, options = {}) {
     const opts = {
+      seatTime: clamp(options.seatTime, 5, 300, 30),
       assignTime: clamp(options.assignTime, 10, 600, 90),
       rotateTime: clamp(options.rotateTime, 5, 600, 60),
       revealTime: clamp(options.revealTime, 2, 60, 8)
     }
-    const shuffled = shuffle(participants)
-    const seatOrder = shuffled.map(p => p.playerId)
+    const participantOrder = participants.map(p => p.playerId)
     const players = {}
-    shuffled.forEach((p, seat) => {
+    participants.forEach(p => {
       players[p.playerId] = {
         playerId: p.playerId,
         playerName: p.playerName || p.playerId,
-        seat,
+        seat: null,
         hp: INITIAL_HP,
         alive: true
       }
     })
-    const dealerId = seatOrder[Math.floor(Math.random() * seatOrder.length)] || null
     return {
       status: 'ready',
       started: false,
       finished: false,
       winnerId: null,
       round: 0,
-      seatOrder,
+      participantOrder,
+      seatOrder: [],
       players,
-      dealerId,
-      phase: 'assign',
+      dealerId: null,
+      phase: 'seat',
       phaseEndsAt: 0,
+      // 自由选座
+      seatPickOrder: [],
+      seatPickIndex: 0,
       cups: [],
       assignment: {},
       rotations: {},
@@ -158,19 +161,22 @@ registerGame({
     const now = Date.now()
     if (!state.started) {
       state.started = true
-      this._startRound(state, now)
+      this._startSeatSelection(state, now)
       return
     }
     if (now < state.phaseEndsAt) return
 
-    if (state.phase === 'assign') {
+    if (state.phase === 'seat') {
+      // 当前选座玩家超时：自动随机选一个空座，然后轮到下一位
+      this._autoSeatCurrent(state, now)
+    } else if (state.phase === 'assign') {
       this._autoAssign(state)
       state.phase = 'rotate'
       state.phaseEndsAt = now + state.opts.rotateTime * 1000
       pushReplay(state, 'auto_assign', '庄家超时，系统随机分配了酒杯', null)
     } else if (state.phase === 'rotate') {
-      this._autoRotate(state)
-      this._resolveRound(state, now)
+      // 当前玩家超时：自动“不动”，然后把选择权交给下一位，而不是直接结算
+      this._autoRotateCurrent(state, now)
     } else if (state.phase === 'reveal') {
       this._nextRound(state, now)
     }
@@ -185,7 +191,7 @@ registerGame({
     if (action.type === 'start' && !state.started) {
       state.started = true
       state.status = 'playing'
-      this._startRound(state, Date.now())
+      this._startSeatSelection(state, Date.now())
       return { updated: true, finished: state.finished }
     }
     if (state.finished) return { updated: false }
@@ -194,13 +200,14 @@ registerGame({
     if (isAdmin) {
       if (action.type === 'next' || action.type === 'lock') {
         const now = Date.now()
-        if (state.phase === 'assign') {
+        if (state.phase === 'seat') {
+          this._autoSeatCurrent(state, now)
+        } else if (state.phase === 'assign') {
           this._autoAssign(state)
           state.phase = 'rotate'
           state.phaseEndsAt = now + state.opts.rotateTime * 1000
         } else if (state.phase === 'rotate') {
-          this._autoRotate(state)
-          this._resolveRound(state, now)
+          this._autoRotateCurrent(state, now)
         } else if (state.phase === 'reveal') {
           this._nextRound(state, now)
         }
@@ -210,6 +217,34 @@ registerGame({
     }
 
     if (!p) return { updated: false }
+
+    // ---- 自由选座：按随机顺序依次选择 ----
+    if (action.type === 'pick_seat') {
+      if (state.phase !== 'seat') return { updated: false }
+      const currentPickerId = state.seatPickOrder[state.seatPickIndex] || null
+      if (!currentPickerId) return { updated: false }
+      if (playerId !== currentPickerId) {
+        return { updated: false, result: { error: `还未轮到你选座，当前轮到 ${state.players[currentPickerId]?.playerName || ''}` } }
+      }
+      const seat = parseInt(action.seat, 10)
+      const total = state.participantOrder.length
+      if (!Number.isInteger(seat) || seat < 0 || seat >= total) {
+        return { updated: false, result: { error: '座位号无效' } }
+      }
+      const occupied = Object.values(state.players).some(x => x.seat === seat)
+      if (occupied) return { updated: false, result: { error: '该座位已被选择' } }
+      const now = Date.now()
+      p.seat = seat
+      state.seatPickIndex += 1
+      pushReplay(state, 'pick_seat', `${p.playerName} 选择了座位 ${seat + 1}`, { playerId, seat })
+      if (state.seatPickIndex >= state.seatPickOrder.length) {
+        this._finishSeatSelection(state, now)
+      } else {
+        state.phaseEndsAt = now + state.opts.seatTime * 1000
+      }
+      const nextPickerId = state.seatPickOrder[state.seatPickIndex] || null
+      return { updated: true, finished: state.finished, result: { picked: true, seat, nextPickerId } }
+    }
 
     // ---- 庄家分配酒杯 ----
     if (action.type === 'assign') {
@@ -286,6 +321,80 @@ registerGame({
     return state.seatOrder.filter(pid => state.players[pid] && state.players[pid].alive)
   },
 
+  _freeSeats(state) {
+    const total = state.participantOrder.length
+    const taken = new Set(Object.values(state.players)
+      .map(p => p.seat)
+      .filter(s => s != null))
+    const free = []
+    for (let i = 0; i < total; i++) if (!taken.has(i)) free.push(i)
+    return free
+  },
+
+  _startSeatSelection(state, now) {
+    for (const pid of state.participantOrder) state.players[pid].seat = null
+    state.seatOrder = []
+    state.dealerId = null
+    state.seatPickOrder = shuffle(state.participantOrder)
+    state.seatPickIndex = 0
+    state.phase = 'seat'
+    state.phaseEndsAt = now + state.opts.seatTime * 1000
+    pushReplay(state, 'seat_start', '自由选座开始，按随机顺序依次选择座位', {
+      order: state.seatPickOrder.map(id => ({ playerId: id, playerName: state.players[id]?.playerName || id }))
+    })
+  },
+
+  // 当前选座玩家超时：随机选一个空座，然后轮到下一位；最后一位完成才进入分配阶段
+  _autoSeatCurrent(state, now) {
+    if (state.phase !== 'seat') return
+    const pid = state.seatPickOrder[state.seatPickIndex]
+    if (!pid) {
+      this._finishSeatSelection(state, now)
+      return
+    }
+    if (state.players[pid] && state.players[pid].seat == null) {
+      const free = this._freeSeats(state)
+      if (free.length) {
+        const seat = free[Math.floor(Math.random() * free.length)]
+        state.players[pid].seat = seat
+        pushReplay(state, 'seat_timeout', `${state.players[pid].playerName} 未按时选座，系统随机安排座位 ${seat + 1}`, {
+          playerId: pid, seat
+        })
+      }
+    }
+    state.seatPickIndex += 1
+    if (state.seatPickIndex >= state.seatPickOrder.length) this._finishSeatSelection(state, now)
+    else state.phaseEndsAt = now + state.opts.seatTime * 1000
+  },
+
+  _finishSeatSelection(state, now) {
+    const total = state.participantOrder.length
+    const seatOrder = new Array(total).fill(null)
+    for (const pid of state.participantOrder) {
+      const seat = state.players[pid]?.seat
+      if (Number.isInteger(seat) && seat >= 0 && seat < total && !seatOrder[seat]) {
+        seatOrder[seat] = pid
+      }
+    }
+    // 兜底：把未安排的玩家填入空座
+    for (let i = 0; i < total; i++) {
+      if (!seatOrder[i]) {
+        const pid = state.participantOrder.find(id => !seatOrder.includes(id) && state.players[id].seat == null)
+        if (pid) {
+          state.players[pid].seat = i
+          seatOrder[i] = pid
+        }
+      }
+    }
+    state.seatOrder = seatOrder.filter(Boolean)
+    state.dealerId = state.seatOrder[Math.floor(Math.random() * state.seatOrder.length)] || null
+    pushReplay(state, 'seat_done', `选座完成，庄家：${state.players[state.dealerId]?.playerName || '—'}`, {
+      seatOrder: state.seatOrder.map(id => ({ playerId: id, playerName: state.players[id]?.playerName || id })),
+      dealerId: state.dealerId
+    })
+    this._startRound(state, now)
+  },
+
   _startRound(state, now) {
     const alive = this._aliveIds(state)
     if (alive.length <= 1) {
@@ -339,13 +448,15 @@ registerGame({
     })
   },
 
-  _autoRotate(state) {
-    const alive = this._aliveIds(state)
-    const n = Math.max(1, alive.length)
-    const now = Date.now()
-    for (let i = state.rotationIndex; i < state.rotationOrder.length; i++) {
-      const pid = state.rotationOrder[i]
-      if (state.rotations[pid] != null) continue
+  // 只处理当前这一位超时玩家：自动不动，然后轮到下一位；最后一位才结算
+  _autoRotateCurrent(state, now) {
+    if (state.phase !== 'rotate') return
+    const pid = state.rotationOrder[state.rotationIndex]
+    if (!pid) {
+      this._resolveRound(state, now)
+      return
+    }
+    if (state.rotations[pid] == null) {
       state.rotations[pid] = 0
       state.rotationHistory.push({
         playerId: pid,
@@ -355,9 +466,16 @@ registerGame({
         at: now,
         auto: true
       })
+      pushReplay(state, 'rotate_timeout', `${state.players[pid]?.playerName || pid} 未按时选择，自动不动，轮到下一位`, {
+        playerId: pid,
+        rotation: 0,
+        currentRotation: state.currentRotation
+      })
     }
-    state.currentRotation = state.currentRotation % n
-    state.rotationIndex = state.rotationOrder.length
+    state.rotationIndex += 1
+    const allChosen = state.rotationIndex >= state.rotationOrder.length
+    if (allChosen) this._resolveRound(state, now)
+    else state.phaseEndsAt = now + state.opts.rotateTime * 1000
   },
 
   _resolveRound(state, now) {
@@ -478,13 +596,19 @@ registerGame({
 
   getState(state, playerId) {
     const now = Date.now()
-    const aliveIds = this._aliveIds(state)
     const reveal = state.phase === 'reveal' || state.finished
+    const seatPhase = state.phase === 'seat'
     const isDealer = playerId === state.dealerId
     const me = state.players[playerId]
+    const currentSeatChooserId = state.seatPickOrder[state.seatPickIndex] || null
+    const currentRotationActorId = state.rotationOrder[state.rotationIndex] || null
+    const playerOrder = (seatPhase || !state.seatOrder.length)
+      ? (state.participantOrder || Object.keys(state.players))
+      : state.seatOrder
 
-    const players = state.seatOrder.map(pid => {
+    const players = playerOrder.map(pid => {
       const p = state.players[pid]
+      if (!p) return null
       const row = {
         playerId: pid,
         playerName: p.playerName,
@@ -502,8 +626,18 @@ registerGame({
       }
       // 依次选择后立即公开
       row.rotation = state.rotations[pid] ?? null
-      row.isCurrentActor = pid === (state.rotationOrder[state.rotationIndex] || null)
+      row.isCurrentActor = seatPhase ? pid === currentSeatChooserId : pid === currentRotationActorId
       return row
+    }).filter(Boolean)
+
+    const seats = Array.from({ length: (state.participantOrder || []).length }, (_, seat) => {
+      const owner = Object.values(state.players).find(x => x.seat === seat)
+      return {
+        seat,
+        playerId: owner ? owner.playerId : null,
+        playerName: owner ? owner.playerName : '',
+        isMe: !!(owner && owner.playerId === playerId)
+      }
     })
 
     // 酒杯列表：毒酒位置仅庄家可见；结算后对所有人公开
@@ -520,17 +654,22 @@ registerGame({
       finished: state.finished,
       round: state.round,
       phase: state.phase,
-      dealerId: state.dealerId,
+      dealerId: state.dealerId || null,
       dealerName: state.players[state.dealerId]?.playerName || '',
       secondsLeft: Math.max(0, Math.ceil((state.phaseEndsAt - now) / 1000)),
-      aliveCount: aliveIds.length,
+      aliveCount: Object.values(state.players).filter(p => p.alive).length,
       players,
+      seats,
+      seatPickOrder: [...(state.seatPickOrder || [])],
+      seatPickOrderNames: (state.seatPickOrder || []).map(id => state.players[id]?.playerName || id),
+      seatPickIndex: state.seatPickIndex || 0,
+      currentSeatChooserId,
       cups,
-      assignments: state.phase === 'assign' ? {} : { ...state.assignment },
+      assignments: state.phase === 'assign' || seatPhase ? {} : { ...state.assignment },
       currentRotation: state.currentRotation || 0,
       rotationOrder: [...(state.rotationOrder || [])],
       rotationIndex: state.rotationIndex || 0,
-      currentActorId: state.rotationOrder[state.rotationIndex] || null,
+      currentActorId: currentRotationActorId,
       rotationHistory: (state.rotationHistory || []).map(h => ({ ...h })),
       my: null,
       lastResult: reveal ? state.lastResult : null,
@@ -540,15 +679,17 @@ registerGame({
     if (me) {
       const myCupId = state.assignment[playerId]
       const myCup = myCupId ? state.cups.find(c => c.id === myCupId) : null
-      const currentActorId = state.rotationOrder[state.rotationIndex] || null
       base.my = {
         playerId,
         hp: me.hp,
         alive: me.alive,
+        seat: me.seat,
         isDealer,
+        canPickSeat: seatPhase && currentSeatChooserId === playerId,
+        isMySeatTurn: seatPhase && currentSeatChooserId === playerId,
         canAssign: isDealer && state.phase === 'assign' && me.alive,
-        canRotate: !isDealer && me.alive && state.phase === 'rotate' && currentActorId === playerId,
-        isMyTurn: state.phase === 'rotate' && currentActorId === playerId,
+        canRotate: !isDealer && me.alive && state.phase === 'rotate' && currentRotationActorId === playerId,
+        isMyTurn: state.phase === 'rotate' && currentRotationActorId === playerId,
         rotationChosen: state.rotations[playerId] != null,
         myRotation: state.rotations[playerId] ?? null,
         myCup: myCup ? publicCup(myCup) : null
@@ -562,16 +703,22 @@ registerGame({
 
   getAllStates(state) {
     const out = {}
-    for (const pid of state.seatOrder) {
+    const order = (state.phase === 'seat' || !state.seatOrder.length)
+      ? (state.participantOrder || Object.keys(state.players))
+      : state.seatOrder
+    for (const pid of order) {
       const p = state.players[pid]
+      if (!p) continue
+      const seatLabel = Number.isInteger(p.seat) ? `座位${p.seat + 1} ` : ''
       out[pid] = {
         score: p.hp,
         progress: p.hp,
         max: INITIAL_HP,
         done: !p.alive || state.finished,
-        label: p.alive ? `❤️ ${p.hp}` : '已淘汰',
+        label: p.alive ? `${seatLabel}❤️ ${p.hp}` : '已淘汰',
         alive: p.alive,
         hp: p.hp,
+        seat: p.seat,
         isDealer: pid === state.dealerId
       }
     }
@@ -586,6 +733,7 @@ registerGame({
     const p = state.players[playerId]
     const name = p ? p.playerName : playerId
     if (!action) return null
+    if (action.type === 'pick_seat') return { text: `${name} 选择了座位 ${Number(action.seat) + 1}`, data: { seat: action.seat } }
     if (action.type === 'assign') return { text: `${name} 完成了酒杯分配`, data: null }
     if (action.type === 'rotate') {
       return {
@@ -598,10 +746,15 @@ registerGame({
 
   getReplaySnapshot(state) {
     const players = {}
-    for (const pid of state.seatOrder) {
+    const order = (state.phase === 'seat' || !state.seatOrder.length)
+      ? (state.participantOrder || Object.keys(state.players))
+      : state.seatOrder
+    for (const pid of order) {
       const p = state.players[pid]
+      if (!p) continue
       const cup = state.assignment[pid] ? state.cups.find(c => c.id === state.assignment[pid]) : null
       players[pid] = {
+        座位: Number.isInteger(p.seat) ? p.seat + 1 : '—',
         生命: p.hp,
         存活: !!p.alive,
         庄家: pid === state.dealerId ? '是' : '',
@@ -613,7 +766,9 @@ registerGame({
       轮次: state.round || 0,
       阶段: state.phase,
       庄家: state.players[state.dealerId]?.playerName || '—',
-      存活人数: this._aliveIds(state).length,
+      存活人数: Object.values(state.players).filter(p => p.alive).length,
+      选座顺序: (state.seatPickOrder || []).map(id => state.players[id]?.playerName || id).join(' → ') || '—',
+      当前选座者: state.players[state.seatPickOrder[state.seatPickIndex]]?.playerName || '—',
       转盘当前累计: `${state.currentRotation || 0} 格`,
       行动顺序: (state.rotationOrder || []).map(id => state.players[id]?.playerName || id).join(' → ') || '—',
       当前行动者: state.players[state.rotationOrder[state.rotationIndex]]?.playerName || '—',

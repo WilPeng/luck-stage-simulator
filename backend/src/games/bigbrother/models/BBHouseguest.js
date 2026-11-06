@@ -46,6 +46,7 @@ class BBHouseguest extends BaseModel {
     const obj = { ...this }
     delete obj._id
     delete obj.collectionName
+    delete obj.password
     return obj
   }
 

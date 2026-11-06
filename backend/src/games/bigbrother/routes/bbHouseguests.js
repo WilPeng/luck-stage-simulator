@@ -5,6 +5,8 @@ const fs = require('fs')
 const multer = require('multer')
 const BBHouseguest = require('../models/BBHouseguest')
 const { generateId, logAction, BB_ACTION_TYPES } = require('../helpers')
+const { auth, requireAdmin } = require('../../../middleware/auth')
+const { hashPassword } = require('../password')
 
 // 头像存储配置（本地文件存储）
 const AVATAR_DIR = path.join(__dirname, '..', '..', '..', '..', 'uploads', 'bbavatars')
@@ -36,8 +38,8 @@ const avatarUpload = multer({
   }
 })
 
-// GET / - 获取所有房客（支持分页和搜索）
-router.get('/', async (req, res) => {
+// GET / - 获取所有房客（支持分页和搜索，仅管理员）
+router.get('/', auth, requireAdmin, async (req, res) => {
   try {
     const { keyword, status, role, page = '1', pageSize = '20' } = req.query
     const filter = { gameId: 'bigbrother' }
@@ -105,8 +107,8 @@ router.get('/active', async (req, res) => {
   }
 })
 
-// GET /:id - 获取单个房客
-router.get('/:id', async (req, res) => {
+// GET /:id - 获取单个房客（仅管理员）
+router.get('/:id', auth, requireAdmin, async (req, res) => {
   try {
     const houseguest = await BBHouseguest.findOne({ id: req.params.id, gameId: 'bigbrother' })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
@@ -118,7 +120,7 @@ router.get('/:id', async (req, res) => {
 })
 
 // POST / - 创建房客（管理员为选手开账号：姓名 + 账号 + 密码）
-router.post('/', async (req, res) => {
+router.post('/', auth, requireAdmin, async (req, res) => {
   try {
     const { name, username, password, role, permissions, isSuperAdmin } = req.body
     if (!name) return res.status(400).json({ success: false, error: '姓名不能为空', code: 'INVALID_NAME' })
@@ -138,7 +140,7 @@ router.post('/', async (req, res) => {
       id: generateId(),
       name,
       username: uname,
-      password: pwd,
+      password: hashPassword(pwd),
       role: makeSuper ? 'admin' : (role === 'admin' ? 'admin' : 'houseguest'),
       isSuperAdmin: makeSuper,
       permissions: makeSuper ? [] : (Array.isArray(permissions) ? permissions : []),
@@ -146,15 +148,16 @@ router.post('/', async (req, res) => {
       gameId: 'bigbrother'
     })
     await houseguest.save()
-    res.json({ success: true, data: houseguest.toObject() })
+    // 仅在创建时回显一次明文密码，便于管理员下发给选手；之后接口不再返回密码
+    res.json({ success: true, data: { ...houseguest.toObject(), password: pwd } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '创建房客失败', code: 'SERVER_ERROR' })
   }
 })
 
-// PUT /:id - 更新房客
-router.put('/:id', async (req, res) => {
+// PUT /:id - 更新房客（仅管理员）
+router.put('/:id', auth, requireAdmin, async (req, res) => {
   try {
     const houseguest = await BBHouseguest.findOne({ id: req.params.id, gameId: 'bigbrother' })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
@@ -168,7 +171,7 @@ router.put('/:id', async (req, res) => {
       }
       houseguest.username = uname
     }
-    if (password) houseguest.password = String(password)
+    if (password) houseguest.password = hashPassword(String(password))
     // 总管理员身份不可直接被撤销；如需更换，请把另一位管理员设为总管理员
     if (isSuperAdmin === false && houseguest.isSuperAdmin) {
       return res.status(400).json({ success: false, error: '不能直接取消总管理员，请先将其他管理员设为总管理员', code: 'SUPER_ADMIN_REQUIRED' })
@@ -201,8 +204,8 @@ router.put('/:id', async (req, res) => {
   }
 })
 
-// DELETE /:id - 删除房客
-router.delete('/:id', async (req, res) => {
+// DELETE /:id - 删除房客（仅管理员）
+router.delete('/:id', auth, requireAdmin, async (req, res) => {
   try {
     const houseguest = await BBHouseguest.findOne({ id: req.params.id, gameId: 'bigbrother' })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
@@ -217,8 +220,8 @@ router.delete('/:id', async (req, res) => {
   }
 })
 
-// POST /batch-delete - 批量删除房客（管理员保护：不删除 admin）
-router.post('/batch-delete', async (req, res) => {
+// POST /batch-delete - 批量删除房客（仅管理员，保护总管理员）
+router.post('/batch-delete', auth, requireAdmin, async (req, res) => {
   try {
     const { ids } = req.body || {}
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -244,18 +247,9 @@ router.post('/batch-delete', async (req, res) => {
 // ===== 头像管理 =====
 
 // POST /me/avatar - 选手自行上传头像（必须在 /:id/avatar 之前）
-router.post('/me/avatar', avatarUpload.single('avatar'), async (req, res) => {
+router.post('/me/avatar', auth, avatarUpload.single('avatar'), async (req, res) => {
   try {
-    const authHeader = req.header('Authorization')
-    if (!authHeader) return res.status(401).json({ success: false, error: '未认证', code: 'NO_TOKEN' })
-    const token = authHeader.replace('Bearer ', '')
-    const jwt = require('jsonwebtoken')
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-
-    let houseguest = await BBHouseguest.findOne({ id: decoded.userId })
-    if (!houseguest && req.body.houseguestId) {
-      houseguest = await BBHouseguest.findOne({ id: req.body.houseguestId })
-    }
+    const houseguest = await BBHouseguest.findOne({ id: req.user.userId })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
     if (!req.file) return res.status(400).json({ success: false, error: '未上传图片文件', code: 'MISSING_FILE' })
 
@@ -279,18 +273,9 @@ router.post('/me/avatar', avatarUpload.single('avatar'), async (req, res) => {
 })
 
 // DELETE /me/avatar - 选手自行删除头像（必须在 /:id/avatar 之前）
-router.delete('/me/avatar', async (req, res) => {
+router.delete('/me/avatar', auth, async (req, res) => {
   try {
-    const authHeader = req.header('Authorization')
-    if (!authHeader) return res.status(401).json({ success: false, error: '未认证', code: 'NO_TOKEN' })
-    const token = authHeader.replace('Bearer ', '')
-    const jwt = require('jsonwebtoken')
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-
-    let houseguest = await BBHouseguest.findOne({ id: decoded.userId })
-    if (!houseguest && req.body.houseguestId) {
-      houseguest = await BBHouseguest.findOne({ id: req.body.houseguestId })
-    }
+    const houseguest = await BBHouseguest.findOne({ id: req.user.userId })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
 
     const oldAvatar = houseguest.avatar
@@ -310,7 +295,7 @@ router.delete('/me/avatar', async (req, res) => {
 })
 
 // POST /:id/avatar - 管理员上传房客头像
-router.post('/:id/avatar', avatarUpload.single('avatar'), async (req, res) => {
+router.post('/:id/avatar', auth, requireAdmin, avatarUpload.single('avatar'), async (req, res) => {
   try {
     const houseguest = await BBHouseguest.findOne({ id: req.params.id, gameId: 'bigbrother' })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
@@ -336,7 +321,7 @@ router.post('/:id/avatar', avatarUpload.single('avatar'), async (req, res) => {
 })
 
 // DELETE /:id/avatar - 管理员删除房客头像
-router.delete('/:id/avatar', async (req, res) => {
+router.delete('/:id/avatar', auth, requireAdmin, async (req, res) => {
   try {
     const houseguest = await BBHouseguest.findOne({ id: req.params.id, gameId: 'bigbrother' })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
