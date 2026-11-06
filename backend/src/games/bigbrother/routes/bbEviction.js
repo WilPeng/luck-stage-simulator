@@ -554,7 +554,7 @@ router.post('/restore/:id', async (req, res) => {
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
     houseguest.status = 'active'
     await houseguest.save()
-    res.json({ success: true, data: houseguest.toObject() })
+    res.json({ success: true, data: houseguest.toSafeObject() })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '恢复房客失败', code: 'SERVER_ERROR' })

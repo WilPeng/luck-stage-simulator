@@ -35,6 +35,7 @@
             <th>头像</th>
             <th>名称</th>
             <th>账号</th>
+            <th>密码</th>
             <th>状态</th>
             <th>Have-Not</th>
             <th>已登录</th>
@@ -49,6 +50,10 @@
             <td><BBAvatar :name="h.name" :avatar="h.avatar" size="sm" /></td>
             <td class="name-cell">{{ h.name }}</td>
             <td><code class="code-tag">{{ h.username }}</code></td>
+            <td>
+              <code v-if="h.password" class="code-tag">{{ h.password }}</code>
+              <span v-else class="pwd-hidden">不可查看（请重置）</span>
+            </td>
             <td>
               <span v-if="h.isSuperAdmin" class="status-tag super">总管理员</span>
               <span v-else class="status-tag" :class="h.role === 'admin' ? 'admin' : h.status">
@@ -68,7 +73,7 @@
               <button v-if="!h.isSuperAdmin" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
             </td>
           </tr>
-          <tr v-if="list.length === 0"><td colspan="8" class="empty-cell">暂无数据</td></tr>
+          <tr v-if="list.length === 0"><td colspan="9" class="empty-cell">暂无数据</td></tr>
         </tbody>
       </table>
     </div>
@@ -261,8 +266,8 @@ function editHouseguest(h: BBHouseguest) {
   editingId.value = h.id
   formName.value = h.name
   formUsername.value = h.username
-  // 密码不再由接口返回；编辑时留空表示不修改
-  formPassword.value = ''
+  // 管理员可见密码；不可查看（历史 bcrypt）时留空表示不修改
+  formPassword.value = h.password || ''
   formRole.value = h.role === 'admin' ? 'admin' : 'houseguest'
   formIsSuperAdmin.value = !!h.isSuperAdmin
   formPermissions.value = Array.isArray(h.permissions) ? [...h.permissions] : []
@@ -368,10 +373,11 @@ function statusLabel(s: string): string {
 async function exportCsv() {
   try {
     const rows = await fetchAllHouseguests()
-    const header = ['名称', '账号', '角色', '状态', '已登录']
+    const header = ['名称', '账号', '密码', '角色', '状态', '已登录']
     const lines = rows.map(h => [
       h.name,
       h.username,
+      h.password || '',
       h.isSuperAdmin ? '总管理员' : (h.role === 'admin' ? '管理员' : '房客'),
       statusLabel(h.status),
       h.hasLogin ? '是' : '否'
@@ -559,6 +565,7 @@ onMounted(fetchData)
 .bb-table tr:hover td { background: #b39bff05; }
 .name-cell { color: #ece7fb; font-weight: 500; }
 .code-tag { background: #b39bff15; color: #b39bff; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+.pwd-hidden { color: #8a7da8; font-size: 12px; }
 .status-tag { padding: 2px 10px; border-radius: 10px; font-size: 12px; }
 .status-tag.active { background: #b39bff22; color: #b39bff; }
 .status-tag.evicted { background: #ff444422; color: #ff4444; }

@@ -6,7 +6,7 @@ const multer = require('multer')
 const BBHouseguest = require('../models/BBHouseguest')
 const { generateId, logAction, BB_ACTION_TYPES } = require('../helpers')
 const { auth, requireAdmin } = require('../../../middleware/auth')
-const { hashPassword } = require('../password')
+const { hashPassword, readPassword } = require('../password')
 
 // 头像存储配置（本地文件存储）
 const AVATAR_DIR = path.join(__dirname, '..', '..', '..', '..', 'uploads', 'bbavatars')
@@ -59,7 +59,13 @@ router.get('/', auth, requireAdmin, async (req, res) => {
       new BBHouseguest()._getCollection().find(filter).skip(skip).limit(currentPageSize).toArray(),
       new BBHouseguest()._getCollection().countDocuments(filter)
     ])
-    const list = documents.map(d => new BBHouseguest(d).toObject())
+    const list = documents.map(d => {
+      const safe = new BBHouseguest(d).toSafeObject()
+      const plain = readPassword(d.password)
+      safe.password = plain
+      safe.passwordViewable = plain != null
+      return safe
+    })
     res.json({
       success: true,
       data: {
@@ -112,7 +118,8 @@ router.get('/:id', auth, requireAdmin, async (req, res) => {
   try {
     const houseguest = await BBHouseguest.findOne({ id: req.params.id, gameId: 'bigbrother' })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
-    res.json({ success: true, data: houseguest.toObject() })
+    const plain = readPassword(houseguest.password)
+    res.json({ success: true, data: { ...houseguest.toSafeObject(), password: plain, passwordViewable: plain != null } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '获取房客失败', code: 'SERVER_ERROR' })
@@ -149,7 +156,7 @@ router.post('/', auth, requireAdmin, async (req, res) => {
     })
     await houseguest.save()
     // 仅在创建时回显一次明文密码，便于管理员下发给选手；之后接口不再返回密码
-    res.json({ success: true, data: { ...houseguest.toObject(), password: pwd } })
+    res.json({ success: true, data: { ...houseguest.toSafeObject(), password: pwd } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '创建房客失败', code: 'SERVER_ERROR' })
@@ -197,7 +204,8 @@ router.put('/:id', auth, requireAdmin, async (req, res) => {
     if (typeof isHaveNot === 'boolean') houseguest.isHaveNot = isHaveNot
     houseguest.updatedAt = new Date().toISOString()
     await houseguest.save()
-    res.json({ success: true, data: houseguest.toObject() })
+    const plain = readPassword(houseguest.password)
+    res.json({ success: true, data: { ...houseguest.toSafeObject(), password: plain, passwordViewable: plain != null } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '更新房客失败', code: 'SERVER_ERROR' })

@@ -81,7 +81,7 @@ async function initBBData() {
   const BBHouseguest = require('./games/bigbrother/models/BBHouseguest')
   const BBSeason = require('./games/bigbrother/models/BBSeason')
   const { generateId, ensureSuperAdmin } = require('./games/bigbrother/helpers')
-  const { hashPassword, checkPassword, isBcryptHash, generateStrongPassword } = require('./games/bigbrother/password')
+  const { hashPassword, checkPassword, isBcryptHash, isEncryptedPassword, generateStrongPassword } = require('./games/bigbrother/password')
 
   const existing = await BBHouseguest.countDocuments({ gameId: 'bigbrother' })
   if (existing > 0) {
@@ -141,8 +141,19 @@ async function initBBData() {
     } else {
       let changed = false
       if (adminDoc.role !== 'admin') { adminDoc.role = 'admin'; changed = true }
-      if (envAdminPassword) {
-        if (!checkPassword(envAdminPassword, adminDoc.password) || !isBcryptHash(adminDoc.password)) {
+      if (!adminDoc.password) {
+        // 密码被清空/缺失：使用环境变量或随机密码恢复，避免管理员无法登录
+        const pwd = envAdminPassword || generateStrongPassword(16)
+        adminDoc.password = hashPassword(pwd)
+        changed = true
+        if (!envAdminPassword) {
+          console.warn('==================================================================')
+          console.warn(`[Big Brother] 管理员密码缺失，已生成随机密码: ${pwd}`)
+          console.warn('[Big Brother] 请立即记录，并在 .env 设置 BB_ADMIN_PASSWORD 后重启。')
+          console.warn('==================================================================')
+        }
+      } else if (envAdminPassword) {
+        if (!checkPassword(envAdminPassword, adminDoc.password) || !isEncryptedPassword(adminDoc.password)) {
           adminDoc.password = hashPassword(envAdminPassword)
           changed = true
           console.log('[Big Brother] Admin password synced from BB_ADMIN_PASSWORD')
@@ -157,8 +168,8 @@ async function initBBData() {
         console.warn(`[Big Brother] 新的管理员密码: ${pwd}`)
         console.warn('[Big Brother] 请立即记录，并在 .env 设置 BB_ADMIN_PASSWORD 后重启。')
         console.warn('==================================================================')
-      } else if (!isBcryptHash(adminDoc.password)) {
-        // 其他历史明文密码：升级为 bcrypt，保持原密码可登录
+      } else if (!isEncryptedPassword(adminDoc.password) && !isBcryptHash(adminDoc.password)) {
+        // 其他历史明文密码：升级为可逆加密，保持原密码可登录且管理员可查看
         adminDoc.password = hashPassword(adminDoc.password)
         changed = true
       }

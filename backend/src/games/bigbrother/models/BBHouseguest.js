@@ -46,6 +46,12 @@ class BBHouseguest extends BaseModel {
     const obj = { ...this }
     delete obj._id
     delete obj.collectionName
+    return obj
+  }
+
+  /** 对外返回时使用：去掉密码字段（注意 toObject 需要保留密码供持久化使用） */
+  toSafeObject() {
+    const obj = this.toObject()
     delete obj.password
     return obj
   }

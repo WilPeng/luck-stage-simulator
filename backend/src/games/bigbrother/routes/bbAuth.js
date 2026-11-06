@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken')
 const BBHouseguest = require('../models/BBHouseguest')
 const { auth } = require('../../../middleware/auth')
 const { logAction, BB_ACTION_TYPES } = require('../helpers')
-const { checkPassword, hashPassword, isBcryptHash, generateStrongPassword } = require('../password')
+const { checkPassword, hashPassword, isBcryptHash, isEncryptedPassword, generateStrongPassword } = require('../password')
 
 function issueToken(user) {
   return jwt.sign(
@@ -25,7 +25,7 @@ async function doLogin(req, res, { requireRole, forbiddenHint }) {
     if (!user) {
       console.warn(`[BB Auth] login failed: username "${String(username).trim()}" not found`)
     } else {
-      const ptype = !user.password ? 'empty' : (isBcryptHash(user.password) ? 'bcrypt' : 'plaintext')
+      const ptype = !user.password ? 'empty' : (isEncryptedPassword(user.password) ? 'encrypted' : (isBcryptHash(user.password) ? 'bcrypt' : 'plaintext'))
       console.warn(`[BB Auth] login failed: username "${user.username}" password mismatch (stored: ${ptype})`)
     }
     return res.status(401).json({ success: false, error: '账号或密码错误', code: 'INVALID_CREDENTIALS' })
@@ -33,14 +33,14 @@ async function doLogin(req, res, { requireRole, forbiddenHint }) {
   if (requireRole && user.role !== requireRole) {
     return res.status(403).json({ success: false, error: forbiddenHint || '无权登录', code: 'FORBIDDEN' })
   }
-  // 老库明文密码：登录成功后自动升级为 bcrypt
-  if (!isBcryptHash(user.password)) {
+  // 老库明文密码：登录成功后自动升级为可逆加密（管理员端仍可查看）
+  if (!isEncryptedPassword(user.password) && !isBcryptHash(user.password)) {
     user.password = hashPassword(password)
   }
   user.hasLogin = true
   await user.save()
   const token = issueToken(user)
-  const userObj = user.toObject()
+  const userObj = user.toSafeObject()
   await logAction(user.id, user.name, user.role, BB_ACTION_TYPES.LOGIN, 'user', user.id, `用户 ${user.name} 登录`)
   return res.json({ success: true, data: userObj, token })
 }
@@ -93,7 +93,7 @@ router.post('/admin/login', async (req, res) => {
 router.get('/admin/status', async (req, res) => {
   try {
     const admin = await BBHouseguest.findOne({ gameId: 'bigbrother', username: 'admin' })
-    const passwordType = !admin ? null : (!admin.password ? 'empty' : (isBcryptHash(admin.password) ? 'bcrypt' : 'plaintext'))
+    const passwordType = !admin ? null : (!admin.password ? 'empty' : (isEncryptedPassword(admin.password) ? 'encrypted' : (isBcryptHash(admin.password) ? 'bcrypt' : 'plaintext')))
     res.json({ success: true, data: { hasAdmin: !!admin, username: admin ? admin.username : null, role: admin ? admin.role : null, passwordType } })
   } catch (e) {
     console.error(e)
@@ -113,9 +113,7 @@ router.get('/me', async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, error: '用户不存在', code: 'USER_NOT_FOUND' })
     }
-    const userObj = user.toObject()
-    delete userObj.password
-    res.json({ success: true, data: userObj })
+    res.json({ success: true, data: user.toSafeObject() })
   } catch (error) {
     res.status(401).json({ success: false, error: '令牌无效或已过期', code: 'INVALID_TOKEN' })
   }
