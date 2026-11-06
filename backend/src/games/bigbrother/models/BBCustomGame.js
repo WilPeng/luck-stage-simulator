@@ -79,6 +79,11 @@ class BBCustomGame extends BaseModel {
     // ===== 答错反馈 =====
     // none=不告知；count=告知正确数量；reveal=告知正确答案；all_correct_only=仅全对时告知
     this.wrongFeedback = data.wrongFeedback || 'none'
+    // 必须提示「答案有误」时，额外展示哪些信息（管理员可配置）
+    // wrong_only=仅答案有误；wrong_count=+答对数量；wrong_detail=+答错题号；wrong_count_detail=+数量+题号
+    this.wrongHint = ['wrong_only', 'wrong_count', 'wrong_detail', 'wrong_count_detail'].includes(data.wrongHint)
+      ? data.wrongHint
+      : 'wrong_only'
     // 答错是否锁定该题（锁定后该题不可再作答）
     this.lockOnWrong = data.lockOnWrong ?? false
 

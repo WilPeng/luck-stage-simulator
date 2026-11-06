@@ -682,6 +682,7 @@ export interface BBCustomGameDef {
   questions: CustomGameQuestion[]
   submitMode: CustomGameSubmitMode
   wrongFeedback: CustomGameWrongFeedback
+  wrongHint?: 'wrong_only' | 'wrong_count' | 'wrong_detail' | 'wrong_count_detail'
   lockOnWrong: boolean
   targetCorrect: number
   cooldownSeconds: number

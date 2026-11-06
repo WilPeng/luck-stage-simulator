@@ -110,6 +110,15 @@
                 <option :value="true">锁定（该题不可再答）</option>
               </select>
             </div>
+            <div class="form-row">
+              <label>答错提示内容（全部答对 / 首个答对即胜时必提示“答案有误”）</label>
+              <select v-model="form.wrongHint" class="bb-input">
+                <option value="wrong_only">仅提示“答案有误”</option>
+                <option value="wrong_count">答案有误 + 答对数量</option>
+                <option value="wrong_detail">答案有误 + 答错题号</option>
+                <option value="wrong_count_detail">答案有误 + 答对数量 + 答错题号</option>
+              </select>
+            </div>
           </div>
 
           <template v-if="form.type === 'quiz'">
@@ -400,6 +409,7 @@ const form = reactive({
   submitMode: 'single' as 'single' | 'batch',
   questionRelease: 'all' as 'all' | 'sequential',
   wrongFeedback: 'none' as 'none' | 'count' | 'reveal' | 'all_correct_only',
+  wrongHint: 'wrong_only' as 'wrong_only' | 'wrong_count' | 'wrong_detail' | 'wrong_count_detail',
   lockOnWrong: false,
   targetCorrect: 1,
   cooldownSeconds: 5,
@@ -501,6 +511,7 @@ onMounted(() => {
     form.submitMode = (props.game as any).submitMode || 'single'
     form.questionRelease = (props.game as any).questionRelease || ((props.game as any).submitMode === 'batch' ? 'all' : 'sequential')
     form.wrongFeedback = (props.game as any).wrongFeedback || 'none'
+    form.wrongHint = (props.game as any).wrongHint || 'wrong_only'
     form.lockOnWrong = !!(props.game as any).lockOnWrong
     form.targetCorrect = (props.game as any).targetCorrect ?? 1
     form.cooldownSeconds = props.game.cooldownSeconds
@@ -608,6 +619,7 @@ async function save() {
       submitMode: form.questionRelease === 'sequential' ? 'single' : 'batch',
       questionRelease: form.questionRelease,
       wrongFeedback: form.wrongFeedback,
+      wrongHint: form.wrongHint,
       lockOnWrong: form.lockOnWrong,
       targetCorrect: form.targetCorrect,
       cooldownSeconds: form.cooldownSeconds,

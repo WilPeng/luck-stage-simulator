@@ -61,6 +61,12 @@ function createCustomGameHandler(gameDef) {
   const cooldownMs = (gameDef.cooldownSeconds || 0) * 1000
   const maxAttempts = gameDef.maxAttempts || 0
   const totalQuestions = gameDef.questions.length
+  // 答对即可结束的比赛：答错时必须提示「答案有误」
+  const mustRevealWrong = gameDef.winCondition === 'all_correct' || gameDef.winCondition === 'first_correct'
+  // 管理员配置：提示「答案有误」时额外展示哪些信息（旧数据默认仅提示答案有误）
+  const wrongHint = gameDef.wrongHint || 'wrong_only'
+  const showWrongCount = wrongHint === 'wrong_count' || wrongHint === 'wrong_count_detail'
+  const showWrongDetail = wrongHint === 'wrong_detail' || wrongHint === 'wrong_count_detail'
 
   // 单题：与正确答案比较；无答案（管理员评判）返回 null
   function grade(q, userAnswer) {
@@ -159,22 +165,22 @@ function createCustomGameHandler(gameDef) {
   }
 
   // 单题反馈（严格执行答错反馈设置，不向选手透露正确答案）
-  // 例外：答对即可结束的比赛（全部答对 / 首个答对即胜）若提交后比赛未结束，
-  // 说明本次答案有误，必须明确告知，否则选手无法判断是否需要重新提交。
+  // 答对即可结束的比赛若答错，必须提示「答案有误」；额外信息由 wrongHint 配置决定。
   function singleFeedback(ps, q, correct) {
     const fb = gameDef.wrongFeedback
-    const mustRevealWrong = gameDef.winCondition === 'all_correct' || gameDef.winCondition === 'first_correct'
-    // 不告知：不透露本次提交是否正确（但上述赛制答错时必须提示）
-    if (fb === 'none') {
-      if (mustRevealWrong && !correct) return { correct: false, correctCount: ps.correctCount }
-      return { submitted: true }
+    if (mustRevealWrong && !correct) {
+      const out = { correct: false }
+      if (showWrongCount) out.correctCount = ps.correctCount
+      if (showWrongDetail) out.wrongQuestionIds = [q.id]
+      return out
     }
-    // 仅全部答对时告知：未全部答对前保持中立（但上述赛制答错时必须提示）
+    // 不告知：不透露本次提交是否正确
+    if (fb === 'none') return { submitted: true }
+    // 仅全部答对时告知：未全部答对前保持中立
     if (fb === 'all_correct_only') {
       if (ps.correctCount >= totalQuestions) {
         return { correct: true, correctCount: ps.correctCount, totalQuestions }
       }
-      if (mustRevealWrong && !correct) return { correct: false, correctCount: ps.correctCount }
       return { submitted: true }
     }
     // 告知答对数量（不告知具体题目）
@@ -184,25 +190,40 @@ function createCustomGameHandler(gameDef) {
   }
 
   // 批量反馈（严格执行答错反馈设置，不向选手透露正确答案）
-  // 例外：答对即可结束的比赛（全部答对 / 首个全部答对即胜）必须告知答错的题目，
-  // 否则选手无法判断距离「全部正确」还差多少题。
+  // 答对即可结束的比赛若未结束，必须提示「答案有误」；额外信息由 wrongHint 配置决定。
   function batchFeedback(ps, gradedCorrect, gradedCount, wrongQuestionIds, correctQuestionIds) {
     const fb = gameDef.wrongFeedback
-    const mustRevealWrong = gameDef.winCondition === 'all_correct' || gameDef.winCondition === 'first_correct'
     const wrongIds = Array.isArray(wrongQuestionIds) ? wrongQuestionIds : []
     const correctIds = Array.isArray(correctQuestionIds) ? correctQuestionIds : []
-    // 不告知：不透露本次提交中任何题目的对错（first_correct 除外）
-    if (fb === 'none' && !mustRevealWrong) return { submitted: true }
+
+    if (mustRevealWrong) {
+      if (ps.correctCount >= totalQuestions) return { correct: true }
+      const out = { correct: false }
+      if (showWrongCount) {
+        out.gradedCorrect = gradedCorrect
+        out.gradedCount = gradedCount
+        out.correctCount = ps.correctCount
+      }
+      if (showWrongDetail) {
+        out.wrongQuestionIds = wrongIds
+        out.correctQuestionIds = correctIds
+        out.wrongCount = wrongIds.length
+      }
+      return out
+    }
+
+    // 不告知：不透露本次提交中任何题目的对错
+    if (fb === 'none') return { submitted: true }
     // 仅全部答对时告知：未全部答对前保持中立
-    if (fb === 'all_correct_only' && !mustRevealWrong) {
+    if (fb === 'all_correct_only') {
       if (ps.correctCount >= totalQuestions) {
         return { correct: true, correctCount: ps.correctCount, totalQuestions }
       }
       return { submitted: true }
     }
     // 告知答对数量（不告知具体题目）
-    if (fb === 'count' && !mustRevealWrong) return { submitted: true, correctCount: ps.correctCount }
-    // reveal / first_correct：告知本次提交中每题的对错（仍不透露正确答案）
+    if (fb === 'count') return { submitted: true, correctCount: ps.correctCount }
+    // reveal：告知本次提交中每题的对错（仍不透露正确答案）
     return {
       correct: gradedCorrect > 0,
       gradedCorrect,
@@ -490,8 +511,9 @@ function createCustomGameHandler(gameDef) {
         const allCorrect = ps.correctCount >= totalQuestions
         // 仅“告知正确答案”模式，或批量提交+首个全对即胜时下发每题对错，
         // 避免其他反馈设置泄露结果；first_correct 需要让选手知道错在哪几题。
-        const revealPerQuestion = gameDef.wrongFeedback === 'reveal'
-          || ((gameDef.winCondition === 'first_correct' || gameDef.winCondition === 'all_correct') && !isAdminJudge)
+        const revealPerQuestion = mustRevealWrong
+          ? (showWrongDetail && !isAdminJudge)
+          : gameDef.wrongFeedback === 'reveal'
         base.questions = ps.questions.map(q => {
           const rec = ps.answers[q.id]
           const item = {

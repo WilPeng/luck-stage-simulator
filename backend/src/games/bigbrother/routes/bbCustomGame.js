@@ -11,6 +11,7 @@ const { clearCustomGameCache } = require('../minigames/customGame')
 
 const ALLOWED_TYPES = ['quiz', 'score', 'elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb', 'lives-build', 'race-score']
 const MODE_TYPES = ['elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb', 'lives-build', 'race-score']
+const ALLOWED_WRONG_HINTS = ['wrong_only', 'wrong_count', 'wrong_detail', 'wrong_count_detail']
 
 function normalizeRacePoints(v) {
   const list = Array.isArray(v)
@@ -100,7 +101,7 @@ router.post('/', async (req, res) => {
     const {
       name, description, rules, icon, type, questions, cooldownSeconds, maxAttempts,
       timeLimit, scoringRule, playerCount, winCondition,
-      submitMode, wrongFeedback, lockOnWrong, targetCorrect,
+      submitMode, wrongFeedback, wrongHint, lockOnWrong, targetCorrect,
       eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit, media,
       lives, raceTarget, racePoints, revealTime
     } = req.body
@@ -148,6 +149,7 @@ router.post('/', async (req, res) => {
       winCondition: finalWin,
       submitMode: submitMode || 'single',
       wrongFeedback: wrongFeedback || 'none',
+      wrongHint: ALLOWED_WRONG_HINTS.includes(wrongHint) ? wrongHint : 'wrong_only',
       lockOnWrong: !!lockOnWrong,
       targetCorrect: targetCorrect ?? 1,
       eliminateRule: eliminateRule || 'last',
@@ -183,7 +185,7 @@ router.put('/:id', async (req, res) => {
     const {
       name, description, rules, icon, type, questions, cooldownSeconds, maxAttempts,
       timeLimit, scoringRule, playerCount, winCondition, enabled,
-      submitMode, wrongFeedback, lockOnWrong, targetCorrect,
+      submitMode, wrongFeedback, wrongHint, lockOnWrong, targetCorrect,
       eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit, media,
       lives, raceTarget, racePoints, revealTime
     } = req.body
@@ -219,6 +221,7 @@ router.put('/:id', async (req, res) => {
     if (winCondition !== undefined) existing.winCondition = winCondition
     if (submitMode !== undefined) existing.submitMode = submitMode
     if (wrongFeedback !== undefined) existing.wrongFeedback = wrongFeedback
+    if (wrongHint !== undefined && ALLOWED_WRONG_HINTS.includes(wrongHint)) existing.wrongHint = wrongHint
     if (lockOnWrong !== undefined) existing.lockOnWrong = !!lockOnWrong
     if (targetCorrect !== undefined) existing.targetCorrect = targetCorrect
     if (eliminateRule !== undefined) existing.eliminateRule = eliminateRule
