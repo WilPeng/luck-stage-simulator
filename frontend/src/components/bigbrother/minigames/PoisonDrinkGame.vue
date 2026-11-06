@@ -42,6 +42,35 @@
         <span class="timer" :class="{ urgent: secondsLeft <= 5 }">⏱ {{ secondsLeft }}s</span>
       </div>
 
+      <!-- 选座转盘：直接在转盘外圈点击座位 -->
+      <div v-if="phase === 'seat'" class="turntable-wrap">
+        <div class="turntable seat-turntable">
+          <div class="wheel-disc seat-disc"></div>
+          <div class="wheel-hub">
+            <div class="hub-label">自由选座</div>
+            <div class="hub-value">{{ seatChosenCount }}/{{ (state.seats || []).length }}</div>
+          </div>
+          <button
+            v-for="s in state.seats || []"
+            :key="s.seat"
+            class="seat-pick"
+            :class="{ taken: !!s.playerId, mine: s.isMe, selectable: state.my?.canPickSeat && !s.playerId }"
+            :style="seatPickStyle(s.seat)"
+            :disabled="!state.my?.canPickSeat || !!s.playerId"
+            @click="pickSeat(s.seat)"
+          >
+            <span class="seat-pick-no">座位 {{ s.seat + 1 }}</span>
+            <span v-if="s.playerName" class="seat-pick-name">{{ s.playerName }}</span>
+            <span v-else class="seat-pick-empty">{{ state.my?.canPickSeat ? '点击选择' : '空位' }}</span>
+          </button>
+        </div>
+        <div class="turn-banner" :class="{ mine: state.my?.canPickSeat }">
+          <template v-if="state.my?.canPickSeat">🎯 轮到你选座，请点击转盘上的空座位</template>
+          <template v-else-if="state.currentSeatChooserId">等待 {{ nameOf(state.currentSeatChooserId) }} 选座…</template>
+          <template v-else>正在进入下一阶段…</template>
+        </div>
+      </div>
+
       <!-- 转盘 -->
       <div v-if="phase !== 'seat'" class="turntable-wrap">
         <div class="turntable">
@@ -122,26 +151,6 @@
       <!-- 自由选座阶段 -->
       <div v-if="state.phase === 'seat'" class="phase-area seat-phase">
         <div class="section-title">自由选座 · 按随机顺序依次选择</div>
-        <div class="seat-status" :class="{ mine: state.my?.canPickSeat }">
-          <template v-if="state.my?.canPickSeat">🎯 轮到你选座，请点击一个空座位</template>
-          <template v-else-if="state.currentSeatChooserId">等待 {{ nameOf(state.currentSeatChooserId) }} 选座…</template>
-          <template v-else>选座结束，正在随机庄家…</template>
-          <span class="seat-timer">⏱ {{ secondsLeft }}s</span>
-        </div>
-        <div class="seat-grid">
-          <button
-            v-for="s in state.seats || []"
-            :key="s.seat"
-            class="seat-slot"
-            :class="{ taken: !!s.playerId, mine: s.isMe, selectable: state.my?.canPickSeat && !s.playerId }"
-            :disabled="!state.my?.canPickSeat || !!s.playerId"
-            @click="pickSeat(s.seat)"
-          >
-            <span class="seat-no">座位 {{ s.seat + 1 }}</span>
-            <span v-if="s.playerName" class="seat-occupant">{{ s.playerName }}</span>
-            <span v-else class="seat-empty">空位</span>
-          </button>
-        </div>
         <div class="seat-order">
           <span class="seat-order-label">选座顺序：</span>
           <span
@@ -391,15 +400,24 @@ function cupAtSeat(i: number) {
   return cid ? (cupMap.value.get(cid) || null) : null
 }
 
-function seatMarkerStyle(i: number) {
-  const n = wheelSeats.value.length
-  const angle = (i / Math.max(1, n)) * Math.PI * 2 - Math.PI / 2
+function ringMarkerStyle(index: number, total: number) {
+  const angle = (index / Math.max(1, total)) * Math.PI * 2 - Math.PI / 2
   const radius = 41
   return {
     left: `${50 + radius * Math.cos(angle)}%`,
     top: `${50 + radius * Math.sin(angle)}%`
   }
 }
+
+function seatMarkerStyle(i: number) {
+  return ringMarkerStyle(i, wheelSeats.value.length)
+}
+
+function seatPickStyle(i: number) {
+  return ringMarkerStyle(i, (state.value.seats || []).length)
+}
+
+const seatChosenCount = computed(() => (state.value.seats || []).filter((s: any) => s.playerId).length)
 
 const rotationHistory = computed<any[]>(() => state.value.rotationHistory || [])
 
@@ -557,27 +575,23 @@ p strong { color: #b39bff; }
 .turn-rule { text-align: center; font-size: 11px; color: #8f83b8; margin: -2px 0 8px; }
 .phase-area { background: #17112a; border: 1px solid #b39bff22; border-radius: 12px; padding: 16px; }
 .section-title { font-size: 14px; font-weight: 600; color: #e6c988; margin-bottom: 12px; }
-.seat-status {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 9px 12px; margin-bottom: 12px; border-radius: 8px;
-  background: #ffffff08; border: 1px solid #ffffff14; color: #b3a6d6; font-size: 13px;
+.seat-turntable .wheel-disc { opacity: 0.75; }
+.seat-pick {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 88px; min-height: 58px; padding: 6px 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border-radius: 10px; background: #1b1130ee; border: 1px solid #ffffff18;
+  color: #b3a6d6; z-index: 3; cursor: not-allowed;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
-.seat-status.mine { color: #00c8ff; border-color: #00c8ff55; background: #00c8ff14; font-weight: 700; }
-.seat-timer { color: #e6c988; font-weight: 700; font-size: 12px; }
-.seat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-bottom: 14px; }
-.seat-slot {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  min-height: 72px; padding: 10px 8px; border-radius: 10px; cursor: not-allowed;
-  background: #0f0a1c; border: 1px solid #ffffff14; color: #8f83b8;
-}
-.seat-slot.selectable { cursor: pointer; border-color: #b39bff66; background: #b39bff10; color: #e0d7ff; }
-.seat-slot.selectable:hover { border-color: #b39bff; background: #b39bff22; }
-.seat-slot.taken { background: #ffffff06; color: #cfc4ea; }
-.seat-slot.mine { border-color: #00c8ff77; box-shadow: 0 0 0 1px #00c8ff33; }
-.seat-no { font-size: 11px; color: #8f83b8; }
-.seat-occupant { font-size: 14px; font-weight: 700; color: #e0d7ff; }
-.seat-slot.mine .seat-occupant { color: #7fd8ff; }
-.seat-empty { font-size: 12px; color: #6b5f92; }
+.seat-pick.selectable { cursor: pointer; border-color: #b39bff66; background: #b39bff14; color: #e0d7ff; }
+.seat-pick.selectable:hover { border-color: #b39bff; box-shadow: 0 0 18px #b39bff55; }
+.seat-pick.taken { background: #ffffff0a; color: #cfc4ea; }
+.seat-pick.mine { border-color: #00c8ff77; box-shadow: 0 0 0 1px #00c8ff33; }
+.seat-pick-no { font-size: 10px; color: #8f83b8; }
+.seat-pick-name { font-size: 13px; font-weight: 700; color: #e0d7ff; max-width: 76px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seat-pick.mine .seat-pick-name { color: #7fd8ff; }
+.seat-pick-empty { font-size: 11px; color: #6b5f92; }
 .seat-order { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
 .seat-order-label { font-size: 12px; color: #8f83b8; }
 .seat-order-item { font-size: 12px; color: #cfc4ea; background: #ffffff08; border: 1px solid #ffffff12; border-radius: 999px; padding: 2px 9px; }
@@ -630,6 +644,9 @@ p strong { color: #b39bff; }
 .rank-status { font-size: 12px; color: #8f83b8; width: 36px; text-align: right; }
 @media (max-width: 560px) {
   .seat-marker { width: 74px; padding: 3px 4px; }
+  .seat-pick { width: 72px; min-height: 52px; padding: 4px; }
+  .seat-pick-name { font-size: 11px; max-width: 62px; }
+  .seat-pick-no { font-size: 9px; }
   .seat-name { font-size: 10px; }
   .seat-cup-name { max-width: 42px; }
   .wheel-cup { width: 34px; height: 34px; font-size: 18px; }

@@ -198,6 +198,9 @@ const emit = defineEmits<{ (e: 'finished', winner: { playerId: string; playerNam
 const bbAuth = useBbAuthStore()
 const myId = computed(() => bbAuth.currentUser?.id || '')
 
+const roomIdRef = ref(props.roomId)
+const { gameState, countdown, winner, finished, connect, sendAction, disconnect } = useMinigameSocket(roomIdRef)
+
 const media = computed<any>(() => (gameState.value as any)?.media || null)
 const onceVideo = computed(() => {
   const m = media.value
@@ -213,9 +216,6 @@ watch(onceVideo, (v) => {
 function onOnceMediaEnded() {
   mediaEnded.value = true
 }
-
-const roomIdRef = ref(props.roomId)
-const { gameState, countdown, winner, finished, connect, sendAction, disconnect } = useMinigameSocket(roomIdRef)
 
 const userAnswer = ref('')
 const numberAnswer = ref(0)
