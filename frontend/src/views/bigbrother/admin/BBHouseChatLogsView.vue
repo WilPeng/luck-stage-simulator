@@ -131,7 +131,7 @@ function pad(n: number) { return String(n).padStart(2, '0') }
 function formatTime(t: string) {
   if (!t) return ''
   const d = new Date(t)
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 function dayKey(t: string) {
   const d = new Date(t)
