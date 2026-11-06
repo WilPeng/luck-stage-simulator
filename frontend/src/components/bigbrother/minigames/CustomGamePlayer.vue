@@ -26,11 +26,19 @@
         <div class="cg-media-title">{{ media.kind === 'video' ? '🎬 比赛视频' : '🎵 比赛音乐' }}
           <span class="cg-media-tag">{{ media.playMode === 'once' ? '统一播放一次' : '可自由播放' }}</span>
         </div>
-        <video v-if="media.kind === 'video'" :src="mediaUrl" controls class="cg-media-el" :autoplay="media.playMode === 'once'" playsinline></video>
-        <audio v-else :src="mediaUrl" controls class="cg-media-el" :autoplay="media.playMode === 'once'"></audio>
+        <MediaPlayer
+          :media="media"
+          :autoplay="media.playMode === 'once'"
+          @ended="onOnceMediaEnded"
+        />
       </div>
-      <CustomModeArena v-if="isModeGame" :state="modeState" :myId="myId" @action="sendAction" />
-      <template v-else>
+      <CustomModeArena v-if="isModeGame && !mediaLocked" :state="modeState" :myId="myId" @action="sendAction" />
+      <div v-else-if="mediaLocked" class="media-lock">
+        <div class="media-lock-icon">🎬</div>
+        <div>比赛视频播放中</div>
+        <div class="media-lock-sub">视频播放结束后自动进入答题</div>
+      </div>
+      <template v-else-if="!isModeGame">
       <!-- 顶部信息栏 -->
       <div class="game-header">
         <div class="header-left">
@@ -191,14 +199,20 @@ const bbAuth = useBbAuthStore()
 const myId = computed(() => bbAuth.currentUser?.id || '')
 
 const media = computed<any>(() => (gameState.value as any)?.media || null)
-const mediaUrl = computed(() => {
-  const u = media.value?.url as string
-  if (!u) return ''
-  if (/^https?:\/\//.test(u)) return u
-  const base = ((import.meta as any).env?.VITE_API_BASE || '').replace(/\/$/, '') || '/api'
-  const root = base.replace(/\/api$/, '')
-  return `${root}${u.startsWith('/') ? '' : '/'}${u}`
+const onceVideo = computed(() => {
+  const m = media.value
+  return !!(m && m.url && m.kind === 'video' && m.playMode === 'once')
 })
+const mediaEnded = ref(true)
+const mediaLocked = computed(() => onceVideo.value && !mediaEnded.value)
+
+watch(onceVideo, (v) => {
+  mediaEnded.value = !v
+}, { immediate: true })
+
+function onOnceMediaEnded() {
+  mediaEnded.value = true
+}
 
 const roomIdRef = ref(props.roomId)
 const { gameState, countdown, winner, finished, connect, sendAction, disconnect } = useMinigameSocket(roomIdRef)
@@ -420,16 +434,21 @@ watch(gameState, (state: any) => {
   }
 })
 
-watch(gameStarted, (val) => {
-  if (!val) return
-  if (!startSent) { startSent = true; sendAction({ type: 'start' }) }
+function tryStartGame() {
+  // 统一播放一次的赛前视频：必须等视频播放结束才开始答题
+  if (!gameStarted.value || mediaLocked.value || startSent) return
+  startSent = true
+  sendAction({ type: 'start' })
   if (!elapsedTimer) {
     startTime.value = Date.now()
     elapsedTimer = setInterval(() => {
       elapsed.value = Math.floor((Date.now() - startTime.value) / 1000)
     }, 1000)
   }
-})
+}
+
+watch(gameStarted, tryStartGame)
+watch(mediaLocked, (locked) => { if (!locked) tryStartGame() })
 
 watch(finished, (val) => {
   if (val && elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null }
@@ -503,6 +522,9 @@ p { color: #8f83b8; margin: 0; }
 .cg-media-title { font-size: 14px; color: #e6c988; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
 .cg-media-tag { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #e6c98822; color: #e6c988; }
 .cg-media-el { width: 100%; max-height: 300px; border-radius: 8px; background: #000; }
+.media-lock { text-align: center; padding: 26px 16px; color: #b3a6d6; font-size: 15px; background: #17112a; border: 1px dashed #b39bff44; border-radius: 10px; }
+.media-lock-icon { font-size: 34px; margin-bottom: 8px; }
+.media-lock-sub { margin-top: 6px; font-size: 12px; color: #8f83b8; }
 @media (max-width: 480px) {
   .minigame { padding: 12px; }
   .countdown-big { font-size: 52px; }
