@@ -101,6 +101,7 @@ const initBBMinigameSocket = (io) => {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET)
       socket.user = decoded
+      if (decoded.userId || decoded.id) socket.data.userId = decoded.userId || decoded.id
       next()
     } catch (err) {
       next(new Error('令牌无效或已过期'))

@@ -110,6 +110,7 @@
               <span class="seat-cup-name">{{ cupAtSeat(i)?.name }}</span>
               <span v-if="poisonVisible && cupAtSeat(i)?.poison" class="seat-poison">☠️</span>
             </div>
+            <div v-if="!p.alive" class="seat-out">已淘汰</div>
           </div>
         </div>
         <div v-if="state.phase === 'rotate'" class="turn-banner" :class="{ mine: state.my?.isMyTurn }">
@@ -360,7 +361,16 @@ const allAssigned = computed(() => {
 // ===== 转盘展示 =====
 const revealActive = computed(() => phase.value === 'reveal' || !!state.value.finished)
 const poisonVisible = computed(() => !!state.value.my?.isDealer || revealActive.value)
-const wheelSeats = computed<any[]>(() => alivePlayers.value)
+// 结算阶段保留本轮 0 血玩家在转盘上，下一轮开始时再离开
+const wheelSeats = computed<any[]>(() => {
+  const rows = state.value.lastResult?.rows
+  if (revealActive.value && Array.isArray(rows) && rows.length) {
+    const ids = new Set(rows.map((r: any) => r.playerId))
+    const list = (state.value.players || []).filter((p: any) => ids.has(p.playerId))
+    if (list.length) return list
+  }
+  return alivePlayers.value
+})
 const wheelStepDeg = computed(() => wheelSeats.value.length ? 360 / wheelSeats.value.length : 0)
 // 视觉旋转使用未取模的累计格数，避免转满一圈时 CSS 反向回转
 const wheelRotationDeg = computed(() => {
@@ -530,8 +540,9 @@ p strong { color: #b39bff; }
 .seat-marker.me { border-color: #b39bff88; }
 .seat-marker.dealer { border-color: #e6c98877; }
 .seat-marker.turn { border-color: #00c8ff; box-shadow: 0 0 0 2px #00c8ff44, 0 0 18px #00c8ff55; }
-.seat-marker.dead { opacity: 0.4; }
+.seat-marker.dead { opacity: 0.85; border-color: #ff444488; background: #2a1420ee; }
 .seat-name { font-size: 11px; color: #ece7fb; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seat-out { margin-top: 2px; font-size: 10px; color: #ff6b6b; font-weight: 700; }
 .seat-crown { margin-left: 2px; }
 .seat-hp { font-size: 10px; letter-spacing: -1px; }
 .seat-cup { display: flex; align-items: center; justify-content: center; gap: 3px; margin-top: 2px; font-size: 11px; color: #e0d7ff; background: #ffffff08; border-radius: 5px; padding: 1px 3px; }

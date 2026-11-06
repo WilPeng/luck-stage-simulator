@@ -321,6 +321,7 @@ export interface BBHouseguest {
   status: 'active' | 'evicted' | 'jury' | 'f2'
   permissions?: string[]
   hasLogin: boolean
+  isOnline?: boolean
   avatar: string | null
   isHaveNot?: boolean
   currentRoomId?: string

@@ -24,6 +24,7 @@ function initBBGameSocket(io) {
 
   bbGameNamespace.on('connection', (socket) => {
     const userId = socket.user?.userId || socket.user?.id
+    if (userId) socket.data.userId = userId
     socket.join('bb-game')
     // 管理员加入 admin 房间
     if (socket.user?.role === 'admin') socket.join('bb-game-admin')

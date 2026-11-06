@@ -38,6 +38,25 @@ const avatarUpload = multer({
   }
 })
 
+// 收集当前真实在线的用户 ID（以 Socket.IO 连接为准，而不是是否登录过）
+async function getOnlineUserIds(req) {
+  const ids = new Set()
+  const io = req.app && req.app.get ? req.app.get('io') : null
+  if (!io) return ids
+  for (const nsName of ['/bigbrother-game', '/bigbrother-house', '/bigbrother-minigame']) {
+    try {
+      const ns = io.of(nsName)
+      if (!ns) continue
+      const sockets = await ns.fetchSockets()
+      for (const s of sockets) {
+        const uid = s.user?.userId || s.user?.id || s.data?.userId || s.userId
+        if (uid) ids.add(String(uid))
+      }
+    } catch (e) { /* ignore */ }
+  }
+  return ids
+}
+
 // GET / - 获取所有房客（支持分页和搜索，仅管理员）
 router.get('/', auth, requireAdmin, async (req, res) => {
   try {
@@ -59,11 +78,13 @@ router.get('/', auth, requireAdmin, async (req, res) => {
       new BBHouseguest()._getCollection().find(filter).skip(skip).limit(currentPageSize).toArray(),
       new BBHouseguest()._getCollection().countDocuments(filter)
     ])
+    const onlineIds = await getOnlineUserIds(req)
     const list = documents.map(d => {
       const safe = new BBHouseguest(d).toSafeObject()
       const plain = readPassword(d.password)
       safe.password = plain
       safe.passwordViewable = plain != null
+      safe.isOnline = onlineIds.has(String(safe.id))
       return safe
     })
     res.json({

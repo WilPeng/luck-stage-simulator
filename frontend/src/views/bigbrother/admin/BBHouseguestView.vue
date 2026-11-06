@@ -38,7 +38,7 @@
             <th>密码</th>
             <th>状态</th>
             <th>Have-Not</th>
-            <th>已登录</th>
+            <th>在线</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -66,7 +66,11 @@
                 {{ h.isHaveNot ? '取消' : '设为贫民' }}
               </button>
             </td>
-            <td>{{ h.hasLogin ? '是' : '否' }}</td>
+            <td>
+              <span class="online-status" :class="{ online: h.isOnline }">
+                <span class="online-dot"></span>{{ h.isOnline ? '在线' : '离线' }}
+              </span>
+            </td>
             <td class="actions">
               <button class="bb-btn bb-btn-xs" @click="editHouseguest(h)">编辑</button>
               <button v-if="h.role === 'admin' && !h.isSuperAdmin" class="bb-btn bb-btn-xs" @click="setSuperAdmin(h)">设为总管理员</button>
@@ -170,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { bbGetHouseguests, bbCreateHouseguest, bbUpdateHouseguest, bbDeleteHouseguest, bbBatchDeleteHouseguests, bbUploadHouseguestAvatar, bbDeleteHouseguestAvatar } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
@@ -373,14 +377,14 @@ function statusLabel(s: string): string {
 async function exportCsv() {
   try {
     const rows = await fetchAllHouseguests()
-    const header = ['名称', '账号', '密码', '角色', '状态', '已登录']
+    const header = ['名称', '账号', '密码', '角色', '状态', '在线']
     const lines = rows.map(h => [
       h.name,
       h.username,
       h.password || '',
       h.isSuperAdmin ? '总管理员' : (h.role === 'admin' ? '管理员' : '房客'),
       statusLabel(h.status),
-      h.hasLogin ? '是' : '否'
+      h.isOnline ? '在线' : '离线'
     ])
     const csv = [header, ...lines].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\r\n')
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -526,7 +530,18 @@ async function onImportFile(e: Event) {
 }
 
 useBbRefresh(fetchData)
-onMounted(fetchData)
+let onlineTimer: ReturnType<typeof setInterval> | null = null
+onMounted(() => {
+  fetchData()
+  // 在线状态来自 Socket 连接，定时刷新让上下线变化能自动显示
+  onlineTimer = setInterval(() => {
+    if (typeof document !== 'undefined' && document.hidden) return
+    fetchData()
+  }, 15000)
+})
+onUnmounted(() => {
+  if (onlineTimer) { clearInterval(onlineTimer); onlineTimer = null }
+})
 </script>
 
 <style scoped>
@@ -566,6 +581,10 @@ onMounted(fetchData)
 .name-cell { color: #ece7fb; font-weight: 500; }
 .code-tag { background: #b39bff15; color: #b39bff; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
 .pwd-hidden { color: #8a7da8; font-size: 12px; }
+.online-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #8f83b8; }
+.online-status.online { color: #4ade80; }
+.online-dot { width: 7px; height: 7px; border-radius: 50%; background: #6b5f92; }
+.online-status.online .online-dot { background: #4ade80; box-shadow: 0 0 6px #4ade8099; }
 .status-tag { padding: 2px 10px; border-radius: 10px; font-size: 12px; }
 .status-tag.active { background: #b39bff22; color: #b39bff; }
 .status-tag.evicted { background: #ff444422; color: #ff4444; }
