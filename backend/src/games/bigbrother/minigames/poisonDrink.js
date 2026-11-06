@@ -101,14 +101,14 @@ registerGame({
   id: 'poison-drink',
   name: '毒酒',
   icon: '🍷',
-  description: '每轮庄家分配酒杯，玩家秘密旋转转盘；喝到毒酒扣 1 点生命，最后存活者获胜',
+  description: '每轮庄家分配酒杯，玩家按顺时针依次公开旋转转盘；喝到毒酒扣 1 点生命，最后存活者获胜',
   category: 'strategy',
   playerCount: { min: 2, max: 20 },
   duration: 1800,
   needsServerTick: true,
   serverTickMs: 500,
   broadcastState: true,
-  privateActions: ['rotate'],
+  privateActions: [],
 
   init(participants, _pool, options = {}) {
     const opts = {
@@ -143,6 +143,10 @@ registerGame({
       cups: [],
       assignment: {},
       rotations: {},
+      currentRotation: 0,      // 本轮转盘累计旋转格数（已公开）
+      rotationOrder: [],       // 本轮非庄家行动顺序（从庄家顺时针下一位开始）
+      rotationIndex: 0,        // 当前轮到 rotationOrder 中的第几位
+      rotationHistory: [],     // 依次公开的转盘操作记录
       lastResult: null,
       opts,
       _replayEvents: []
@@ -234,20 +238,45 @@ registerGame({
       return { updated: true, finished: false, result: { submitted: true } }
     }
 
-    // ---- 非庄家选择转盘操作 ----
+    // ---- 非庄家按顺时针依次选择转盘操作（选择即时公开） ----
     if (action.type === 'rotate') {
       if (state.phase !== 'rotate') return { updated: false }
       if (!p.alive) return { updated: false }
       if (playerId === state.dealerId) return { updated: false, result: { error: '庄家本轮不参与转盘操作' } }
+      const currentActorId = state.rotationOrder[state.rotationIndex] || null
+      if (!currentActorId) return { updated: false }
+      if (playerId !== currentActorId) {
+        return { updated: false, result: { error: `还未轮到你，当前轮到 ${state.players[currentActorId]?.playerName || ''} 选择` } }
+      }
       if (state.rotations[playerId] != null) return { updated: false, result: { error: '本轮已经选择过了' } }
       const rotation = parseInt(action.rotation, 10)
       if (![0, 1, 2].includes(rotation)) return { updated: false, result: { error: '请选择 0 / 1 / 2 格' } }
-      state.rotations[playerId] = rotation
+      const now = Date.now()
       const alive = this._aliveIds(state)
-      const nonDealer = alive.filter(id => id !== state.dealerId)
-      const allChosen = nonDealer.every(id => state.rotations[id] != null)
-      if (allChosen) this._resolveRound(state, Date.now())
-      return { updated: true, finished: false, result: { submitted: true, allChosen } }
+      const n = alive.length
+      state.rotations[playerId] = rotation
+      state.currentRotation = (state.currentRotation + rotation) % Math.max(1, n)
+      state.rotationHistory.push({
+        playerId,
+        playerName: p.playerName,
+        rotation,
+        cumulativeRotation: state.currentRotation,
+        at: now
+      })
+      state.rotationIndex += 1
+      const allChosen = state.rotationIndex >= state.rotationOrder.length
+      pushReplay(state, 'rotate', `${p.playerName} 旋转 ${rotation} 格，转盘当前累计 ${state.currentRotation} 格`, {
+        playerId, rotation, currentRotation: state.currentRotation, allChosen
+      })
+      if (allChosen) this._resolveRound(state, now)
+      // 每位玩家独立的选择时间窗口
+      else state.phaseEndsAt = now + state.opts.rotateTime * 1000
+      const nextActorId = state.rotationOrder[state.rotationIndex] || null
+      return {
+        updated: true,
+        finished: false,
+        result: { submitted: true, allChosen, rotation, currentRotation: state.currentRotation, nextActorId }
+      }
     }
 
     return { updated: false }
@@ -277,13 +306,27 @@ registerGame({
     }))
     state.assignment = {}
     state.rotations = {}
+    state.currentRotation = 0
+    state.rotationHistory = []
+    state.rotationIndex = 0
+    // 行动顺序：从庄家座位的下一位开始，顺时针依次行动（跳过庄家）
+    const dealerSeat = state.players[state.dealerId]?.seat ?? -1
+    const rotationOrder = []
+    for (let step = 1; step < state.seatOrder.length; step++) {
+      const seat = (dealerSeat + step + state.seatOrder.length) % state.seatOrder.length
+      const pid = state.seatOrder[seat]
+      const p = state.players[pid]
+      if (p && p.alive && pid !== state.dealerId) rotationOrder.push(pid)
+    }
+    state.rotationOrder = rotationOrder
     state.lastResult = null
     state.phase = 'assign'
     state.phaseEndsAt = now + state.opts.assignTime * 1000
     pushReplay(state, 'round_start', `第${state.round}轮开始，庄家：${state.players[state.dealerId]?.playerName || '—'}，本轮流转 ${n} 杯酒`, {
       round: state.round,
       dealerId: state.dealerId,
-      cups: state.cups.map(publicCup)
+      cups: state.cups.map(publicCup),
+      rotationOrder
     })
   },
 
@@ -298,10 +341,23 @@ registerGame({
 
   _autoRotate(state) {
     const alive = this._aliveIds(state)
-    for (const pid of alive) {
-      if (pid === state.dealerId) continue
-      if (state.rotations[pid] == null) state.rotations[pid] = 0
+    const n = Math.max(1, alive.length)
+    const now = Date.now()
+    for (let i = state.rotationIndex; i < state.rotationOrder.length; i++) {
+      const pid = state.rotationOrder[i]
+      if (state.rotations[pid] != null) continue
+      state.rotations[pid] = 0
+      state.rotationHistory.push({
+        playerId: pid,
+        playerName: state.players[pid]?.playerName || pid,
+        rotation: 0,
+        cumulativeRotation: state.currentRotation,
+        at: now,
+        auto: true
+      })
     }
+    state.currentRotation = state.currentRotation % n
+    state.rotationIndex = state.rotationOrder.length
   },
 
   _resolveRound(state, now) {
@@ -309,9 +365,8 @@ registerGame({
     const alive = this._aliveIds(state)
     const n = alive.length
     if (!n) { this._finish(state, null); return }
-    const totalRotation = alive
-      .filter(pid => pid !== state.dealerId)
-      .reduce((sum, pid) => sum + (parseInt(state.rotations[pid], 10) || 0), 0) % n
+    // 依次公开执行后，转盘累计角度已经记录在 currentRotation 中
+    const totalRotation = (state.currentRotation || 0) % n
 
     const cupById = new Map(state.cups.map(c => [c.id, c]))
     // initialCupAtSeat[i]：按存活玩家座位顺序，初始分到第 i 个座位的酒
@@ -445,9 +500,9 @@ registerGame({
         const cup = state.cups.find(c => c.id === state.assignment[pid])
         if (cup) row.cup = publicCup(cup)
       }
-      // 转盘选择仅揭晓后公开；本人随时可见自己的选择
-      if (reveal) row.rotation = state.rotations[pid] ?? null
-      else if (pid === playerId) row.rotation = state.rotations[pid] ?? null
+      // 依次选择后立即公开
+      row.rotation = state.rotations[pid] ?? null
+      row.isCurrentActor = pid === (state.rotationOrder[state.rotationIndex] || null)
       return row
     })
 
@@ -472,6 +527,11 @@ registerGame({
       players,
       cups,
       assignments: state.phase === 'assign' ? {} : { ...state.assignment },
+      currentRotation: state.currentRotation || 0,
+      rotationOrder: [...(state.rotationOrder || [])],
+      rotationIndex: state.rotationIndex || 0,
+      currentActorId: state.rotationOrder[state.rotationIndex] || null,
+      rotationHistory: (state.rotationHistory || []).map(h => ({ ...h })),
       my: null,
       lastResult: reveal ? state.lastResult : null,
       winnerId: state.winnerId || null
@@ -480,13 +540,15 @@ registerGame({
     if (me) {
       const myCupId = state.assignment[playerId]
       const myCup = myCupId ? state.cups.find(c => c.id === myCupId) : null
+      const currentActorId = state.rotationOrder[state.rotationIndex] || null
       base.my = {
         playerId,
         hp: me.hp,
         alive: me.alive,
         isDealer,
         canAssign: isDealer && state.phase === 'assign' && me.alive,
-        canRotate: !isDealer && me.alive && state.phase === 'rotate' && state.rotations[playerId] == null,
+        canRotate: !isDealer && me.alive && state.phase === 'rotate' && currentActorId === playerId,
+        isMyTurn: state.phase === 'rotate' && currentActorId === playerId,
         rotationChosen: state.rotations[playerId] != null,
         myRotation: state.rotations[playerId] ?? null,
         myCup: myCup ? publicCup(myCup) : null
@@ -525,7 +587,12 @@ registerGame({
     const name = p ? p.playerName : playerId
     if (!action) return null
     if (action.type === 'assign') return { text: `${name} 完成了酒杯分配`, data: null }
-    if (action.type === 'rotate') return { text: `${name} 已选择转盘操作`, data: null }
+    if (action.type === 'rotate') {
+      return {
+        text: `${name} 旋转 ${action.rotation} 格`,
+        data: { rotation: action.rotation, currentRotation: state.currentRotation || 0 }
+      }
+    }
     return null
   },
 
@@ -547,6 +614,9 @@ registerGame({
       阶段: state.phase,
       庄家: state.players[state.dealerId]?.playerName || '—',
       存活人数: this._aliveIds(state).length,
+      转盘当前累计: `${state.currentRotation || 0} 格`,
+      行动顺序: (state.rotationOrder || []).map(id => state.players[id]?.playerName || id).join(' → ') || '—',
+      当前行动者: state.players[state.rotationOrder[state.rotationIndex]]?.playerName || '—',
       本轮回合: state.cups.map(c => `${c.emoji}${c.name}${c.poison ? '☠️' : ''}`).join('、')
     }
     if (state.lastResult) {

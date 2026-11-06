@@ -134,7 +134,7 @@
 
               <!-- 毒酒：分配时长 / 转盘时长 / 结算展示 -->
               <template v-if="pendingGame.id === 'poison-drink'">
-                <p class="opt-hint">每位玩家 3 点生命，座位随机固定。每轮庄家为所有存活玩家分配酒杯（毒酒位置仅庄家可见），非庄家秘密选择转盘旋转 0 / 1 / 2 格，统一结算。喝到毒酒 -1 生命，最后存活者获胜。</p>
+                <p class="opt-hint">每位玩家 3 点生命，座位随机固定。每轮庄家为所有存活玩家分配酒杯（毒酒位置仅庄家可见）；非庄家从庄家下一位开始按顺时针依次选择转盘旋转 0 / 1 / 2 格，选择即时公开并转动转盘，最后统一结算。喝到毒酒 -1 生命，最后存活者获胜。</p>
                 <div class="opt-row">
                   <label class="opt-label">庄家分配时长（秒）
                     <input v-model.number="options.assignTime" type="number" min="10" max="600" class="opt-number" />

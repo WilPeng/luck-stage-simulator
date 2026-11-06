@@ -27,7 +27,7 @@
       <h2>毒酒</h2>
       <p>每位玩家初始 <strong>3 点生命</strong>，座位顺序随机生成后固定，庄家随机产生。</p>
       <p>每轮根据存活人数生成同样数量的酒杯，其中随机 <strong>1 ~ N-1 杯有毒</strong>，只有庄家知道毒酒位置。</p>
-      <p>庄家把酒杯分配给所有存活玩家；非庄家玩家秘密选择「不动 / 顺时针 1 格 / 顺时针 2 格」，全部选完后统一揭晓。</p>
+      <p>庄家把酒杯分配给所有存活玩家；非庄家玩家从庄家下一位开始，按顺时针依次选择「不动 / 顺时针 1 格 / 顺时针 2 格」，选择结果即时公开并转动转盘。</p>
       <p>喝到毒酒生命 -1，生命归零淘汰；最后存活者获胜。</p>
       <div v-if="countdown > 0" class="countdown-big"><CountdownDisplay :value="countdown" /></div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
@@ -41,12 +41,60 @@
         <span class="timer" :class="{ urgent: secondsLeft <= 5 }">⏱ {{ secondsLeft }}s</span>
       </div>
 
+      <!-- 转盘 -->
+      <div class="turntable-wrap">
+        <div class="turntable">
+          <div class="wheel-disc" :style="{ transform: `rotate(${wheelRotationDeg}deg)` }">
+            <div
+              v-for="(cup, i) in wheelCups"
+              :key="i"
+              class="wheel-arm"
+              :style="{ transform: `rotate(${i * wheelStepDeg}deg)` }"
+            >
+              <div class="wheel-cup" :class="{ poison: poisonVisible && cup && cup.poison, empty: !cup }">
+                <span v-if="cup">{{ cup.emoji }}</span>
+                <span v-else>·</span>
+              </div>
+            </div>
+          </div>
+          <div class="wheel-hub">
+            <div class="hub-label">转盘</div>
+            <div class="hub-value">{{ state.currentRotation || 0 }} 格</div>
+          </div>
+          <div
+            v-for="(p, i) in wheelSeats"
+            :key="p.playerId"
+            class="seat-marker"
+            :class="{
+              me: p.playerId === myId,
+              dead: !p.alive,
+              dealer: p.isDealer,
+              turn: p.playerId === state.currentActorId
+            }"
+            :style="seatMarkerStyle(i)"
+          >
+            <div class="seat-name">{{ p.playerName }}<span v-if="p.isDealer" class="seat-crown">👑</span></div>
+            <div class="seat-hp">{{ '❤️'.repeat(Math.max(0, p.hp)) || '💀' }}</div>
+            <div v-if="cupAtSeat(i)" class="seat-cup" :class="{ poison: poisonVisible && cupAtSeat(i)?.poison }">
+              <span>{{ cupAtSeat(i)?.emoji }}</span>
+              <span class="seat-cup-name">{{ cupAtSeat(i)?.name }}</span>
+              <span v-if="poisonVisible && cupAtSeat(i)?.poison" class="seat-poison">☠️</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="state.phase === 'rotate'" class="turn-banner" :class="{ mine: state.my?.isMyTurn }">
+          <template v-if="state.my?.isMyTurn">🎯 轮到你选择转盘操作</template>
+          <template v-else-if="state.currentActorId">等待 {{ nameOf(state.currentActorId) }} 选择…</template>
+          <template v-else>正在结算…</template>
+        </div>
+      </div>
+
       <div class="players-board">
         <div
           v-for="p in state.players || []"
           :key="p.playerId"
           class="p-card"
-          :class="{ me: p.playerId === myId, dead: !p.alive, dealer: p.isDealer }"
+          :class="{ me: p.playerId === myId, dead: !p.alive, dealer: p.isDealer, acting: p.playerId === state.currentActorId }"
         >
           <div class="p-top">
             <span class="p-name">{{ p.playerName }}</span>
@@ -57,8 +105,8 @@
             <span class="cup-emoji">{{ p.cup.emoji }}</span>
             <span class="cup-name">{{ p.cup.name }}</span>
           </div>
-          <div v-if="state.phase === 'rotate' && p.alive && !p.isDealer" class="p-rot">
-            {{ p.playerId === myId ? (p.rotation != null ? `已选择 ${p.rotation} 格` : '尚未选择') : (p.rotation != null ? '已选择' : '选择中') }}
+          <div v-if="state.phase === 'rotate' && p.alive && !p.isDealer" class="p-rot" :class="{ acting: p.playerId === state.currentActorId }">
+            {{ p.rotation != null ? `旋转 ${p.rotation} 格` : (p.playerId === state.currentActorId ? '轮到选择…' : '等待中') }}
           </div>
           <div v-if="!p.alive" class="p-dead">已淘汰</div>
         </div>
@@ -105,10 +153,10 @@
         </template>
       </div>
 
-      <!-- 转盘阶段 -->
+      <!-- 转盘阶段：按顺时针依次选择，结果即时公开 -->
       <div v-else-if="state.phase === 'rotate'" class="phase-area">
         <template v-if="state.my?.canRotate">
-          <div class="section-title">选择你的转盘操作（选择将保密，直到所有人完成）</div>
+          <div class="section-title">轮到你选择（选择后立即公开并转动转盘）</div>
           <div v-if="state.my.myCup" class="my-cup">
             你的酒杯：<span class="cup-emoji">{{ state.my.myCup.emoji }}</span>
             <strong>{{ state.my.myCup.name }}</strong>
@@ -120,16 +168,26 @@
           </div>
         </template>
         <template v-else-if="state.my?.isDealer">
-          <div class="waiting-msg">你是庄家，本轮不参与转盘操作，等待其他玩家选择…</div>
-          <div class="submit-count">{{ chosenCount }} / {{ rotatorCount }} 人已选择</div>
+          <div class="waiting-msg">你是庄家，本轮不参与转盘操作；当前轮到 {{ nameOf(state.currentActorId) }} 选择…</div>
         </template>
         <template v-else-if="state.my && !state.my.alive">
           <div class="waiting-msg">你已被淘汰，观战中…</div>
         </template>
-        <template v-else>
-          <div class="waiting-msg">等待其他玩家选择转盘操作…</div>
-          <div class="submit-count">{{ chosenCount }} / {{ rotatorCount }} 人已选择</div>
+        <template v-else-if="state.my?.rotationChosen">
+          <div class="waiting-msg">你已选择旋转 {{ state.my.myRotation }} 格，等待下一位…</div>
         </template>
+        <template v-else>
+          <div class="waiting-msg">当前轮到 {{ nameOf(state.currentActorId) }} 选择…</div>
+        </template>
+        <div class="submit-count">{{ chosenCount }} / {{ rotatorCount }} 人已选择</div>
+        <div v-if="rotationHistory.length" class="rotation-history">
+          <div class="history-title">已公开的选择</div>
+          <div class="history-list">
+            <span v-for="(h, i) in rotationHistory" :key="i" class="history-item">
+              <b>{{ i + 1 }}. {{ h.playerName }}</b> +{{ h.rotation }} 格 → 转盘 {{ h.cumulativeRotation }} 格
+            </span>
+          </div>
+        </div>
       </div>
 
       <!-- 结算阶段 -->
@@ -243,6 +301,67 @@ const allAssigned = computed(() => {
   return ids.length === cups.length && new Set(ids).size === cups.length
 })
 
+// ===== 转盘展示 =====
+const revealActive = computed(() => phase.value === 'reveal' || !!state.value.finished)
+const poisonVisible = computed(() => !!state.value.my?.isDealer || revealActive.value)
+const wheelSeats = computed<any[]>(() => alivePlayers.value)
+const wheelStepDeg = computed(() => wheelSeats.value.length ? 360 / wheelSeats.value.length : 0)
+// 视觉旋转使用未取模的累计格数，避免转满一圈时 CSS 反向回转
+const wheelRotationDeg = computed(() => {
+  if (phase.value === 'assign') return 0
+  const raw = (state.value.rotationHistory || []).reduce((sum: number, h: any) => sum + (Number(h.rotation) || 0), 0)
+  return raw * wheelStepDeg.value
+})
+const cupMap = computed(() => new Map((state.value.cups || []).map((c: any) => [c.id, c])))
+
+const wheelCups = computed(() => {
+  const seats = wheelSeats.value
+  if (phase.value === 'assign') {
+    const hasDraft = seats.some((p: any) => !!assignDraft[p.playerId])
+    if (hasDraft) {
+      return seats.map((p: any) => {
+        const draft = assignDraft[p.playerId]
+        return draft ? (cupMap.value.get(draft) || null) : null
+      })
+    }
+    return seats.map((_: any, i: number) => (state.value.cups || [])[i] || null)
+  }
+  return seats.map((p: any) => {
+    const cid = state.value.assignments?.[p.playerId]
+    return cid ? (cupMap.value.get(cid) || null) : null
+  })
+})
+
+// 当前累计旋转后，第 i 个座位上的酒杯
+function cupAtSeat(i: number) {
+  const seats = wheelSeats.value
+  const n = seats.length
+  if (!n) return null
+  const rotation = phase.value === 'assign' ? 0 : (state.value.currentRotation || 0)
+  const sourceIndex = ((i - rotation) % n + n) % n
+  const pid = seats[sourceIndex]?.playerId
+  const cid = pid ? state.value.assignments?.[pid] : null
+  return cid ? (cupMap.value.get(cid) || null) : null
+}
+
+function seatMarkerStyle(i: number) {
+  const n = wheelSeats.value.length
+  const angle = (i / Math.max(1, n)) * Math.PI * 2 - Math.PI / 2
+  const radius = 41
+  return {
+    left: `${50 + radius * Math.cos(angle)}%`,
+    top: `${50 + radius * Math.sin(angle)}%`
+  }
+}
+
+const rotationHistory = computed<any[]>(() => state.value.rotationHistory || [])
+
+function nameOf(pid: string | null | undefined) {
+  if (!pid) return '—'
+  const p = (state.value.players || []).find((x: any) => x.playerId === pid)
+  return p ? p.playerName : pid
+}
+
 function randomAssign() {
   const cups = [...(state.value.dealerCups || [])]
   for (let i = cups.length - 1; i > 0; i--) {
@@ -298,11 +417,64 @@ p strong { color: #b39bff; }
 .phase-tag.reveal { background: #e6c9881a; color: #e6c988; }
 .timer { margin-left: auto; font-weight: 700; }
 .timer.urgent { color: #ff4444; }
+.turntable-wrap { margin: 0 auto 18px; max-width: 560px; }
+.turntable { position: relative; width: 100%; max-width: 520px; aspect-ratio: 1; margin: 0 auto; }
+.wheel-disc {
+  position: absolute; inset: 16%; border-radius: 50%;
+  border: 3px solid #b39bff55;
+  background:
+    repeating-conic-gradient(from 0deg, #241640 0deg 12deg, #1a1030 12deg 24deg),
+    radial-gradient(circle at 50% 45%, #2b1b50, #10081f);
+  box-shadow: inset 0 0 46px #00000099, 0 0 32px #b39bff22;
+  transition: transform 0.65s cubic-bezier(0.22, 0.85, 0.25, 1);
+  z-index: 1;
+}
+.wheel-arm { position: absolute; inset: 0; }
+.wheel-cup {
+  position: absolute; left: 50%; top: 3%; transform: translateX(-50%);
+  width: 42px; height: 42px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; background: #24163f; border: 1px solid #b39bff66;
+  box-shadow: 0 2px 10px #00000088;
+}
+.wheel-cup.poison { border-color: #ff4444; background: #3a1620; box-shadow: 0 0 16px #ff444488; }
+.wheel-cup.empty { opacity: 0.22; }
+.wheel-hub {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 26%; aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #3a2568, #140b26);
+  border: 2px solid #b39bff66;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 2; box-shadow: 0 0 26px #b39bff33;
+}
+.hub-label { font-size: 11px; color: #a99bd0; }
+.hub-value { font-size: 18px; font-weight: 800; color: #e6c988; }
+.seat-marker {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 92px; padding: 4px 6px; border-radius: 9px;
+  background: #1b1130ee; border: 1px solid #ffffff18;
+  text-align: center; z-index: 3;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.seat-marker.me { border-color: #b39bff88; }
+.seat-marker.dealer { border-color: #e6c98877; }
+.seat-marker.turn { border-color: #00c8ff; box-shadow: 0 0 0 2px #00c8ff44, 0 0 18px #00c8ff55; }
+.seat-marker.dead { opacity: 0.4; }
+.seat-name { font-size: 11px; color: #ece7fb; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seat-crown { margin-left: 2px; }
+.seat-hp { font-size: 10px; letter-spacing: -1px; }
+.seat-cup { display: flex; align-items: center; justify-content: center; gap: 3px; margin-top: 2px; font-size: 11px; color: #e0d7ff; background: #ffffff08; border-radius: 5px; padding: 1px 3px; }
+.seat-cup-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 58px; }
+.seat-cup.poison { color: #ff8f8f; background: #ff44441a; }
+.seat-poison { font-size: 10px; }
+.turn-banner { margin: 10px auto 0; text-align: center; font-size: 13px; color: #b3a6d6; background: #ffffff08; border: 1px solid #ffffff12; border-radius: 8px; padding: 7px 10px; }
+.turn-banner.mine { color: #00c8ff; border-color: #00c8ff55; background: #00c8ff14; font-weight: 700; }
 .players-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
 .p-card { position: relative; background: #1b1130; border: 1px solid #ffffff14; border-radius: 10px; padding: 10px 12px; color: #ddd; }
 .p-card.me { border-color: #b39bff88; box-shadow: 0 0 0 1px #b39bff33; }
 .p-card.dead { opacity: 0.45; }
 .p-card.dealer { border-color: #e6c98866; }
+.p-card.acting { border-color: #00c8ff; box-shadow: 0 0 0 1px #00c8ff55, 0 0 16px #00c8ff33; }
 .p-top { display: flex; align-items: center; gap: 6px; }
 .p-name { flex: 1; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crown { font-size: 14px; }
@@ -311,7 +483,13 @@ p strong { color: #b39bff; }
 .cup-emoji { font-size: 18px; }
 .cup-name { font-size: 12px; color: #e0d7ff; }
 .p-rot { margin-top: 6px; font-size: 12px; color: #7fd8ff; }
+.p-rot.acting { color: #00c8ff; font-weight: 700; }
 .p-dead { margin-top: 6px; font-size: 12px; color: #ff6b6b; }
+.rotation-history { margin-top: 12px; border-top: 1px dashed #ffffff14; padding-top: 10px; }
+.history-title { font-size: 12px; color: #8f83b8; margin-bottom: 6px; }
+.history-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.history-item { font-size: 12px; color: #cfc4ea; background: #ffffff08; border: 1px solid #ffffff12; border-radius: 999px; padding: 3px 9px; }
+.history-item b { color: #e6c988; font-weight: 600; }
 .phase-area { background: #17112a; border: 1px solid #b39bff22; border-radius: 12px; padding: 16px; }
 .section-title { font-size: 14px; font-weight: 600; color: #e6c988; margin-bottom: 12px; }
 .cup-pool { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
@@ -359,6 +537,14 @@ p strong { color: #b39bff; }
 .rank-name { flex: 1; text-align: left; }
 .rank-hp { font-size: 12px; letter-spacing: 1px; }
 .rank-status { font-size: 12px; color: #8f83b8; width: 36px; text-align: right; }
+@media (max-width: 560px) {
+  .seat-marker { width: 74px; padding: 3px 4px; }
+  .seat-name { font-size: 10px; }
+  .seat-cup-name { max-width: 42px; }
+  .wheel-cup { width: 34px; height: 34px; font-size: 18px; }
+  .hub-value { font-size: 14px; }
+  .hub-label { font-size: 9px; }
+}
 @media (max-width: 480px) {
   .poison-drink { padding: 12px; }
   .rotate-buttons { grid-template-columns: 1fr; }

@@ -348,7 +348,7 @@ function buildFeedback(result: any) {
     if (result.gradedCount !== undefined) detail = `本次答对 ${result.gradedCorrect}/${result.gradedCount} 题`
     feedback.value = {
       type: 'wrong',
-      text: `已提交，其中 ${wrongIds.length} 题答错（${wrongIds.map(questionLabel).join('、')}）`,
+      text: `❌ 答案有误：其中 ${wrongIds.length} 题答错（${wrongIds.map(questionLabel).join('、')}）`,
       detail
     }
     return
@@ -378,7 +378,7 @@ function buildFeedback(result: any) {
   } else if (result.correctCount !== undefined) {
     detail = `当前答对 ${result.correctCount} 题`
   }
-  feedback.value = { type: 'wrong', text: '❌ 答案错误，请重新检查', detail }
+  feedback.value = { type: 'wrong', text: '❌ 答案有误，请重新检查', detail }
 }
 
 watch(gameState, (state: any) => {
@@ -395,8 +395,8 @@ watch(gameState, (state: any) => {
     for (const q of state.questions) {
       if (q.userAnswer && batchAnswers.value[q.id] == null) batchAnswers.value[q.id] = q.userAnswer
     }
-    // 批量提交 + 首个全对即胜：持久标记已提交且答错的题
-    if (state.winCondition === 'first_correct') {
+    // 答对即可结束的比赛：持久标记已提交且答错的题
+    if (state.winCondition === 'first_correct' || state.winCondition === 'all_correct') {
       wrongQids.value = state.questions
         .filter((q: any) => q.correct === false && q.userAnswer)
         .map((q: any) => q.id)
