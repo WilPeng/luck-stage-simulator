@@ -83,7 +83,7 @@
 
               <!-- 抓小三：选点时长 / 每回合时长 -->
               <template v-if="pendingGame.id === 'catch-mistress'">
-                <p class="opt-hint">40 个藏身地点，每位选手秘密选择 1 个；随机顺序逐一揭开，被揭中者淘汰，躲到最后的人获胜。若多人选择同一地点且它是最后唯一未揭开的地点，则最先揭开该地点的选手获胜。</p>
+                <p class="opt-hint">40 个藏身地点，每位选手秘密选择 1 个；随机顺序逐一揭开，被揭中者淘汰，躲到最后的人获胜。选手可以揭开自己的藏身处；若某次揭开导致所有剩余选手全部淘汰，则揭开该地点的选手获胜（即使他自己也被淘汰）。</p>
                 <div class="opt-row">
                   <label class="opt-label">选点时长(秒)
                     <input v-model.number="options.hideTime" type="number" min="5" max="120" class="opt-number" />

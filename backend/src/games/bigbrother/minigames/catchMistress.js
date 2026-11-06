@@ -159,39 +159,18 @@ function doReveal(state, playerId, location, now, auto) {
   if (state.revealed[location]) return false
 
   const alive = alivePlayers(state)
-  const beforeUnrevealed = TOTAL - state.revealed.filter(Boolean).length
   const targets = alive.filter(p => p.choice === location)
-  const special = beforeUnrevealed === 1 && alive.length > 1 && alive.every(p => p.choice === location)
 
   state.revealed[location] = true
-
-  if (special) {
-    state.lastReveal = {
-      location,
-      locationName: locName(location),
-      by: playerId,
-      byName: nameOf(state, playerId),
-      eliminated: [],
-      empty: false,
-      special: true,
-      auto: !!auto
-    }
-    state.revealLog.push({ ...state.lastReveal, eliminated: [] })
-    pushEvent(
-      state,
-      'finish',
-      `${auto ? '超时，' : ''}${nameOf(state, playerId)} 揭开最后的藏身点 ${locName(location)}，率先揭开者获胜`,
-      { location, playerId, special: true }
-    )
-    finishWith(state, playerId)
-    return true
-  }
 
   const eliminated = targets.map(p => p.playerId)
   for (const pid of eliminated) {
     state.players[pid].alive = false
     state.players[pid].eliminated = true
   }
+
+  const remaining = alivePlayers(state)
+  const allEliminated = remaining.length === 0
 
   state.lastReveal = {
     location,
@@ -200,7 +179,7 @@ function doReveal(state, playerId, location, now, auto) {
     byName: nameOf(state, playerId),
     eliminated: eliminated.map(pid => ({ playerId: pid, playerName: nameOf(state, pid) })),
     empty: eliminated.length === 0,
-    special: false,
+    special: allEliminated,
     auto: !!auto
   }
   state.revealLog.push({ ...state.lastReveal, eliminated: [...state.lastReveal.eliminated] })
@@ -221,9 +200,12 @@ function doReveal(state, playerId, location, now, auto) {
     )
   }
 
-  const remaining = alivePlayers(state)
-  if (remaining.length <= 1) {
-    finishWith(state, remaining[0] ? remaining[0].playerId : null)
+  if (allEliminated) {
+    finishWith(state, playerId)
+    return true
+  }
+  if (remaining.length === 1) {
+    finishWith(state, remaining[0].playerId)
     return true
   }
   return advanceTurn(state, now)
@@ -233,7 +215,7 @@ registerGame({
   id: 'catch-mistress',
   name: '抓小三',
   icon: '🕵️',
-  description: '40 个藏身地点，每人秘密选择 1 个；随机顺序逐一揭开，被揭中者淘汰，躲到最后的人获胜',
+  description: '40 个藏身地点，每人秘密选择 1 个；随机顺序逐一揭开，被揭中者淘汰，躲到最后的人获胜；若揭开后所有剩余选手全部淘汰，则揭开者获胜',
   category: 'strategy',
   playerCount: { min: 2, max: 20 },
   duration: 900,
@@ -428,9 +410,10 @@ registerGame({
       if (state.finished && state.winnerId === p.playerId) label = '获胜'
       else if (!p.alive) label = '已淘汰'
       else if (state.phase === 'hiding') label = p.choice != null ? '已藏好' : '选择中'
+      const win = state.winnerId === p.playerId
       out[p.playerId] = {
-        score: p.alive ? 1 : 0,
-        progress: p.alive ? 1 : 0,
+        score: p.alive || win ? 1 : 0,
+        progress: p.alive || win ? 1 : 0,
         max: 1,
         done: !p.alive || state.finished === true,
         label,
@@ -507,7 +490,8 @@ registerGame({
       summary: {
         阶段: phaseLabel,
         已揭开: `${state.revealed.filter(Boolean).length}/${TOTAL}`,
-        当前行动: currentTurnId ? nameOf(state, currentTurnId) : '—'
+        当前行动: currentTurnId ? nameOf(state, currentTurnId) : '—',
+        获胜者: state.winnerId ? nameOf(state, state.winnerId) : '—'
       },
       players
     }

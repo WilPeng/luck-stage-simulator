@@ -6,7 +6,7 @@
       <div v-if="winner" class="cm-winner">{{ winner.playerName }} 获胜！</div>
       <div v-else class="cm-winner none">无胜者</div>
       <div class="cm-final-list">
-        <div v-for="p in players" :key="p.playerId" class="cm-final-row" :class="{ me: p.playerId === myId, out: !p.alive }">
+        <div v-for="p in players" :key="p.playerId" class="cm-final-row" :class="{ me: p.playerId === myId, out: !p.alive && p.playerId !== (winner?.playerId || state.winnerId) }">
           <span class="cm-final-name">{{ p.playerName }}</span>
           <span class="cm-final-loc">{{ p.choice != null ? locationText(p.choice) : '未选择' }}</span>
           <span class="cm-final-state" :class="{ win: p.playerId === (winner?.playerId || state.winnerId), out: !p.alive }">
@@ -20,7 +20,7 @@
       <div class="cm-finish-icon">🕵️</div>
       <h2>{{ gameTitle || '抓小三' }}</h2>
       <p>本场共有 {{ totalLocations }} 个藏身地点。每位选手秘密选择 1 个藏身地点，随后按随机顺序逐一揭开地点。被揭开藏身点的选手立即淘汰，躲到最后的人获胜。</p>
-      <p class="cm-rule-note">特别规则：若多人选择同一地点，且这是最后唯一未揭开的地点，则最先揭开该地点的选手获胜。</p>
+      <p class="cm-rule-note">特别规则：选手可以揭开自己的藏身处。若某次揭开导致所有剩余选手全部淘汰，则揭开该地点的选手获胜（即使他自己也被淘汰）。</p>
       <div v-if="countdown > 0" class="countdown-big"><CountdownDisplay :value="countdown" /></div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
@@ -80,7 +80,7 @@
 
       <div v-if="lastReveal" class="cm-last" :class="{ empty: lastReveal.empty, special: lastReveal.special }">
         <template v-if="lastReveal.special">
-          {{ lastReveal.byName }} 揭开最后的藏身点 {{ lastReveal.locationName }}，率先揭开者获胜！
+          {{ lastReveal.byName }} 揭开 {{ lastReveal.locationName }}，所有剩余选手全部淘汰，{{ lastReveal.byName }} 获胜！
         </template>
         <template v-else-if="lastReveal.empty">
           {{ lastReveal.byName }} 揭开了 {{ lastReveal.locationName }}，无人被抓住
@@ -110,7 +110,7 @@
               <span class="cm-log-loc">{{ r.locationName }}</span>
               <span class="cm-log-by">{{ r.byName }}</span>
               <span class="cm-log-result">
-                <template v-if="r.special">率先揭开最后地点，获胜</template>
+                <template v-if="r.special">全员淘汰，揭开者获胜</template>
                 <template v-else-if="r.empty">无人被抓住</template>
                 <template v-else>{{ eliminatedNames(r.eliminated) }} 淘汰</template>
               </span>

@@ -311,8 +311,8 @@
                   <tr v-for="p in detail.participants" :key="p.playerId">
                     <td class="mc-name">{{ p.playerName }}</td>
                     <td>{{ meta.choices?.[p.playerId] || '-' }}</td>
-                    <td class="mc" :class="meta.alive?.includes(p.playerId) ? 'ok' : 'bad'">
-                      {{ meta.alive?.includes(p.playerId) ? '存活' : '淘汰' }}
+                    <td class="mc" :class="(meta.winnerId === p.playerId || meta.alive?.includes(p.playerId)) ? 'ok' : 'bad'">
+                      {{ meta.winnerId === p.playerId ? '获胜' : (meta.alive?.includes(p.playerId) ? '存活' : '淘汰') }}
                     </td>
                   </tr>
                 </tbody>
@@ -321,7 +321,7 @@
                 <div v-for="(r, i) in meta.revealLog" :key="i" class="race-item">
                   <div class="race-head">{{ r.locationName }} · {{ r.byName }}</div>
                   <div>
-                    {{ r.special ? '率先揭开最后地点，获胜' : (r.empty ? '无人被抓住' : eliminatedNames(r.eliminated) + ' 淘汰') }}
+                    {{ r.special ? '全员淘汰，揭开者获胜' : (r.empty ? '无人被抓住' : eliminatedNames(r.eliminated) + ' 淘汰') }}
                   </div>
                 </div>
               </div>
