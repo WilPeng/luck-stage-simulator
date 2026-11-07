@@ -772,6 +772,11 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 .bb-house {
   max-width: 1200px;
   margin: 0 auto;
+  height: calc(100vh - 108px);
+  height: calc(100dvh - 108px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .house-loading-overlay { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #221540; }
 .loading-spinner { width: 36px; height: 36px; border: 3px solid #b39bff22; border-top-color: #b39bff; border-radius: 50%; animation: hspin 0.8s linear infinite; }
@@ -945,7 +950,18 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 .house-layout {
   display: flex;
   gap: 16px;
-  min-height: 500px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.bb-house > .page-header,
+.bb-house > .locked-banner,
+.bb-house > .invite-banner,
+.bb-house > .doorbell-banner,
+.bb-house > .shower-banner,
+.bb-house > .moving-banner,
+.bb-house > .photo-wall-top {
+  flex-shrink: 0;
 }
 .house-left {
   width: 320px;
@@ -953,11 +969,23 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #b39bff55 transparent;
 }
+.house-left::-webkit-scrollbar { width: 6px; }
+.house-left::-webkit-scrollbar-track { background: transparent; }
+.house-left::-webkit-scrollbar-thumb { background: #b39bff44; border-radius: 3px; }
+.house-left::-webkit-scrollbar-thumb:hover { background: #b39bff66; }
 .map-wrap.locked { pointer-events: none; opacity: 0.5; }
 .house-right {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .hoh-panel {
@@ -1051,8 +1079,13 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 .bb-btn-outline:hover { background: #ffffff08; color: #a99bd0; border-color: #ffffff33; }
 
 @media (max-width: 768px) {
-  .house-layout { flex-direction: column; }
-  .house-left { width: 100%; }
+  .bb-house {
+    height: calc(100vh - 92px);
+    height: calc(100dvh - 92px);
+  }
+  .house-layout { flex-direction: column; overflow-y: auto; }
+  .house-left { width: 100%; overflow: visible; }
+  .house-right { min-height: 360px; overflow: visible; }
 }
 .locked-banner { background: #e6c98815; border: 1px solid #e6c98844; color: #e6c988; border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; text-align: center; }
 .photo-wall-top { margin-bottom: 14px; }

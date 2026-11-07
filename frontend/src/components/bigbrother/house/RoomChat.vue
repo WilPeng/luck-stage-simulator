@@ -133,7 +133,8 @@ import { computed } from 'vue'
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-height: clamp(360px, 62vh, 640px);
+  max-height: 100%;
+  min-height: 0;
   background: #1b1130;
   border: 1px solid #b39bff22;
   border-radius: 12px;
@@ -147,6 +148,7 @@ import { computed } from 'vue'
   padding: 12px 16px;
   border-bottom: 1px solid #ffffff08;
   background: #1e1436;
+  flex-shrink: 0;
 }
 .chat-room-info {
   display: flex;
@@ -178,6 +180,7 @@ import { computed } from 'vue'
   flex-wrap: wrap;
   min-height: 34px;
   align-items: center;
+  flex-shrink: 0;
 }
 .presence-player {
   display: flex;
@@ -294,6 +297,7 @@ import { computed } from 'vue'
   padding: 10px 16px;
   border-top: 1px solid #ffffff08;
   background: #1e1436;
+  flex-shrink: 0;
 }
 .msg-input {
   flex: 1;
