@@ -86,6 +86,7 @@ const props = defineProps<{
   connected: boolean
   hasMore: boolean
   loading: boolean
+  active?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -123,6 +124,7 @@ function scrollToBottom() {
 }
 
 watch(() => props.messages.length, scrollToBottom)
+watch(() => props.active, (v) => { if (v) scrollToBottom() })
 onMounted(scrollToBottom)
 
 import { computed } from 'vue'

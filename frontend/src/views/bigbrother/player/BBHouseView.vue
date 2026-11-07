@@ -75,9 +75,23 @@
       <PhotoWall :players="photoWallPlayers" />
     </div>
 
+    <!-- 手机端：移动/操作 与 聊天 两个标签页 -->
+    <div class="mobile-tabs">
+      <button
+        class="mobile-tab"
+        :class="{ active: mobileTab === 'move' }"
+        @click="mobileTab = 'move'"
+      >🗺 移动 / 操作</button>
+      <button
+        class="mobile-tab"
+        :class="{ active: mobileTab === 'chat' }"
+        @click="mobileTab = 'chat'"
+      >💬 聊天</button>
+    </div>
+
     <div class="house-layout">
       <!-- 左侧：房屋地图 -->
-      <div class="house-left">
+      <div class="house-left" :class="{ 'mobile-active': mobileTab === 'move' }">
         <div class="map-wrap" :class="{ locked: isShowering || isSleeping || moving }">
           <HouseMap
             :rooms="rooms"
@@ -196,7 +210,7 @@
       </div>
 
       <!-- 右侧：房间聊天 -->
-      <div class="house-right">
+      <div class="house-right" :class="{ 'mobile-active': mobileTab === 'chat' }">
         <RoomChat
           :roomId="currentRoomId"
           :roomName="currentRoomName"
@@ -206,6 +220,7 @@
           :connected="house.connected.value"
           :hasMore="hasMore"
           :loading="loadingMore"
+          :active="mobileTab === 'chat'"
           @send="handleSend"
           @load-more="handleLoadMore"
         />
@@ -248,6 +263,7 @@ const seasonStore = useBbSeasonStore()
 const house = useHouseSocket()
 
 const currentRoomId = ref('living_room')
+const mobileTab = ref<'move' | 'chat'>('move')
 const locationLoaded = ref(false)
 const rooms = ref<BBHouseRoomWithCount[]>([])
 const reachableRooms = ref<any[]>([])
@@ -947,6 +963,25 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.mobile-tabs { display: none; }
+.mobile-tab {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #b39bff33;
+  background: #17112a;
+  color: #a99bd0;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mobile-tab.active {
+  border-color: #b39bff;
+  background: #b39bff22;
+  color: #ece7fb;
+  font-weight: 600;
+}
+
 .house-layout {
   display: flex;
   gap: 16px;
@@ -960,7 +995,8 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 .bb-house > .doorbell-banner,
 .bb-house > .shower-banner,
 .bb-house > .moving-banner,
-.bb-house > .photo-wall-top {
+.bb-house > .photo-wall-top,
+.bb-house > .mobile-tabs {
   flex-shrink: 0;
 }
 .house-left {
@@ -1083,9 +1119,14 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
     height: calc(100vh - 92px);
     height: calc(100dvh - 92px);
   }
-  .house-layout { flex-direction: column; overflow-y: auto; }
-  .house-left { width: 100%; overflow: visible; }
-  .house-right { min-height: 360px; overflow: visible; }
+  .mobile-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .house-layout { flex-direction: column; overflow: hidden; }
+  .house-left,
+  .house-right { width: 100%; flex: 1; min-height: 0; }
+  .house-left { overflow-y: auto; }
+  .house-right { overflow: hidden; }
+  .house-left:not(.mobile-active),
+  .house-right:not(.mobile-active) { display: none; }
 }
 .locked-banner { background: #e6c98815; border: 1px solid #e6c98844; color: #e6c988; border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; text-align: center; }
 .photo-wall-top { margin-bottom: 14px; }
