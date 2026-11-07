@@ -55,6 +55,30 @@
       </div>
     </div>
 
+    <!-- 聊天框内弹出邀请提示 -->
+    <div v-if="hohInvite || moveInvite" class="chat-invites">
+      <div v-if="hohInvite" class="chat-invite">
+        <div class="ci-icon">👑</div>
+        <div class="ci-body">
+          <div class="ci-title">{{ hohInvite.hohName }} 邀请你进入 HOH Room</div>
+          <div class="ci-actions">
+            <button class="ci-btn primary" @click="$emit('accept-hoh-invite')">接受</button>
+            <button class="ci-btn" @click="$emit('decline-hoh-invite')">拒绝</button>
+          </div>
+        </div>
+      </div>
+      <div v-if="moveInvite" class="chat-invite">
+        <div class="ci-icon">👥</div>
+        <div class="ci-body">
+          <div class="ci-title">{{ moveInvite.inviterName }} 邀请你一同前往 {{ moveInvite.roomName }}</div>
+          <div class="ci-actions">
+            <button class="ci-btn primary" @click="$emit('accept-move-invite')">同意</button>
+            <button class="ci-btn" @click="$emit('decline-move-invite')">拒绝</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 输入框 -->
     <div class="chat-input">
       <input
@@ -87,11 +111,17 @@ const props = defineProps<{
   hasMore: boolean
   loading: boolean
   active?: boolean
+  hohInvite?: { hohName: string; hohId: string; roomId: string } | null
+  moveInvite?: { inviterId: string; inviterName: string; targetRoomId: string; roomName: string } | null
 }>()
 
 const emit = defineEmits<{
   (e: 'send', content: string): void
   (e: 'load-more'): void
+  (e: 'accept-hoh-invite'): void
+  (e: 'decline-hoh-invite'): void
+  (e: 'accept-move-invite'): void
+  (e: 'decline-move-invite'): void
 }>()
 
 const authStore = useBbAuthStore()
@@ -305,6 +335,42 @@ import { computed } from 'vue'
   font-size: 13px;
 }
 .empty-icon { font-size: 24px; opacity: 0.4; }
+
+.chat-invites {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid #ffffff08;
+  background: #1e1436;
+  flex-shrink: 0;
+}
+.chat-invite {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid #e6c98866;
+  background: #e6c98814;
+  border-radius: 10px;
+}
+.ci-icon { font-size: 20px; line-height: 1.2; flex-shrink: 0; }
+.ci-body { flex: 1; min-width: 0; }
+.ci-title { font-size: 13px; color: #ece7fb; line-height: 1.5; }
+.ci-actions { display: flex; gap: 8px; margin-top: 8px; }
+.ci-btn {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid #ffffff22;
+  background: transparent;
+  color: #cfc4ea;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ci-btn:hover { background: #ffffff10; }
+.ci-btn.primary { border-color: #b39bff66; background: #b39bff22; color: #b39bff; }
+.ci-btn.primary:hover { background: #b39bff33; }
 
 .chat-input {
   display: flex;

@@ -24,29 +24,7 @@
       🔒 {{ houseLockReason || '你当前处于特殊区域，只能由管理员安排移动' }}
     </div>
 
-    <!-- HOH 邀请提示 -->
-    <div v-if="inviteData" class="invite-banner">
-      <div class="invite-icon">👑</div>
-      <div class="invite-info">
-        <div class="invite-text">{{ inviteData.hohName }} 邀请你进入 HOH Room</div>
-        <div class="invite-actions">
-          <button class="bb-btn bb-btn-sm" @click="handleAcceptInvite">接受</button>
-          <button class="bb-btn bb-btn-sm bb-btn-outline" @click="handleDeclineInvite">拒绝</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 同行邀请提示 -->
-    <div v-if="moveInviteData" class="invite-banner">
-      <div class="invite-icon">👥</div>
-      <div class="invite-info">
-        <div class="invite-text">{{ moveInviteData.inviterName }} 邀请你一起前往 {{ moveInviteData.roomName }}</div>
-        <div class="invite-actions">
-          <button class="bb-btn bb-btn-sm" @click="handleAcceptMoveInvite">同意</button>
-          <button class="bb-btn bb-btn-sm bb-btn-outline" @click="handleDeclineMoveInvite">拒绝</button>
-        </div>
-      </div>
-    </div>
+    <!-- HOH / 同行邀请改为在聊天框内显示 -->
 
     <!-- HOH 门铃提示（房内的人收到） -->
     <div v-if="doorbellNotice" class="doorbell-banner">
@@ -224,8 +202,14 @@
           :hasMore="hasMore"
           :loading="loadingMore"
           :active="mobileTab === 'chat'"
+          :hohInvite="inviteData"
+          :moveInvite="moveInviteData"
           @send="handleSend"
           @load-more="handleLoadMore"
+          @accept-hoh-invite="handleAcceptInvite"
+          @decline-hoh-invite="handleDeclineInvite"
+          @accept-move-invite="handleAcceptMoveInvite"
+          @decline-move-invite="handleDeclineMoveInvite"
         />
       </div>
     </div>
@@ -267,6 +251,9 @@ const house = useHouseSocket()
 
 const currentRoomId = ref('living_room')
 const mobileTab = ref<'move' | 'chat'>('move')
+function isMobileView() {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
+}
 const locationLoaded = ref(false)
 const rooms = ref<BBHouseRoomWithCount[]>([])
 const reachableRooms = ref<any[]>([])
@@ -488,6 +475,7 @@ house.onMonitorUpdate.value = (data) => {
 
 house.onInviteReceived.value = (data) => {
   inviteData.value = data
+  if (isMobileView()) mobileTab.value = 'chat'
 }
 
 house.onInviteAccepted.value = (data) => {
@@ -515,6 +503,7 @@ house.onInviteCancelled.value = (data) => {
 
 house.onMoveInviteReceived.value = (data) => {
   moveInviteData.value = data
+  if (isMobileView()) mobileTab.value = 'chat'
 }
 
 house.onMoveInviteSent.value = (data) => {
