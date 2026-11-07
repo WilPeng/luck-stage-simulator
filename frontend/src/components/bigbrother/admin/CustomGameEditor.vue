@@ -80,7 +80,7 @@
               <label>题目放出方式</label>
               <select v-model="form.questionRelease" class="bb-input">
                 <option value="all">同时放出（全部题目一起展示）</option>
-                <option value="sequential">逐题放出（一题一题展示）</option>
+                <option value="sequential">逐题放出（一题一题展示，每题仅可作答一次，答错进入下一题）</option>
               </select>
             </div>
             <div class="form-row">

@@ -170,6 +170,9 @@
             </button>
           </div>
         </div>
+        <div v-else class="completed">
+          <span class="done-msg">已答完所有题目，等待比赛结束...</span>
+        </div>
       </template>
 
       <!-- 反馈 -->
