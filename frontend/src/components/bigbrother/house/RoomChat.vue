@@ -133,6 +133,7 @@ import { computed } from 'vue'
   display: flex;
   flex-direction: column;
   height: 100%;
+  max-height: clamp(360px, 62vh, 640px);
   background: #1b1130;
   border: 1px solid #b39bff22;
   border-radius: 12px;
@@ -201,12 +202,19 @@ import { computed } from 'vue'
 
 .messages-container {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #b39bff55 transparent;
 }
+.messages-container::-webkit-scrollbar { width: 6px; }
+.messages-container::-webkit-scrollbar-track { background: transparent; }
+.messages-container::-webkit-scrollbar-thumb { background: #b39bff44; border-radius: 3px; }
+.messages-container::-webkit-scrollbar-thumb:hover { background: #b39bff66; }
 
 .load-more {
   text-align: center;
