@@ -410,8 +410,8 @@ function createCustomGameHandler(gameDef) {
         } else {
           // 只有答错才进入提交冷却
           if (cooldownMs > 0) ps.cooldownUntil = Date.now() + cooldownMs
-          // 逐题放出模式：每题只作答一次，答错不计分并直接进入下一题
-          if (gameDef.lockOnWrong || releaseSequential) {
+          // 逐题放出 + 开启“答错进入下一题”：每题只作答一次，答错不计分并直接进入下一题
+          if (gameDef.lockOnWrong || (releaseSequential && gameDef.advanceOnWrong)) {
             ps.locked[q.id] = true
             advanceIndex(ps)
           }

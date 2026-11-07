@@ -86,6 +86,8 @@ class BBCustomGame extends BaseModel {
       : 'wrong_only'
     // 答错是否锁定该题（锁定后该题不可再作答）
     this.lockOnWrong = data.lockOnWrong ?? false
+    // 逐题模式下答错后是否直接进入下一题（每题仅作答一次）
+    this.advanceOnWrong = data.advanceOnWrong ?? false
 
     // ===== 答对赛制（quiz） =====
     // winCondition: all_correct | target_correct | admin_judge | first_correct | most_correct

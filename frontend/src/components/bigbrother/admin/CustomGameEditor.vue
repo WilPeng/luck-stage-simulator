@@ -80,7 +80,7 @@
               <label>题目放出方式</label>
               <select v-model="form.questionRelease" class="bb-input">
                 <option value="all">同时放出（全部题目一起展示）</option>
-                <option value="sequential">逐题放出（一题一题展示，每题仅可作答一次，答错进入下一题）</option>
+                <option value="sequential">逐题放出（一题一题展示）</option>
               </select>
             </div>
             <div class="form-row">
@@ -108,6 +108,13 @@
               <select v-model="form.lockOnWrong" class="bb-input">
                 <option :value="false">不锁定（可重答）</option>
                 <option :value="true">锁定（该题不可再答）</option>
+              </select>
+            </div>
+            <div class="form-row" v-if="form.questionRelease === 'sequential'">
+              <label>答错后进入下一题（每题仅作答一次）</label>
+              <select v-model="form.advanceOnWrong" class="bb-input">
+                <option :value="false">否（答错可重答）</option>
+                <option :value="true">是（答错不计分，直接下一题）</option>
               </select>
             </div>
             <div class="form-row">
@@ -411,6 +418,7 @@ const form = reactive({
   wrongFeedback: 'none' as 'none' | 'count' | 'reveal' | 'all_correct_only',
   wrongHint: 'wrong_only' as 'wrong_only' | 'wrong_count' | 'wrong_detail' | 'wrong_count_detail',
   lockOnWrong: false,
+  advanceOnWrong: false,
   targetCorrect: 1,
   cooldownSeconds: 5,
   maxAttempts: 0,
@@ -513,6 +521,7 @@ onMounted(() => {
     form.wrongFeedback = (props.game as any).wrongFeedback || 'none'
     form.wrongHint = (props.game as any).wrongHint || 'wrong_only'
     form.lockOnWrong = !!(props.game as any).lockOnWrong
+    form.advanceOnWrong = !!(props.game as any).advanceOnWrong
     form.targetCorrect = (props.game as any).targetCorrect ?? 1
     form.cooldownSeconds = props.game.cooldownSeconds
     form.maxAttempts = props.game.maxAttempts
@@ -621,6 +630,7 @@ async function save() {
       wrongFeedback: form.wrongFeedback,
       wrongHint: form.wrongHint,
       lockOnWrong: form.lockOnWrong,
+      advanceOnWrong: form.advanceOnWrong,
       targetCorrect: form.targetCorrect,
       cooldownSeconds: form.cooldownSeconds,
       maxAttempts: form.maxAttempts,

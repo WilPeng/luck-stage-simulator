@@ -101,7 +101,7 @@ router.post('/', async (req, res) => {
     const {
       name, description, rules, icon, type, questions, cooldownSeconds, maxAttempts,
       timeLimit, scoringRule, playerCount, winCondition,
-      submitMode, wrongFeedback, wrongHint, lockOnWrong, targetCorrect,
+      submitMode, wrongFeedback, wrongHint, lockOnWrong, advanceOnWrong, targetCorrect,
       eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit, media,
       lives, raceTarget, racePoints, revealTime
     } = req.body
@@ -151,6 +151,7 @@ router.post('/', async (req, res) => {
       wrongFeedback: wrongFeedback || 'none',
       wrongHint: ALLOWED_WRONG_HINTS.includes(wrongHint) ? wrongHint : 'wrong_only',
       lockOnWrong: !!lockOnWrong,
+      advanceOnWrong: !!advanceOnWrong,
       targetCorrect: targetCorrect ?? 1,
       eliminateRule: eliminateRule || 'last',
       showSubmissions: showSubmissions !== false,
@@ -185,7 +186,7 @@ router.put('/:id', async (req, res) => {
     const {
       name, description, rules, icon, type, questions, cooldownSeconds, maxAttempts,
       timeLimit, scoringRule, playerCount, winCondition, enabled,
-      submitMode, wrongFeedback, wrongHint, lockOnWrong, targetCorrect,
+      submitMode, wrongFeedback, wrongHint, lockOnWrong, advanceOnWrong, targetCorrect,
       eliminateRule, showSubmissions, basicTimeLimit, tiebreakTimeLimit, media,
       lives, raceTarget, racePoints, revealTime
     } = req.body
@@ -223,6 +224,7 @@ router.put('/:id', async (req, res) => {
     if (wrongFeedback !== undefined) existing.wrongFeedback = wrongFeedback
     if (wrongHint !== undefined && ALLOWED_WRONG_HINTS.includes(wrongHint)) existing.wrongHint = wrongHint
     if (lockOnWrong !== undefined) existing.lockOnWrong = !!lockOnWrong
+    if (advanceOnWrong !== undefined) existing.advanceOnWrong = !!advanceOnWrong
     if (targetCorrect !== undefined) existing.targetCorrect = targetCorrect
     if (eliminateRule !== undefined) existing.eliminateRule = eliminateRule
     if (showSubmissions !== undefined) existing.showSubmissions = !!showSubmissions

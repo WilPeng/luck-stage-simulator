@@ -685,6 +685,7 @@ export interface BBCustomGameDef {
   wrongFeedback: CustomGameWrongFeedback
   wrongHint?: 'wrong_only' | 'wrong_count' | 'wrong_detail' | 'wrong_count_detail'
   lockOnWrong: boolean
+  advanceOnWrong?: boolean
   targetCorrect: number
   cooldownSeconds: number
   maxAttempts: number
