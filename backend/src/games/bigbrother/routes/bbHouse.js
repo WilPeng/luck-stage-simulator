@@ -1226,7 +1226,18 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
     const rooms = await BBHouseRoom.find({ gameId })
     const guests = await BBHouseguest.find({ gameId })
     const guestById = {}
-    guests.forEach(g => { guestById[g.id] = { playerId: g.id, name: g.name, avatar: g.avatar || null } })
+    const guestSleepById = {}
+    guests.forEach(g => {
+      guestById[g.id] = { playerId: g.id, name: g.name, avatar: g.avatar || null }
+      // 睡眠时间段：睡眠中的人不应被算作“看到”该消息
+      const start = g.sleepStartedAt ? new Date(g.sleepStartedAt).getTime() : null
+      const wakeAt = g.wakeAt ? new Date(g.wakeAt).getTime() : null
+      guestSleepById[g.id] = {
+        sleeping: !!g.isSleeping,
+        start: Number.isFinite(start) ? start : null,
+        end: Number.isFinite(wakeAt) ? wakeAt : null
+      }
+    })
 
     // 位置历史按房间分组
     const history = await BBLocationHistory.find({ gameId })
@@ -1244,7 +1255,14 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
         const from = new Date(iv.from).getTime()
         const to = iv.to ? new Date(iv.to).getTime() : Infinity
         // 仅统计仍存在的房客，过滤已删除/已不存在的历史记录
-        if (t >= from && t <= to && guestById[iv.playerId]) seen.add(iv.playerId)
+        if (t >= from && t <= to && guestById[iv.playerId]) {
+          const sleep = guestSleepById[iv.playerId]
+          // 当前仍在睡眠：从入睡时刻起的所有消息都不算“看到”
+          // 已经醒来：睡眠区间内的消息也不算“看到”
+          const inSleep = sleep && sleep.start != null && t >= sleep.start &&
+            (sleep.sleeping || sleep.end == null || t <= sleep.end)
+          if (!inSleep) seen.add(iv.playerId)
+        }
       }
       const seenBy = Array.from(seen).map(id => guestById[id])
       return { ...m.toObject(), seenBy }
