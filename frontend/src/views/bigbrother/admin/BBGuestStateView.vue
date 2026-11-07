@@ -16,6 +16,7 @@
             <th>状态</th>
             <th>位置</th>
             <th>本轮已睡</th>
+            <th>入睡时间</th>
             <th>在睡觉</th>
             <th>洗澡冷却</th>
             <th>在洗澡</th>
@@ -37,6 +38,7 @@
                 {{ g.sleepCompleted ? '已完成' : '未完成' }}
               </span>
             </td>
+            <td>{{ g.sleepStartedAt ? formatTime(g.sleepStartedAt) : '—' }}</td>
             <td>
               <span v-if="g.isSleeping" class="badge sleeping" :title="g.wakeAt ? '醒来：' + formatTime(g.wakeAt) : ''">睡眠中</span>
               <span v-else class="badge none">清醒</span>
@@ -62,7 +64,7 @@
               <button v-if="cooldownActive(g)" class="bb-btn-xs" @click="shower(g, 'clear')">清除洗澡冷却</button>
             </td>
           </tr>
-          <tr v-if="!houseguests.length"><td colspan="8" class="empty">暂无房客</td></tr>
+          <tr v-if="!houseguests.length"><td colspan="9" class="empty">暂无房客</td></tr>
         </tbody>
       </table>
     </div>

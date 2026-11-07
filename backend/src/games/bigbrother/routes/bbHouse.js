@@ -1293,7 +1293,7 @@ router.get('/admin/guest-states', auth, requireAdmin, async (req, res) => {
           return {
             id: g.id, name: g.name, avatar: g.avatar, role: g.role, status: g.status,
             currentRoomId: g.currentRoomId,
-            isSleeping: g.isSleeping, wakeAt: g.wakeAt, lastSleepDate: g.lastSleepDate,
+            isSleeping: g.isSleeping, sleepStartedAt: g.sleepStartedAt, wakeAt: g.wakeAt, lastSleepDate: g.lastSleepDate,
             sleepCycleDate: sleepState.cycleDate,
             sleepCompleted: sleepState.completed,
             canSleepNow: sleepState.inWindow,
