@@ -280,6 +280,19 @@ import { computed } from 'vue'
   word-break: break-word;
 }
 
+.self-msg .msg-row {
+  flex-direction: row-reverse;
+}
+.self-msg .msg-body {
+  align-items: flex-end;
+  text-align: right;
+}
+.self-msg .msg-header {
+  justify-content: flex-end;
+}
+.self-msg .msg-content {
+  text-align: right;
+}
 .self-msg .msg-sender { color: #66aaff; }
 
 .empty-messages {
