@@ -8,7 +8,7 @@
           <option value="">全部房间</option>
           <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
         </select>
-        <button class="bb-btn" @click="loadLogs">刷新</button>
+        <button class="bb-btn" @click="loadLogs(true)">刷新</button>
         <button class="bb-btn" :class="{ active: composerVisible }" @click="toggleComposer">
           💬 房间发言{{ composerVisible ? ' ▲' : ' ▼' }}
         </button>
@@ -112,7 +112,7 @@ async function sendMessage() {
   try {
     await bbAdminSendMessage(roomId, content)
     composerText.value = ''
-    if (!roomFilter.value || roomFilter.value === roomId) await loadLogs()
+    if (!roomFilter.value || roomFilter.value === roomId) await loadLogs(true)
   } catch (e: any) {
     alert(e?.message || '发言失败')
   } finally {
@@ -161,20 +161,25 @@ const grouped = computed(() => {
 function selectRoom(id: string) {
   roomFilter.value = id
   if (id) composerRoom.value = id
-  loadLogs()
+  loadLogs(true)
 }
 
 function onRoomFilterChange() {
   if (roomFilter.value) composerRoom.value = roomFilter.value
-  loadLogs()
+  loadLogs(true)
 }
 
-async function loadLogs() {
+async function loadLogs(forceBottom = false) {
   try {
+    const el = scrollEl.value
+    // 仅当管理员本来就在底部附近时才跟随新消息，避免打断向上翻阅
+    const wasNearBottom = !el || (el.scrollHeight - el.scrollTop - el.clientHeight < 80)
     const res = await bbAdminChatLogs(roomFilter.value || undefined)
     logs.value = res?.messages || []
     await nextTick()
-    if (scrollEl.value) scrollEl.value.scrollTop = scrollEl.value.scrollHeight
+    if (scrollEl.value && (forceBottom || wasNearBottom)) {
+      scrollEl.value.scrollTop = scrollEl.value.scrollHeight
+    }
   } catch { logs.value = [] }
 }
 
@@ -188,8 +193,8 @@ async function loadRooms() {
 onMounted(async () => {
   realtime.connect()
   await loadRooms()
-  await loadLogs()
-  timer = setInterval(loadLogs, 5000)
+  await loadLogs(true)
+  timer = setInterval(() => loadLogs(false), 5000)
 })
 onUnmounted(() => {
   if (timer) { clearInterval(timer); timer = null }
