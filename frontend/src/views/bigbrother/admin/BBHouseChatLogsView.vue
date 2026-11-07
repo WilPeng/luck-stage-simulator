@@ -38,9 +38,9 @@
                 </div>
                 <div class="bubble">{{ m.content }}</div>
                 <div class="seen" @click="toggleDetail(m.id)">
-                  👁 {{ (m.seenBy || []).length }} 人看到 {{ expanded === m.id ? '▲' : '▼' }}
+                  👁 {{ (m.seenBy || []).length }} 人看到 {{ expanded.has(m.id) ? '▲' : '▼' }}
                 </div>
-                <div v-if="expanded === m.id" class="seen-detail">
+                <div v-if="expanded.has(m.id)" class="seen-detail">
                   <div v-if="(m.seenBy || []).length" class="seen-avatars">
                     <div v-for="v in m.seenBy" :key="v.playerId || v" class="seen-avatar" :title="v.name || v">
                       <BBAvatar :name="v.name || String(v)" :avatar="v.avatar || null" size="sm" />
@@ -85,7 +85,7 @@ import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 const rooms = ref<any[]>([])
 const roomFilter = ref('')
 const logs = ref<any[]>([])
-const expanded = ref<string | null>(null)
+const expanded = ref<Set<string>>(new Set())
 const keyword = ref('')
 const scrollEl = ref<HTMLElement | null>(null)
 let timer: ReturnType<typeof setInterval> | null = null
@@ -126,7 +126,12 @@ function roomName(id: string) {
 function countByRoom(id: string) {
   return logs.value.filter(m => m.roomId === id).length
 }
-function toggleDetail(id: string) { expanded.value = expanded.value === id ? null : id }
+function toggleDetail(id: string) {
+  const next = new Set(expanded.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expanded.value = next
+}
 function pad(n: number) { return String(n).padStart(2, '0') }
 function formatTime(t: string) {
   if (!t) return ''
