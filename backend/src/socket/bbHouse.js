@@ -466,6 +466,16 @@ function initBBHouseSocket(io) {
           targetRoomIcon: ctx.targetRoom.icon,
           at: Date.now()
         }
+        // 同一邀请人同时只保留一个待处理邀请：自动取消之前发给其他人的邀请
+        for (const [prevTargetId, prevInvite] of pendingMoveInvites) {
+          if (prevInvite.inviterId !== socket.userId) continue
+          if (prevTargetId === targetPlayerId) continue
+          pendingMoveInvites.delete(prevTargetId)
+          emitToUser(prevTargetId, 'house:move-invite-cancelled', {
+            inviterId: socket.userId,
+            inviterName: socket.userName
+          })
+        }
         pendingMoveInvites.set(targetPlayerId, invite)
         emitToUser(targetPlayerId, 'house:move-invite-received', {
           inviterId: socket.userId,
@@ -540,6 +550,30 @@ function initBBHouseSocket(io) {
         })
       } catch (e) {
         console.error('[BBHouse] Decline move invite error:', e)
+      }
+    })
+
+    // 邀请人主动取消同行邀请
+    socket.on('house:cancel-move-invite', () => {
+      try {
+        let cancelled = 0
+        for (const [targetId, invite] of pendingMoveInvites) {
+          if (invite.inviterId !== socket.userId) continue
+          pendingMoveInvites.delete(targetId)
+          emitToUser(targetId, 'house:move-invite-cancelled', {
+            inviterId: socket.userId,
+            inviterName: socket.userName
+          })
+          socket.emit('house:move-invite-cancelled', {
+            targetPlayerId: targetId,
+            targetPlayerName: invite.targetPlayerName,
+            bySelf: true
+          })
+          cancelled++
+        }
+        if (!cancelled) socket.emit('house:error', { error: '没有待取消的同行邀请' })
+      } catch (e) {
+        console.error('[BBHouse] Cancel move invite error:', e)
       }
     })
 

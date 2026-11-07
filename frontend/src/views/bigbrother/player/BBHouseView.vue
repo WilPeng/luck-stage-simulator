@@ -162,7 +162,10 @@
             </select>
             <button class="bb-btn bb-btn-sm" :disabled="!coMoveTargetId || !coMoveRoomId" @click="handleInviteCoMove">邀请</button>
           </div>
-          <div v-if="coMovePendingName" class="action-hint">已邀请 {{ coMovePendingName }}，等待同意…</div>
+          <div v-if="coMovePendingName" class="action-hint co-move-pending">
+            <span>已邀请 {{ coMovePendingName }}，等待同意…</span>
+            <button class="bb-btn bb-btn-xs" @click="handleCancelCoMoveInvite">取消邀请</button>
+          </div>
           <div v-if="coMoveNotice" class="invite-notice">{{ coMoveNotice }}</div>
         </div>
 
@@ -531,6 +534,19 @@ house.onMoveInviteDeclined.value = (data) => {
   window.setTimeout(() => { coMoveNotice.value = '' }, 4000)
 }
 
+house.onMoveInviteCancelled.value = (data) => {
+  if (data.targetPlayerId) {
+    // 邀请人侧：自己取消，或被新的邀请替代
+    coMovePendingName.value = ''
+    coMoveNotice.value = '已取消同行邀请'
+    window.setTimeout(() => { coMoveNotice.value = '' }, 4000)
+  }
+  if (data.inviterId) {
+    // 被邀请人侧：邀请已取消
+    moveInviteData.value = null
+  }
+}
+
 house.onBroadcast.value = (data) => {
   broadcastData.value = data
 }
@@ -704,6 +720,13 @@ function handleInviteCoMove() {
   house.inviteMove(coMoveTargetId.value, coMoveRoomId.value)
   coMoveTargetId.value = ''
   coMoveRoomId.value = ''
+}
+
+function handleCancelCoMoveInvite() {
+  house.cancelMoveInvite()
+  coMovePendingName.value = ''
+  coMoveNotice.value = '已取消同行邀请'
+  window.setTimeout(() => { coMoveNotice.value = '' }, 4000)
 }
 
 function handleAcceptMoveInvite() {
@@ -919,6 +942,7 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   background: #1b1130; border: 1px solid #b39bff33; border-radius: 10px; padding: 12px 14px;
 }
 .action-hint { font-size: 11px; color: #8f83b8; }
+.co-move-pending { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .comove-panel { background: #1b1130; border: 1px solid #b39bff33; border-radius: 10px; padding: 14px; }
 .comove-title { font-size: 14px; color: #b39bff; font-weight: 600; margin-bottom: 10px; }

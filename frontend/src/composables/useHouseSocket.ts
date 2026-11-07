@@ -64,6 +64,7 @@ export function useHouseSocket() {
   const onMoveInviteSent = ref<((data: { targetPlayerId: string; targetPlayerName: string; targetRoomId: string; roomName: string }) => void) | null>(null)
   const onMoveInviteAccepted = ref<((data: { playerId: string; playerName: string; targetRoomId: string; roomName: string }) => void) | null>(null)
   const onMoveInviteDeclined = ref<((data: { playerId: string; playerName: string }) => void) | null>(null)
+  const onMoveInviteCancelled = ref<((data: { inviterId?: string; inviterName?: string; targetPlayerId?: string; targetPlayerName?: string; bySelf?: boolean }) => void) | null>(null)
   const onBroadcast = ref<((data: { type: string; roomId: string | null; message: string; from: string; at: string }) => void) | null>(null)
   const onSleepForced = ref<((data: { wakeAt: string; sleepCycleDate?: string; sleepDurationMinutes?: number }) => void) | null>(null)
   const onMoveStarted = ref<((data: { fromRoomId: string; toRoomId: string; roomName?: string; roomIcon?: string; durationSeconds: number; endsAt: string; reason?: string }) => void) | null>(null)
@@ -110,6 +111,7 @@ export function useHouseSocket() {
     s.on('house:move-invite-sent', (data) => onMoveInviteSent.value?.(data))
     s.on('house:move-invite-accepted', (data) => onMoveInviteAccepted.value?.(data))
     s.on('house:move-invite-declined', (data) => onMoveInviteDeclined.value?.(data))
+    s.on('house:move-invite-cancelled', (data) => onMoveInviteCancelled.value?.(data))
     s.on('house:broadcast', (data) => onBroadcast.value?.(data))
     s.on('house:sleep-forced', (data) => onSleepForced.value?.(data))
     s.on('house:move-started', (data) => onMoveStarted.value?.(data))
@@ -169,6 +171,10 @@ export function useHouseSocket() {
     socket.value?.emit('house:decline-move-invite')
   }
 
+  function cancelMoveInvite() {
+    socket.value?.emit('house:cancel-move-invite')
+  }
+
   function setHohDoor(isOpen: boolean) {
     socket.value?.emit('house:hoh-door-set', { isOpen })
   }
@@ -196,6 +202,7 @@ export function useHouseSocket() {
     inviteMove,
     acceptMoveInvite,
     declineMoveInvite,
+    cancelMoveInvite,
     setHohDoor,
     ringHohDoorbell,
     onHistory,
@@ -213,6 +220,7 @@ export function useHouseSocket() {
     onMoveInviteSent,
     onMoveInviteAccepted,
     onMoveInviteDeclined,
+    onMoveInviteCancelled,
     onBroadcast,
     onSleepForced,
     onMoveStarted,
