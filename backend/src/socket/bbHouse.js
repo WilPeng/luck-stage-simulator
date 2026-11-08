@@ -87,9 +87,36 @@ async function getGuestStateMap(userIds) {
   return map
 }
 
+// 发送消息时确定“谁能看到”：当前在该房间、清醒、未移动、且不在洗澡限制中
+async function getRoomAudience(roomId) {
+  const [guests, locations] = await Promise.all([
+    BBHouseguest.find({ gameId }),
+    BBPlayerLocation.find({ gameId })
+  ])
+  const roomByPlayer = new Map()
+  for (const loc of locations) roomByPlayer.set(loc.playerId, loc.currentRoomId)
+  const ids = []
+  for (const g of guests) {
+    if (g.role === 'admin' || g.status !== 'active') continue
+    if (roomByPlayer.get(g.id) !== roomId) continue
+    if (g.isSleeping || g.isMoving) continue
+    if (g.isShowering && roomId !== 'bathroom') continue
+    ids.push(g.id)
+  }
+  return ids
+}
+
+// 发给选手的消息不暴露 visibleTo 快照
+function toPublicMessage(message) {
+  const obj = typeof message.toObject === 'function' ? message.toObject() : { ...message }
+  delete obj.visibleTo
+  return obj
+}
+
 // 由后端向指定房间发送一条聊天消息（用于仪式等系统发言），并实时广播
 async function postRoomMessage(roomId, { senderId, senderName, senderRole = 'houseguest', senderAvatar = null, content }) {
   try {
+    const visibleTo = await getRoomAudience(roomId)
     const msg = new BBChatMessage({
       id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       senderId: senderId || 'system',
@@ -99,18 +126,17 @@ async function postRoomMessage(roomId, { senderId, senderName, senderRole = 'hou
       content: String(content || '').trim(),
       chatType: 'room',
       roomId,
-      gameId
+      gameId,
+      visibleTo
     })
     await msg.save()
     if (bbHouseNamespace) {
       const roomSockets = await bbHouseNamespace.in(`room:${roomId}`).fetchSockets()
-      const guestMap = await getGuestStateMap(roomSockets.map(socketUserId))
+      const audience = new Set(visibleTo)
       for (const s of roomSockets) {
-        const g = guestMap.get(socketUserId(s))
-        if (g?.isSleeping) continue
-        if (g?.isMoving) continue
-        if (g?.isShowering && roomId !== 'bathroom') continue
-        s.emit('house:new-message', { roomId, message: msg.toObject() })
+        const isAdmin = s.data?.userRole === 'admin'
+        if (!isAdmin && !audience.has(socketUserId(s))) continue
+        s.emit('house:new-message', { roomId, message: toPublicMessage(msg) })
       }
     }
     return msg.toObject()
@@ -191,7 +217,7 @@ function initBBHouseSocket(io) {
         allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
         const visible = await locationHistory.filterVisibleMessages(socket.userId, currentRoomId, allMessages)
         const recent = visible.slice(-50)
-        socket.emit('house:history', { roomId: currentRoomId, messages: recent.map(m => m.toObject()) })
+        socket.emit('house:history', { roomId: currentRoomId, messages: recent.map(toPublicMessage) })
 
         // 发送房间内玩家列表（按位置，包含离线房客）
         await broadcastRoomPresence(currentRoomId)
@@ -234,6 +260,8 @@ function initBBHouseSocket(io) {
         }
         }
 
+        // 发送时确定可见者快照（睡眠中的同房间玩家会被排除）
+        const visibleTo = await getRoomAudience(roomId)
         // 保存消息
         const avatar = await getAvatar(socket.userId)
         const msg = new BBChatMessage({
@@ -245,20 +273,18 @@ function initBBHouseSocket(io) {
           content: content.trim(),
           chatType: 'room',
           roomId,
-          gameId
+          gameId,
+          visibleTo
         })
         await msg.save()
 
-        // 广播给同房间所有人（睡眠中的房客不接收；洗澡中的房客只接收浴室消息）
-        // 一次性批量查询房客状态，避免 N 个接收者触发 N 次数据库查询
+        // 按可见者快照实时广播（睡眠中的房客不接收；洗澡中的房客只接收浴室消息）
         const roomSockets = await bbHouseNamespace.in(`room:${roomId}`).fetchSockets()
-        const guestMap = await getGuestStateMap(roomSockets.map(socketUserId))
-        const payload = { roomId, message: msg.toObject() }
+        const audience = new Set(visibleTo)
+        const payload = { roomId, message: toPublicMessage(msg) }
         for (const s of roomSockets) {
-          const g = guestMap.get(socketUserId(s))
-          if (g?.isSleeping) continue
-          if (g?.isMoving) continue
-          if (g?.isShowering && roomId !== 'bathroom') continue
+          const isAdmin = s.data?.userRole === 'admin'
+          if (!isAdmin && !audience.has(socketUserId(s))) continue
           s.emit('house:new-message', payload)
         }
       } catch (e) {
@@ -290,7 +316,7 @@ function initBBHouseSocket(io) {
         }
         older = older.slice().reverse()
 
-        socket.emit('house:older-messages', { roomId, messages: older.map(m => m.toObject()) })
+        socket.emit('house:older-messages', { roomId, messages: older.map(toPublicMessage) })
       } catch (e) {
         console.error('[BBHouse] Load more error:', e)
       }
@@ -334,7 +360,7 @@ function initBBHouseSocket(io) {
           const allMessages = await BBChatMessage.find({ gameId, chatType: 'room', roomId: newRoomId })
           allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
           const visible = await locationHistory.filterVisibleMessages(socket.userId, newRoomId, allMessages)
-          socket.emit('house:history', { roomId: newRoomId, messages: visible.slice(-50).map(m => m.toObject()) })
+          socket.emit('house:history', { roomId: newRoomId, messages: visible.slice(-50).map(toPublicMessage) })
         }
       } catch (e) {
         console.error('[BBHouse] Moved event error:', e)
@@ -1020,7 +1046,7 @@ async function movePlayerSockets(playerId, oldRoomId, newRoomId, reason = '管�
     })
     // 先通知客户端切换，再补发新房间历史（保证顺序）
     s.emit('house:force-moved', { targetRoomId: newRoomId, reason })
-    s.emit('house:history', { roomId: newRoomId, messages: visible.slice(-50).map(m => m.toObject()) })
+    s.emit('house:history', { roomId: newRoomId, messages: visible.slice(-50).map(toPublicMessage) })
   }
 
   await broadcastRoomPresence(oldRoomId)

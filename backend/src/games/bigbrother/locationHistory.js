@@ -58,12 +58,21 @@ function isTimeVisible(intervals, createdAt) {
   })
 }
 
-/** 过滤出玩家可见的消息（消息发出时该玩家在对应房间，且不在睡眠中） */
+/** 过滤出玩家可见的消息（优先使用发送时的 visibleTo 快照，旧消息按位置历史兜底） */
 async function filterVisibleMessages(playerId, roomId, messages) {
   const intervals = await getIntervalsForRoom(playerId, roomId)
-  if (!intervals.length) return []
-  const visible = messages.filter(m => isTimeVisible(intervals, m.createdAt))
-  return sleepHistory.filterAwakeMessages(playerId, visible)
+  const visible = messages.filter(m => {
+    // 新消息：发送时已确定可见者快照（睡眠中的玩家已被排除）
+    if (Array.isArray(m.visibleTo)) return m.visibleTo.includes(playerId)
+    // 旧消息：按位置历史判断
+    return isTimeVisible(intervals, m.createdAt)
+  })
+  const legacy = visible.filter(m => !Array.isArray(m.visibleTo))
+  if (!legacy.length) return visible
+  // 旧消息仍需按睡眠时间兜底
+  const awake = await sleepHistory.filterAwakeMessages(playerId, legacy)
+  const awakeIds = new Set(awake.map(m => m.id))
+  return visible.filter(m => Array.isArray(m.visibleTo) || awakeIds.has(m.id))
 }
 
 module.exports = {

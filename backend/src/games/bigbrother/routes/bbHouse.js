@@ -1261,20 +1261,28 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
     })
 
     const result = limited.map(m => {
-      const ivs = byRoom[m.roomId] || []
-      const t = new Date(m.createdAt).getTime()
-      const seen = new Set()
-      for (const iv of ivs) {
-        const from = new Date(iv.from).getTime()
-        const to = iv.to ? new Date(iv.to).getTime() : Infinity
-        // 仅统计仍存在的房客，过滤已删除/已不存在的历史记录
-        if (t >= from && t <= to && guestById[iv.playerId]) {
-          const intervals = sleepByPlayer[iv.playerId] || []
-          const inSleep = intervals.some(s => t >= s.from && t <= s.to)
-          if (!inSleep) seen.add(iv.playerId)
+      let seenIds
+      if (Array.isArray(m.visibleTo)) {
+        // 新消息：使用发送时的可见者快照（已排除睡眠中的玩家）
+        seenIds = m.visibleTo.filter(id => !!guestById[id])
+      } else {
+        // 旧消息：按位置历史 + 睡眠记录兜底
+        const ivs = byRoom[m.roomId] || []
+        const t = new Date(m.createdAt).getTime()
+        const seen = new Set()
+        for (const iv of ivs) {
+          const from = new Date(iv.from).getTime()
+          const to = iv.to ? new Date(iv.to).getTime() : Infinity
+          // 仅统计仍存在的房客，过滤已删除/已不存在的历史记录
+          if (t >= from && t <= to && guestById[iv.playerId]) {
+            const intervals = sleepByPlayer[iv.playerId] || []
+            const inSleep = intervals.some(s => t >= s.from && t <= s.to)
+            if (!inSleep) seen.add(iv.playerId)
+          }
         }
+        seenIds = Array.from(seen)
       }
-      const seenBy = Array.from(seen).map(id => guestById[id])
+      const seenBy = seenIds.map(id => guestById[id])
       return { ...m.toObject(), seenBy }
     })
 

@@ -17,6 +17,9 @@ class BBChatMessage extends BaseModel {
     this.targetId = data?.targetId || null
     this.targetName = data?.targetName || null
     this.gameId = data?.gameId || 'bigbrother'
+    // 发送时快照：当时能看到这条消息的玩家 ID（睡眠中/不在房间的玩家会被排除）
+    // null 表示旧消息没有快照，需要按位置历史兜底计算
+    this.visibleTo = Array.isArray(data?.visibleTo) ? data.visibleTo.map(String) : null
     this.createdAt = data?.createdAt || new Date().toISOString()
     this.updatedAt = data?.updatedAt || new Date().toISOString()
   }
