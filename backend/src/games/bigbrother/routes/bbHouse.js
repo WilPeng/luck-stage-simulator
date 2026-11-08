@@ -1220,13 +1220,18 @@ router.post('/admin/send-message', auth, requireAdmin, async (req, res) => {
 router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
   try {
     const gameId = 'bigbrother'
-    const { roomId } = req.query
+    const { roomId, before } = req.query
     const filter = { gameId, chatType: 'room' }
     if (roomId) filter.roomId = roomId
+    if (before) filter.createdAt = { $lt: before }
 
-    const messages = await BBChatMessage.find(filter)
-    messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-    const limited = messages.slice(-300)
+    // 每次取 301 条判断是否还有更早的记录，返回其中最近的 300 条
+    const page = await BBChatMessage.findPaginated(filter, {
+      sort: { createdAt: -1 },
+      limit: 301
+    })
+    const hasMore = page.data.length > 300
+    const limited = page.data.slice(0, 300).reverse()
 
     const rooms = await BBHouseRoom.find({ gameId })
     const guests = await BBHouseguest.find({ gameId })
@@ -1290,7 +1295,7 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
       return { ...m.toObject(), seenBy }
     })
 
-    res.json({ success: true, data: { rooms: rooms.map(r => r.toObject()), messages: result } })
+    res.json({ success: true, data: { rooms: rooms.map(r => r.toObject()), messages: result, hasMore } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '获取聊天记录失败' })

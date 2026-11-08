@@ -155,8 +155,11 @@ export async function bbAdminSendMessage(roomId: string, content: string) {
 }
 
 // 管理员：查看所有房间聊天记录（含每条消息被谁看到）
-export async function bbAdminChatLogs(roomId?: string) {
-  const qs = roomId ? `?roomId=${encodeURIComponent(roomId)}` : ''
+export async function bbAdminChatLogs(roomId?: string, before?: string) {
+  const params = new URLSearchParams()
+  if (roomId) params.set('roomId', roomId)
+  if (before) params.set('before', before)
+  const qs = params.toString() ? `?${params.toString()}` : ''
   return doRequest<any>(`/house/admin/chat-logs${qs}`)
 }
 

@@ -153,9 +153,48 @@ function scrollToBottom() {
   })
 }
 
-watch(() => props.messages.length, scrollToBottom)
+let prevFirstId = ''
+let prevLastId = ''
+let prevScrollHeight = 0
+let prevScrollTop = 0
+let prevNearBottom = true
+
+watch(() => props.messages.length, () => {
+  const el = messagesContainer.value
+  if (el) {
+    prevScrollHeight = el.scrollHeight
+    prevScrollTop = el.scrollTop
+    prevNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
+  const firstId = props.messages[0]?.id || ''
+  const lastId = props.messages[props.messages.length - 1]?.id || ''
+  const hadMessages = !!prevLastId
+  const appended = hadMessages && !!lastId && lastId !== prevLastId
+  const prepended = hadMessages && !appended && !!firstId && firstId !== prevFirstId
+
+  nextTick(() => {
+    const container = messagesContainer.value
+    if (container) {
+      if (prepended) {
+        // 加载更早的消息时保持当前阅读位置，不跳回底部
+        container.scrollTop = prevScrollTop + (container.scrollHeight - prevScrollHeight)
+      } else if (appended) {
+        // 正在向上翻阅时，不被新消息拉回底部
+        if (prevNearBottom) container.scrollTop = container.scrollHeight
+      } else if (!hadMessages) {
+        container.scrollTop = container.scrollHeight
+      }
+    }
+    prevFirstId = firstId
+    prevLastId = lastId
+  })
+})
 watch(() => props.active, (v) => { if (v) scrollToBottom() })
-onMounted(scrollToBottom)
+onMounted(() => {
+  scrollToBottom()
+  prevFirstId = props.messages[0]?.id || ''
+  prevLastId = props.messages[props.messages.length - 1]?.id || ''
+})
 
 import { computed } from 'vue'
 </script>

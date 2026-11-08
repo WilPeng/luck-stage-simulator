@@ -26,6 +26,9 @@
 
       <section class="chat-panel">
         <div ref="scrollEl" class="chat-scroll">
+          <div v-if="hasMore" class="load-more" @click="loadMoreHistory">
+            {{ loadingMore ? '加载中…' : '↑ 加载更早的消息' }}
+          </div>
           <template v-for="(group, gi) in grouped" :key="gi">
             <div class="day-sep"><span>{{ group.day }}</span></div>
             <div v-for="m in group.items" :key="m.id" class="msg">
@@ -85,6 +88,8 @@ import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 const rooms = ref<any[]>([])
 const roomFilter = ref('')
 const logs = ref<any[]>([])
+const hasMore = ref(false)
+const loadingMore = ref(false)
 const expanded = ref<Set<string>>(new Set())
 const keyword = ref('')
 const scrollEl = ref<HTMLElement | null>(null)
@@ -166,26 +171,61 @@ const grouped = computed(() => {
 function selectRoom(id: string) {
   roomFilter.value = id
   if (id) composerRoom.value = id
-  loadLogs(true)
+  loadLogs(true, true)
 }
 
 function onRoomFilterChange() {
   if (roomFilter.value) composerRoom.value = roomFilter.value
-  loadLogs(true)
+  loadLogs(true, true)
 }
 
-async function loadLogs(forceBottom = false) {
+async function loadLogs(forceBottom = false, reset = false) {
   try {
     const el = scrollEl.value
     // 仅当管理员本来就在底部附近时才跟随新消息，避免打断向上翻阅
     const wasNearBottom = !el || (el.scrollHeight - el.scrollTop - el.clientHeight < 80)
     const res = await bbAdminChatLogs(roomFilter.value || undefined)
-    logs.value = res?.messages || []
+    const fetched = res?.messages || []
+    if (reset || logs.value.length === 0) {
+      logs.value = fetched
+      hasMore.value = !!res?.hasMore
+    } else {
+      // 合并新消息，保留已经加载的更早历史
+      const map = new Map()
+      for (const m of [...logs.value, ...fetched]) map.set(m.id, m)
+      logs.value = Array.from(map.values()).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    }
     await nextTick()
     if (scrollEl.value && (forceBottom || wasNearBottom)) {
       scrollEl.value.scrollTop = scrollEl.value.scrollHeight
     }
-  } catch { logs.value = [] }
+  } catch {
+    if (reset) { logs.value = []; hasMore.value = false }
+  }
+}
+
+async function loadMoreHistory() {
+  if (loadingMore.value || !hasMore.value || !logs.value.length) return
+  loadingMore.value = true
+  const el = scrollEl.value
+  const prevHeight = el?.scrollHeight || 0
+  const prevTop = el?.scrollTop || 0
+  try {
+    const before = logs.value[0]?.createdAt
+    const res = await bbAdminChatLogs(roomFilter.value || undefined, before)
+    const older = res?.messages || []
+    const map = new Map()
+    for (const m of [...older, ...logs.value]) map.set(m.id, m)
+    logs.value = Array.from(map.values()).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    hasMore.value = !!res?.hasMore
+    await nextTick()
+    if (scrollEl.value) {
+      // 保持当前阅读位置，不因前面插入历史消息而跳动
+      scrollEl.value.scrollTop = prevTop + (scrollEl.value.scrollHeight - prevHeight)
+    }
+  } catch {} finally {
+    loadingMore.value = false
+  }
 }
 
 async function loadRooms() {
@@ -198,7 +238,7 @@ async function loadRooms() {
 onMounted(async () => {
   realtime.connect()
   await loadRooms()
-  await loadLogs(true)
+  await loadLogs(true, true)
   timer = setInterval(() => loadLogs(false), 5000)
 })
 onUnmounted(() => {
@@ -222,6 +262,8 @@ onUnmounted(() => {
 .rl-count { margin-left: auto; font-size: 11px; color: #b3a6d6; }
 .chat-panel { background: #0b0b1c; border: 1px solid #ffffff12; border-radius: 10px; overflow: hidden; }
 .chat-scroll { height: 72vh; overflow-y: auto; padding: 18px; }
+.load-more { text-align: center; color: #b39bff; font-size: 12px; cursor: pointer; padding: 6px 0 12px; user-select: none; }
+.load-more:hover { text-decoration: underline; }
 .day-sep { text-align: center; margin: 14px 0; }
 .day-sep span { background: #ffffff10; color: #b3a6d6; font-size: 12px; padding: 3px 12px; border-radius: 10px; }
 .msg { display: flex; gap: 10px; margin-bottom: 14px; }
