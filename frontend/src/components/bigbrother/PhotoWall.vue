@@ -1,26 +1,32 @@
 <template>
   <div class="photo-wall">
-    <div v-if="!ready" class="pw-loading">
-      <span class="pw-spinner"></span>
-      <span>照片墙加载中…</span>
-    </div>
-    <template v-else>
-      <div
-        v-for="(p, i) in players"
-        :key="p.id"
-        class="pw-cell"
-        :class="[{ out: isOut(p) }, 'hue-' + (i % 6)]"
-        :title="p.name"
-      >
-        <img v-if="p.avatar" :src="p.avatar" class="pw-media" :alt="p.name" />
-        <div v-else class="pw-media pw-initial">{{ (p.name || '?').charAt(0) }}</div>
-        <span v-if="showNames" class="pw-name">{{ p.name }}</span>
-        <div v-if="editable" class="pw-order">
-          <button class="pw-btn" :disabled="i === 0" @click.stop="$emit('move', i, -1)">↑</button>
-          <button class="pw-btn" :disabled="i === players.length - 1" @click.stop="$emit('move', i, 1)">↓</button>
-        </div>
+    <button v-if="collapsible" class="pw-toggle" @click="collapsed = !collapsed">
+      <span>🖼️ 照片墙</span>
+      <span class="pw-toggle-text">{{ collapsed ? '展开 ▼' : '收起 ▲' }}</span>
+    </button>
+    <template v-if="!collapsed">
+      <div v-if="!ready" class="pw-loading">
+        <span class="pw-spinner"></span>
+        <span>照片墙加载中…</span>
       </div>
-      <div v-if="!players.length" class="pw-empty">暂无房客</div>
+      <template v-else>
+        <div
+          v-for="(p, i) in players"
+          :key="p.id"
+          class="pw-cell"
+          :class="[{ out: isOut(p) }, 'hue-' + (i % 6)]"
+          :title="p.name"
+        >
+          <img v-if="p.avatar" :src="p.avatar" class="pw-media" :alt="p.name" />
+          <div v-else class="pw-media pw-initial">{{ (p.name || '?').charAt(0) }}</div>
+          <span v-if="showNames" class="pw-name">{{ p.name }}</span>
+          <div v-if="editable" class="pw-order">
+            <button class="pw-btn" :disabled="i === 0" @click.stop="$emit('move', i, -1)">↑</button>
+            <button class="pw-btn" :disabled="i === players.length - 1" @click.stop="$emit('move', i, 1)">↓</button>
+          </div>
+        </div>
+        <div v-if="!players.length" class="pw-empty">暂无房客</div>
+      </template>
     </template>
   </div>
 </template>
@@ -28,10 +34,20 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 
-const props = defineProps<{ players: any[]; editable?: boolean; showNames?: boolean }>()
+const props = withDefaults(defineProps<{
+  players: any[]
+  editable?: boolean
+  showNames?: boolean
+  collapsible?: boolean
+}>(), {
+  editable: false,
+  showNames: false,
+  collapsible: true
+})
 defineEmits<{ (e: 'move', index: number, dir: -1 | 1): void }>()
 
 const ready = ref(false)
+const collapsed = ref(false)
 
 function preloadAvatars() {
   const urls = (props.players || [])
@@ -68,6 +84,22 @@ function isOut(p: any) {
   overflow: hidden;
   width: 100%;
 }
+.pw-toggle {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border: 1px solid #b39bff33;
+  border-radius: 8px;
+  background: #1b1130;
+  color: #ece7fb;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.pw-toggle:hover { background: #b39bff18; border-color: #b39bff66; }
+.pw-toggle-text { font-size: 12px; color: #b39bff; }
 .pw-cell {
   position: relative;
   aspect-ratio: 1 / 1;
