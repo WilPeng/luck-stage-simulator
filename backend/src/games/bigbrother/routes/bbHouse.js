@@ -1233,32 +1233,36 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
     const guestById = {}
     guests.forEach(g => { guestById[g.id] = { playerId: g.id, name: g.name, avatar: g.avatar || null } })
 
-    // 睡眠时间段（以玩家实际点击醒来的时间为结束边界）
-    const sleepRecords = await BBSleepRecord.find({ gameId })
+    // 仅在存在旧消息（没有 visibleTo 快照）时才需要读取位置/睡眠记录兜底
+    const hasLegacy = limited.some(m => !Array.isArray(m.visibleTo))
     const sleepByPlayer = {}
-    for (const rec of sleepRecords) {
-      const from = new Date(rec.from).getTime()
-      if (!Number.isFinite(from)) continue
-      const to = rec.to ? new Date(rec.to).getTime() : Infinity
-      if (!sleepByPlayer[rec.playerId]) sleepByPlayer[rec.playerId] = []
-      sleepByPlayer[rec.playerId].push({ from, to })
-    }
-    // 兼容升级前已存在的睡眠记录（没有 BBSleepRecord）
-    guests.forEach(g => {
-      if (sleepByPlayer[g.id] || !g.sleepStartedAt) return
-      const from = new Date(g.sleepStartedAt).getTime()
-      if (!Number.isFinite(from)) return
-      const to = g.isSleeping ? Infinity : (g.wakeAt ? new Date(g.wakeAt).getTime() : Infinity)
-      sleepByPlayer[g.id] = [{ from, to }]
-    })
-
-    // 位置历史按房间分组
-    const history = await BBLocationHistory.find({ gameId })
     const byRoom = {}
-    history.forEach(h => {
-      if (!byRoom[h.roomId]) byRoom[h.roomId] = []
-      byRoom[h.roomId].push({ playerId: h.playerId, from: h.from, to: h.to })
-    })
+    if (hasLegacy) {
+      // 睡眠时间段（以玩家实际点击醒来的时间为结束边界）
+      const sleepRecords = await BBSleepRecord.find({ gameId })
+      for (const rec of sleepRecords) {
+        const from = new Date(rec.from).getTime()
+        if (!Number.isFinite(from)) continue
+        const to = rec.to ? new Date(rec.to).getTime() : Infinity
+        if (!sleepByPlayer[rec.playerId]) sleepByPlayer[rec.playerId] = []
+        sleepByPlayer[rec.playerId].push({ from, to })
+      }
+      // 兼容升级前已存在的睡眠记录（没有 BBSleepRecord）
+      guests.forEach(g => {
+        if (sleepByPlayer[g.id] || !g.sleepStartedAt) return
+        const from = new Date(g.sleepStartedAt).getTime()
+        if (!Number.isFinite(from)) return
+        const to = g.isSleeping ? Infinity : (g.wakeAt ? new Date(g.wakeAt).getTime() : Infinity)
+        sleepByPlayer[g.id] = [{ from, to }]
+      })
+
+      // 位置历史按房间分组
+      const history = await BBLocationHistory.find({ gameId })
+      history.forEach(h => {
+        if (!byRoom[h.roomId]) byRoom[h.roomId] = []
+        byRoom[h.roomId].push({ playerId: h.playerId, from: h.from, to: h.to })
+      })
+    }
 
     const result = limited.map(m => {
       let seenIds

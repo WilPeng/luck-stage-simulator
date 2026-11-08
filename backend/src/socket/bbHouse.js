@@ -89,16 +89,14 @@ async function getGuestStateMap(userIds) {
 
 // 发送消息时确定“谁能看到”：当前在该房间、清醒、未移动、且不在洗澡限制中
 async function getRoomAudience(roomId) {
-  const [guests, locations] = await Promise.all([
-    BBHouseguest.find({ gameId }),
-    BBPlayerLocation.find({ gameId })
-  ])
-  const roomByPlayer = new Map()
-  for (const loc of locations) roomByPlayer.set(loc.playerId, loc.currentRoomId)
+  // 仅查询该房间的玩家位置，减少读取量
+  const locations = await BBPlayerLocation.find({ gameId, currentRoomId: roomId })
+  if (!locations.length) return []
+  const idsInRoom = locations.map(loc => loc.playerId)
+  const guests = await BBHouseguest.find({ gameId, id: { $in: idsInRoom } })
   const ids = []
   for (const g of guests) {
     if (g.role === 'admin' || g.status !== 'active') continue
-    if (roomByPlayer.get(g.id) !== roomId) continue
     if (g.isSleeping || g.isMoving) continue
     if (g.isShowering && roomId !== 'bathroom') continue
     ids.push(g.id)

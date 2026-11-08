@@ -60,6 +60,11 @@ function isTimeVisible(intervals, createdAt) {
 
 /** 过滤出玩家可见的消息（优先使用发送时的 visibleTo 快照，旧消息按位置历史兜底） */
 async function filterVisibleMessages(playerId, roomId, messages) {
+  const hasLegacy = messages.some(m => !Array.isArray(m.visibleTo))
+  // 全部是新消息时直接按快照过滤，无需查询位置/睡眠记录
+  if (!hasLegacy) {
+    return messages.filter(m => m.visibleTo.includes(playerId))
+  }
   const intervals = await getIntervalsForRoom(playerId, roomId)
   const visible = messages.filter(m => {
     // 新消息：发送时已确定可见者快照（睡眠中的玩家已被排除）
