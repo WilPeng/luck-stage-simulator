@@ -363,6 +363,7 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
     const { getCollection } = require('../../../config/db')
     const serpentCol = getCollection('BBSerpentMark')
     await serpentCol.deleteMany({ gameId: 'bigbrother' })
+    await getCollection('BBSleepRecord').deleteMany({ gameId: 'bigbrother' })
 
     const houseguests = await BBHouseguest.find({ gameId: 'bigbrother' })
     for (const h of houseguests) {

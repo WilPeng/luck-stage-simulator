@@ -19,6 +19,7 @@ const {
   getShowerCooldownUntil
 } = require('../games/bigbrother/houseRules')
 const locationHistory = require('../games/bigbrother/locationHistory')
+const sleepHistory = require('../games/bigbrother/sleepHistory')
 const { getCollection } = require('../config/db')
 
 const JWT_SECRET = process.env.JWT_SECRET || 'bigbrother_secret_key'
@@ -684,6 +685,7 @@ async function runHouseTimers() {
       g.wakeAt = new Date(sleepStartedAt.getTime() + sleepState.sleepDurationMinutes * 60 * 1000).toISOString()
       g.lastSleepDate = sleepState.cycleDate
       await g.save()
+      await sleepHistory.startSleep(g.id, g.sleepStartedAt)
       emitToUser(g.id, 'house:sleep-forced', {
         wakeAt: g.wakeAt,
         sleepCycleDate: g.lastSleepDate,

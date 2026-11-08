@@ -19,6 +19,7 @@ const COLLECTIONS = [
   'BBHouseDoor',      // House 门状态
   'BBPlayerLocation', // 玩家当前位置
   'BBLocationHistory',// 玩家位置历史（消息可见性核心）
+  'BBSleepRecord',    // 睡眠时间段记录（睡眠期间聊天不可见）
   'BBCustomGame',     // 自定义游戏
   'BBGameLibrary',    // 游戏库排序 / 文件夹
   'BBPowerChallenge', // 实力大挑战题目池

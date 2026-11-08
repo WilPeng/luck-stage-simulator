@@ -298,6 +298,7 @@ async function ensureBBIndexes() {
     ['BBChatMessage', [{ gameId: 1, chatType: 1, roomId: 1, createdAt: 1 }, { gameId: 1, roomId: 1 }]],
     ['BBPlayerLocation', [{ gameId: 1, currentRoomId: 1 }, { gameId: 1, playerId: 1 }]],
     ['BBLocationHistory', [{ gameId: 1, playerId: 1 }]],
+    ['BBSleepRecord', [{ gameId: 1, playerId: 1, to: 1 }]],
     ['BBChampionVote', [{ gameId: 1 }, { gameId: 1, voterId: 1 }]],
     ['BBJuryQA', [{ gameId: 1, roundId: 1 }]],
     ['BBMinigameReplay', [{ gameId: 1, gameType: 1, startedAt: -1 }]],

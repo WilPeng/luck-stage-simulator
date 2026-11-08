@@ -5,6 +5,7 @@
  */
 const { v4: uuidv4 } = require('uuid')
 const BBLocationHistory = require('./models/BBLocationHistory')
+const sleepHistory = require('./sleepHistory')
 
 const gameId = 'bigbrother'
 
@@ -57,11 +58,12 @@ function isTimeVisible(intervals, createdAt) {
   })
 }
 
-/** 过滤出玩家可见的消息（消息发出时该玩家在对应房间） */
+/** 过滤出玩家可见的消息（消息发出时该玩家在对应房间，且不在睡眠中） */
 async function filterVisibleMessages(playerId, roomId, messages) {
   const intervals = await getIntervalsForRoom(playerId, roomId)
   if (!intervals.length) return []
-  return messages.filter(m => isTimeVisible(intervals, m.createdAt))
+  const visible = messages.filter(m => isTimeVisible(intervals, m.createdAt))
+  return sleepHistory.filterAwakeMessages(playerId, visible)
 }
 
 module.exports = {
