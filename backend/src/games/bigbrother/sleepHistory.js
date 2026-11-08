@@ -4,6 +4,7 @@
  * 即使醒来后也不能看到。
  */
 const BBSleepRecord = require('./models/BBSleepRecord')
+const BBHouseguest = require('./models/BBHouseguest')
 
 const gameId = 'bigbrother'
 
@@ -51,7 +52,15 @@ async function endSleep(playerId, atIso, fallbackFromIso) {
 
 async function getSleepIntervals(playerId) {
   const list = await BBSleepRecord.find({ playerId, gameId })
-  return list.map(rec => ({ from: rec.from, to: rec.to }))
+  const intervals = list.map(rec => ({ from: rec.from, to: rec.to }))
+  // 兼容升级前没有睡眠记录的数据：至少使用房客当前/最近一次睡眠区间
+  if (!intervals.length) {
+    const g = await BBHouseguest.findOne({ id: playerId, gameId })
+    if (g && g.sleepStartedAt) {
+      intervals.push({ from: g.sleepStartedAt, to: g.isSleeping ? null : (g.wakeAt || null) })
+    }
+  }
+  return intervals
 }
 
 function isTimeSleeping(intervals, createdAt) {
