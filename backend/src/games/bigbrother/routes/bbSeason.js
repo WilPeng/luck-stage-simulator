@@ -39,9 +39,12 @@ async function ensureSeason() {
   if (!season.final3Round && season.status !== 'finished') {
     try {
       const { getCollection } = require('../../../config/db')
-      const hgTotal = await getCollection('BBHouseguest').countDocuments({ gameId: 'bigbrother', role: 'houseguest' })
-      if (hgTotal > 3) {
-        const normal = hgTotal - 3 // 每轮淘汰 1 人直至存活 3
+      const hgCol = getCollection('BBHouseguest')
+      const hgTotal = await hgCol.countDocuments({ gameId: 'bigbrother', role: 'houseguest' })
+      const walkedCount = await hgCol.countDocuments({ gameId: 'bigbrother', role: 'houseguest', status: 'walked' })
+      const plannedPlayers = Math.max(0, hgTotal - walkedCount)
+      if (plannedPlayers > 3) {
+        const normal = plannedPlayers - 3 // 每轮淘汰 1 人直至存活 3（退赛已占用淘汰名额）
         season.final3Round = normal + 1
         season.championRound = normal + 2
         season.totalRounds = normal + 2
@@ -223,6 +226,8 @@ router.post('/set', auth, requireAdmin, async (req, res) => {
       season.votesLocked = false
       season.evictionNight = null
     }
+    // 进入冠军投票阶段后，仍需管理员手动「开启冠军投票」
+    if (stage === 'champion_vote') season.championVotingOpen = false
     season.updatedAt = new Date().toISOString()
     await season.save()
     await logAction(req.user.userId, req.user.name || 'admin', 'admin',
@@ -286,6 +291,7 @@ router.post('/next', auth, requireAdmin, async (req, res) => {
       await clearRoundData(prevRound)
       season.currentRound = season.championRound || (season.currentRound + 1)
       season.currentStage = 'champion_vote'
+      season.championVotingOpen = false
       season.updatedAt = new Date().toISOString()
       await season.save()
       await logAction(req.user.userId, req.user.name || 'admin', 'admin',
@@ -370,6 +376,11 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
       if (h.role !== 'admin') {
         h.status = 'active'
         h.hasLogin = false
+        // 重置退赛状态
+        h.walkedAt = null
+        h.walkedRound = null
+        h.walkNote = ''
+        h.walkUndo = null
         // 重置后清除睡眠/洗澡状态，避免新赛季房客无法移动/发言
         h.isSleeping = false
         h.sleepStartedAt = null
@@ -427,6 +438,7 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
     season.runnerUpId = null
     season.runnerUpName = ''
     season.championReveal = null
+    season.championVotingOpen = false
     season.updatedAt = new Date().toISOString()
     await season.save()
     await logAction(req.user.userId, req.user.name || 'admin', 'admin',
@@ -606,6 +618,10 @@ router.get('/config', auth, async (req, res) => {
     }
     // 判断赛季是否已开始
     const isSeasonStarted = season.currentRound > 1 || season.currentStage !== 'hoh_competition'
+    const { getCollection } = require('../../../config/db')
+    const walkedCount = await getCollection('BBHouseguest').countDocuments({
+      gameId: 'bigbrother', role: 'houseguest', status: 'walked'
+    })
     res.json({
       success: true,
       data: {
@@ -614,6 +630,9 @@ router.get('/config', auth, async (req, res) => {
         totalRounds: season.totalRounds,
         isSeasonStarted,
         currentRound: season.currentRound,
+        final3Round: season.final3Round ?? null,
+        championRound: season.championRound ?? null,
+        walkedCount,
         jurySize: season.jurySize ?? 7,
         finalSize: season.finalSize ?? 2
       }
@@ -669,8 +688,11 @@ router.put('/config', auth, requireAdmin, async (req, res) => {
     // 普通轮 = 使存活人数降到 3 所需的淘汰轮；之后固定追加 F3(1周) 与冠军投票(1周)
     try {
       const { getCollection } = require('../../../config/db')
-      const hgTotal = await getCollection('BBHouseguest').countDocuments({ gameId: 'bigbrother', role: 'houseguest' })
-      const totalPlayers = Math.max(hgTotal, season.currentRound >= 1 ? hgTotal : 0) || 13
+      const hgCol = getCollection('BBHouseguest')
+      const hgTotal = await hgCol.countDocuments({ gameId: 'bigbrother', role: 'houseguest' })
+      const walkedCount = await hgCol.countDocuments({ gameId: 'bigbrother', role: 'houseguest', status: 'walked' })
+      // 退赛相当于提前少一名选手：规划时按「总人数 - 已退赛人数」计算需要的普通轮
+      const totalPlayers = Math.max(hgTotal - walkedCount, 1) || 13
       let alive = totalPlayers
       let lastNormalRound = 0
       const sortedRounds = [...roundConfigs].sort((a, b) => a.round - b.round)
@@ -757,7 +779,14 @@ router.get('/settlement', auth, requireAdmin, async (req, res) => {
 
     // 玩家总信息与名次
     const playerMap = new Map()
-    houseguests.forEach(h => playerMap.set(h.id, { id: h.id, name: h.name, avatar: h.avatar || null, status: h.status || 'active', evictedRound: null }))
+    houseguests.forEach(h => playerMap.set(h.id, {
+      id: h.id,
+      name: h.name,
+      avatar: h.avatar || null,
+      status: h.status || 'active',
+      evictedRound: null,
+      walkedRound: h.walkedRound ?? null
+    }))
 
     // 先按淘汰顺序记录每个玩家被淘汰的轮次，推断名次（越晚淘汰名次越小；0 = 冠军待定）
     // 冠军/仍在场者名次暂按活动次序，最终以冠军流程为准
@@ -781,6 +810,21 @@ router.get('/settlement', auth, requireAdmin, async (req, res) => {
         }
       }
     }
+    // 退赛者：按其退赛轮次计入淘汰顺序（保证其他玩家名次/陪审边界正确），展示时固定置底
+    for (const h of houseguests) {
+      if (h.status !== 'walked') continue
+      const wr = h.walkedRound || 1
+      const p = playerMap.get(h.id)
+      if (p) {
+        p.status = 'walked'
+        p.evictedRound = wr
+        p.walkedRound = wr
+      }
+      if (!evictionOrder.some(x => x.playerId === h.id)) {
+        evictionOrder.push({ playerId: h.id, round: wr, walked: true })
+      }
+    }
+    evictionOrder.sort((a, b) => (a.round || 0) - (b.round || 0))
 
     const activeCount = houseguests.length
     const totalEliminated = evictionOrder.length
@@ -811,6 +855,7 @@ router.get('/settlement', auth, requireAdmin, async (req, res) => {
         roundsData.push({
           round: r,
           kind: 'final3',
+          tied: false,
           f3RoundWinners: [
             { round: 1, playerId: final3Winners['1']?.playerId || null, name: final3Winners['1']?.name || '' },
             { round: 2, playerId: final3Winners['2']?.playerId || null, name: final3Winners['2']?.name || '' },
@@ -846,6 +891,7 @@ router.get('/settlement', auth, requireAdmin, async (req, res) => {
         roundsData.push({
           round: r,
           kind: 'champion',
+          tied: false,
           f3RoundWinners: [],
           fhohId: season.fhohId || null,
           fhohName: season.fhohName || '',
@@ -922,10 +968,14 @@ router.get('/settlement', auth, requireAdmin, async (req, res) => {
       const nomineeTargets = (finalIds.length ? finalIds : Array.from(new Set(castVotes.map(v => v.targetId))))
       const ticketCounts = nomineeTargets.map(id => idCount.get(id) || 0).sort((a, b) => b - a)
       const ticketText = ticketCounts.length ? ticketCounts.join('-') : (castVotes.length ? `${castVotes.length}` : '')
+      // 是否平票：仅单淘汰且前两名票数相同，HOH 才需要投裁决票
+      const evictCountForRound = getEvictCountForRound(r, season.twistConfigs || [], season.roundConfigs || [])
+      const tied = evictCountForRound === 1 && ticketCounts.length >= 2 && ticketCounts[0] === ticketCounts[1]
 
       roundsData.push({
         round: r,
         kind: 'normal',
+        tied,
         hohId: hohDoc?.winnerId || null,
         hohName: hohDoc?.winnerName || '',
         initialNomineeIds: initialIds,
@@ -953,15 +1003,22 @@ router.get('/settlement', auth, requireAdmin, async (req, res) => {
     // 玩家排名：0=存活(冠军待定)，其余按名次（大=早淘汰）
     const playersData = houseguests.map(h => {
       const rid = rankMap.get(h.id) || 0
+      const pm = playerMap.get(h.id) || {}
       return {
         playerId: h.id,
         name: h.name,
         avatar: h.avatar || null,
-        status: h.status || 'active',
+        status: pm.status || h.status || 'active',
         rank: rid,
-        evictedRound: (playerMap.get(h.id) || {}).evictedRound || null
+        evictedRound: pm.evictedRound || null,
+        walkedRound: pm.walkedRound ?? h.walkedRound ?? null
       }
     }).sort((a, b) => {
+      // 退赛者固定放在最后一行（多名为退赛时按退赛轮次排序）
+      const aw = a.status === 'walked' ? 1 : 0
+      const bw = b.status === 'walked' ? 1 : 0
+      if (aw !== bw) return aw - bw
+      if (aw === 1) return (a.walkedRound || 0) - (b.walkedRound || 0)
       // 0 排在最后（冠军/存活），其余按名次升序（冠军名次最小应最上；0 特殊置顶由冠军流程定）
       if (a.rank === 0 && b.rank !== 0) return 1
       if (b.rank === 0 && a.rank !== 0) return -1
@@ -1010,6 +1067,7 @@ router.get('/endgame/status', auth, async (req, res) => {
     const actives = await hg.find({ gameId: 'bigbrother', role: 'houseguest', status: 'active' }).toArray()
     const jurys = await hg.find({ gameId: 'bigbrother', role: 'houseguest', status: 'jury' }).toArray()
     const evicted = await hg.find({ gameId: 'bigbrother', role: 'houseguest', status: 'evicted' }).toArray()
+    const walked = await hg.find({ gameId: 'bigbrother', role: 'houseguest', status: 'walked' }).toArray()
     const champVotes = await BBChampionVote.find({})
     const votesByTarget = {}
     const votesByVoter = new Map()
@@ -1048,6 +1106,7 @@ router.get('/endgame/status', auth, async (req, res) => {
         activePlayers: actives.map(a => ({ playerId: a.id, name: a.name })),
         juryPlayers: jurys.map(j => ({ playerId: j.id, name: j.name })),
         evictedPlayers: evicted.map(e => ({ playerId: e.id, name: e.name })),
+        walkedPlayers: walked.map(w => ({ playerId: w.id, name: w.name, walkedRound: w.walkedRound ?? null })),
         fhoh: season.fhohId ? { playerId: season.fhohId, name: season.fhohName } : null,
         finalTwo: finalTwoNorm,
         lastJury: season.lastJuryId ? { playerId: season.lastJuryId, name: season.lastJuryName } : null,
@@ -1055,6 +1114,7 @@ router.get('/endgame/status', auth, async (req, res) => {
         champion: season.championId ? { playerId: season.championId, name: season.championName } : null,
         runnerUp: season.runnerUpId ? { playerId: season.runnerUpId, name: season.runnerUpName } : null,
         championVotes: votesByTarget,
+        championVotingOpen: !!season.championVotingOpen,
         juryVotes,
         myChampionVote,
         championReveal: season.championReveal || null
@@ -1101,6 +1161,7 @@ router.post('/endgame/reset', auth, requireAdmin, async (req, res) => {
     season.runnerUpId = null
     season.runnerUpName = ''
     season.championReveal = null
+    season.championVotingOpen = false
     season.status = 'running'
 
     // 3) 回退进度到 F3 轮（若已是冠军轮/已结束）
@@ -1224,12 +1285,40 @@ router.post('/endgame/fhoh-pick', auth, async (req, res) => {
   }
 })
 
+// POST /endgame/open-voting - 管理员开启冠军投票（开启后陪审团才能正式投票）
+router.post('/endgame/open-voting', auth, requireAdmin, async (req, res) => {
+  try {
+    const season = await ensureSeason()
+    if (season.currentStage !== 'champion_vote') {
+      return res.status(400).json({ success: false, error: '当前不是冠军投票阶段', code: 'NOT_CHAMPION_VOTE' })
+    }
+    if ((season.finalTwo || []).length !== 2) {
+      return res.status(400).json({ success: false, error: '尚未确定 FTC 决赛二人', code: 'NO_FTC' })
+    }
+    if (season.championId) {
+      return res.status(400).json({ success: false, error: '冠军已产生，无需开启投票', code: 'CHAMPION_DECIDED' })
+    }
+    season.championVotingOpen = true
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    await logAction(req.user.userId, req.user.name || 'admin', 'admin',
+      BB_ACTION_TYPES.PROGRESS_SET, 'season', season.id, '开启冠军投票')
+    res.json({ success: true, data: { championVotingOpen: true } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '开启冠军投票失败', code: 'SERVER_ERROR' })
+  }
+})
+
 // POST /endgame/champion-vote - 陪审团成员投冠军票（每位 jury 一票）
 router.post('/endgame/champion-vote', auth, async (req, res) => {
   try {
     const season = await ensureSeason()
     if (season.currentStage !== 'champion_vote') {
       return res.status(400).json({ success: false, error: '当前不是冠军投票阶段', code: 'NOT_CHAMPION_VOTE' })
+    }
+    if (!season.championVotingOpen) {
+      return res.status(400).json({ success: false, error: '管理员尚未开启冠军投票', code: 'VOTING_NOT_OPEN' })
     }
     if (season.finalTwo.length !== 2) {
       return res.status(400).json({ success: false, error: '尚未确定 FTC 决赛二人', code: 'NO_FTC' })

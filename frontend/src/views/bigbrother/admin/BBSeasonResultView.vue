@@ -98,11 +98,19 @@
                   <span v-if="p.status === 'f2'" class="mini-tag f2">F2</span>
                   <span v-else-if="p.status === 'jury'" class="mini-tag jury">jury</span>
                   <span v-else-if="p.status === 'evicted'" class="mini-tag evt">evicted</span>
+                  <span v-else-if="p.status === 'walked'" class="mini-tag walked">walked</span>
                 </div>
               </td>
               <template v-for="c in rounds" :key="'v'+p.playerId+'-'+c.round">
+                <!-- 退赛：从退出投票的那一轮起，到最后一列合并为一个单元格 -->
+                <template v-if="p.status === 'walked' && walkStartRound(p) != null && c.round === walkStartRound(p)">
+                  <td :colspan="walkedSpan(p, c)" class="cell-walked">walked</td>
+                </template>
+                <template v-else-if="p.status === 'walked' && walkStartRound(p) != null && c.round > walkStartRound(p)">
+                  <!-- 已被 walked 合并单元格覆盖，不输出 -->
+                </template>
                 <!-- 普通轮 -->
-                <template v-if="colKind(c)==='normal'">
+                <template v-else-if="colKind(c)==='normal'">
                   <!-- 淘汰后第一个后续普通轮：合并大格直到冠军列前（含后续普通轮与 F3 列） -->
                   <template v-if="p.evictedRound && c.round === p.evictedRound + 1">
                     <td :colspan="evictSpanNormal(p, c)" class="cell-evicted-round">{{ evictedText(p) }}</td>
@@ -249,6 +257,17 @@ function isFinalist(playerId: string): boolean {
   if (champ.runnerUp?.playerId) names.add(champ.runnerUp.playerId)
   return names.has(playerId)
 }
+// 退赛展示起点：从该轮起（含）到最后一列合并显示 walked
+function walkStartRound(p: any): number | null {
+  const r = p?.walkedRound ?? (p?.status === 'walked' ? p?.evictedRound : null)
+  return r == null ? null : Number(r)
+}
+// walked 合并单元格跨度：从起点轮次到最后一列（含 F3 / 冠军列）
+function walkedSpan(_p: any, _c: BBSettlementRound): number {
+  const start = walkStartRound(_p)
+  if (start == null) return 1
+  return Math.max(rounds.value.filter(x => x.round >= start).length, 1)
+}
 // 淘汰后是否还有后续普通轮（决定合并格起点在普通轮还是 F3 列）
 function hasNormalAfterEvict(p: any): boolean {
   return rounds.value.some(x => colKind(x) === 'normal' && x.round > (p.evictedRound || 0))
@@ -261,6 +280,7 @@ function evictSpanNormal(p: any, c: BBSettlementRound): number {
 }
 // 淘汰合并格文案：jury → "Jury X"（X=进入陪审的顺序），否则 Evicted
 function evictedText(p: any): string {
+  if (p.status === 'walked') return 'walked'
   if (p.status === 'jury') {
     const order = juryOrder(p.playerId)
     return order > 0 ? `Jury ${order}` : 'Jury'
@@ -302,6 +322,11 @@ function champCellClass(p: any, c: BBSettlementRound): string {
 const orderedPlayers = computed(() => {
   const list = [...(settlement.value?.players || [])]
   return list.sort((a, b) => {
+    // 退赛者固定放在最后一行
+    const aw = a.status === 'walked' ? 1 : 0
+    const bw = b.status === 'walked' ? 1 : 0
+    if (aw !== bw) return aw - bw
+    if (aw === 1) return ((a.walkedRound || 0) - (b.walkedRound || 0))
     if (a.rank === 0 && b.rank !== 0) return -1
     if (b.rank === 0 && a.rank !== 0) return 1
     return a.rank - b.rank
@@ -322,8 +347,8 @@ function playerCellValue(p: any, r: BBSettlementRound): string {
     return 'NOM'
   }
   if (isHoh(p.playerId, r)) {
-    // HOH 平票裁决：该格显示 HOH 投的人名（仍算 HOH 格）；无裁决才显示 HOH
-    return r.hohDecided && r.hohVoteTargetName ? r.hohVoteTargetName : 'HOH'
+    // 仅平票轮显示 HOH 的裁决票；非平票轮只显示加粗的 HOH
+    return r.hohDecided && r.tied && r.hohVoteTargetName ? r.hohVoteTargetName : 'HOH'
   }
   if (isNom(p.playerId, r)) return 'NOM'
   const vote = (r.votesDetail || []).find(v => v.voterId === p.playerId)
@@ -443,7 +468,12 @@ function exportCsv() {
   orderedPlayers.value.forEach(p => {
     const row = [p.name]
     let wroteEvict = false
+    const walkedRound = p.walkedRound || (p.status === 'walked' ? p.evictedRound : null)
     rs.forEach(r => {
+      if (p.status === 'walked' && walkedRound && r.round >= walkedRound) {
+        row.push(r.round === walkedRound ? 'walked' : '')
+        return
+      }
       if (colKind(r) === 'champion') {
         row.push(champCellValue(p, r))
       } else if (colKind(r) === 'final3') {
@@ -547,7 +577,9 @@ onMounted(fetchData)
 .mini-tag.f2 { background: #e6c98822; color: #e6c988; border: 1px solid #e6c98855; }
 .mini-tag.jury { background: #9b59b622; color: #9b59b6; border: 1px solid #9b59b644; }
 .mini-tag.evt { background: #88888822; border: 1px solid #88888844; }
+.mini-tag.walked { background: #ff880022; color: #ff9933; border: 1px solid #ff880055; }
 .vote-cell { color: var(--text); }
+.cell-walked { background: #ff880018; color: #ff9933; font-weight: 700; letter-spacing: .5px; }
 .cell-is-hoh { background: #b39bff33; font-weight: 700; }
 .cell-is-nom { background: #ff880033; font-weight: 700; }
 .cell-voted { opacity: .9; }

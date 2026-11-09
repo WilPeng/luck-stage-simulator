@@ -157,6 +157,7 @@ export interface BBSeason {
   championName?: string
   runnerUpId?: string | null
   runnerUpName?: string
+  championVotingOpen?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -165,6 +166,7 @@ export interface BBSeason {
 export interface BBSettlementRound {
   round: number
   kind?: 'normal' | 'final3' | 'champion'
+  tied?: boolean
   f3RoundWinners?: { round: number; playerId: string | null; name: string }[]
   fhohId?: string | null
   fhohName?: string
@@ -203,6 +205,7 @@ export interface BBSettlementPlayer {
   status: string
   rank: number
   evictedRound: number | null
+  walkedRound?: number | null
 }
 
 export interface BBSettlement {
@@ -237,6 +240,7 @@ export interface BBEndgameStatus {
   activePlayers: { playerId: string; name: string }[]
   juryPlayers: { playerId: string; name: string }[]
   evictedPlayers: { playerId: string; name: string }[]
+  walkedPlayers?: { playerId: string; name: string; walkedRound: number | null }[]
   fhoh: { playerId: string; name: string } | null
   finalTwo: { playerId: string; playerName: string; name?: string }[]
   lastJury: { playerId: string; name: string } | null
@@ -244,6 +248,7 @@ export interface BBEndgameStatus {
   champion: { playerId: string; name: string } | null
   runnerUp: { playerId: string; name: string } | null
   championVotes: Record<string, number>
+  championVotingOpen: boolean
   juryVotes: { juryId: string; juryName: string; voted: boolean; targetId: string | null; targetName: string }[]
   myChampionVote?: { targetId: string; targetName: string } | null
   championReveal?: BBChampionReveal | null
@@ -318,7 +323,10 @@ export interface BBHouseguest {
   loginCode?: string
   role: 'admin' | 'houseguest'
   isSuperAdmin?: boolean
-  status: 'active' | 'evicted' | 'jury' | 'f2'
+  status: 'active' | 'evicted' | 'jury' | 'f2' | 'walked'
+  walkedAt?: string | null
+  walkedRound?: number | null
+  walkNote?: string
   permissions?: string[]
   hasLogin: boolean
   isOnline?: boolean
@@ -343,6 +351,7 @@ export interface BBHouseguestStats {
   active: number
   evicted: number
   jury: number
+  walked: number
 }
 
 export interface BBHohRecord {

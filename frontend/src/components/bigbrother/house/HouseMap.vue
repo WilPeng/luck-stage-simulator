@@ -106,7 +106,12 @@ const reachableEnterable = computed(() => (props.reachableRooms || []).filter(r 
 const reachableDenied = computed(() => (props.reachableRooms || []).filter(r => !r.canEnter && !r.isFull))
 const otherRooms = computed(() => {
   const reachableSet = new Set((props.reachableRooms || []).map(r => r.id))
-  return props.rooms.filter(r => r.id !== props.currentRoomId && !reachableSet.has(r.id))
+  return props.rooms.filter(r =>
+    r.id !== props.currentRoomId &&
+    !reachableSet.has(r.id) &&
+    // 初入屋 / 陪审屋等特殊隔离区域不在地图上展示
+    (r as any).accessRule !== 'admin_only'
+  )
 })
 
 function countOf(roomId: string) {

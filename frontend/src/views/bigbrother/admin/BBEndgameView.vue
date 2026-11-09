@@ -143,8 +143,18 @@
         </div>
       </div>
 
+      <!-- 冠军投票开关：开启后选手端才能正式投票 -->
+      <div v-if="status.finalTwo.length === 2 && !status.champion" class="action-row voting-gate-row">
+        <button
+          v-if="!status.championVotingOpen"
+          class="bb-btn bb-btn-primary"
+          @click="openChampionVoting"
+        >🔓 开启冠军投票</button>
+        <span v-else class="voting-open-tag">✅ 冠军投票已开启 · 选手端可投票</span>
+      </div>
+
       <!-- 管理员逐人代投冠军票 -->
-      <div v-if="status.finalTwo.length === 2 && !status.champion" class="jury-vote-admin">
+      <div v-if="status.finalTwo.length === 2 && !status.champion && status.championVotingOpen" class="jury-vote-admin">
         <div class="board-title">逐陪审代投（点击该陪审投给谁）</div>
         <div v-if="!juryVotes.length" class="hint">暂无陪审成员</div>
         <div v-for="jv in juryVotes" :key="jv.juryId" class="jury-vote-row" :class="{ done: jv.voted }">
@@ -160,7 +170,7 @@
         </div>
       </div>
 
-      <div v-if="status.finalTwo.length === 2 && !status.champion" class="action-row">
+      <div v-if="status.finalTwo.length === 2 && !status.champion && status.championVotingOpen" class="action-row">
         <button class="bb-btn bb-btn-primary" @click="resolveChampion">🏆 结算冠军</button>
       </div>
 
@@ -235,10 +245,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import {
   bbGetEndgameStatus, bbFinal3Round, bbFhohPick, bbChampionResult, bbChampionVote, bbResetEndgame,
   bbCreateMinigameRoom, bbStartMinigame, bbGetMinigameRoom, bbSummonMinigamePlayers,
-  bbPrepareChampionReveal, bbNextChampionReveal, bbResetChampionReveal, bbReorderChampionReveal
+  bbPrepareChampionReveal, bbNextChampionReveal, bbResetChampionReveal, bbReorderChampionReveal,
+  bbOpenChampionVoting
 } from '../../../services/bbApi'
 import type { BBEndgameStatus } from '../../../types/bigbrother'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
@@ -400,6 +412,15 @@ async function adminCastJuryVote(juryId: string, targetId: string, targetName: s
   } catch (e: any) { alert(e.message) }
 }
 
+async function openChampionVoting() {
+  if (!confirm('开启冠军投票后，陪审团即可在选手端正式投票。确定开启吗？')) return
+  try {
+    await bbOpenChampionVoting()
+    await refresh()
+    alert('冠军投票已开启，选手端现在可以投票')
+  } catch (e: any) { alert(e.message) }
+}
+
 async function goNext() {
   try {
     await seasonStore.nextStage()
@@ -484,6 +505,7 @@ async function registerRoomWinner() {
 
 onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
 
+useBbRefresh(refresh)
 onMounted(refresh)
 </script>
 
@@ -570,6 +592,8 @@ onMounted(refresh)
 .board-title { font-size: 13px; color: #8f83b8; margin-bottom: 8px; }
 .jury-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .action-row { margin: 12px 0; }
+.voting-gate-row { display: flex; align-items: center; gap: 12px; }
+.voting-open-tag { font-size: 13px; color: #4ade80; background: #4ade8015; border: 1px solid #4ade8044; padding: 4px 12px; border-radius: 8px; }
 .champion-card {
   display: flex; align-items: center; gap: 16px; background: #e6c98810;
   border: 1px solid #e6c988; border-radius: 12px; padding: 20px;

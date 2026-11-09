@@ -76,7 +76,12 @@ router.get('/rooms', auth, async (req, res) => {
       for (const r of rows) counts[r._id] = r.n
     }
 
-    const result = rooms.map(room => ({ ...room.toObject(), currentCount: showCounts ? (counts[room.id] || 0) : null }))
+    // 普通玩家：隐藏特殊隔离区域（初入屋/陪审屋），除非自己当前就在该区域
+    const currentRoomId = loc?.currentRoomId || null
+    const visibleRooms = isAdmin
+      ? rooms
+      : rooms.filter(room => room.accessRule !== 'admin_only' || room.id === currentRoomId)
+    const result = visibleRooms.map(room => ({ ...room.toObject(), currentCount: showCounts ? (counts[room.id] || 0) : null }))
     res.json({ success: true, data: result })
   } catch (e) {
     console.error(e)
@@ -470,7 +475,8 @@ router.get('/hoh-monitor', auth, async (req, res) => {
     const rooms = await BBHouseRoom.find({ gameId: 'bigbrother' })
     const result = []
     for (const room of rooms) {
-      if (room.type === 'hidden') continue // 不显示 Diary Room
+      // 不显示 Diary Room 与特殊隔离区域（初入屋/陪审屋）
+      if (room.type === 'hidden' || room.accessRule === 'admin_only') continue
       const count = await BBPlayerLocation.countDocuments({ currentRoomId: room.id, gameId: 'bigbrother' })
       result.push({ roomId: room.id, roomName: room.name, icon: room.icon, count })
     }

@@ -12,7 +12,12 @@ class BBHouseguest extends BaseModel {
     this.role = data?.role || 'houseguest' // admin | houseguest
     // 总管理员：唯一、拥有全部权限、不可删除，可转移给其他管理员
     this.isSuperAdmin = !!data?.isSuperAdmin
-    this.status = data?.status || 'active' // active | evicted | jury
+    this.status = data?.status || 'active' // active | evicted | jury | f2 | walked
+    // 退赛（walked）：选手主动退出比赛
+    this.walkedAt = data?.walkedAt || null
+    this.walkedRound = data?.walkedRound ?? null // 从第几轮起显示为 walked
+    this.walkNote = data?.walkNote || ''
+    this.walkUndo = data?.walkUndo || null // 撤销退赛所需的赛程快照
     // 管理员权限（仅 role=admin 有效）。空数组表示拥有全部权限。
     this.permissions = Array.isArray(data?.permissions) ? data.permissions : (data?.permissions || [])
     this.hasLogin = data?.hasLogin || false
@@ -49,10 +54,11 @@ class BBHouseguest extends BaseModel {
     return obj
   }
 
-  /** 对外返回时使用：去掉密码字段（注意 toObject 需要保留密码供持久化使用） */
+  /** 对外返回时使用：去掉密码与退赛撤销快照（注意 toObject 需要保留密码供持久化使用） */
   toSafeObject() {
     const obj = this.toObject()
     delete obj.password
+    delete obj.walkUndo
     return obj
   }
 
@@ -95,13 +101,14 @@ class BBHouseguest extends BaseModel {
 
   static async stats(gameId) {
     const gid = gameId || 'bigbrother'
-    const [total, active, evicted, jury] = await Promise.all([
+    const [total, active, evicted, jury, walked] = await Promise.all([
       BBHouseguest.countDocuments({ gameId: gid }),
       BBHouseguest.countDocuments({ gameId: gid, status: 'active' }),
       BBHouseguest.countDocuments({ gameId: gid, status: 'evicted' }),
-      BBHouseguest.countDocuments({ gameId: gid, status: 'jury' })
+      BBHouseguest.countDocuments({ gameId: gid, status: 'jury' }),
+      BBHouseguest.countDocuments({ gameId: gid, status: 'walked' })
     ])
-    return { total, active, evicted, jury }
+    return { total, active, evicted, jury, walked }
   }
 }
 

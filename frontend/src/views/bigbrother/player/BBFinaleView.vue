@@ -6,6 +6,9 @@
       <span v-else-if="isChampionVote" class="stage-tag champ">冠军投票</span>
     </div>
 
+    <!-- 陪审团问答（FTC 确定后即可进行，决赛二人与陪审团参与） -->
+    <JuryQA v-if="finalTwo.length === 2 && (isJury || isFinalist)" :isJury="isJury" :isFinalist="isFinalist" />
+
     <!-- F3：参与小游戏 -->
     <template v-if="isFinal3">
       <!-- F3 三轮胜者进度 -->
@@ -51,8 +54,6 @@
 
     <!-- 冠军投票 / 冠军揭晓 -->
     <template v-else-if="isChampionVote">
-      <JuryQA :isJury="isJury" :isFinalist="isFinalist" />
-
       <!-- 逐句揭晓（仅新句播放动画） -->
       <div v-if="revealSegments.length" class="reveal-panel">
         <div class="reveal-title">🏆 冠军揭晓</div>
@@ -70,20 +71,25 @@
 
       <div v-else-if="finalTwo.length === 2" class="vote-section">
         <div class="vote-title">🏆 陪审团冠军投票</div>
-        <p v-if="isFinalist" class="note">你是决赛选手，无需投票。</p>
-        <p v-else-if="!isJury" class="note">只有陪审团成员可以投冠军票。</p>
+        <template v-if="!eg?.championVotingOpen">
+          <p class="note">等待管理员开启冠军投票…（可先在下方陪审团问答中交流）</p>
+        </template>
+        <template v-else>
+          <p v-if="isFinalist" class="note">你是决赛选手，无需投票。</p>
+          <p v-else-if="!isJury" class="note">只有陪审团成员可以投冠军票。</p>
 
-        <div class="finalist-cards">
-          <div v-for="p in finalTwo" :key="p.playerId"
-            class="finalist-card" :class="{ chosen: myVote?.targetId === p.playerId }"
-            @click="askVote(p)">
-            <div class="finalist-avatar">{{ p.playerName.charAt(0) }}</div>
-            <div class="finalist-name">{{ p.playerName }}</div>
-            <div class="finalist-action">
-              {{ myVote?.targetId === p.playerId ? '✅ 已投票' : '点此投票' }}
+          <div class="finalist-cards">
+            <div v-for="p in finalTwo" :key="p.playerId"
+              class="finalist-card" :class="{ chosen: myVote?.targetId === p.playerId }"
+              @click="askVote(p)">
+              <div class="finalist-avatar">{{ p.playerName.charAt(0) }}</div>
+              <div class="finalist-name">{{ p.playerName }}</div>
+              <div class="finalist-action">
+                {{ myVote?.targetId === p.playerId ? '✅ 已投票' : '点此投票' }}
+              </div>
             </div>
           </div>
-        </div>
+        </template>
       </div>
       <div v-else class="pending-card">
         <div class="pending-title">决赛二人尚未确定</div>
@@ -217,6 +223,7 @@ async function refreshStatus() {
 }
 
 function askVote(p: { playerId: string; playerName: string }) {
+  if (!eg.value?.championVotingOpen) { alert('管理员尚未开启冠军投票'); return }
   if (myVote.value) { alert('你已经投过票'); return }
   if (!isJury.value) { alert('只有陪审团成员可以投票'); return }
   confirmTarget.value = p

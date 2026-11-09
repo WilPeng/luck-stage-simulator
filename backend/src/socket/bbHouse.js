@@ -96,7 +96,9 @@ async function getRoomAudience(roomId) {
   const guests = await BBHouseguest.find({ gameId, id: { $in: idsInRoom } })
   const ids = []
   for (const g of guests) {
-    if (g.role === 'admin' || g.status !== 'active') continue
+    // 陪审团(jury)与决赛二人(f2)仍可交流：陪审屋内的 jury 互相聊天、客厅内 F2 与 jury 进行问答
+    if (g.role === 'admin') continue
+    if (!['active', 'f2', 'jury'].includes(g.status)) continue
     if (g.isSleeping || g.isMoving) continue
     if (g.isShowering && roomId !== 'bathroom') continue
     ids.push(g.id)
@@ -247,6 +249,10 @@ function initBBHouseSocket(io) {
         // 睡眠/洗澡状态限制（管理员不受限）
         const senderGuest = await BBHouseguest.findOne({ id: socket.userId, gameId })
         if (!isAdmin) {
+        // 仅仍在比赛中的玩家（active / f2 / jury）可以发言
+        if (senderGuest && !['active', 'f2', 'jury'].includes(senderGuest.status)) {
+          return socket.emit('house:error', { error: '你当前不能再在 House 发言' })
+        }
         if (senderGuest?.isSleeping) {
           return socket.emit('house:error', { error: '睡眠中无法发送消息' })
         }
@@ -1005,7 +1011,8 @@ async function broadcastMonitorUpdate() {
     const countMap = new Map(countRows.map(r => [r._id, r.n]))
     const result = []
     for (const room of rooms) {
-      if (room.type === 'hidden') continue // Diary Room 不参与监控
+      // Diary Room 与特殊隔离区域（初入屋/陪审屋）不出现在 HOH Monitor
+      if (room.type === 'hidden' || room.accessRule === 'admin_only') continue
       result.push({ roomId: room.id, roomName: room.name, icon: room.icon, count: countMap.get(room.id) || 0 })
     }
 

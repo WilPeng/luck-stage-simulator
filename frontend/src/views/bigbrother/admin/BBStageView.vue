@@ -64,7 +64,7 @@
         <span class="jury-size-hint">（赛季开始前设置，最后 {{ finalSize }} 人进入决赛不淘汰，再往前 {{ jurySize }} 个淘汰者为陪审团）</span>
       </div>
       <p class="auto-gen-hint">
-        💡 淘汰者名次和陪审团状态会根据在线房客数（{{ totalHouseguests }}人）、Jury人数（{{ jurySize }}人）和Final人数（{{ finalSize }}人）自动计算
+        💡 淘汰者名次和陪审团状态会根据在线房客数（{{ totalHouseguests }}人<template v-if="walkedCount">，已扣除 {{ walkedCount }} 名退赛</template>）、Jury人数（{{ jurySize }}人）和Final人数（{{ finalSize }}人）自动计算
       </p>
 
       <!-- 终局轮次预告 -->
@@ -240,7 +240,8 @@ const saving = ref(false)
 const isSeasonStarted = ref(false)
 const jurySize = ref(7)
 const finalSize = ref(2) // 最终不淘汰进入决赛的人数
-const totalHouseguests = ref(0) // 在线房客总人数
+const totalHouseguests = ref(0) // 参与赛程规划的房客数（总人数 - 退赛人数）
+const walkedCount = ref(0)
 
 // 轮次配置
 const roundConfigs = ref<BBRoundConfig[]>([])
@@ -424,10 +425,11 @@ async function fetchData() {
     }))
   }
 
-  // 获取在线房客总人数
+  // 获取参与赛程规划的房客数（退赛相当于提前少一名选手）
   try {
     const stats = await bbGetHouseguestStats()
-    totalHouseguests.value = stats.total
+    walkedCount.value = stats.walked || 0
+    totalHouseguests.value = Math.max(0, stats.total - walkedCount.value)
   } catch {}
   resizeRoundsToNeeded()
 }

@@ -309,7 +309,15 @@ async function computeEvictionResult(season) {
   const finalSize = season.finalSize || 2
   const hgColTotal = getCollection('BBHouseguest')
   const totalHouseguests = await hgColTotal.countDocuments({ gameId: 'bigbrother', role: 'houseguest' })
-  const priorEvictions = await getCollection('BBEviction').countDocuments({ gameId: 'bigbrother', roundId: { $ne: roundId } })
+  const voteEvictions = await getCollection('BBEviction').countDocuments({ gameId: 'bigbrother', roundId: { $ne: roundId } })
+  // 退赛同样占用一个淘汰名次，计入 priorEvictions，保证名次与陪审团边界正确
+  const priorWalks = await hgColTotal.countDocuments({
+    gameId: 'bigbrother',
+    role: 'houseguest',
+    status: 'walked',
+    walkedRound: { $lte: curRound }
+  })
+  const priorEvictions = voteEvictions + priorWalks
   for (let ei = 0; ei < evictedTargets.length; ei++) {
     const target = evictedTargets[ei]
     const evicted = await BBHouseguest.findOne({ id: target.id })
@@ -552,6 +560,12 @@ router.post('/restore/:id', async (req, res) => {
   try {
     const houseguest = await BBHouseguest.findOne({ id: req.params.id })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
+    // 退赛恢复走专用逻辑：同时把被删除的轮次补回赛程
+    if (houseguest.status === 'walked') {
+      const { undoWalk } = require('../walk')
+      const data = await undoWalk(houseguest.id)
+      return res.json({ success: true, data: data.player.toSafeObject() })
+    }
     houseguest.status = 'active'
     await houseguest.save()
     res.json({ success: true, data: houseguest.toSafeObject() })

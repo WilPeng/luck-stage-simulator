@@ -24,6 +24,7 @@
         <option value="active">活跃</option>
         <option value="evicted">已淘汰</option>
         <option value="jury">陪审团</option>
+        <option value="walked">退赛</option>
       </select>
     </div>
 
@@ -72,6 +73,8 @@
               </span>
             </td>
             <td class="actions">
+              <button v-if="h.role !== 'admin' && (h.status === 'active' || h.status === 'f2')" class="bb-btn bb-btn-xs bb-btn-walk" @click="openWalkModal(h)">退赛</button>
+              <button v-if="h.role !== 'admin' && h.status === 'walked'" class="bb-btn bb-btn-xs" @click="undoWalk(h)">撤销退赛</button>
               <button class="bb-btn bb-btn-xs" @click="editHouseguest(h)">编辑</button>
               <button v-if="h.role === 'admin' && !h.isSuperAdmin" class="bb-btn bb-btn-xs" @click="setSuperAdmin(h)">设为总管理员</button>
               <button v-if="!h.isSuperAdmin" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
@@ -136,12 +139,14 @@
             </div>
             <div v-if="editingId && formRole !== 'admin'" class="form-group">
               <label>状态</label>
-              <select v-model="formStatus" class="bb-select">
+              <select v-model="formStatus" class="bb-select" :disabled="editingWalked">
                 <option value="active">活跃</option>
                 <option value="evicted">已淘汰</option>
                 <option value="jury">陪审团</option>
                 <option value="f2">决赛二人</option>
+                <option value="walked" disabled>退赛（请使用退赛/撤销退赛按钮）</option>
               </select>
+              <p v-if="editingWalked" class="form-hint">退赛状态请使用列表中的「撤销退赛」按钮恢复，避免赛程不一致。</p>
             </div>
             <div v-if="editingId && formRole !== 'admin' && formStatus === 'active'" class="form-group">
               <label class="checkbox-row">
@@ -170,13 +175,69 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- 退赛弹窗 -->
+    <Teleport to="body">
+      <div v-if="showWalkModal" class="bb-modal-overlay" @click.self="closeWalkModal">
+        <div class="bb-modal">
+          <div class="bb-modal-header">
+            <h3>选手退赛（walked）</h3>
+            <button class="close-btn" @click="closeWalkModal">×</button>
+          </div>
+          <div class="bb-modal-body">
+            <p class="walk-target">确定让 <strong>{{ walkTarget?.name }}</strong> 退赛吗？</p>
+
+            <div class="form-group">
+              <label>退赛轮次（结算表中从此轮起显示 walked）</label>
+              <select v-model.number="walkRound" class="bb-select">
+                <option v-for="r in walkRoundOptions" :key="r" :value="r">第 {{ r }} 轮</option>
+              </select>
+            </div>
+
+            <div v-if="walkEndgame" class="form-group">
+              <p class="form-hint warning">
+                已进入 F3 / 冠军投票阶段，没有可删除的普通轮。退赛将仅标记状态，并在人数不足时自动进入冠军投票或结算。
+              </p>
+            </div>
+            <div v-else class="form-group">
+              <label>要删除的普通轮次</label>
+              <select v-model.number="removeRound" class="bb-select">
+                <option v-for="r in removeRoundOptions" :key="r" :value="r">
+                  第 {{ r }} 轮{{ forceRemoveRound === r ? '（当前轮，强制删除）' : '' }}
+                </option>
+              </select>
+              <p v-if="!removeRoundOptions.length" class="form-hint warning">
+                当前没有可删除的普通轮（可能已进入最后一个普通轮或终局），无法按常规退赛调整赛程。
+              </p>
+              <p v-else class="form-hint">
+                退赛会占用一个淘汰名额：系统将跳过你选择的这一轮，后续轮次整体前移，F3/冠军轮同步前移。
+              </p>
+            </div>
+
+            <div class="form-group">
+              <label>备注（可选）</label>
+              <input v-model="walkNoteInput" class="bb-input" placeholder="退赛原因等" maxlength="200" />
+            </div>
+
+            <div class="form-actions">
+              <button class="bb-btn" @click="closeWalkModal">取消</button>
+              <button
+                class="bb-btn bb-btn-danger"
+                :disabled="walking || !walkRound || (!walkEndgame && !removeRound)"
+                @click="confirmWalk"
+              >{{ walking ? '处理中...' : '确认退赛' }}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
-import { bbGetHouseguests, bbCreateHouseguest, bbUpdateHouseguest, bbDeleteHouseguest, bbBatchDeleteHouseguests, bbUploadHouseguestAvatar, bbDeleteHouseguestAvatar } from '../../../services/bbApi'
+import { bbGetHouseguests, bbCreateHouseguest, bbUpdateHouseguest, bbDeleteHouseguest, bbBatchDeleteHouseguests, bbUploadHouseguestAvatar, bbDeleteHouseguestAvatar, bbWalkHouseguest, bbUndoWalkHouseguest, bbGetSeasonProgress, bbGetSeasonConfig } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBHouseguest } from '../../../types/bigbrother'
 
@@ -199,6 +260,19 @@ const formIsHaveNot = ref(false)
 const editingAvatar = ref<string | null>(null)
 const selectedIds = ref<string[]>([])
 
+// ===== 退赛（walked） =====
+const showWalkModal = ref(false)
+const walkTarget = ref<BBHouseguest | null>(null)
+const walkRound = ref<number | null>(null)
+const removeRound = ref<number | null>(null)
+const walkNoteInput = ref('')
+const walkRoundOptions = ref<number[]>([])
+const removeRoundOptions = ref<number[]>([])
+const forceRemoveRound = ref<number | null>(null)
+const walkCurrentStage = ref('')
+const walkEndgame = ref(false)
+const walking = ref(false)
+
 const PERMISSIONS = [
   { key: 'dashboard', label: '总览' },
   { key: 'houseguests', label: '房客管理' },
@@ -218,6 +292,11 @@ const PERMISSIONS = [
 const editingSuperAdmin = computed(() => {
   const h = list.value.find(x => x.id === editingId.value)
   return !!h?.isSuperAdmin
+})
+
+const editingWalked = computed(() => {
+  const h = list.value.find(x => x.id === editingId.value)
+  return h?.status === 'walked'
 })
 
 const selectableList = computed(() => list.value.filter(h => !h.isSuperAdmin))
@@ -262,7 +341,7 @@ function onRoleChange() { page.value = 1; fetchData() }
 function changePage(p: number) { page.value = p; fetchData() }
 
 function statusText(status: string): string {
-  const map: Record<string, string> = { active: '活跃', evicted: '已淘汰', jury: '陪审团', f2: '决赛二人' }
+  const map: Record<string, string> = { active: '活跃', evicted: '已淘汰', jury: '陪审团', f2: '决赛二人', walked: '退赛' }
   return map[status] || status
 }
 
@@ -294,6 +373,115 @@ async function toggleHaveNot(h: BBHouseguest) {
     await bbUpdateHouseguest(h.id, { isHaveNot: !h.isHaveNot })
     await fetchData()
   } catch (e: any) { alert(e.message) }
+}
+
+async function openWalkModal(h: BBHouseguest) {
+  walkTarget.value = h
+  walkNoteInput.value = ''
+  walkRound.value = null
+  removeRound.value = null
+  walkRoundOptions.value = []
+  removeRoundOptions.value = []
+  forceRemoveRound.value = null
+  walkCurrentStage.value = ''
+  walkEndgame.value = false
+  showWalkModal.value = true
+
+  try {
+    const [progress, config] = await Promise.all([bbGetSeasonProgress(), bbGetSeasonConfig()])
+    const current = progress.currentRound || 1
+    const lastNormal = progress.final3Round
+      ? progress.final3Round - 1
+      : Math.max(current, (progress.totalRounds || 2) - 2)
+    walkCurrentStage.value = progress.currentStage || ''
+    // 已进入 F3 / 冠军投票：没有可删除的普通轮，仅标记退赛并自动处理终局
+    walkEndgame.value = !!(
+      (progress.final3Round && current >= progress.final3Round) ||
+      progress.currentStage === 'final3' ||
+      progress.currentStage === 'champion_vote'
+    )
+
+    walkRoundOptions.value = []
+    if (walkEndgame.value) {
+      walkRoundOptions.value.push(current)
+      walkRound.value = current
+      removeRound.value = null
+      return
+    }
+
+    for (let r = current; r <= lastNormal; r++) walkRoundOptions.value.push(r)
+
+    const evictByRound = new Map<number, number>()
+    for (const cfg of (config.roundConfigs || [])) {
+      evictByRound.set(cfg.round, (cfg as any).evictCount ?? 1)
+    }
+    const canDelete = (r: number) => r >= current && r <= lastNormal && (evictByRound.get(r) ?? 1) <= 1
+
+    removeRoundOptions.value = []
+    for (let r = current + 1; r <= lastNormal; r++) {
+      if (canDelete(r)) removeRoundOptions.value.push(r)
+    }
+    // 当前轮：未开始时可直接删除；已开始时标记为强制删除
+    if (canDelete(current)) {
+      if (progress.currentStage === 'hoh_competition') {
+        removeRoundOptions.value.unshift(current)
+      } else {
+        forceRemoveRound.value = current
+        removeRoundOptions.value.push(current)
+      }
+    }
+
+    walkRound.value = walkRoundOptions.value[0] ?? current
+    removeRound.value = removeRoundOptions.value.length
+      ? removeRoundOptions.value[removeRoundOptions.value.length - 1]
+      : null
+  } catch (e: any) {
+    alert(e?.message || '获取赛程信息失败')
+  }
+}
+
+function closeWalkModal() {
+  if (walking.value) return
+  showWalkModal.value = false
+}
+
+async function confirmWalk() {
+  const target = walkTarget.value
+  if (!target || !walkRound.value) return
+  if (!walkEndgame.value && !removeRound.value) return
+  const forced = !walkEndgame.value && forceRemoveRound.value === removeRound.value && walkCurrentStage.value !== 'hoh_competition'
+  const extra = forced ? '\n注意：当前轮次已开始，将强制删除该轮并清空本轮比赛数据。' : ''
+  const removeText = walkEndgame.value ? '' : `\n将删除第 ${removeRound.value} 轮。`
+  if (!confirm(`确定让 ${target.name} 退赛吗？${removeText}${extra}`)) return
+
+  walking.value = true
+  try {
+    const res: any = await bbWalkHouseguest(target.id, {
+      walkedRound: walkRound.value,
+      ...(walkEndgame.value ? {} : { removeRound: removeRound.value as number }),
+      note: walkNoteInput.value,
+      force: forced
+    })
+    showWalkModal.value = false
+    await fetchData()
+    const warningText = res.warnings?.length ? `\n\n注意：\n${res.warnings.join('\n')}` : ''
+    alert(`已将 ${target.name} 标记为退赛${res.removedRound ? `，并删除第 ${res.removedRound} 轮` : ''}${warningText}`)
+  } catch (e: any) {
+    alert(e?.message || '退赛失败')
+  } finally {
+    walking.value = false
+  }
+}
+
+async function undoWalk(h: BBHouseguest) {
+  if (!confirm(`确定撤销 ${h.name} 的退赛吗？被删除的轮次会恢复。`)) return
+  try {
+    await bbUndoWalkHouseguest(h.id)
+    await fetchData()
+    alert(`已撤销 ${h.name} 的退赛`)
+  } catch (e: any) {
+    alert(e?.message || '撤销退赛失败')
+  }
 }
 
 async function onAdminAvatarFile(e: Event) {
@@ -370,7 +558,7 @@ async function fetchAllHouseguests(): Promise<BBHouseguest[]> {
 }
 
 function statusLabel(s: string): string {
-  const map: Record<string, string> = { active: '活跃', evicted: '已淘汰', jury: '陪审团' }
+  const map: Record<string, string> = { active: '活跃', evicted: '已淘汰', jury: '陪审团', f2: '决赛二人', walked: '退赛' }
   return map[s] || s
 }
 
@@ -590,9 +778,15 @@ onUnmounted(() => {
 .status-tag.evicted { background: #ff444422; color: #ff4444; }
 .status-tag.jury { background: #e6c98822; color: #e6c988; }
 .status-tag.f2 { background: #a855f722; color: #c084fc; }
+.status-tag.walked { background: #ff880022; color: #ff9933; }
 .status-tag.admin { background: #4488ff22; color: #66aaff; }
 .status-tag.super { background: #e6c98833; color: #f0d488; font-weight: 600; }
 .form-hint { margin: 8px 0 0; font-size: 12px; color: #8f83b8; line-height: 1.4; }
+.form-hint.warning { color: #ff9933; }
+.walk-target { margin: 0 0 16px; color: #cfc4ea; font-size: 14px; }
+.walk-target strong { color: #ff9933; }
+.bb-btn-walk { border-color: #ff8800aa; color: #ff9933; }
+.bb-btn-walk:hover { background: #ff880022; }
 .perm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 12px; }
 .havenot-tag { padding: 2px 10px; border-radius: 10px; font-size: 12px; background: #66aaff22; color: #66aaff; margin-right: 6px; }
 .checkbox-row { display: flex; align-items: center; gap: 8px; color: #cfc4ea; cursor: pointer; }

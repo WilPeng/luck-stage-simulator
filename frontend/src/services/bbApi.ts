@@ -150,7 +150,11 @@ export async function bbGetSeasonConfig(): Promise<{
   totalRounds: number
   isSeasonStarted: boolean
   currentRound: number
+  final3Round: number | null
+  championRound: number | null
+  walkedCount: number
   jurySize: number
+  finalSize: number
 }> {
   return doRequest('/season/config')
 }
@@ -190,6 +194,10 @@ export async function bbFhohPick(pickedId: string, pickedName?: string): Promise
     method: 'POST',
     body: JSON.stringify({ pickedId, pickedName })
   })
+}
+
+export async function bbOpenChampionVoting(): Promise<{ championVotingOpen: boolean }> {
+  return doRequest('/season/endgame/open-voting', { method: 'POST', body: JSON.stringify({}) })
 }
 
 export async function bbChampionVote(targetId: string, targetName?: string, voterId?: string, voterName?: string): Promise<any> {
@@ -583,6 +591,24 @@ export async function bbGetEvictionHistory(): Promise<BBEviction[]> {
 
 export async function bbRestoreHouseguest(id: string): Promise<BBHouseguest> {
   return doRequest<BBHouseguest>(`/eviction/restore/${id}`, { method: 'POST' })
+}
+
+// ===== 退赛（walked） =====
+export async function bbWalkHouseguest(
+  id: string,
+  params: { walkedRound?: number; removeRound?: number; note?: string; force?: boolean }
+): Promise<{ player: BBHouseguest; season: BBSeason; walkedRound: number; removedRound: number | null; warnings?: string[] }> {
+  return doRequest(`/houseguests/${id}/walk`, {
+    method: 'POST',
+    body: JSON.stringify(params)
+  })
+}
+
+export async function bbUndoWalkHouseguest(id: string): Promise<{ player: BBHouseguest; season: BBSeason }> {
+  return doRequest(`/houseguests/${id}/walk/undo`, {
+    method: 'POST',
+    body: JSON.stringify({})
+  })
 }
 
 // ===== 日志 =====

@@ -89,7 +89,7 @@ function roomName(id: string) {
   return rooms.value.find(r => r.id === id)?.name || id
 }
 function statusLabel(s: string) {
-  return ({ active: '在住', evicted: '淘汰', jury: '陪审' } as Record<string, string>)[s] || s || ''
+  return ({ active: '在住', evicted: '淘汰', jury: '陪审', f2: '决赛二人', walked: '退赛' } as Record<string, string>)[s] || s || ''
 }
 function formatTime(t: string) {
   if (!t) return ''

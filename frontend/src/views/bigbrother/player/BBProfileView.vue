@@ -82,7 +82,7 @@ const newPwd2 = ref('')
 const pwdSaving = ref(false)
 
 const statusText = computed(() => {
-  const map: Record<string, string> = { active: '活跃', evicted: '已淘汰', jury: '陪审团', f2: '决赛二人' }
+  const map: Record<string, string> = { active: '活跃', evicted: '已淘汰', jury: '陪审团', f2: '决赛二人', walked: '已退赛' }
   return map[user.value?.status || ''] || user.value?.status || ''
 })
 

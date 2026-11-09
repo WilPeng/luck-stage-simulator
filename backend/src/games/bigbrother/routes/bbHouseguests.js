@@ -7,6 +7,7 @@ const BBHouseguest = require('../models/BBHouseguest')
 const { generateId, logAction, BB_ACTION_TYPES } = require('../helpers')
 const { auth, requireAdmin } = require('../../../middleware/auth')
 const { hashPassword, readPassword } = require('../password')
+const { markWalk, undoWalk } = require('../walk')
 
 // 头像存储配置（本地文件存储）
 const AVATAR_DIR = path.join(__dirname, '..', '..', '..', '..', 'uploads', 'bbavatars')
@@ -107,13 +108,14 @@ router.get('/', auth, requireAdmin, async (req, res) => {
 router.get('/stats', async (req, res) => {
   try {
     const col = new BBHouseguest()._getCollection()
-    const [total, active, evicted, jury] = await Promise.all([
+    const [total, active, evicted, jury, walked] = await Promise.all([
       col.countDocuments({ gameId: 'bigbrother', role: 'houseguest' }),
       col.countDocuments({ gameId: 'bigbrother', role: 'houseguest', status: 'active' }),
       col.countDocuments({ gameId: 'bigbrother', role: 'houseguest', status: 'evicted' }),
-      col.countDocuments({ gameId: 'bigbrother', role: 'houseguest', status: 'jury' })
+      col.countDocuments({ gameId: 'bigbrother', role: 'houseguest', status: 'jury' }),
+      col.countDocuments({ gameId: 'bigbrother', role: 'houseguest', status: 'walked' })
     ])
-    res.json({ success: true, data: { total, active, evicted, jury } })
+    res.json({ success: true, data: { total, active, evicted, jury, walked } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '获取房客统计失败', code: 'SERVER_ERROR' })
@@ -367,6 +369,68 @@ router.delete('/:id/avatar', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '删除头像失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// ===== 退赛（walked） =====
+
+// POST /:id/walk - 选手退赛（仅管理员）
+// body: { walkedRound?: number, removeRound?: number, note?: string, force?: boolean }
+router.post('/:id/walk', auth, requireAdmin, async (req, res) => {
+  try {
+    const { walkedRound, removeRound, note, force } = req.body || {}
+    const data = await markWalk({
+      playerId: req.params.id,
+      walkedRound,
+      removeRound,
+      note,
+      force: force === true
+    })
+    await logAction(req.user.userId, req.user.name || 'admin', 'admin',
+      BB_ACTION_TYPES.WALK, 'houseguest', data.player.id,
+      `${data.player.name} 退赛（第${data.displayWalkRound}轮起）` +
+      (data.snapshot?.didRemoveRound ? `，删除第${data.snapshot.removeRound}轮` : ''))
+    res.json({
+      success: true,
+      data: {
+        player: data.player.toSafeObject(),
+        season: data.season.toObject(),
+        walkedRound: data.displayWalkRound,
+        removedRound: data.snapshot?.didRemoveRound ? data.snapshot.removeRound : null,
+        warnings: data.warnings || []
+      }
+    })
+  } catch (e) {
+    console.error(e)
+    res.status(e.code ? 400 : 500).json({
+      success: false,
+      error: e.message || '退赛失败',
+      code: e.code || 'SERVER_ERROR'
+    })
+  }
+})
+
+// POST /:id/walk/undo - 撤销退赛（仅管理员）
+router.post('/:id/walk/undo', auth, requireAdmin, async (req, res) => {
+  try {
+    const data = await undoWalk(req.params.id)
+    await logAction(req.user.userId, req.user.name || 'admin', 'admin',
+      BB_ACTION_TYPES.WALK_UNDO, 'houseguest', data.player.id,
+      `撤销退赛：${data.player.name}`)
+    res.json({
+      success: true,
+      data: {
+        player: data.player.toSafeObject(),
+        season: data.season.toObject()
+      }
+    })
+  } catch (e) {
+    console.error(e)
+    res.status(e.code ? 400 : 500).json({
+      success: false,
+      error: e.message || '撤销退赛失败',
+      code: e.code || 'SERVER_ERROR'
+    })
   }
 })
 

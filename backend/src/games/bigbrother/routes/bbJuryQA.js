@@ -7,11 +7,17 @@ const { generateId } = require('../helpers')
 const { auth, requireAdmin } = require('../../../middleware/auth')
 const { broadcastBBGame } = require('../../../socket/bbGame')
 
+// 问答归属轮次：终局固定使用 F3 轮，避免 F3 → 冠军投票切换后问答列表被清空
+function juryQaRoundId(season) {
+  if (season?.final3Round) return `round-${season.final3Round}`
+  return `round-${season?.currentRound || 1}`
+}
+
 // GET / - 当前轮次陪审团问答列表
 router.get('/', auth, async (req, res) => {
   try {
     const season = await BBSeason.findOne({ gameId: 'bigbrother' })
-    const roundId = `round-${season?.currentRound || 1}`
+    const roundId = juryQaRoundId(season)
     const docs = await BBJuryQA.find({ gameId: 'bigbrother', roundId })
     docs.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
     res.json({ success: true, data: docs.map(d => d.toObject()) })
@@ -29,7 +35,7 @@ router.post('/ask', auth, async (req, res) => {
       return res.status(400).json({ success: false, error: '问题不能为空' })
     }
     const season = await BBSeason.findOne({ gameId: 'bigbrother' })
-    const roundId = `round-${season?.currentRound || 1}`
+    const roundId = juryQaRoundId(season)
     // 溯源提问者：优先 token 中的姓名，否则回查房客
     const asker = req.user?.name || (await BBHouseguest.findOne({ id: req.user?.userId }))?.name || ''
     const doc = new BBJuryQA({

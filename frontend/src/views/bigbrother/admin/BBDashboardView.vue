@@ -36,6 +36,13 @@
           <div class="stat-label">陪审团</div>
         </div>
       </div>
+      <div class="stat-card walked">
+        <div class="stat-icon">🚶</div>
+        <div class="stat-info">
+          <div class="stat-value">{{ stats.walked }}</div>
+          <div class="stat-label">退赛</div>
+        </div>
+      </div>
       <div class="stat-card current-round">
         <div class="stat-icon">📅</div>
         <div class="stat-info">
@@ -103,7 +110,7 @@ import { bbGetHouseguestStats, bbRunHohCompetition, bbRunVetoCompetition } from 
 const router = useRouter()
 const seasonStore = useBbSeasonStore()
 
-const stats = ref({ total: 0, active: 0, evicted: 0, jury: 0 })
+const stats = ref({ total: 0, active: 0, evicted: 0, jury: 0, walked: 0 })
 const currentHohName = ref('')
 
 const progressPercent = computed(() => {
@@ -175,6 +182,7 @@ onMounted(async () => {
 .stat-card.active { border-left: 3px solid #b39bff; }
 .stat-card.evicted { border-left: 3px solid #ff4444; }
 .stat-card.jury { border-left: 3px solid #e6c988; }
+.stat-card.walked { border-left: 3px solid #ff8800; }
 .stat-card.current-round { border-left: 3px solid #4488ff; }
 .stat-card.stage-info { border-left: 3px solid #b39bff; }
 .stat-icon { font-size: 28px; }
