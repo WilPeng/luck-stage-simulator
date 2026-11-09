@@ -52,6 +52,7 @@ export function useHouseSocket() {
   const onHistory = ref<((data: { roomId: string; messages: HouseMessage[] }) => void) | null>(null)
   const onNewMessage = ref<((data: { roomId: string; message: HouseMessage }) => void) | null>(null)
   const onOlderMessages = ref<((data: { roomId: string; messages: HouseMessage[] }) => void) | null>(null)
+  const onHistoryJump = ref<((data: { roomId: string; at: string; messages: HouseMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean }) => void) | null>(null)
   const onPlayerJoined = ref<((data: { roomId: string; playerName: string; at?: string }) => void) | null>(null)
   const onPlayerLeft = ref<((data: { roomId: string; playerName: string; at?: string }) => void) | null>(null)
   const onRoomPresence = ref<((data: { roomId: string; players: HousePlayer[] }) => void) | null>(null)
@@ -99,6 +100,7 @@ export function useHouseSocket() {
     s.on('house:history', (data) => onHistory.value?.(data))
     s.on('house:new-message', (data) => onNewMessage.value?.(data))
     s.on('house:older-messages', (data) => onOlderMessages.value?.(data))
+    s.on('house:history-jump', (data) => onHistoryJump.value?.(data))
     s.on('house:player-joined', (data) => onPlayerJoined.value?.(data))
     s.on('house:player-left', (data) => onPlayerLeft.value?.(data))
     s.on('house:room-presence', (data) => onRoomPresence.value?.(data))
@@ -136,6 +138,10 @@ export function useHouseSocket() {
 
   function loadMore(roomId: string, before: string) {
     socket.value?.emit('house:load-more', { roomId, before })
+  }
+
+  function jumpHistory(roomId: string, at: string) {
+    socket.value?.emit('house:jump-history', { roomId, at })
   }
 
   function notifyMoved(oldRoomId: string, newRoomId: string) {
@@ -194,6 +200,7 @@ export function useHouseSocket() {
     disconnect,
     sendMessage,
     loadMore,
+    jumpHistory,
     notifyMoved,
     invitePlayer,
     acceptInvite,
@@ -208,6 +215,7 @@ export function useHouseSocket() {
     onHistory,
     onNewMessage,
     onOlderMessages,
+    onHistoryJump,
     onPlayerJoined,
     onPlayerLeft,
     onRoomPresence,

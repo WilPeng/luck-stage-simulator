@@ -5,9 +5,20 @@
         <span class="chat-room-icon">{{ roomIcon }}</span>
         <span class="chat-room-name">{{ roomName }}</span>
       </div>
-      <div class="chat-presence">
-        <span class="presence-dot" :class="{ online: connected }"></span>
-        <span class="presence-text">{{ presenceCount }}人在房间</span>
+      <div class="chat-header-right">
+        <button class="jump-toggle" title="跳转聊天记录" @click="toggleJumpPicker">📅</button>
+        <div class="chat-presence">
+          <span class="presence-dot" :class="{ online: connected }"></span>
+          <span class="presence-text">{{ presenceCount }}人在房间</span>
+        </div>
+      </div>
+      <div v-if="showJumpPicker" class="jump-popover" @click.stop>
+        <div class="jp-title">跳转聊天记录</div>
+        <input v-model="jumpTime" type="datetime-local" class="jp-input" />
+        <div class="jp-actions">
+          <button class="jp-btn" @click="jumpToLatest">回到最新</button>
+          <button class="jp-btn primary" :disabled="!jumpTime" @click="confirmJump">跳转</button>
+        </div>
       </div>
     </div>
 
@@ -122,14 +133,40 @@ const emit = defineEmits<{
   (e: 'decline-hoh-invite'): void
   (e: 'accept-move-invite'): void
   (e: 'decline-move-invite'): void
+  (e: 'jump-history', at: string): void
 }>()
 
 const authStore = useBbAuthStore()
 const currentUserId = computed(() => authStore.currentUser?.id || '')
 const inputText = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
+const showJumpPicker = ref(false)
+const jumpTime = ref('')
 
 const presenceCount = computed(() => props.presencePlayers.length)
+
+function localDateTimeValue(date: Date) {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}T${p(date.getHours())}:${p(date.getMinutes())}`
+}
+
+function toggleJumpPicker() {
+  if (!showJumpPicker.value && !jumpTime.value) jumpTime.value = localDateTimeValue(new Date())
+  showJumpPicker.value = !showJumpPicker.value
+}
+
+function confirmJump() {
+  if (!jumpTime.value) return
+  const date = new Date(jumpTime.value)
+  if (Number.isNaN(date.getTime())) return
+  emit('jump-history', date.toISOString())
+  showJumpPicker.value = false
+}
+
+function jumpToLatest() {
+  emit('jump-history', new Date().toISOString())
+  showJumpPicker.value = false
+}
 
 function handleSend() {
   const text = inputText.value.trim()
@@ -220,7 +257,60 @@ import { computed } from 'vue'
   border-bottom: 1px solid #ffffff08;
   background: #1e1436;
   flex-shrink: 0;
+  position: relative;
 }
+.chat-header-right { display: flex; align-items: center; gap: 10px; }
+.jump-toggle {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  border: 1px solid #b39bff33;
+  background: #ffffff08;
+  color: #cfc4ea;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: all 0.2s;
+}
+.jump-toggle:hover { background: #b39bff18; border-color: #b39bff66; }
+.jump-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 12px;
+  z-index: 30;
+  width: min(260px, calc(100vw - 32px));
+  padding: 12px;
+  border: 1px solid #b39bff44;
+  border-radius: 10px;
+  background: #1b1130;
+  box-shadow: 0 10px 30px #00000088;
+}
+.jp-title { font-size: 13px; color: #ece7fb; font-weight: 600; margin-bottom: 8px; }
+.jp-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #b39bff44;
+  background: #120a22;
+  color: #ece7fb;
+  font-size: 13px;
+  outline: none;
+}
+.jp-input:focus { border-color: #b39bff; }
+.jp-actions { display: flex; gap: 8px; margin-top: 10px; }
+.jp-btn {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid #ffffff22;
+  background: transparent;
+  color: #cfc4ea;
+  font-size: 12px;
+  cursor: pointer;
+}
+.jp-btn:hover { background: #ffffff10; }
+.jp-btn.primary { border-color: #b39bff66; background: #b39bff22; color: #b39bff; }
+.jp-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .chat-room-info {
   display: flex;
   align-items: center;

@@ -320,6 +320,41 @@ function initBBHouseSocket(io) {
       }
     })
 
+    // === 跳转到指定时间附近的历史消息 ===
+    socket.on('house:jump-history', async ({ roomId, at }) => {
+      try {
+        if (!roomId) return
+        if (socket.userRole !== 'admin') {
+          const guest = await BBHouseguest.findOne({ id: socket.userId, gameId })
+          if (guest?.isMoving) return
+          const loc = await BBPlayerLocation.findOne({ playerId: socket.userId, gameId })
+          if (!loc || loc.currentRoomId !== roomId) return
+        }
+        const target = at ? new Date(at) : new Date()
+        if (Number.isNaN(target.getTime())) return
+
+        const all = await BBChatMessage.find({ gameId, chatType: 'room', roomId })
+        all.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        const visible = await locationHistory.filterVisibleMessages(socket.userId, roomId, all)
+
+        const targetMs = target.getTime()
+        let idx = visible.findIndex(m => new Date(m.createdAt).getTime() > targetMs)
+        if (idx < 0) idx = visible.length
+        const beforeStart = Math.max(0, idx - 50)
+        const slice = visible.slice(beforeStart, Math.min(visible.length, idx + 20))
+
+        socket.emit('house:history-jump', {
+          roomId,
+          at: target.toISOString(),
+          messages: slice.map(toPublicMessage),
+          hasMoreBefore: beforeStart > 0,
+          hasMoreAfter: idx + 20 < visible.length
+        })
+      } catch (e) {
+        console.error('[BBHouse] Jump history error:', e)
+      }
+    })
+
     // === 房间移动通知（由 REST API 触发，通过 socket 广播） ===
     socket.on('house:moved', async ({ oldRoomId, newRoomId }) => {
       try {

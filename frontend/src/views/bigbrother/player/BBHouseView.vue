@@ -210,6 +210,7 @@
           @decline-hoh-invite="handleDeclineInvite"
           @accept-move-invite="handleAcceptMoveInvite"
           @decline-move-invite="handleDeclineMoveInvite"
+          @jump-history="handleJumpHistory"
         />
       </div>
     </div>
@@ -401,6 +402,14 @@ house.onOlderMessages.value = (data) => {
   if (data.roomId === currentRoomId.value && data.messages.length > 0) {
     messages.value = [...data.messages, ...messages.value]
     if (data.messages.length < 50) hasMore.value = false
+  }
+  loadingMore.value = false
+}
+
+house.onHistoryJump.value = (data) => {
+  if (data.roomId === currentRoomId.value) {
+    messages.value = data.messages
+    hasMore.value = !!data.hasMoreBefore
   }
   loadingMore.value = false
 }
@@ -682,6 +691,11 @@ function handleLoadMore() {
   if (messages.value.length === 0) return
   loadingMore.value = true
   house.loadMore(currentRoomId.value, messages.value[0].createdAt)
+}
+
+function handleJumpHistory(at: string) {
+  loadingMore.value = true
+  house.jumpHistory(currentRoomId.value, at)
 }
 
 async function handleAcceptInvite() {
