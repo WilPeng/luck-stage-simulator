@@ -27,10 +27,12 @@
 
     <!-- 房间人数/床位/睡觉 & 作息规则 -->
     <div class="control-card">
-      <div class="control-header">
+      <div class="control-header control-toggle" @click="roomsConfigOpen = !roomsConfigOpen">
         <h3>🛏️ 房间人数 / 床位 / 睡觉</h3>
+        <span class="collapse-arrow">{{ roomsConfigOpen ? '▲' : '▼' }}</span>
       </div>
 
+      <div v-show="roomsConfigOpen">
       <div class="house-rules">
         <div class="rule-row">
           <label>单次睡觉时长</label>
@@ -80,6 +82,7 @@
           <button class="bb-btn bb-btn-xs" @click="saveRoom(r.id)">保存</button>
         </div>
       </div>
+      </div>
     </div>
 
     <!-- 餐厅照片墙（可调整顺序） -->
@@ -101,6 +104,7 @@
             <span class="location-icon">{{ getRoomIcon(roomId as string) }}</span>
             <span class="location-name">{{ getRoomName(roomId as string) }}</span>
             <span class="location-count">{{ data.players?.length || 0 }} 人</span>
+            <button class="bb-btn bb-btn-xs room-chat-btn" @click="goRoomChat(roomId as string)">💬 聊天</button>
           </div>
           <div class="location-players">
             <div v-for="p in (data.players || [])" :key="p.playerId" class="location-player">
@@ -142,12 +146,19 @@ import { bbGetSeason } from '../../../services/bbApi'
 import type { BBHouseRoomWithCount } from '../../../types/bigbrother'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import PhotoWall from '../../../components/bigbrother/PhotoWall.vue'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 const rooms = ref<BBHouseRoomWithCount[]>([])
+const roomsConfigOpen = ref(false)
 const locations = ref<Record<string, { room: any; players: any[] }>>({})
 const backyardDoorOpen = ref(true)
 
 const allRooms = ref<BBHouseRoomWithCount[]>([])
+
+function goRoomChat(roomId: string) {
+  router.push({ path: '/games/bigbrother/admin/house-chat', query: { roomId } })
+}
 
 // 餐厅照片墙
 const photoWall = ref<any[]>([])
@@ -381,6 +392,8 @@ async function handleForceMove(playerId: string, targetRoomId: string) {
   margin-bottom: 12px;
 }
 .control-header h3 { margin: 0; font-size: 16px; color: #ece7fb; }
+.control-toggle { cursor: pointer; user-select: none; }
+.collapse-arrow { font-size: 12px; color: #b39bff; }
 .door-status { font-size: 13px; font-weight: 600; color: #ff6b6b; }
 .door-status.open { color: #b39bff; }
 .control-actions { display: flex; gap: 10px; }
@@ -466,6 +479,7 @@ async function handleForceMove(playerId: string, targetRoomId: string) {
 .location-icon { font-size: 16px; }
 .location-name { flex: 1; font-size: 13px; font-weight: 600; color: #ece7fb; }
 .location-count { font-size: 11px; color: #b39bff; background: #b39bff15; padding: 2px 8px; border-radius: 8px; }
+.room-chat-btn { margin-left: auto; }
 
 .location-players { padding: 8px 14px; }
 .location-player {

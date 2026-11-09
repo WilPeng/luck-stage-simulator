@@ -17,10 +17,14 @@
 
     <div class="chat-layout">
       <aside class="room-list">
-        <div class="rl-item" :class="{ active: roomFilter === '' }" @click="selectRoom('')">🏠 全部房间</div>
+        <div class="rl-item" :class="{ active: roomFilter === '' }" @click="selectRoom('')">
+          🏠 全部房间
+          <span class="rl-online" title="当前在房间人数">👥 {{ totalOccupancy }}</span>
+        </div>
         <div v-for="r in rooms" :key="r.id" class="rl-item" :class="{ active: roomFilter === r.id }" @click="selectRoom(r.id)">
           {{ r.icon }} {{ r.name }}
-          <span class="rl-count">{{ countByRoom(r.id) }}</span>
+          <span class="rl-online" title="当前在房间人数">👥 {{ occupancy[r.id] || 0 }}</span>
+          <span class="rl-count" title="已加载消息数">💬 {{ countByRoom(r.id) }}</span>
         </div>
       </aside>
 
@@ -80,13 +84,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { bbGetHouseRooms, bbAdminChatLogs, bbAdminSendMessage } from '../../../services/bbHouseApi'
 import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 
+const route = useRoute()
 const rooms = ref<any[]>([])
 const roomFilter = ref('')
+const occupancy = ref<Record<string, number>>({})
 const logs = ref<any[]>([])
 const hasMore = ref(false)
 const loadingMore = ref(false)
@@ -131,6 +138,7 @@ function roomName(id: string) {
 function countByRoom(id: string) {
   return logs.value.filter(m => m.roomId === id).length
 }
+const totalOccupancy = computed(() => Object.values(occupancy.value).reduce((sum, n) => sum + (Number(n) || 0), 0))
 function toggleDetail(id: string) {
   const next = new Set(expanded.value)
   if (next.has(id)) next.delete(id)
@@ -185,6 +193,7 @@ async function loadLogs(forceBottom = false, reset = false) {
     // 仅当管理员本来就在底部附近时才跟随新消息，避免打断向上翻阅
     const wasNearBottom = !el || (el.scrollHeight - el.scrollTop - el.clientHeight < 80)
     const res = await bbAdminChatLogs(roomFilter.value || undefined)
+    occupancy.value = res?.occupancy || {}
     const fetched = res?.messages || []
     if (reset || logs.value.length === 0) {
       logs.value = fetched
@@ -237,9 +246,19 @@ async function loadRooms() {
 
 onMounted(async () => {
   realtime.connect()
+  const initialRoom = typeof route.query.roomId === 'string' ? route.query.roomId : ''
+  roomFilter.value = initialRoom
   await loadRooms()
+  if (initialRoom) composerRoom.value = initialRoom
   await loadLogs(true, true)
   timer = setInterval(() => loadLogs(false), 5000)
+})
+
+watch(() => route.query.roomId, (value) => {
+  const nextRoom = typeof value === 'string' ? value : ''
+  roomFilter.value = nextRoom
+  if (nextRoom) composerRoom.value = nextRoom
+  loadLogs(true, true)
 })
 onUnmounted(() => {
   if (timer) { clearInterval(timer); timer = null }
@@ -260,6 +279,7 @@ onUnmounted(() => {
 .rl-item:hover { background: #ffffff08; }
 .rl-item.active { background: #b39bff22; color: #b39bff; }
 .rl-count { margin-left: auto; font-size: 11px; color: #b3a6d6; }
+.rl-online { font-size: 11px; color: #7fd8ff; margin-left: 8px; }
 .chat-panel { background: #0b0b1c; border: 1px solid #ffffff12; border-radius: 10px; overflow: hidden; }
 .chat-scroll { height: 72vh; overflow-y: auto; padding: 18px; }
 .load-more { text-align: center; color: #b39bff; font-size: 12px; cursor: pointer; padding: 6px 0 12px; user-select: none; }

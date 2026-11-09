@@ -1238,6 +1238,14 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
     const guestById = {}
     guests.forEach(g => { guestById[g.id] = { playerId: g.id, name: g.name, avatar: g.avatar || null } })
 
+    // 当前每个房间的实际人数（实时轮询返回）
+    const currentLocations = await BBPlayerLocation.find({ gameId })
+    const occupancy = {}
+    for (const loc of currentLocations) {
+      if (!loc.currentRoomId) continue
+      occupancy[loc.currentRoomId] = (occupancy[loc.currentRoomId] || 0) + 1
+    }
+
     // 仅在存在旧消息（没有 visibleTo 快照）时才需要读取位置/睡眠记录兜底
     const hasLegacy = limited.some(m => !Array.isArray(m.visibleTo))
     const sleepByPlayer = {}
@@ -1295,7 +1303,7 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
       return { ...m.toObject(), seenBy }
     })
 
-    res.json({ success: true, data: { rooms: rooms.map(r => r.toObject()), messages: result, hasMore } })
+    res.json({ success: true, data: { rooms: rooms.map(r => r.toObject()), messages: result, hasMore, occupancy } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '获取聊天记录失败' })
