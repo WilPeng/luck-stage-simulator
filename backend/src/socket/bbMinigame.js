@@ -694,6 +694,16 @@ function broadcastProgress(room, minigameNs) {
       view = buildAdminView(room.minigameId, room.gameState)
     }
     if (!view && handler && handler.getReplayMeta) view = handler.getReplayMeta(room.gameState)
+    // 部分游戏提供管理员专用图形化盘面（如毒酒的转盘）
+    if (handler && typeof handler.getAdminState === 'function') {
+      try {
+        const board = handler.getAdminState(room.gameState)
+        if (board) {
+          if (view) view.board = board
+          else view = { type: room.minigameId, board }
+        }
+      } catch (e) { /* ignore */ }
+    }
     if (view) {
       minigameNs.fetchSockets().then(socks => {
         for (const s of socks) {

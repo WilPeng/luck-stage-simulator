@@ -744,6 +744,81 @@ registerGame({
     return null
   },
 
+  /**
+   * 管理员观战盘面：与选手端转盘同构，但毒酒位置全部可见。
+   * 前端 MinigameObserver 用这份数据绘制可旋转的图形化盘面。
+   */
+  getAdminState(state) {
+    if (!state) return null
+    const now = Date.now()
+    const reveal = state.phase === 'reveal' || state.finished
+    const seatPhase = state.phase === 'seat'
+    const currentSeatChooserId = state.seatPickOrder[state.seatPickIndex] || null
+    const currentRotationActorId = state.rotationOrder[state.rotationIndex] || null
+    const playerOrder = (seatPhase || !state.seatOrder.length)
+      ? (state.participantOrder || Object.keys(state.players))
+      : state.seatOrder
+
+    const players = playerOrder.map(pid => {
+      const p = state.players[pid]
+      if (!p) return null
+      const row = {
+        playerId: pid,
+        playerName: p.playerName,
+        seat: p.seat,
+        hp: p.hp,
+        alive: p.alive,
+        eliminated: !p.alive,
+        isDealer: pid === state.dealerId,
+        isMe: false,
+        isCurrentActor: seatPhase ? pid === currentSeatChooserId : pid === currentRotationActorId,
+        rotation: state.rotations[pid] ?? null
+      }
+      if (state.assignment[pid] && state.phase !== 'assign') {
+        const cup = state.cups.find(c => c.id === state.assignment[pid])
+        if (cup) row.cup = { ...publicCup(cup), poison: !!cup.poison }
+      }
+      return row
+    }).filter(Boolean)
+
+    const seats = Array.from({ length: (state.participantOrder || []).length }, (_, seat) => {
+      const owner = Object.values(state.players).find(x => x.seat === seat)
+      return {
+        seat,
+        playerId: owner ? owner.playerId : null,
+        playerName: owner ? owner.playerName : ''
+      }
+    })
+
+    return {
+      status: state.status,
+      started: state.started,
+      finished: state.finished,
+      round: state.round,
+      phase: state.phase,
+      dealerId: state.dealerId || null,
+      dealerName: state.players[state.dealerId]?.playerName || '',
+      secondsLeft: Math.max(0, Math.ceil((state.phaseEndsAt - now) / 1000)),
+      aliveCount: Object.values(state.players).filter(p => p.alive).length,
+      players,
+      seats,
+      seatPickOrder: [...(state.seatPickOrder || [])],
+      seatPickOrderNames: (state.seatPickOrder || []).map(id => state.players[id]?.playerName || id),
+      seatPickIndex: state.seatPickIndex || 0,
+      currentSeatChooserId,
+      // 管理员可见全部毒酒信息
+      cups: state.cups.map(c => ({ ...publicCup(c), poison: !!c.poison })),
+      assignments: state.phase === 'assign' || seatPhase ? {} : { ...state.assignment },
+      currentRotation: state.currentRotation || 0,
+      rotationOrder: [...(state.rotationOrder || [])],
+      rotationIndex: state.rotationIndex || 0,
+      currentActorId: currentRotationActorId,
+      rotationHistory: (state.rotationHistory || []).map(h => ({ ...h })),
+      lastResult: reveal ? state.lastResult : null,
+      winnerId: state.winnerId || null
+    }
+  },
+
   getReplaySnapshot(state) {
     const players = {}
     const order = (state.phase === 'seat' || !state.seatOrder.length)

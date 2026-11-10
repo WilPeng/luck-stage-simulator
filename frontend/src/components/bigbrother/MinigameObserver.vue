@@ -29,8 +29,11 @@
       <div v-if="adminView" class="obs-admin">
         <div class="obs-admin-title">🔎 完整局面（管理员视角 · 含隐藏信息）</div>
 
+        <!-- 毒酒：图形化转盘盘面（含毒酒位置） -->
+        <PoisonDrinkSpectator v-if="adminView.board" :board="adminView.board" />
+
         <!-- 出包魔法师 -->
-        <template v-if="Array.isArray(adminView.players) && adminView.tower">
+        <template v-else-if="Array.isArray(adminView.players) && adminView.tower">
           <div class="oa-players">
             <div v-for="p in adminView.players" :key="p.playerId" class="oa-p"
               :class="{ turn: p.isTurn, dead: !p.alive }">
@@ -119,6 +122,7 @@
 import { computed, onMounted, watch, nextTick, ref } from 'vue'
 import { useMinigameSocket } from '../../composables/useMinigameSocket'
 import BBAvatar from './BBAvatar.vue'
+import PoisonDrinkSpectator from './minigames/PoisonDrinkSpectator.vue'
 
 const props = defineProps<{
   roomId: string | null
