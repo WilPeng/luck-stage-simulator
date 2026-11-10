@@ -953,14 +953,37 @@ export async function bbKeySpeech(payload: { phase: 'opening' | 'closing'; text?
 }
 
 // ===== 陪审团问答（冠军投票前） =====
-export async function bbGetJuryQA(): Promise<any[]> {
-  return doRequest<any[]>('/jury-qa')
+export interface BBJuryQARoomState {
+  roundId: string
+  phase: 'opening' | 'qa' | 'closing'
+  phaseName: string
+  juryOrder: { playerId: string; name: string }[]
+  turnIndex: number
+  currentTurn: { playerId: string; name: string } | null
+  messages: any[]
 }
+
+export async function bbGetJuryQA(): Promise<BBJuryQARoomState> {
+  return doRequest<BBJuryQARoomState>('/jury-qa')
+}
+export async function bbSendJuryQAMessage(content: string): Promise<any> {
+  return doRequest<any>('/jury-qa/message', { method: 'POST', body: JSON.stringify({ content }) })
+}
+// 兼容旧接口（已不再使用）
 export async function bbAskJuryQuestion(question: string): Promise<any> {
   return doRequest<any>('/jury-qa/ask', { method: 'POST', body: JSON.stringify({ question }) })
 }
 export async function bbAnswerJuryQuestion(questionId: string, answer: string): Promise<any> {
   return doRequest<any>('/jury-qa/answer', { method: 'POST', body: JSON.stringify({ questionId, answer }) })
+}
+export async function bbSetJuryQAPhase(phase: 'opening' | 'qa' | 'closing'): Promise<any> {
+  return doRequest<any>('/jury-qa/phase', { method: 'POST', body: JSON.stringify({ phase }) })
+}
+export async function bbSetJuryQAOrder(order: string[]): Promise<any> {
+  return doRequest<any>('/jury-qa/order', { method: 'POST', body: JSON.stringify({ order }) })
+}
+export async function bbNextJuryQATurn(): Promise<any> {
+  return doRequest<any>('/jury-qa/next-turn', { method: 'POST', body: JSON.stringify({}) })
 }
 export async function bbDeleteJuryQuestion(id: string): Promise<void> {
   return doRequest<void>(`/jury-qa/${id}`, { method: 'DELETE' })

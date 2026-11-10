@@ -13,6 +13,18 @@ class BBJuryQA extends BaseModel {
     this.answerBy = data.answerBy || null      // 回答的决赛选手 id
     this.answerByName = data.answerByName || ''
     this.answeredAt = data.answeredAt || null
+
+    // ===== 新版问答室消息字段 =====
+    this.type = data.type || null              // message | question | answer
+    this.phase = data.phase || null            // opening | qa | closing
+    this.senderId = data.senderId || null
+    this.senderName = data.senderName || ''
+    this.senderRole = data.senderRole || ''    // finalist | jury | admin
+    this.content = data.content || ''
+    this.replyToId = data.replyToId || null
+    this.replyToName = data.replyToName || ''
+    this.replyToContent = data.replyToContent || ''
+
     this.gameId = data.gameId || 'bigbrother'
     this.createdAt = data.createdAt || new Date().toISOString()
     this.updatedAt = data.updatedAt || new Date().toISOString()

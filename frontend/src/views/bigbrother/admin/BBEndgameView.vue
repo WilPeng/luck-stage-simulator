@@ -10,7 +10,7 @@
     </div>
 
     <!-- 陪审团问答（冠军投票前） -->
-    <JuryQA v-if="status && status.finalTwo && status.finalTwo.length === 2" />
+    <JuryQA v-if="status && status.finalTwo && status.finalTwo.length === 2" :isAdmin="true" />
 
     <div class="status-banner">
       <div class="status-item">

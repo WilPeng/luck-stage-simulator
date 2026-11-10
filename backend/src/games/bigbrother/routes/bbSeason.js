@@ -439,6 +439,9 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
     season.runnerUpName = ''
     season.championReveal = null
     season.championVotingOpen = false
+    season.juryQAPhase = 'opening'
+    season.juryQAJuryOrder = []
+    season.juryQATurnIndex = 0
     season.updatedAt = new Date().toISOString()
     await season.save()
     await logAction(req.user.userId, req.user.name || 'admin', 'admin',
@@ -1162,6 +1165,9 @@ router.post('/endgame/reset', auth, requireAdmin, async (req, res) => {
     season.runnerUpName = ''
     season.championReveal = null
     season.championVotingOpen = false
+    season.juryQAPhase = 'opening'
+    season.juryQAJuryOrder = []
+    season.juryQATurnIndex = 0
     season.status = 'running'
 
     // 3) 回退进度到 F3 轮（若已是冠军轮/已结束）
