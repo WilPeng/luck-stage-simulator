@@ -49,6 +49,34 @@ export async function doRequest<T>(path: string, options: RequestInit = {}): Pro
   return json.data !== undefined ? json.data : json
 }
 
+// 下载文件（用于导出等返回二进制的接口），返回 Blob 与文件名
+export async function doDownload(path: string, options: RequestInit = {}): Promise<{ blob: Blob; filename?: string }> {
+  const url = `${API_BASE}${path}`
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...buildHeaders(), ...(options.headers || {}) }
+  })
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`
+    try {
+      const json = await res.json()
+      msg = json?.error || json?.message || msg
+    } catch {}
+    throw new Error(msg)
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get('Content-Disposition') || ''
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)
+  const plain = /filename="?([^";]+)"?/i.exec(disposition)
+  let filename: string | undefined
+  if (encoded) {
+    try { filename = decodeURIComponent(encoded[1]) } catch { filename = encoded[1] }
+  } else if (plain) {
+    filename = plain[1]
+  }
+  return { blob, filename }
+}
+
 // ===== 认证 =====
 async function authRequest(path: string, username: string, password: string): Promise<{ token: string; user: BBHouseguest }> {
   const res = await fetch(`${API_BASE}${path}`, {

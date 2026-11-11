@@ -1,7 +1,7 @@
 /**
  * BB House 前端 API 服务
  */
-import { doRequest } from './bbApi'
+import { doRequest, doDownload } from './bbApi'
 
 // ===== 房屋地图 =====
 export async function bbGetHouseMap() {
@@ -166,6 +166,23 @@ export async function bbAdminChatLogs(roomId?: string, before?: string) {
   if (before) params.set('before', before)
   const qs = params.toString() ? `?${params.toString()}` : ''
   return doRequest<any>(`/house/admin/chat-logs${qs}`)
+}
+
+// 管理员：导出聊天记录为 .txt
+export async function bbAdminExportChatLogs(filters: {
+  start?: string
+  end?: string
+  roomId?: string
+  senderId?: string
+  receiverId?: string
+  keyword?: string
+} = {}) {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) params.set(key, String(value))
+  })
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  return doDownload(`/house/admin/chat-logs/export${qs}`)
 }
 
 // 管理员：房客睡眠/洗澡记录

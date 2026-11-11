@@ -9,6 +9,7 @@
           <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
         </select>
         <button class="bb-btn" @click="loadLogs(true)">刷新</button>
+        <button class="bb-btn" @click="openExport">📤 导出TXT</button>
         <button class="bb-btn" :class="{ active: composerVisible }" @click="toggleComposer">
           💬 房间发言{{ composerVisible ? ' ▲' : ' ▼' }}
         </button>
@@ -80,13 +81,70 @@
         </div>
       </section>
     </div>
+
+    <!-- 导出聊天记录 -->
+    <div v-if="exportVisible" class="export-mask" @click.self="exportVisible = false">
+      <div class="export-dialog">
+        <div class="export-head">
+          <h3>📤 导出聊天记录</h3>
+          <button class="export-close" @click="exportVisible = false">✕</button>
+        </div>
+        <div class="export-body">
+          <label class="export-field">
+            <span>开始时间</span>
+            <input v-model="exportStart" type="datetime-local" class="bb-input" />
+          </label>
+          <label class="export-field">
+            <span>结束时间</span>
+            <input v-model="exportEnd" type="datetime-local" class="bb-input" />
+          </label>
+          <label class="export-field">
+            <span>发送者</span>
+            <select v-model="exportSender" class="bb-select">
+              <option value="">全部发送者</option>
+              <option v-for="g in senders" :key="g.id" :value="g.id">
+                {{ g.name }}{{ g.role === 'admin' ? '（管理员）' : '' }}
+              </option>
+            </select>
+          </label>
+          <label class="export-field">
+            <span>接收者视角</span>
+            <select v-model="exportReceiver" class="bb-select">
+              <option value="">全部（管理员视角）</option>
+              <option v-for="g in receivers" :key="g.id" :value="g.id">{{ g.name }}</option>
+            </select>
+          </label>
+          <label class="export-field">
+            <span>房间</span>
+            <select v-model="exportRoom" class="bb-select">
+              <option value="">全部房间</option>
+              <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
+            </select>
+          </label>
+          <label class="export-field">
+            <span>关键词</span>
+            <input v-model="exportKeyword" class="bb-input" placeholder="内容 / 发送者姓名" />
+          </label>
+        </div>
+        <div class="export-tip">
+          导出为 .txt 文件。每条消息包含发送时间、发送者、发送房间，以及可看到该消息的其他玩家。
+          选择「接收者视角」后，仅导出该玩家当时能看到的全部聊天记录。
+        </div>
+        <div class="export-actions">
+          <button class="bb-btn" @click="resetExportFilters">重置</button>
+          <button class="bb-btn bb-btn-primary" :disabled="exporting" @click="doExport">
+            {{ exporting ? '导出中…' : '导出 TXT' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { bbGetHouseRooms, bbAdminChatLogs, bbAdminSendMessage } from '../../../services/bbHouseApi'
+import { bbGetHouseRooms, bbAdminChatLogs, bbAdminSendMessage, bbAdminExportChatLogs, bbAdminGuestStates } from '../../../services/bbHouseApi'
 import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 
@@ -108,6 +166,81 @@ const composerVisible = ref(true)
 const composerRoom = ref('')
 const composerText = ref('')
 const sending = ref(false)
+
+// 导出聊天记录
+const exportVisible = ref(false)
+const exportStart = ref('')
+const exportEnd = ref('')
+const exportSender = ref('')
+const exportReceiver = ref('')
+const exportRoom = ref('')
+const exportKeyword = ref('')
+const exporting = ref(false)
+const participants = ref<any[]>([])
+
+const senders = computed(() => participants.value)
+const receivers = computed(() => participants.value.filter(g => g.role !== 'admin'))
+
+async function loadParticipants() {
+  if (participants.value.length) return
+  try {
+    const res = await bbAdminGuestStates()
+    participants.value = res?.guests || []
+  } catch {}
+}
+
+async function openExport() {
+  exportVisible.value = true
+  await loadParticipants()
+}
+
+function resetExportFilters() {
+  exportStart.value = ''
+  exportEnd.value = ''
+  exportSender.value = ''
+  exportReceiver.value = ''
+  exportRoom.value = ''
+  exportKeyword.value = ''
+}
+
+function toIso(value: string) {
+  if (!value) return undefined
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString()
+}
+
+async function doExport() {
+  if (exporting.value) return
+  const start = toIso(exportStart.value)
+  const end = toIso(exportEnd.value)
+  if (start && end && new Date(start) > new Date(end)) {
+    alert('开始时间不能晚于结束时间')
+    return
+  }
+  exporting.value = true
+  try {
+    const { blob, filename } = await bbAdminExportChatLogs({
+      start,
+      end,
+      roomId: exportRoom.value || undefined,
+      senderId: exportSender.value || undefined,
+      receiverId: exportReceiver.value || undefined,
+      keyword: exportKeyword.value.trim() || undefined
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename || 'chat-logs.txt'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } catch (e: any) {
+    alert(e?.message || '导出失败')
+  } finally {
+    exporting.value = false
+  }
+}
 
 function toggleComposer() {
   composerVisible.value = !composerVisible.value
@@ -324,6 +457,39 @@ onUnmounted(() => {
   outline: none;
 }
 .composer-input:focus { border-color: #b39bff; }
+.export-mask {
+  position: fixed;
+  inset: 0;
+  background: #000000aa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+.export-dialog {
+  width: 520px;
+  max-width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #1b1130;
+  border: 1px solid #b39bff44;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 20px 60px #00000066;
+}
+.export-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.export-head h3 { margin: 0; font-size: 17px; color: #ece7fb; }
+.export-close { background: transparent; border: none; color: #b3a6d6; font-size: 16px; cursor: pointer; }
+.export-close:hover { color: #ece7fb; }
+.export-body { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.export-field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #b3a6d6; }
+.export-field .bb-input, .export-field .bb-select { width: 100%; box-sizing: border-box; }
+.export-tip { margin-top: 14px; font-size: 12px; line-height: 1.6; color: #8c7fb3; }
+.export-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+@media (max-width: 640px) {
+  .export-body { grid-template-columns: 1fr; }
+}
 @media (max-width: 820px) {
   .bb-chat-logs { padding: 14px; }
   .page-header { flex-direction: column; align-items: stretch; }

@@ -1259,6 +1259,70 @@ router.post('/admin/send-message', auth, requireAdmin, async (req, res) => {
   }
 })
 
+// 计算每条消息在发送时被哪些房客看到（优先使用 visibleTo 快照，旧消息按位置/睡眠历史兜底）
+async function attachSeenBy(messages, guests) {
+  const gameId = 'bigbrother'
+  const guestById = {}
+  guests.forEach(g => { guestById[g.id] = { playerId: g.id, name: g.name, avatar: g.avatar || null } })
+
+  // 仅在存在旧消息（没有 visibleTo 快照）时才需要读取位置/睡眠记录兜底
+  const hasLegacy = messages.some(m => !Array.isArray(m.visibleTo))
+  const sleepByPlayer = {}
+  const byRoom = {}
+  if (hasLegacy) {
+    // 睡眠时间段（以玩家实际点击醒来的时间为结束边界）
+    const sleepRecords = await BBSleepRecord.find({ gameId })
+    for (const rec of sleepRecords) {
+      const from = new Date(rec.from).getTime()
+      if (!Number.isFinite(from)) continue
+      const to = rec.to ? new Date(rec.to).getTime() : Infinity
+      if (!sleepByPlayer[rec.playerId]) sleepByPlayer[rec.playerId] = []
+      sleepByPlayer[rec.playerId].push({ from, to })
+    }
+    // 兼容升级前已存在的睡眠记录（没有 BBSleepRecord）
+    guests.forEach(g => {
+      if (sleepByPlayer[g.id] || !g.sleepStartedAt) return
+      const from = new Date(g.sleepStartedAt).getTime()
+      if (!Number.isFinite(from)) return
+      const to = g.isSleeping ? Infinity : (g.wakeAt ? new Date(g.wakeAt).getTime() : Infinity)
+      sleepByPlayer[g.id] = [{ from, to }]
+    })
+
+    // 位置历史按房间分组
+    const history = await BBLocationHistory.find({ gameId })
+    history.forEach(h => {
+      if (!byRoom[h.roomId]) byRoom[h.roomId] = []
+      byRoom[h.roomId].push({ playerId: h.playerId, from: h.from, to: h.to })
+    })
+  }
+
+  return messages.map(m => {
+    let seenIds
+    if (Array.isArray(m.visibleTo)) {
+      // 新消息：使用发送时的可见者快照（已排除睡眠中的玩家）
+      seenIds = m.visibleTo.filter(id => !!guestById[id])
+    } else {
+      // 旧消息：按位置历史 + 睡眠记录兜底
+      const ivs = byRoom[m.roomId] || []
+      const t = new Date(m.createdAt).getTime()
+      const seen = new Set()
+      for (const iv of ivs) {
+        const from = new Date(iv.from).getTime()
+        const to = iv.to ? new Date(iv.to).getTime() : Infinity
+        // 仅统计仍存在的房客，过滤已删除/已不存在的历史记录
+        if (t >= from && t <= to && guestById[iv.playerId]) {
+          const intervals = sleepByPlayer[iv.playerId] || []
+          const inSleep = intervals.some(s => t >= s.from && t <= s.to)
+          if (!inSleep) seen.add(iv.playerId)
+        }
+      }
+      seenIds = Array.from(seen)
+    }
+    const seenBy = seenIds.map(id => guestById[id])
+    return { ...m.toObject(), seenIds, seenBy }
+  })
+}
+
 // GET /admin/chat-logs - 管理员查看所有房间聊天记录，并计算每条消息被哪些房客看到
 router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
   try {
@@ -1278,8 +1342,6 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
 
     const rooms = await BBHouseRoom.find({ gameId })
     const guests = await BBHouseguest.find({ gameId })
-    const guestById = {}
-    guests.forEach(g => { guestById[g.id] = { playerId: g.id, name: g.name, avatar: g.avatar || null } })
 
     // 当前每个房间的实际人数（实时轮询返回）
     const currentLocations = await BBPlayerLocation.find({ gameId })
@@ -1289,67 +1351,114 @@ router.get('/admin/chat-logs', auth, requireAdmin, async (req, res) => {
       occupancy[loc.currentRoomId] = (occupancy[loc.currentRoomId] || 0) + 1
     }
 
-    // 仅在存在旧消息（没有 visibleTo 快照）时才需要读取位置/睡眠记录兜底
-    const hasLegacy = limited.some(m => !Array.isArray(m.visibleTo))
-    const sleepByPlayer = {}
-    const byRoom = {}
-    if (hasLegacy) {
-      // 睡眠时间段（以玩家实际点击醒来的时间为结束边界）
-      const sleepRecords = await BBSleepRecord.find({ gameId })
-      for (const rec of sleepRecords) {
-        const from = new Date(rec.from).getTime()
-        if (!Number.isFinite(from)) continue
-        const to = rec.to ? new Date(rec.to).getTime() : Infinity
-        if (!sleepByPlayer[rec.playerId]) sleepByPlayer[rec.playerId] = []
-        sleepByPlayer[rec.playerId].push({ from, to })
-      }
-      // 兼容升级前已存在的睡眠记录（没有 BBSleepRecord）
-      guests.forEach(g => {
-        if (sleepByPlayer[g.id] || !g.sleepStartedAt) return
-        const from = new Date(g.sleepStartedAt).getTime()
-        if (!Number.isFinite(from)) return
-        const to = g.isSleeping ? Infinity : (g.wakeAt ? new Date(g.wakeAt).getTime() : Infinity)
-        sleepByPlayer[g.id] = [{ from, to }]
-      })
-
-      // 位置历史按房间分组
-      const history = await BBLocationHistory.find({ gameId })
-      history.forEach(h => {
-        if (!byRoom[h.roomId]) byRoom[h.roomId] = []
-        byRoom[h.roomId].push({ playerId: h.playerId, from: h.from, to: h.to })
-      })
-    }
-
-    const result = limited.map(m => {
-      let seenIds
-      if (Array.isArray(m.visibleTo)) {
-        // 新消息：使用发送时的可见者快照（已排除睡眠中的玩家）
-        seenIds = m.visibleTo.filter(id => !!guestById[id])
-      } else {
-        // 旧消息：按位置历史 + 睡眠记录兜底
-        const ivs = byRoom[m.roomId] || []
-        const t = new Date(m.createdAt).getTime()
-        const seen = new Set()
-        for (const iv of ivs) {
-          const from = new Date(iv.from).getTime()
-          const to = iv.to ? new Date(iv.to).getTime() : Infinity
-          // 仅统计仍存在的房客，过滤已删除/已不存在的历史记录
-          if (t >= from && t <= to && guestById[iv.playerId]) {
-            const intervals = sleepByPlayer[iv.playerId] || []
-            const inSleep = intervals.some(s => t >= s.from && t <= s.to)
-            if (!inSleep) seen.add(iv.playerId)
-          }
-        }
-        seenIds = Array.from(seen)
-      }
-      const seenBy = seenIds.map(id => guestById[id])
-      return { ...m.toObject(), seenBy }
-    })
+    const result = await attachSeenBy(limited, guests)
 
     res.json({ success: true, data: { rooms: rooms.map(r => r.toObject()), messages: result, hasMore, occupancy } })
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '获取聊天记录失败' })
+  }
+})
+
+// GET /admin/chat-logs/export - 导出聊天记录为 .txt（支持时间范围 / 发送者 / 接收者视角 / 房间 / 关键词筛选）
+router.get('/admin/chat-logs/export', auth, requireAdmin, async (req, res) => {
+  try {
+    const gameId = 'bigbrother'
+    const { roomId, senderId, receiverId, keyword } = req.query
+
+    const filter = { gameId, chatType: 'room' }
+    if (roomId) filter.roomId = roomId
+    if (senderId) filter.senderId = senderId
+
+    const createdAt = {}
+    if (req.query.start) {
+      const start = new Date(req.query.start)
+      if (!Number.isNaN(start.getTime())) createdAt.$gte = start.toISOString()
+    }
+    if (req.query.end) {
+      const end = new Date(req.query.end)
+      if (!Number.isNaN(end.getTime())) createdAt.$lte = end.toISOString()
+    }
+    if (Object.keys(createdAt).length) filter.createdAt = createdAt
+
+    if (keyword && String(keyword).trim()) {
+      const escaped = String(keyword).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const re = new RegExp(escaped, 'i')
+      filter.$or = [{ content: re }, { senderName: re }]
+    }
+
+    const MAX_EXPORT = 50000
+    const page = await BBChatMessage.findPaginated(filter, {
+      sort: { createdAt: 1 },
+      limit: MAX_EXPORT + 1
+    })
+    if (page.data.length > MAX_EXPORT) {
+      return res.status(400).json({ success: false, error: `符合条件的消息超过 ${MAX_EXPORT} 条，请缩小时间范围后重试` })
+    }
+
+    const rooms = await BBHouseRoom.find({ gameId })
+    const roomNameById = {}
+    rooms.forEach(r => { roomNameById[r.id] = r.name || r.id })
+    const guests = await BBHouseguest.find({ gameId })
+    const guestNameById = {}
+    guests.forEach(g => { guestNameById[g.id] = g.name || g.id })
+
+    let messages = await attachSeenBy(page.data, guests)
+
+    // 接收者视角：仅保留该玩家当时能看到的消息（自己发送的消息始终可见）
+    if (receiverId) {
+      messages = messages.filter(m =>
+        m.senderId === receiverId ||
+        (Array.isArray(m.seenIds) ? m.seenIds.includes(receiverId) : (m.seenBy || []).some(v => v.playerId === receiverId))
+      )
+    }
+
+    const pad = n => String(n).padStart(2, '0')
+    const fmt = iso => {
+      const d = new Date(iso)
+      if (Number.isNaN(d.getTime())) return String(iso || '')
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+    }
+
+    const lines = []
+    lines.push('==============================================')
+    lines.push('Big Brother 聊天记录导出')
+    lines.push(`导出时间：${fmt(new Date().toISOString())}`)
+    lines.push(`时间范围：${req.query.start ? fmt(req.query.start) : '不限'} 至 ${req.query.end ? fmt(req.query.end) : '不限'}`)
+    lines.push(`发送者：${senderId ? (guestNameById[senderId] || senderId) : '全部'}`)
+    lines.push(`接收者视角：${receiverId ? (guestNameById[receiverId] || receiverId) : '全部（管理员视角）'}`)
+    lines.push(`房间：${roomId ? (roomNameById[roomId] || roomId) : '全部'}`)
+    lines.push(`关键词：${keyword && String(keyword).trim() ? String(keyword).trim() : '无'}`)
+    lines.push(`消息数量：${messages.length}`)
+    lines.push('==============================================')
+    lines.push('')
+
+    if (!messages.length) {
+      lines.push('（无符合条件的聊天记录）')
+    } else {
+      for (const m of messages) {
+        const others = (m.seenBy || [])
+          .filter(v => v.playerId !== m.senderId)
+          .map(v => v.name || v.playerId)
+        lines.push(`【${fmt(m.createdAt)}】`)
+        lines.push(`发送者：${m.senderName || m.senderId || '未知'}`)
+        lines.push(`发送房间：${roomNameById[m.roomId] || m.roomId || '未知'}`)
+        lines.push(`其他可见玩家：${others.length ? others.join('、') : '无'}`)
+        lines.push(`内容：${m.content || ''}`)
+        lines.push('----------------------------------------------')
+      }
+    }
+
+    const now = new Date()
+    const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+    const filename = `BB聊天记录_${ts}.txt`
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="chat-logs-${ts}.txt"; filename*=UTF-8''${encodeURIComponent(filename)}`)
+    // 加 UTF-8 BOM，避免 Windows 记事本打开中文乱码
+    res.send('\uFEFF' + lines.join('\r\n'))
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '导出聊天记录失败' })
   }
 })
 
