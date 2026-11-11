@@ -1,5 +1,10 @@
 <template>
-  <div class="jury-chat">
+  <div
+    ref="rootEl"
+    class="jury-chat"
+    :class="{ large: !!large }"
+    :style="chatHeight != null ? { height: chatHeight + 'px' } : undefined"
+  >
     <div class="jc-head">
       <div>
         <div class="jc-title">🎤 陪审团问答室</div>
@@ -49,6 +54,37 @@
       </div>
     </div>
 
+    <!-- 陪审团提问顺序（所有玩家可见） -->
+    <div v-if="!isAdmin && room.phase === 'qa'" class="jc-public-order">
+      <div class="jc-public-order-head">
+        <span class="jc-public-order-title">陪审团提问顺序</span>
+        <span v-if="room.currentTurn" class="jc-public-order-turn">
+          当前轮到：<strong>{{ room.currentTurn.name }}</strong>
+        </span>
+      </div>
+      <div class="jc-public-order-list">
+        <span
+          v-for="(j, i) in room.juryOrder"
+          :key="j.playerId"
+          class="jc-order-chip"
+          :class="{ turn: room.currentTurn?.playerId === j.playerId, mine: j.playerId === myId }"
+        >
+          <span class="jc-order-chip-no">{{ i + 1 }}</span>
+          <span class="jc-order-chip-name">{{ j.name }}</span>
+        </span>
+        <span v-if="!room.juryOrder.length" class="jc-order-empty">暂无陪审团成员</span>
+      </div>
+      <div v-if="isJury" class="jc-public-order-note">
+        <template v-if="isMyTurn">
+          轮到你提问，可以连续提多个问题；问完后点击下方「下一位」。
+          <button class="jc-next-turn" @click="nextTurn">下一位</button>
+        </template>
+        <template v-else-if="room.currentTurn">
+          请等待 {{ room.currentTurn.name }} 提问结束后再轮到你。
+        </template>
+      </div>
+    </div>
+
     <!-- 消息区 -->
     <div ref="messagesEl" class="jc-messages">
       <div v-if="!room.messages.length" class="jc-empty">
@@ -63,12 +99,22 @@
           <span class="jc-admin-msg-text">{{ m.content }}</span>
         </div>
 
-        <!-- 决赛选手消息 / 回答（右侧） -->
-        <div v-else-if="m.senderRole === 'finalist'" class="jc-row right">
-          <div class="jc-bubble finalist" :class="{ answer: m.type === 'answer' }">
+        <!-- 其他消息：自己右侧，他人左侧；F2 发言高亮 -->
+        <div v-else class="jc-row" :class="isMine(m) ? 'right' : 'left'">
+          <BBAvatar v-if="!isMine(m)" :name="m.senderName" size="sm" />
+          <div
+            class="jc-bubble"
+            :class="[
+              isMine(m) ? 'mine' : 'other',
+              m.senderRole === 'finalist' ? 'finalist' : 'jury',
+              { answer: m.type === 'answer' }
+            ]"
+          >
             <div class="jc-meta">
               <span class="jc-name">{{ m.senderName }}</span>
-              <span class="jc-role finalist">{{ m.type === 'answer' ? '回答' : '决赛选手' }}</span>
+              <span class="jc-role" :class="{ finalist: m.senderRole === 'finalist' }">
+                {{ m.senderRole === 'finalist' ? (m.type === 'answer' ? '回答' : '决赛选手') : '陪审团' }}
+              </span>
               <span class="jc-time">{{ fmt(m.createdAt) }}</span>
             </div>
             <!-- 回答引用 -->
@@ -77,24 +123,11 @@
               <div class="jc-quote-body">{{ m.replyToContent }}</div>
             </div>
             <div class="jc-text">{{ m.content }}</div>
-          </div>
-          <BBAvatar :name="m.senderName" size="sm" />
-        </div>
-
-        <!-- 陪审团提问（左侧） -->
-        <div v-else class="jc-row left">
-          <BBAvatar :name="m.senderName" size="sm" />
-          <div class="jc-bubble jury">
-            <div class="jc-meta">
-              <span class="jc-name">{{ m.senderName }}</span>
-              <span class="jc-role">陪审团</span>
-              <span class="jc-time">{{ fmt(m.createdAt) }}</span>
-            </div>
-            <div class="jc-text">{{ m.content }}</div>
-            <div v-if="isFinalist && room.phase === 'qa'" class="jc-answer-row">
+            <div v-if="m.senderRole !== 'finalist' && isFinalist && room.phase === 'qa'" class="jc-answer-row">
               <button class="jc-answer-btn" @click="startReply(m)">回答</button>
             </div>
           </div>
+          <BBAvatar v-if="isMine(m)" :name="m.senderName" size="sm" />
         </div>
       </div>
     </div>
@@ -127,7 +160,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import {
   bbGetJuryQA, bbSendJuryQAMessage, bbAnswerJuryQuestion,
   bbSetJuryQAPhase, bbSetJuryQAOrder, bbNextJuryQATurn
@@ -139,7 +172,7 @@ import BBAvatar from './BBAvatar.vue'
 type Phase = 'opening' | 'qa' | 'closing'
 interface JuryOrderItem { playerId: string; name: string }
 
-const props = defineProps<{ isJury?: boolean; isFinalist?: boolean; isAdmin?: boolean }>()
+const props = defineProps<{ isJury?: boolean; isFinalist?: boolean; isAdmin?: boolean; large?: boolean }>()
 
 const PHASES: { id: Phase; label: string }[] = [
   { id: 'opening', label: '① 决赛开场发言' },
@@ -173,6 +206,25 @@ const sending = ref(false)
 const replyTarget = ref<any | null>(null)
 const messagesEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
+const rootEl = ref<HTMLElement | null>(null)
+const chatHeight = ref<number | null>(null)
+
+// 选手端：让问答室输入框底部正好落在可视窗口底部
+function updateHeight() {
+  if (!props.large) { chatHeight.value = null; return }
+  const el = rootEl.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  // 抵消内部滚动容器（.bb-main）的滚动偏移，保证高度按页面初始位置计算
+  const scrollParent = el.closest('.bb-main') as HTMLElement | null
+  const scrollTop = scrollParent ? scrollParent.scrollTop : (window.scrollY || 0)
+  const viewportH = window.visualViewport?.height || window.innerHeight
+  chatHeight.value = Math.max(360, Math.floor(viewportH - rect.top - scrollTop))
+}
+
+function onResize() {
+  updateHeight()
+}
 
 const orderDraft = ref<JuryOrderItem[]>([])
 const orderDirty = ref(false)
@@ -220,7 +272,8 @@ const hint = computed(() => {
   if (props.isAdmin) return ''
   if (room.value.phase === 'opening') return '第一阶段：两名 F2 分别发言，陪审团暂不能发言'
   if (room.value.phase === 'closing') return '第三阶段：两名 F2 分别总结发言，陪审团暂不能发言'
-  if (props.isJury && !isMyTurn.value) {
+  if (props.isJury) {
+    if (isMyTurn.value) return '轮到你提问，可以连续提多个问题；问完后点击上方「下一位」'
     return room.value.currentTurn ? `当前轮到 ${room.value.currentTurn.name} 提问` : '等待陪审团提问'
   }
   return ''
@@ -231,6 +284,10 @@ const emptyHint = computed(() => {
   if (room.value.phase === 'closing') return '等待决赛二人总结发言'
   return '暂无消息，陪审团可以按顺序开始提问'
 })
+
+function isMine(m: any): boolean {
+  return !!m && !!myId.value && m.senderId === myId.value
+}
 
 function fmt(t: string) {
   if (!t) return ''
@@ -332,7 +389,17 @@ async function nextTurn() {
 }
 
 useBbRefresh(load)
-onMounted(load)
+onMounted(async () => {
+  await nextTick()
+  updateHeight()
+  window.addEventListener('resize', onResize)
+  window.visualViewport?.addEventListener('resize', onResize)
+  await load()
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', onResize)
+  window.visualViewport?.removeEventListener('resize', onResize)
+})
 </script>
 
 <style scoped>
@@ -364,6 +431,45 @@ onMounted(load)
 .jc-phase-badge.opening { background: #4488ff18; border-color: #4488ff55; color: #7fb0ff; }
 .jc-phase-badge.qa { background: #aa44ff18; border-color: #aa44ff55; color: #c9a6ff; }
 .jc-phase-badge.closing { background: #e6c98818; border-color: #e6c98855; color: #e6c988; }
+
+/* 选手端放大：高度由 JS 撑满到可视窗口底部 */
+.jury-chat.large { min-height: 0; }
+.jury-chat.large .jc-messages { flex: 1 1 auto; min-height: 0; max-height: none; padding: 20px; }
+.jury-chat.large .jc-bubble { max-width: 82%; }
+.jury-chat.large .jc-text { font-size: 15px; }
+.jury-chat.large .jc-input { font-size: 15px; padding: 12px 16px; }
+.jury-chat.large .jc-send { padding: 12px 26px; font-size: 15px; }
+
+/* 选手端可见的陪审提问顺序 */
+.jc-public-order {
+  padding: 10px 16px;
+  border-bottom: 1px solid #ffffff10;
+  background: #160d28;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.jc-public-order-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.jc-public-order-title { font-size: 12px; color: #8f83b8; font-weight: 600; }
+.jc-public-order-turn { font-size: 12px; color: #c9a6ff; }
+.jc-public-order-turn strong { color: #fff; }
+.jc-public-order-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.jc-order-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: #cfc4ea; background: #ffffff08;
+  border: 1px solid #ffffff14; border-radius: 999px; padding: 3px 10px;
+}
+.jc-order-chip.turn { color: #c9a6ff; border-color: #aa44ff88; background: #aa44ff1c; font-weight: 700; }
+.jc-order-chip.mine { box-shadow: 0 0 0 1px #b39bff55; }
+.jc-order-chip-no { color: #8f83b8; font-size: 11px; }
+.jc-order-chip.turn .jc-order-chip-no { color: #c9a6ff; }
+.jc-order-chip-name { white-space: nowrap; }
+.jc-public-order-note { font-size: 11px; color: #8f83b8; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.jc-next-turn {
+  padding: 3px 12px; border-radius: 6px; cursor: pointer; font-size: 11px;
+  background: #aa44ff22; border: 1px solid #aa44ff88; color: #c9a6ff;
+}
+.jc-next-turn:hover { background: #aa44ff33; }
 
 /* 管理员控制台 */
 .jc-admin {
@@ -427,8 +533,17 @@ onMounted(load)
   border: 1px solid #ffffff14;
   background: #2a1a4a;
 }
-.jc-bubble.jury { border-bottom-left-radius: 4px; border-color: #aa44ff33; }
-.jc-bubble.finalist { border-bottom-right-radius: 4px; background: #b39bff18; border-color: #b39bff44; }
+.jc-bubble.jury { border-color: #aa44ff33; }
+.jc-bubble.other { border-bottom-left-radius: 4px; }
+.jc-bubble.mine { border-bottom-right-radius: 4px; }
+/* F2 发言高亮 */
+.jc-bubble.finalist {
+  background: linear-gradient(135deg, #e6c98820, #b39bff16);
+  border-color: #e6c98888;
+  box-shadow: 0 0 0 1px #e6c98833, 0 0 16px #e6c98822;
+}
+.jc-bubble.finalist .jc-name { color: #ffe9b0; }
+.jc-bubble.finalist .jc-role.finalist { color: #e6c988; background: #e6c9881c; }
 .jc-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 4px; }
 .jc-name { color: #ece7fb; font-weight: 600; }
 .jc-role { color: #aa44ff; background: #aa44ff18; border-radius: 6px; padding: 0 6px; }

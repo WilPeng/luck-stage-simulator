@@ -7,7 +7,7 @@
     </div>
 
     <!-- 陪审团问答（FTC 确定后即可进行，决赛二人与陪审团参与） -->
-    <JuryQA v-if="finalTwo.length === 2 && (isJury || isFinalist)" :isJury="isJury" :isFinalist="isFinalist" />
+    <JuryQA v-if="finalTwo.length === 2 && (isJury || isFinalist)" :isJury="isJury" :isFinalist="isFinalist" :large="true" />
 
     <!-- F3：参与小游戏 -->
     <template v-if="isFinal3">
@@ -287,7 +287,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
 </script>
 
 <style scoped>
-.bb-finale-player { max-width: 700px; margin: 0 auto; padding: 16px; }
+.bb-finale-player { max-width: 960px; margin: 0 auto; padding: 16px; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
 .stage-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }

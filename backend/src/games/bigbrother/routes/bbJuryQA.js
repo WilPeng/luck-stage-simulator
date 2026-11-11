@@ -213,13 +213,7 @@ router.post('/message', auth, async (req, res) => {
     })
     await doc.save()
 
-    // 陪审提问成功后轮转到下一位
-    if (senderRole === 'jury' && orderIds.length) {
-      season.juryQATurnIndex = (turnIndex + 1) % orderIds.length
-      season.updatedAt = new Date().toISOString()
-      await season.save()
-    }
-
+    // 同一位陪审在轮到自己时可以连续提多个问题，由管理员或该陪审点击「下一位」再轮转
     broadcastBBGame('bb:jury-qa', { roundId })
     res.json({ success: true, data: doc.toObject() })
   } catch (e) {
@@ -335,18 +329,23 @@ router.post('/order', auth, requireAdmin, async (req, res) => {
   }
 })
 
-// POST /next-turn - 管理员手动轮转到下一位陪审
-router.post('/next-turn', auth, requireAdmin, async (req, res) => {
+// POST /next-turn - 轮转到下一位陪审（管理员，或当前轮到的陪审自己结束本轮提问）
+router.post('/next-turn', auth, async (req, res) => {
   try {
     const season = await BBSeason.findOne({ gameId: GAME_ID })
     if (!season) return res.status(404).json({ success: false, error: '赛季不存在' })
     const { order } = await getJuryOrderIds(season)
-    if (order.length) {
-      const cur = Number(season.juryQATurnIndex) || 0
-      season.juryQATurnIndex = (cur + 1) % order.length
-      season.updatedAt = new Date().toISOString()
-      await season.save()
+    if (!order.length) {
+      return res.json({ success: true, data: { turnIndex: 0 } })
     }
+    const cur = ((Number(season.juryQATurnIndex) || 0) % order.length + order.length) % order.length
+    const isAdmin = req.user?.role === 'admin'
+    if (!isAdmin && order[cur] !== req.user?.userId) {
+      return res.status(403).json({ success: false, error: '只有管理员或当前提问的陪审可以切换到下一位', code: 'NOT_YOUR_TURN' })
+    }
+    season.juryQATurnIndex = (cur + 1) % order.length
+    season.updatedAt = new Date().toISOString()
+    await season.save()
     broadcastBBGame('bb:jury-qa', { roundId: juryQaRoundId(season) })
     res.json({ success: true, data: { turnIndex: season.juryQATurnIndex } })
   } catch (e) {
