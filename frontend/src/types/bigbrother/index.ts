@@ -158,6 +158,7 @@ export interface BBSeason {
   runnerUpId?: string | null
   runnerUpName?: string
   championVotingOpen?: boolean
+  allChatsRevealed?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -215,6 +216,7 @@ export interface BBSettlement {
   championRound?: number | null
   seasonStatus: string
   totalPlayers: number
+  allChatsRevealed?: boolean
   endgame?: {
     final3Round?: number | null
     championRound?: number | null
@@ -249,6 +251,7 @@ export interface BBEndgameStatus {
   runnerUp: { playerId: string; name: string } | null
   championVotes: Record<string, number>
   championVotingOpen: boolean
+  allChatsRevealed?: boolean
   juryVotes: { juryId: string; juryName: string; voted: boolean; targetId: string | null; targetName: string }[]
   myChampionVote?: { targetId: string; targetName: string } | null
   championReveal?: BBChampionReveal | null
@@ -292,6 +295,7 @@ export interface BBMenuData {
   totalRounds: number
   final3Round?: number | null
   championRound?: number | null
+  allChatsRevealed?: boolean
   isAdmin: boolean
   menu: BBMenuItem[]
 }
@@ -310,6 +314,7 @@ export interface BBSeasonProgress {
   totalRounds: number
   final3Round?: number | null
   championRound?: number | null
+  allChatsRevealed?: boolean
   stageOrder: BBStageType[]
   stageNameMap: Record<string, string>
   matrix: BBMatrixCell[]

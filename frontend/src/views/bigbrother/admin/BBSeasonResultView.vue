@@ -4,6 +4,11 @@
       <h1>🏆 季终结算</h1>
       <span class="round-tag">第{{ seasonInfo.currentRound }}周 · {{ seasonInfo.seasonStatus }}</span>
       <div class="header-actions">
+        <button
+          v-if="settlement?.endgame?.champion"
+          class="bb-btn"
+          @click="toggleRevealChats"
+        >{{ settlement?.allChatsRevealed ? '🔒 取消公开聊天记录' : '📜 公开全部聊天记录' }}</button>
         <button class="bb-btn" :class="{ active: theme === 'black' }" @click="theme = 'black'">🌙 黑色</button>
         <button class="bb-btn" :class="{ active: theme === 'white' }" @click="theme = 'white'">☀️ 白色</button>
         <button class="bb-btn" @click="exportImage" :disabled="exporting">📷 导出图片</button>
@@ -160,7 +165,7 @@
 import { ref, reactive, computed, nextTick, onMounted } from 'vue'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
 import html2canvas from 'html2canvas'
-import { bbGetSeasonSettlement, bbGetHouseguests } from '../../../services/bbApi'
+import { bbGetSeasonSettlement, bbGetHouseguests, bbRevealAllChats } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import type { BBSettlement, BBSettlementRound } from '../../../types/bigbrother'
 
@@ -495,6 +500,20 @@ function exportCsv() {
   a.download = `季终结算_${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(a.href)
+}
+
+async function toggleRevealChats() {
+  if (!settlement.value?.endgame?.champion) return
+  const next = !settlement.value.allChatsRevealed
+  if (!confirm(next
+    ? '公开后所有选手都能查看全部聊天记录（含所有房间与私聊）。确定公开吗？'
+    : '确定取消公开全部聊天记录吗？')) return
+  try {
+    await bbRevealAllChats(next)
+    await fetchData()
+  } catch (e: any) {
+    alert(e?.message || '操作失败')
+  }
 }
 
 async function fetchData() {

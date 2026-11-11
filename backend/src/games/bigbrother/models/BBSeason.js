@@ -57,6 +57,8 @@ class BBSeason extends BaseModel {
     this.votesLocked = data?.votesLocked ?? false
     // 冠军投票是否已由管理员开启（进入 champion_vote 阶段后仍需管理员点击开启才能投票）
     this.championVotingOpen = data?.championVotingOpen ?? false
+    // 冠军产生后，管理员可公开全部聊天记录给所有选手查看
+    this.allChatsRevealed = data?.allChatsRevealed ?? false
     // 陪审团问答室：opening(决赛开场) | qa(陪审轮流提问) | closing(决赛总结)
     this.juryQAPhase = data?.juryQAPhase || 'opening'
     this.juryQAJuryOrder = data?.juryQAJuryOrder || []

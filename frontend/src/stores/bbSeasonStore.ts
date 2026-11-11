@@ -28,6 +28,7 @@ export const useBbSeasonStore = defineStore('bbSeason', () => {
         totalRounds: data.totalRounds,
         final3Round: data.final3Round,
         championRound: data.championRound,
+        allChatsRevealed: data.allChatsRevealed,
         status: 'running',
         createdAt: '',
         updatedAt: ''
@@ -50,6 +51,7 @@ export const useBbSeasonStore = defineStore('bbSeason', () => {
           currentRound: data.currentRound,
           currentStage: data.currentStage,
           totalRounds: data.totalRounds,
+          allChatsRevealed: data.allChatsRevealed,
           status: 'running',
           createdAt: '',
           updatedAt: ''
@@ -60,6 +62,7 @@ export const useBbSeasonStore = defineStore('bbSeason', () => {
         season.value.totalRounds = data.totalRounds
         season.value.final3Round = data.final3Round
         season.value.championRound = data.championRound
+        season.value.allChatsRevealed = data.allChatsRevealed
       }
     } catch (e) {
       console.error('fetchMenu error:', e)

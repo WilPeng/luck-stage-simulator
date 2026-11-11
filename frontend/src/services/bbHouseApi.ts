@@ -51,6 +51,11 @@ export async function bbGetHohMonitor() {
   return doRequest<any>('/house/hoh-monitor')
 }
 
+// 冠军产生后管理员公开的全部聊天记录
+export async function bbGetAllChatLogs(): Promise<{ allChatsRevealed: boolean; messages: any[] }> {
+  return doRequest<any>('/house/all-chats')
+}
+
 // ===== 管理员 API =====
 export async function bbAdminSetDoor(doorId: string, isOpen: boolean) {
   return doRequest<any>('/house/admin/door', {

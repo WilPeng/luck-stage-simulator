@@ -224,7 +224,12 @@
           <div class="champ-label">冠军</div>
           <div class="champ-name">{{ status.champion.name }}</div>
         </div>
-        <button class="bb-btn bb-btn-primary" @click="goNext">结束赛季</button>
+        <div class="champion-actions">
+          <button class="bb-btn" @click="toggleRevealAllChats">
+            {{ status.allChatsRevealed ? '🔒 取消公开聊天记录' : '📜 公开全部聊天记录' }}
+          </button>
+          <button class="bb-btn bb-btn-primary" @click="goNext">结束赛季</button>
+        </div>
       </div>
     </div>
 
@@ -250,7 +255,7 @@ import {
   bbGetEndgameStatus, bbFinal3Round, bbFhohPick, bbChampionResult, bbChampionVote, bbResetEndgame,
   bbCreateMinigameRoom, bbStartMinigame, bbGetMinigameRoom, bbSummonMinigamePlayers,
   bbPrepareChampionReveal, bbNextChampionReveal, bbResetChampionReveal, bbReorderChampionReveal,
-  bbOpenChampionVoting
+  bbOpenChampionVoting, bbRevealAllChats
 } from '../../../services/bbApi'
 import type { BBEndgameStatus } from '../../../types/bigbrother'
 import MinigameSelectModal from '../../../components/bigbrother/minigames/MinigameSelectModal.vue'
@@ -410,6 +415,21 @@ async function adminCastJuryVote(juryId: string, targetId: string, targetName: s
     await bbChampionVote(targetId, targetName, juryId, juryVotes.value.find(j => j.juryId === juryId)?.juryName || '')
     await refresh()
   } catch (e: any) { alert(e.message) }
+}
+
+async function toggleRevealAllChats() {
+  if (!status.value?.champion) return
+  const next = !status.value.allChatsRevealed
+  if (!confirm(next
+    ? '公开后所有选手都能查看全部聊天记录（含所有房间与私聊）。确定公开吗？'
+    : '确定取消公开全部聊天记录吗？')) return
+  try {
+    await bbRevealAllChats(next)
+    await refresh()
+    alert(next ? '已公开全部聊天记录，选手端现在可以查看' : '已取消公开全部聊天记录')
+  } catch (e: any) {
+    alert(e?.message || '操作失败')
+  }
 }
 
 async function openChampionVoting() {
@@ -602,6 +622,8 @@ onMounted(refresh)
 .champ-label { font-size: 12px; color: #e6c988; text-transform: uppercase; }
 .champ-name { font-size: 22px; font-weight: 700; color: #e6c988; }
 .champion-card .bb-btn { margin-left: auto; }
+.champion-actions { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+.champion-actions .bb-btn { margin-left: 0; }
 .cand-btn.room { border-color: #4488ff88; color: #4488ff; }
 .room-status {
   margin-top: 14px; padding: 12px 16px; background: #ffffff05;

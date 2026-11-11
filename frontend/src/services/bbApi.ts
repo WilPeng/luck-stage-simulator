@@ -196,6 +196,13 @@ export async function bbFhohPick(pickedId: string, pickedName?: string): Promise
   })
 }
 
+export async function bbRevealAllChats(reveal = true): Promise<{ allChatsRevealed: boolean }> {
+  return doRequest('/season/reveal-chats', {
+    method: 'POST',
+    body: JSON.stringify({ reveal })
+  })
+}
+
 export async function bbOpenChampionVoting(): Promise<{ championVotingOpen: boolean }> {
   return doRequest('/season/endgame/open-voting', { method: 'POST', body: JSON.stringify({}) })
 }

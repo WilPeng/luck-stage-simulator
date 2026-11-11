@@ -161,6 +161,43 @@ router.get('/my-location', auth, async (req, res) => {
   }
 })
 
+// GET /all-chats - 冠军产生后由管理员公开，所有选手可查看全部聊天记录
+router.get('/all-chats', auth, async (req, res) => {
+  try {
+    const season = await getCurrentSeason()
+    const isAdmin = req.user.role === 'admin'
+    if (!isAdmin && !season?.allChatsRevealed) {
+      return res.status(403).json({ success: false, error: '管理员尚未公开全部聊天记录', code: 'CHATS_NOT_REVEALED' })
+    }
+    const [docs, rooms] = await Promise.all([
+      BBChatMessage.find({ gameId: 'bigbrother' }),
+      BBHouseRoom.find({ gameId: 'bigbrother' })
+    ])
+    const roomMap = new Map(rooms.map(r => [r.id, r]))
+    docs.sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+    const messages = docs.map(m => {
+      const obj = m.toObject()
+      delete obj.visibleTo
+      const room = m.roomId ? roomMap.get(m.roomId) : null
+      return {
+        ...obj,
+        roomName: room?.name || '',
+        roomIcon: room?.icon || ''
+      }
+    })
+    res.json({
+      success: true,
+      data: {
+        allChatsRevealed: !!season?.allChatsRevealed || isAdmin,
+        messages
+      }
+    })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '获取全部聊天记录失败' })
+  }
+})
+
 // GET /reachable - 获取从当前位置可达的房间
 router.get('/reachable', auth, async (req, res) => {
   try {

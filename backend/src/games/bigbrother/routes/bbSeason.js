@@ -124,6 +124,7 @@ router.get('/progress', auth, async (req, res) => {
         totalRounds: season.totalRounds,
         final3Round: season.final3Round || null,
         championRound: season.championRound || null,
+        allChatsRevealed: !!season.allChatsRevealed,
         stageOrder: BB_STAGE_ORDER,
         stageNameMap: stageNameMapFull,
         matrix
@@ -182,6 +183,7 @@ router.get('/menu', auth, async (req, res) => {
         totalRounds: season.totalRounds,
         final3Round: season.final3Round || null,
         championRound: season.championRound || null,
+        allChatsRevealed: !!season.allChatsRevealed,
         isAdmin: req.user.role === 'admin',
         menu
       }
@@ -439,6 +441,7 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
     season.runnerUpName = ''
     season.championReveal = null
     season.championVotingOpen = false
+    season.allChatsRevealed = false
     season.juryQAPhase = 'opening'
     season.juryQAJuryOrder = []
     season.juryQATurnIndex = 0
@@ -1037,6 +1040,7 @@ router.get('/settlement', auth, requireAdmin, async (req, res) => {
         championRound: season.championRound || null,
         seasonStatus: season.status,
         totalPlayers: houseguests.length,
+        allChatsRevealed: !!season.allChatsRevealed,
         endgame: {
           final3Round: season.final3Round || null,
           championRound: season.championRound || null,
@@ -1118,6 +1122,7 @@ router.get('/endgame/status', auth, async (req, res) => {
         runnerUp: season.runnerUpId ? { playerId: season.runnerUpId, name: season.runnerUpName } : null,
         championVotes: votesByTarget,
         championVotingOpen: !!season.championVotingOpen,
+        allChatsRevealed: !!season.allChatsRevealed,
         juryVotes,
         myChampionVote,
         championReveal: season.championReveal || null
@@ -1165,6 +1170,7 @@ router.post('/endgame/reset', auth, requireAdmin, async (req, res) => {
     season.runnerUpName = ''
     season.championReveal = null
     season.championVotingOpen = false
+    season.allChatsRevealed = false
     season.juryQAPhase = 'opening'
     season.juryQAJuryOrder = []
     season.juryQATurnIndex = 0
@@ -1313,6 +1319,27 @@ router.post('/endgame/open-voting', auth, requireAdmin, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ success: false, error: '开启冠军投票失败', code: 'SERVER_ERROR' })
+  }
+})
+
+// POST /reveal-chats - 冠军产生后，管理员公开/取消公开全部聊天记录
+router.post('/reveal-chats', auth, requireAdmin, async (req, res) => {
+  try {
+    const season = await ensureSeason()
+    if (!season.championId) {
+      return res.status(400).json({ success: false, error: '尚未产生冠军，暂时不能公开全部聊天记录', code: 'NO_CHAMPION' })
+    }
+    const reveal = req.body?.reveal !== false
+    season.allChatsRevealed = reveal
+    season.updatedAt = new Date().toISOString()
+    await season.save()
+    await logAction(req.user.userId, req.user.name || 'admin', 'admin',
+      BB_ACTION_TYPES.PROGRESS_SET, 'season', season.id,
+      reveal ? '公开全部聊天记录' : '取消公开全部聊天记录')
+    res.json({ success: true, data: { allChatsRevealed: reveal } })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ success: false, error: '操作失败', code: 'SERVER_ERROR' })
   }
 })
 

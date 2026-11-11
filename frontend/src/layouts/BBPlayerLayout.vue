@@ -54,6 +54,7 @@
         <div class="header-info">
           <span class="stage-tag">{{ seasonStore.stageName }}</span>
           <span class="user-name">{{ currentUser?.name }}</span>
+          <button v-if="seasonStore.season?.allChatsRevealed" class="bb-btn bb-btn-sm" @click="allChatsOpen = true">📜 全部聊天记录</button>
           <button class="bb-btn bb-btn-sm" @click="toggleBroadcastHistory">🔔 广播记录</button>
           <button class="bb-btn bb-btn-sm" @click="handleLogout">退出</button>
         </div>
@@ -125,6 +126,8 @@
         <router-view :key="'bb-stage-' + realtime.stageTick" />
       </main>
     </div>
+
+    <AllChatLogsModal :open="allChatsOpen" @close="allChatsOpen = false" />
   </div>
 </template>
 
@@ -136,6 +139,7 @@ import { useBbSeasonStore } from '../stores/bbSeasonStore'
 import { useBbRealtimeStore } from '../stores/bbRealtimeStore'
 import { BB_STAGE_NAME } from '../types/bigbrother'
 import { bbGetMyState, bbSleepWake, bbGetBroadcastHistory } from '../services/bbHouseApi'
+import AllChatLogsModal from '../components/bigbrother/AllChatLogsModal.vue'
 import { applyGamePageMeta } from '../router'
 
 const router = useRouter()
@@ -177,6 +181,9 @@ watch(() => realtime.lastSummon, (s) => {
 
 const mobileMenuOpen = ref(false)
 const collapsedRounds = ref<Set<number>>(new Set())
+
+// 冠军产生后公开的全部聊天记录
+const allChatsOpen = ref(false)
 
 // 广播通知记录
 const broadcastHistoryOpen = ref(false)

@@ -26,8 +26,10 @@
         <tbody>
           <tr v-for="g in houseguests" :key="g.id">
             <td class="name-cell">
-              <BBAvatar :name="g.name" :avatar="g.avatar" size="sm" />
-              <span>{{ g.name }}</span>
+              <div class="name-cell-inner">
+                <BBAvatar :name="g.name" :avatar="g.avatar" size="sm" />
+                <span>{{ g.name }}</span>
+              </div>
             </td>
             <td>
               <span class="status-tag" :class="g.status">{{ statusLabel(g.status) }}</span>
@@ -54,14 +56,16 @@
               <span v-else class="badge none">空闲</span>
             </td>
             <td class="actions">
-              <button v-if="g.isSleeping" class="bb-btn-xs danger" @click="sleep(g, 'end')">立即结束睡觉</button>
-              <button v-else class="bb-btn-xs" @click="sleep(g, 'start')">立即开始睡觉</button>
-              <button v-if="g.sleepCompleted" class="bb-btn-xs" @click="sleep(g, 'clear')">清除本轮已睡</button>
-              <button v-else class="bb-btn-xs" @click="sleep(g, 'mark')">标记本轮已睡</button>
+              <div class="actions-inner">
+                <button v-if="g.isSleeping" class="bb-btn-xs danger" @click="sleep(g, 'end')">立即结束睡觉</button>
+                <button v-else class="bb-btn-xs" @click="sleep(g, 'start')">立即开始睡觉</button>
+                <button v-if="g.sleepCompleted" class="bb-btn-xs" @click="sleep(g, 'clear')">清除本轮已睡</button>
+                <button v-else class="bb-btn-xs" @click="sleep(g, 'mark')">标记本轮已睡</button>
 
-              <button v-if="g.isShowering" class="bb-btn-xs danger" @click="shower(g, 'end')">立即结束洗澡</button>
-              <button v-else class="bb-btn-xs" @click="shower(g, 'start')">立即开始洗澡</button>
-              <button v-if="cooldownActive(g)" class="bb-btn-xs" @click="shower(g, 'clear')">清除洗澡冷却</button>
+                <button v-if="g.isShowering" class="bb-btn-xs danger" @click="shower(g, 'end')">立即结束洗澡</button>
+                <button v-else class="bb-btn-xs" @click="shower(g, 'start')">立即开始洗澡</button>
+                <button v-if="cooldownActive(g)" class="bb-btn-xs" @click="shower(g, 'clear')">清除洗澡冷却</button>
+              </div>
             </td>
           </tr>
           <tr v-if="!houseguests.length"><td colspan="9" class="empty">暂无房客</td></tr>
@@ -152,21 +156,24 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 .page-header h1 { font-size: 22px; color: #ece7fb; margin: 0; }
 .today { color: #8f83b8; font-size: 13px; }
 .table-wrapper { overflow-x: auto; }
-.state-table { width: 100%; border-collapse: collapse; }
-.state-table th, .state-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #ffffff12; font-size: 13px; color: #ddd; white-space: nowrap; }
+.state-table { width: 100%; min-width: 960px; border-collapse: collapse; table-layout: auto; }
+.state-table th, .state-table td { padding: 10px 12px; text-align: left; vertical-align: middle; border-bottom: 1px solid #ffffff12; font-size: 13px; color: #ddd; white-space: nowrap; }
 .state-table th { color: #8f83b8; font-size: 12px; }
-.name-cell { display: flex; align-items: center; gap: 8px; }
+.name-cell { vertical-align: middle; }
+.name-cell-inner { display: flex; align-items: center; gap: 8px; }
 .status-tag { padding: 1px 8px; border-radius: 6px; font-size: 11px; }
 .status-tag.active { background: #b39bff22; color: #b39bff; }
 .status-tag.evicted { background: #ff444422; color: #ff6666; }
 .status-tag.jury { background: #e6c98822; color: #e6c988; }
+.status-tag.walked { background: #ff880022; color: #ff9933; }
 .badge { padding: 2px 10px; border-radius: 10px; font-size: 11px; }
 .badge.ok { background: #b39bff22; color: #b39bff; }
 .badge.sleeping { background: #4488ff22; color: #7fb0ff; }
 .badge.showering { background: #00c8ff22; color: #7fd8ff; }
 .badge.cooling { background: #e6c98822; color: #e6c988; }
 .badge.none { background: #ffffff10; color: #8f83b8; }
-.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.actions { vertical-align: middle; }
+.actions-inner { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .bb-btn-xs { padding: 3px 10px; font-size: 11px; background: transparent; border: 1px solid #b39bff44; color: #b39bff; border-radius: 4px; cursor: pointer; }
 .bb-btn-xs:hover { background: #b39bff22; }
 .bb-btn-xs.danger { border-color: #ff444466; color: #ff6666; }
