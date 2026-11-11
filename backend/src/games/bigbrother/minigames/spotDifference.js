@@ -48,15 +48,18 @@ registerGame({
   init(participants) {
     const { gridA, gridB, diffs } = generateBoards()
     const playerStates = {}
+    const playerNames = {}
     participants.forEach(p => {
       playerStates[p.playerId] = {
         marks: [],            // 已标记的格子索引
         done: false,
         finishTime: null,
-        cooldownUntil: 0
+        cooldownUntil: 0,
+        submissions: []       // 每次提交记录（复盘用）
       }
+      playerNames[p.playerId] = p.playerName || p.playerId
     })
-    return { playerStates, status: 'ready', startTime: null, gridA, gridB, diffs, size: SIZE, colors: COLORS }
+    return { playerStates, playerNames, status: 'ready', startTime: null, gridA, gridB, diffs, size: SIZE, colors: COLORS }
   },
 
   handleAction(state, playerId, action) {
@@ -93,12 +96,14 @@ registerGame({
       if (correct) {
         ps.done = true
         ps.finishTime = Date.now()
+        ps.submissions.push({ at: ps.finishTime, correct: true, marks: marks.slice(), cooldownUntil: 0 })
         const finished = Object.values(state.playerStates).every(s => s.done)
         return { updated: true, finished, winner: finished ? this.computeWinner(state) : undefined, result: { correct: true } }
       }
       // 错误：进入冷却并清空标记
       ps.marks = []
       ps.cooldownUntil = Date.now() + COOLDOWN
+      ps.submissions.push({ at: Date.now(), correct: false, marks: marks.slice(), cooldownUntil: ps.cooldownUntil })
       return { updated: true, finished: false, result: { correct: false, cooldownMs: COOLDOWN } }
     }
 
@@ -144,6 +149,60 @@ registerGame({
       marks: ps.marks,
       done: ps.done,
       status: state.status
+    }
+  },
+
+  getReplayMeta(state) {
+    const names = state.playerNames || {}
+    const diffInfo = (state.diffs || []).map(idx => ({
+      index: idx,
+      row: Math.floor(idx / state.size) + 1,
+      col: (idx % state.size) + 1,
+      colorA: state.gridA[idx],
+      colorB: state.gridB[idx]
+    }))
+    const players = Object.entries(state.playerStates).map(([pid, ps]) => {
+      const duration = (state.startTime && ps.finishTime) ? ps.finishTime - state.startTime : null
+      return {
+        playerId: pid,
+        playerName: names[pid] || pid,
+        score: ps.done ? state.diffs.length : ps.marks.length,
+        status: ps.done ? '已完成' : '未完成',
+        details: [
+          { label: '找到不同', value: `${ps.done ? state.diffs.length : ps.marks.length}/${state.diffs.length}` },
+          { label: '提交次数', value: ps.submissions.length },
+          { label: '完成用时', value: duration == null ? '—' : `${(duration / 1000).toFixed(1)}s` }
+        ]
+      }
+    }).sort((a, b) => {
+      if ((a.status === '已完成') !== (b.status === '已完成')) return a.status === '已完成' ? -1 : 1
+      return b.score - a.score
+    })
+    const rows = []
+    for (const [pid, ps] of Object.entries(state.playerStates)) {
+      for (const s of (ps.submissions || [])) {
+        rows.push([
+          names[pid] || pid,
+          s.correct ? '✅ 正确' : '❌ 错误',
+          (s.marks || []).map(i => `#${i + 1}`).join('、') || '—',
+          state.startTime ? `+${((s.at - state.startTime) / 1000).toFixed(1)}s` : '—'
+        ])
+      }
+    }
+    return {
+      type: 'spot-difference',
+      title: '找不同',
+      description: `共 ${state.diffs.length} 处不同，标记所有不同并提交；第一个找齐并正确的选手获胜。`,
+      summary: [
+        { label: '不同处数', value: state.diffs.length },
+        { label: '不同位置', value: diffInfo.map(d => `第${d.row}行第${d.col}列（${d.colorA}→${d.colorB}）`).join('；') }
+      ],
+      players,
+      tables: [{
+        title: '提交记录',
+        columns: ['选手', '结果', '提交标记', '时间'],
+        rows
+      }]
     }
   },
 

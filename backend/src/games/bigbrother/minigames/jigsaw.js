@@ -39,10 +39,12 @@ registerGame({
     let baseOrder = identity()
     do { baseOrder = shuffle(identity()) } while (isSolved(baseOrder))
     const playerStates = {}
+    const playerNames = {}
     for (const p of participants) {
       playerStates[p.playerId] = { order: [...baseOrder], cooldownUntil: 0, done: false, finishTime: null }
+      playerNames[p.playerId] = p.playerName || p.playerId
     }
-    return { playerStates, status: 'ready', startTime: null, size: SIZE, imageUrl }
+    return { playerStates, playerNames, status: 'ready', startTime: null, size: SIZE, imageUrl }
   },
 
   handleAction(state, playerId, action) {
@@ -112,6 +114,63 @@ registerGame({
       wrong: cooling,
       cooldownRemaining: cooling ? Math.ceil((ps.cooldownUntil - Date.now()) / 1000) : 0
     }
+  },
+
+  /** 管理员观战/复盘：所有选手的拼图盘面 */
+  getAdminState(state) {
+    if (!state) return null
+    const now = Date.now()
+    const names = state.playerNames || {}
+    const players = Object.entries(state.playerStates || {}).map(([pid, ps]) => {
+      const placed = (ps.order || []).filter((v, i) => v === i).length
+      const cooling = now < (ps.cooldownUntil || 0)
+      return {
+        playerId: pid,
+        playerName: names[pid] || pid,
+        order: [...(ps.order || [])],
+        placed,
+        total: TOTAL,
+        done: !!ps.done,
+        finishTime: ps.finishTime || null,
+        cooldownRemaining: cooling ? Math.ceil((ps.cooldownUntil - now) / 1000) : 0,
+        wrong: cooling
+      }
+    })
+    return {
+      type: 'jigsaw',
+      started: !!state.startTime,
+      status: state.status,
+      size: state.size || SIZE,
+      imageUrl: state.imageUrl || '',
+      players
+    }
+  },
+
+  getReplaySnapshot(state) {
+    const board = this.getAdminState(state)
+    if (!board) return null
+    const players = {}
+    for (const p of board.players) {
+      players[p.playerId] = {
+        正确块数: `${p.placed}/${p.total}`,
+        状态: p.done ? '已完成' : (p.cooldownRemaining > 0 ? `冷却 ${p.cooldownRemaining}s` : '进行中')
+      }
+    }
+    return {
+      type: 'jigsaw',
+      summary: {
+        尺寸: `${board.size}×${board.size}`,
+        图片: board.imageUrl || '未设置',
+        已完成: board.players.filter(p => p.done).length
+      },
+      players,
+      board
+    }
+  },
+
+  getReplayMeta(state) {
+    const board = this.getAdminState(state)
+    return { type: 'jigsaw', imageUrl: state?.imageUrl || '', size: state?.size || SIZE, board }
   },
 
   getAllStates(state) {

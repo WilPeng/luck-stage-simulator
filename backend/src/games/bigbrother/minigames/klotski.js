@@ -69,6 +69,7 @@ registerGame({
   init(participants) {
     const sharedBoard = generateSharedBoard()
     const playerStates = {}
+    const playerNames = {}
     for (const p of participants) {
       playerStates[p.playerId] = {
         board: sharedBoard.slice(),   // 每人独立棋盘，初始完全一致
@@ -77,8 +78,9 @@ registerGame({
         finishTime: null,
         solved: false
       }
+      playerNames[p.playerId] = p.playerName || p.playerId
     }
-    return { playerStates, initialBoard: sharedBoard.slice(), status: 'ready' }
+    return { playerStates, playerNames, initialBoard: sharedBoard.slice(), status: 'ready' }
   },
 
   handleAction(state, playerId, action) {
@@ -153,6 +155,42 @@ registerGame({
       startTime: ps.startTime,
       finishTime: ps.finishTime,
       status: state.status
+    }
+  },
+
+  getReplayMeta(state) {
+    const names = state.playerNames || {}
+    const entries = Object.entries(state.playerStates).map(([pid, ps]) => {
+      const duration = (ps.startTime && ps.finishTime) ? ps.finishTime - ps.startTime : null
+      return {
+        playerId: pid,
+        playerName: names[pid] || pid,
+        score: ps.moves || 0,
+        status: ps.solved ? '已完成' : '未完成',
+        details: [
+          { label: '步数', value: ps.moves || 0 },
+          { label: '完成用时', value: duration == null ? '—' : `${(duration / 1000).toFixed(1)}s` }
+        ]
+      }
+    }).sort((a, b) => {
+      if ((a.status === '已完成') !== (b.status === '已完成')) return a.status === '已完成' ? -1 : 1
+      return a.score - b.score
+    })
+    const boards = Object.entries(state.playerStates).map(([pid, ps]) => ({
+      playerId: pid,
+      playerName: names[pid] || pid,
+      board: [...(ps.board || [])],
+      solved: !!ps.solved,
+      moves: ps.moves || 0
+    }))
+    return {
+      type: 'klotski',
+      title: '华容道 4×4',
+      description: '所有选手棋盘一致，移动数字块使 1~15 顺序排列且空格在右下；最快复原者获胜。',
+      summary: [{ label: '棋盘', value: '4×4' }],
+      players: entries,
+      initialBoard: state.initialBoard || [],
+      boards
     }
   },
 

@@ -819,6 +819,10 @@ registerGame({
     }
   },
 
+  getReplayMeta(state) {
+    return { type: 'poison-drink', board: this.getAdminState(state) }
+  },
+
   getReplaySnapshot(state) {
     const players = {}
     const order = (state.phase === 'seat' || !state.seatOrder.length)
@@ -853,7 +857,7 @@ registerGame({
       summary['上轮累计旋转'] = `${state.lastResult.totalRotation} 格`
       summary['上轮结果'] = state.lastResult.rows.map(r => `${r.playerName}${r.poison ? '☠️' : '✅'}`).join('、')
     }
-    return { type: 'poison-drink', summary, players }
+    return { type: 'poison-drink', summary, players, board: this.getAdminState(state) }
   },
 
   takeReplayEvents(state) {

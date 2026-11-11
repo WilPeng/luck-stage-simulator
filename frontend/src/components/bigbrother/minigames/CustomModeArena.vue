@@ -3,7 +3,7 @@
     <div class="arena-header">
       <span class="mode-name">{{ modeName }}</span>
       <span v-if="state.tiebreak" class="tb-tag">数字加时题</span>
-      <span v-else-if="state.totalQuestions" class="q-progress">第 {{ (state.qIndex || 0) + 1 }} / {{ state.totalQuestions }} 题</span>
+      <span v-else-if="state.totalQuestions" class="q-progress">第 {{ questionNo }} / {{ state.totalQuestions }} 题</span>
       <span v-if="mode === 'race-score'" class="tb-tag">目标 {{ state.raceTarget }} 分</span>
       <span v-if="mode === 'lives-build' && state.my" class="tb-tag">我的生命 {{ state.my.lives }} ❤️</span>
       <span v-if="timerActive" class="arena-timer" :class="{ urgent: remain <= 5 }">⏱ {{ remain }}s</span>
@@ -25,8 +25,18 @@
       </div>
     </div>
 
-    <div v-if="mode === 'duel' && state.current" class="duel-banner">
+    <div v-if="mode === 'duel' && state.current && state.phase !== 'announcing'" class="duel-banner">
       ⚔ {{ nameOf(state.current[0]) }} vs {{ nameOf(state.current[1]) }}
+    </div>
+
+    <div v-if="mode === 'duel' && state.phase === 'announcing' && state.current" class="duel-announce">
+      <div class="da-label">⚔ 本轮 PK 公示</div>
+      <div class="da-versus">
+        {{ nameOf(state.current[0]) }}
+        <span class="da-vs">VS</span>
+        {{ nameOf(state.current[1]) }}
+      </div>
+      <div class="da-timer">{{ duelAnnounceRemain }} 秒后开始作答</div>
     </div>
 
     <div v-if="state.roundResult" class="round-result">
@@ -49,6 +59,10 @@
           </span>
         </div>
         <div v-else class="race-order-empty">本题无人答对</div>
+      </template>
+      <template v-else-if="state.roundResult.eliminatedIds && state.roundResult.eliminatedIds.length">
+        {{ state.roundResult.eliminatedIds.map(nameOf).join('、') }} 出局
+        <span v-if="state.roundResult.bothEliminated">（双方均未作答）</span>
       </template>
       <template v-else-if="state.roundResult.eliminatedId">
         {{ nameOf(state.roundResult.eliminatedId) }} 出局
@@ -76,6 +90,32 @@
           @click="$emit('action', { type: 'pick', targetId: p.playerId })"
         >{{ p.playerName }}</button>
       </div>
+    </template>
+
+    <template v-else-if="mode === 'duel' && state.phase === 'duel-picking'">
+      <p class="pick-hint" v-if="state.my && state.my.canPickDuel">你是上一轮胜者，请选择本轮 PK 的 2 名选手：</p>
+      <p class="pick-hint" v-else>等待 <strong>{{ nameOf(state.pickerId) }}</strong> 选择本轮 PK 的 2 名选手…</p>
+      <div class="pick-countdown">选择剩余 {{ duelPickRemain }} 秒</div>
+      <div v-if="state.my && state.my.canPickDuel" class="pick-grid">
+        <button
+          v-for="p in alivePlayers"
+          :key="p.playerId"
+          class="pick-btn duel-pick-btn"
+          :class="{ selected: duelPickSelected.includes(p.playerId) }"
+          @click="toggleDuelPick(p.playerId)"
+        >
+          {{ p.playerName }}
+          <span v-if="duelPickSelected.includes(p.playerId)" class="pick-check">✓</span>
+        </button>
+      </div>
+      <button
+        v-if="state.my && state.my.canPickDuel"
+        class="submit-btn"
+        :disabled="duelPickSelected.length !== 2"
+        @click="confirmDuelPick"
+      >
+        确认选择 ({{ duelPickSelected.length }}/2)
+      </button>
     </template>
 
     <template v-else-if="state.question">
@@ -168,6 +208,7 @@ const modeName = computed(() => ({
 } as Record<string, string>)[mode.value] || '对战')
 
 const myAnswer = computed(() => props.state.my?.myAnswer ?? null)
+const questionNo = computed(() => Math.max(0, Number(props.state.qIndex) || 0) + 1)
 const textAnswer = ref('')
 const padValue = ref(0)
 const matchAnswer = ref('')
@@ -248,6 +289,32 @@ const canInput = computed(() => {
 const aliveOthers = computed(() =>
   (props.state.players || []).filter((p: any) => p.alive && p.playerId !== props.myId)
 )
+const alivePlayers = computed(() =>
+  (props.state.players || []).filter((p: any) => p.alive)
+)
+const duelPickSelected = ref<string[]>([])
+const duelAnnounceRemain = computed(() => Math.max(0, Math.ceil(((props.state.nextAt || 0) - now.value) / 1000)))
+const duelPickRemain = computed(() => Math.max(0, Math.ceil(((props.state.pickDeadline || 0) - now.value) / 1000)))
+
+watch(() => props.state.phase, (phase) => {
+  if (phase !== 'duel-picking') duelPickSelected.value = []
+})
+watch(() => props.state.pickerId, () => { duelPickSelected.value = [] })
+
+function toggleDuelPick(playerId: string) {
+  const current = duelPickSelected.value
+  if (current.includes(playerId)) {
+    duelPickSelected.value = current.filter(id => id !== playerId)
+    return
+  }
+  if (current.length >= 2) return
+  duelPickSelected.value = [...current, playerId]
+}
+
+function confirmDuelPick() {
+  if (duelPickSelected.value.length !== 2) return
+  emit('action', { type: 'pick_pair', playerIds: [...duelPickSelected.value] })
+}
 
 function nameOf(id: string) {
   const p = (props.state.players || []).find((x: any) => x.playerId === id)
@@ -310,13 +377,23 @@ function submitMatch() {
 .action-msg.correct { color: #7ee0a0; background: #7ee0a014; border: 1px solid #7ee0a033; }
 .action-msg.wrong { color: #ff8f8f; background: #ff444414; border: 1px solid #ff444433; }
 .duel-banner { text-align: center; font-size: 16px; color: #00c8ff; background: #00c8ff14; border: 1px solid #00c8ff33; border-radius: 8px; padding: 8px; }
+.duel-announce { text-align: center; padding: 18px; border: 1px solid #00c8ff55; background: #00c8ff12; border-radius: 12px; }
+.da-label { font-size: 13px; color: #7fd8ff; letter-spacing: 1px; }
+.da-versus { margin: 10px 0; font-size: 24px; font-weight: 800; color: #ece7fb; }
+.da-vs { color: #00c8ff; font-size: 15px; margin: 0 10px; }
+.da-timer { font-size: 14px; color: #e6c988; }
 .round-result { text-align: center; font-size: 14px; color: #e6c988; background: #e6c98814; border: 1px solid #e6c98833; border-radius: 8px; padding: 8px; }
 .round-result strong { color: #b39bff; }
 .arena-finished { text-align: center; font-size: 22px; font-weight: 700; color: #b39bff; padding: 24px 0; }
 .pick-hint { color: #ece7fb; font-size: 15px; }
+.pick-countdown { text-align: center; color: #e6c988; font-size: 13px; }
 .pick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .pick-btn { padding: 14px; border: 2px solid #ff444455; border-radius: 8px; background: #ff444411; color: #ff8888; font-size: 15px; cursor: pointer; }
 .pick-btn:hover { background: #ff444433; }
+.duel-pick-btn { display: flex; align-items: center; justify-content: center; gap: 6px; border-color: #b39bff55; background: #b39bff11; color: #e0d7ff; }
+.duel-pick-btn:hover { background: #b39bff22; }
+.duel-pick-btn.selected { border-color: #b39bff; background: #b39bff33; color: #fff; }
+.pick-check { color: #7ee0a0; font-weight: 700; }
 .q-text { font-size: 20px; color: #ece7fb; line-height: 1.5; }
 .points-hint { font-size: 12px; color: #e6c988; }
 .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

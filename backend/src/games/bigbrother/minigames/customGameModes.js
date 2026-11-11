@@ -58,6 +58,8 @@ function createModeHandler(gameDef) {
   // 模式1/2/3 的每题限时（管理员可设置，默认 30s）
   const answerLimitMs = (gameDef.answerTimeLimit || gameDef.basicTimeLimit || 30) * 1000
   const REVEAL_MS = 3000
+  const DUEL_ANNOUNCE_MS = 8000
+  const DUEL_PICK_MS = 20000
   // 模式6（记忆回溯）：初始生命值
   const initialLives = Math.max(1, parseInt(gameDef.lives, 10) || 2)
   // 模式7（众里寻他千百度）：目标分与名次得分
@@ -125,9 +127,11 @@ function createModeHandler(gameDef) {
       current: null,
       firstId: null,
       pickerId: null,
+      duelWinnerId: null,
       finished: false,
       winner: null,
       started: false,
+      roundHistory: [],
       // 模式6/7 运行时数据
       lives: initialLives,
       raceTarget,
@@ -153,6 +157,47 @@ function createModeHandler(gameDef) {
 
   function aliveList(state) {
     return Object.values(state.ps).filter(p => p.alive)
+  }
+
+  function questionInfo(q) {
+    if (!q) return null
+    return {
+      id: q.id,
+      text: q.text,
+      qtype: q.qtype || 'text',
+      options: q.options || [],
+      correctAnswer: q.qtype === 'match'
+        ? (q.pairs || []).map(p => `${p.left} ↔ ${p.right}`).join('；')
+        : q.correctAnswer,
+      pairs: q.pairs || [],
+      media: q.media || null
+    }
+  }
+
+  // 记录一轮完整过程：题目、每人答案/对错/分数/生命、淘汰与得分结果
+  function snapshotRound(state) {
+    if (!Array.isArray(state.roundHistory)) state.roundHistory = []
+    const players = Object.values(state.ps).map(p => ({
+      playerId: p.playerId,
+      playerName: p.playerName,
+      answer: p.answer,
+      correct: p.correct,
+      score: p.score || 0,
+      lives: p.lives,
+      roundPoints: p.roundPoints || 0,
+      alive: !!p.alive,
+      eliminated: !!p.eliminated,
+      inTiebreak: !!p.inTiebreak
+    }))
+    state.roundHistory.push({
+      qIndex: state.qIndex,
+      tiebreak: !!state.tiebreak,
+      question: questionInfo(state._q || null),
+      players,
+      result: state.roundResult ? JSON.parse(JSON.stringify(state.roundResult)) : null,
+      winnerId: state.pendingWinner || state.duelWinnerId || null,
+      at: Date.now()
+    })
   }
 
   function resetRoundAnswers(state) {
@@ -217,6 +262,7 @@ function createModeHandler(gameDef) {
     }
     if (elim) pushEvent(state, 'eliminate', `${nameOf(state, elim)} 出局`, { eliminatedId: elim, qIndex: state.qIndex })
     state.roundResult = { eliminatedId: elim }
+    snapshotRound(state)
     state.phase = 'reveal'
     state.nextAt = Date.now() + REVEAL_MS
   }
@@ -247,6 +293,7 @@ function createModeHandler(gameDef) {
       if (p) { p.alive = false; p.eliminated = true }
       pushEvent(state, 'eliminate', `${nameOf(state, state.firstId)} 首个作答错误，自己出局`, { eliminatedId: state.firstId })
       state.roundResult = { eliminatedId: state.firstId, selfEliminated: true }
+      snapshotRound(state)
       state.phase = 'reveal'
       state.nextAt = Date.now() + REVEAL_MS
     }
@@ -262,38 +309,55 @@ function createModeHandler(gameDef) {
     return false
   }
 
-  function pickDuelPair(state, ids) {
-    let pair = ids && ids.length === 2 ? ids : null
-    if (!pair) {
-      const pool = aliveList(state).map(p => p.playerId)
-      pair = shuffle(pool).slice(0, 2)
-    }
+  // 模式3：公示本轮 PK 的两人（8 秒），公示结束后再开始答题
+  function announceDuelPair(state, pair) {
     state.current = pair
+    state.pickerId = null
+    resetRoundAnswers(state)
+    state._q = null
+    state.question = null
+    state.phase = 'announcing'
+    state.nextAt = Date.now() + DUEL_ANNOUNCE_MS
+    state.deadline = 0
+    state.pickDeadline = 0
     if (pair && pair.length === 2) {
-      pushEvent(state, 'pair', `${nameOf(state, pair[0])} vs ${nameOf(state, pair[1])}`, { pair })
+      pushEvent(state, 'pair', `本轮 PK：${nameOf(state, pair[0])} vs ${nameOf(state, pair[1])}`, { pair })
     }
+  }
+
+  // 公示结束，正式开始本轮答题
+  function beginDuelQuestion(state) {
     state.qIndex++
     if (state.qIndex >= allQuestions.length) state.qIndex = 0
-    state.pickerId = null
-    state.firstId = null
-    resetRoundAnswers(state)
-    state._q = allQuestions[state.qIndex]
-    state.question = publicQuestion(allQuestions[state.qIndex])
-    state.phase = 'answering'
-    state.deadline = Date.now() + answerLimitMs
-    state.nextAt = 0
+    beginQuestion(state, allQuestions[state.qIndex])
   }
 
   function advanceDuel(state) {
     const alive = aliveList(state)
     if (alive.length <= 1) return finishWith(state, alive[0] ? alive[0].playerId : null)
+    // 只剩 2 人：直接进行最终对决，但仍需公示 8 秒
     if (alive.length === 2) {
-      pickDuelPair(state, alive.map(p => p.playerId))
+      announceDuelPair(state, alive.map(p => p.playerId))
       return false
     }
-    state.current = null
-    state.phase = 'pairing'
-    state.nextAt = Date.now() + REVEAL_MS
+    // 后续轮次由上一局胜者选择 2 名 PK 选手
+    const lastWinner = state.duelWinnerId && state.ps[state.duelWinnerId] && state.ps[state.duelWinnerId].alive
+      ? state.duelWinnerId
+      : null
+    if (lastWinner) {
+      state.current = null
+      state.question = null
+      state._q = null
+      state.firstId = null
+      state.phase = 'duel-picking'
+      state.pickerId = lastWinner
+      state.pickDeadline = Date.now() + DUEL_PICK_MS
+      state.nextAt = 0
+      pushEvent(state, 'phase', `${nameOf(state, lastWinner)} 选择本轮 PK 的 2 名选手`, { pickerId: lastWinner })
+      return false
+    }
+    // 兜底：随机选择
+    announceDuelPair(state, shuffle(alive.map(p => p.playerId)).slice(0, 2))
     return false
   }
 
@@ -309,6 +373,7 @@ function createModeHandler(gameDef) {
     target.eliminated = true
     pushEvent(state, 'eliminate', `${nameOf(state, targetId)} 被 ${nameOf(state, state.pickerId)} 选择出局`, { eliminatedId: targetId, pickedBy: state.pickerId })
     state.roundResult = { eliminatedId: targetId, pickedBy: state.pickerId }
+    snapshotRound(state)
     state.phase = 'reveal'
     state.nextAt = Date.now() + REVEAL_MS
     state.pickDeadline = 0
@@ -335,6 +400,7 @@ function createModeHandler(gameDef) {
     if (elim && state.ps[elim]) { state.ps[elim].alive = false; state.ps[elim].eliminated = true }
     if (elim) pushEvent(state, 'eliminate', `超时：${nameOf(state, elim)} 出局`, { eliminatedId: elim, timeout: true })
     state.roundResult = { eliminatedId: elim, timeout: true }
+    snapshotRound(state)
     state.phase = 'reveal'
     state.nextAt = Date.now() + REVEAL_MS
   }
@@ -342,19 +408,36 @@ function createModeHandler(gameDef) {
   // 模式2 超时：无人作答则本轮无人出局
   function timeoutFirstPick(state) {
     state.roundResult = { timeout: true, eliminatedId: null }
+    snapshotRound(state)
     state.phase = 'reveal'
     state.nextAt = Date.now() + REVEAL_MS
   }
 
-  // 模式3 超时：随机判负一方
+  // 模式3 作答超时：无人作答时双方淘汰；若已是全场最后 2 人则随机判负一人
   function timeoutDuel(state) {
     const pair = state.current || []
     if (pair.length !== 2) return advanceDuel(state)
+    const alive = aliveList(state)
+    if (alive.length > 2) {
+      for (const id of pair) {
+        if (state.ps[id]) { state.ps[id].alive = false; state.ps[id].eliminated = true }
+      }
+      pushEvent(state, 'duel', `超时：${nameOf(state, pair[0])}、${nameOf(state, pair[1])} 均未作答，两人淘汰`, { eliminatedIds: pair, timeout: true, bothEliminated: true })
+      state.roundResult = { eliminatedIds: pair, timeout: true, bothEliminated: true }
+      state.duelWinnerId = null
+      snapshotRound(state)
+      state.phase = 'reveal'
+      state.nextAt = Date.now() + REVEAL_MS
+      return false
+    }
+    // 最后 2 人：不能同时淘汰，随机判负一人以保证产生胜者
     const loser = Math.random() < 0.5 ? pair[0] : pair[1]
     const winner = pair.find(id => id !== loser)
     if (state.ps[loser]) { state.ps[loser].alive = false; state.ps[loser].eliminated = true }
     pushEvent(state, 'duel', `超时：${nameOf(state, loser)} 出局`, { winnerId: winner, eliminatedId: loser, timeout: true })
     state.roundResult = { winnerId: winner, eliminatedId: loser, timeout: true }
+    state.duelWinnerId = winner
+    snapshotRound(state)
     state.phase = 'reveal'
     state.nextAt = Date.now() + REVEAL_MS
     return false
@@ -400,6 +483,7 @@ function createModeHandler(gameDef) {
       correctOrder: correctOnes.map(p => ({ playerId: p.playerId, at: p.correctAt })),
       livesMap: Object.fromEntries(alive.map(p => [p.playerId, p.lives]))
     }
+    snapshotRound(state)
     state.phase = 'reveal'
     state.nextAt = Date.now() + modeRevealMs
     return false
@@ -432,9 +516,10 @@ function createModeHandler(gameDef) {
     }
     const detail = state.correctOrder.map(r => {
       const p = state.ps[r.playerId]
-      return `${nameOf(state, r.playerId)} 第${r.rank}位 +${r.points}`
-    }).join('；')
+      return `${nameOf(state, r.playerId)} 第${r.rank}名 +${r.points}`
+    }).join('、')
     pushEvent(state, 'round', `第${state.qIndex + 1}题结算：${detail || '无人答对'}`, state.roundResult)
+    snapshotRound(state)
     state.phase = 'reveal'
     state.nextAt = Date.now() + modeRevealMs
     return false
@@ -510,6 +595,7 @@ function createModeHandler(gameDef) {
       }
       pushEvent(state, 'tiebreak', `数字加时题目标 ${state.target}，${nameOf(state, best)} 最接近且不超过，获胜`, { winnerId: best, target: state.target })
       state.roundResult = { tiebreak: true, winnerId: best, target: state.target, lockedAt: now }
+      snapshotRound(state)
       return finishWith(state, best)
     }
 
@@ -541,6 +627,7 @@ function createModeHandler(gameDef) {
       anyCorrect,
       results: alive.map(p => ({ playerId: p.playerId, correct: !!p.correct, answer: p.answer }))
     }
+    snapshotRound(state)
     state.phase = 'reveal'
     state.nextAt = now + REVEAL_MS
     return false
@@ -580,7 +667,9 @@ function createModeHandler(gameDef) {
     }
 
     if (mode === 'duel') {
-      if (state.phase === 'answering' && state.firstId) {
+      if (state.phase === 'announcing' && state.nextAt && now >= state.nextAt) {
+        beginDuelQuestion(state)
+      } else if (state.phase === 'answering' && state.firstId) {
         const p = state.ps[state.firstId]
         const correct = p ? p.correct : false
         const other = state.current ? state.current.find(id => id !== state.firstId) : null
@@ -588,14 +677,18 @@ function createModeHandler(gameDef) {
         if (loser && state.ps[loser]) { state.ps[loser].alive = false; state.ps[loser].eliminated = true }
         pushEvent(state, 'duel', `${nameOf(state, state.firstId)} ${correct ? '答对' : '答错'}，${nameOf(state, loser)} 出局`, { winnerId: correct ? state.firstId : other, eliminatedId: loser })
         state.roundResult = { winnerId: correct ? state.firstId : other, eliminatedId: loser }
+        state.duelWinnerId = correct ? state.firstId : other
+        snapshotRound(state)
         state.phase = 'reveal'
         state.nextAt = now + REVEAL_MS
       } else if (state.phase === 'answering' && state.deadline && now >= state.deadline) {
         timeoutDuel(state)
       } else if (state.phase === 'reveal' && state.nextAt && now >= state.nextAt) {
         return advanceDuel(state)
-      } else if (state.phase === 'pairing' && state.nextAt && now >= state.nextAt) {
-        pickDuelPair(state, null)
+      } else if (state.phase === 'duel-picking' && state.pickDeadline && now >= state.pickDeadline) {
+        // 胜者超时未选择：随机抽取 2 人
+        const pool = aliveList(state).map(p => p.playerId)
+        announceDuelPair(state, shuffle(pool).slice(0, 2))
       }
       return false
     }
@@ -643,9 +736,9 @@ function createModeHandler(gameDef) {
         state.qIndex = 0
         beginQuestion(state, allQuestions[0])
       } else if (mode === 'duel') {
-        state.phase = 'pairing'
-        state.nextAt = Date.now() + 1500
         state.qIndex = -1
+        const pair = shuffle(aliveList(state).map(p => p.playerId)).slice(0, 2)
+        announceDuelPair(state, pair)
       } else {
         state.qIndex = 0
         if (!basicQuestions.length) return { updated: true, finished: setupTiebreak(state) }
@@ -656,13 +749,25 @@ function createModeHandler(gameDef) {
 
     if (state.finished) return { updated: false }
 
+    // 模式3：上一局胜者选择本轮 PK 的 2 名选手（选手操作，非管理员）
+    if (mode === 'duel' && action.type === 'pick_pair') {
+      if (state.phase === 'duel-picking' && playerId === state.pickerId) {
+        const ids = Array.isArray(action.playerIds) ? action.playerIds : (action.ids || [])
+        const aliveIds = new Set(aliveList(state).map(x => x.playerId))
+        if (ids.length === 2 && ids[0] !== ids[1] && ids.every(id => aliveIds.has(id))) {
+          announceDuelPair(state, ids)
+        }
+      }
+      return { updated: true }
+    }
+
     // ---- 管理员推进 ----
     if (isAdmin) {
       if (action.type === 'next') {
         if (mode === 'elim-last') return { updated: true, finished: advanceElimLast(state) }
         if (mode === 'first-pick') return { updated: true, finished: advanceFirstPick(state) }
         if (mode === 'duel') {
-          if (state.phase === 'pairing') { pickDuelPair(state, null); return { updated: true } }
+          if (state.phase === 'announcing') { beginDuelQuestion(state); return { updated: true } }
           if (state.phase === 'reveal') return { updated: true, finished: advanceDuel(state) }
           return { updated: true }
         }
@@ -684,14 +789,6 @@ function createModeHandler(gameDef) {
         if (mode === 'lives-build') return { updated: true, finished: resolveLivesRound(state, false) }
         if (mode === 'race-score') return { updated: true, finished: resolveRaceRound(state, false) }
         return { updated: true, finished: lockRound(state) }
-      }
-      if (mode === 'duel' && action.type === 'pick_pair') {
-        if (state.phase === 'pairing' || state.phase === 'idle') {
-          const ids = action.playerIds || action.ids
-          pickDuelPair(state, ids)
-          return { updated: true }
-        }
-        return { updated: true }
       }
       return { updated: false }
     }
@@ -882,6 +979,8 @@ function createModeHandler(gameDef) {
       current: state.current || null,
       pickerId: state.pickerId || null,
       firstId: state.firstId || null,
+      nextAt: state.nextAt || 0,
+      duelWinnerId: state.duelWinnerId || null,
       roundResult: state.roundResult || null,
       showSubmissions: gameDef.showSubmissions !== false,
       players: buildPlayers(state, playerId),
@@ -921,7 +1020,8 @@ function createModeHandler(gameDef) {
           !(mode === 'lives-build' && p.answered && p.correct) &&
           !(mode === 'race-score' && p.correct) &&
           !(state.deadline && Date.now() >= state.deadline),
-        canPick: mode === 'first-pick' && state.phase === 'picking' && playerId === state.pickerId
+        canPick: mode === 'first-pick' && state.phase === 'picking' && playerId === state.pickerId,
+        canPickDuel: mode === 'duel' && state.phase === 'duel-picking' && playerId === state.pickerId
       }
     }
     return base
@@ -975,6 +1075,39 @@ function createModeHandler(gameDef) {
       return { text: `${pname} 指定对决：${ids.map(id => nameOf(state, id)).join(' vs ')}`, data: { ids } }
     }
     return null
+  }
+
+  // 复盘：题目、每一轮的完整答案/得分/淘汰过程
+  function getReplayMeta(state) {
+    const correctCount = {}
+    for (const r of (state.roundHistory || [])) {
+      for (const p of (r.players || [])) {
+        if (p.correct) correctCount[p.playerId] = (correctCount[p.playerId] || 0) + 1
+      }
+    }
+    return {
+      type: 'custom-mode',
+      mode,
+      gameName: gameDef.name,
+      description: gameDef.description,
+      winCondition: gameDef.winCondition,
+      eliminateRule: gameDef.eliminateRule || '',
+      raceTarget,
+      racePoints,
+      initialLives,
+      winnerId: state.winner || null,
+      questions: allQuestions.map(questionInfo),
+      rounds: state.roundHistory || [],
+      players: Object.values(state.ps).map(p => ({
+        playerId: p.playerId,
+        playerName: p.playerName,
+        alive: !!p.alive,
+        eliminated: !!p.eliminated,
+        score: p.score || 0,
+        lives: p.lives,
+        correctCount: correctCount[p.playerId] || 0
+      }))
+    }
   }
 
   // 管理员完整局面（含隐藏信息）
@@ -1042,6 +1175,7 @@ function createModeHandler(gameDef) {
     getAllStates,
     checkTarget,
     describeEvent,
+    getReplayMeta,
     takeReplayEvents
   }
 }

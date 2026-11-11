@@ -30,7 +30,13 @@
         <div class="obs-admin-title">🔎 完整局面（管理员视角 · 含隐藏信息）</div>
 
         <!-- 毒酒：图形化转盘盘面（含毒酒位置） -->
-        <PoisonDrinkSpectator v-if="adminView.board" :board="adminView.board" />
+        <PoisonDrinkSpectator v-if="adminView.type === 'poison-drink' && adminView.board" :board="adminView.board" />
+
+        <!-- 拼图：所有选手盘面 -->
+        <JigsawSpectator v-else-if="adminView.type === 'jigsaw' && adminView.board" :board="adminView.board" />
+
+        <!-- 记忆翻牌：所有选手牌面 -->
+        <MemoryMatchSpectator v-else-if="adminView.type === 'memory-match' && adminView.board" :board="adminView.board" />
 
         <!-- 出包魔法师 -->
         <template v-else-if="Array.isArray(adminView.players) && adminView.tower">
@@ -123,6 +129,8 @@ import { computed, onMounted, watch, nextTick, ref } from 'vue'
 import { useMinigameSocket } from '../../composables/useMinigameSocket'
 import BBAvatar from './BBAvatar.vue'
 import PoisonDrinkSpectator from './minigames/PoisonDrinkSpectator.vue'
+import JigsawSpectator from './minigames/JigsawSpectator.vue'
+import MemoryMatchSpectator from './minigames/MemoryMatchSpectator.vue'
 
 const props = defineProps<{
   roomId: string | null

@@ -23,6 +23,7 @@ registerGame({
 
   init(participants) {
     const playerStates = {}
+    const playerNames = {}
     participants.forEach(p => {
       playerStates[p.playerId] = {
         rounds: [],
@@ -30,8 +31,9 @@ registerGame({
         totalScore: 0,
         finishTime: null
       }
+      playerNames[p.playerId] = p.playerName || p.playerId
     })
-    return { playerStates, status: 'ready' }
+    return { playerStates, playerNames, status: 'ready' }
   },
 
   handleAction(state, playerId, action) {
@@ -114,6 +116,44 @@ registerGame({
       totalScore: ps.totalScore,
       targetScore: Number(state.targetScore) || 0,
       status: state.status
+    }
+  },
+
+  getReplayMeta(state) {
+    const names = state.playerNames || {}
+    const players = Object.entries(state.playerStates).map(([pid, ps]) => {
+      const roundTotals = (ps.rounds || []).map(r => r.total)
+      return {
+        playerId: pid,
+        playerName: names[pid] || pid,
+        score: ps.totalScore || 0,
+        status: ps.currentRound >= TOTAL_ROUNDS ? '已完成' : '进行中',
+        details: [
+          { label: '总分', value: ps.totalScore || 0 },
+          { label: '每轮点数', value: roundTotals.length ? roundTotals.join(' / ') : '—' }
+        ]
+      }
+    }).sort((a, b) => b.score - a.score)
+    const rows = Object.entries(state.playerStates).map(([pid, ps]) => {
+      const row = [names[pid] || pid]
+      for (let i = 0; i < TOTAL_ROUNDS; i++) {
+        const r = ps.rounds?.[i]
+        row.push(r ? `${r.results.join('+')} = ${r.total}` : '—')
+      }
+      row.push(ps.totalScore || 0)
+      return row
+    })
+    return {
+      type: 'dice-duel',
+      title: '骰子对决',
+      description: `共 ${TOTAL_ROUNDS} 轮，每轮可选择 1-4 颗骰子，累计点数最高者获胜。`,
+      summary: [{ label: '总轮数', value: TOTAL_ROUNDS }],
+      players,
+      tables: [{
+        title: '每轮掷骰明细',
+        columns: ['选手', ...Array.from({ length: TOTAL_ROUNDS }, (_, i) => `第${i + 1}轮`), '总分'],
+        rows
+      }]
     }
   },
 

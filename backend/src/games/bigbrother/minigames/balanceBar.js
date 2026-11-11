@@ -22,16 +22,19 @@ registerGame({
 
   init(participants) {
     const playerStates = {}
+    const playerNames = {}
     participants.forEach(p => {
       playerStates[p.playerId] = {
         position: 0.5,       // 0-1，0.5为正中
         velocity: 0,
         isHolding: false,    // 玩家是否按住
         timeInZone: 0,       // 在目标区域的累计毫秒数
-        startTime: null
+        startTime: null,
+        history: []          // 每秒采样：{ sec, timeInZone, position }
       }
+      playerNames[p.playerId] = p.playerName || p.playerId
     })
-    return { playerStates, status: 'ready', tickCount: 0 }
+    return { playerStates, playerNames, status: 'ready', tickCount: 0 }
   },
 
   // 服务端 tick 更新（由 socket 层定时调用）
@@ -64,6 +67,16 @@ registerGame({
       // 检查是否在目标区域
       if (Math.abs(ps.position - 0.5) <= TARGET_ZONE) {
         ps.timeInZone += TICK_INTERVAL
+      }
+    }
+
+    // 每秒记录一次复盘采样
+    if (state.tickCount % 20 === 0) {
+      const sec = Math.round(state.tickCount / 20)
+      for (const pid of Object.keys(state.playerStates)) {
+        const ps = state.playerStates[pid]
+        if (!Array.isArray(ps.history)) ps.history = []
+        ps.history.push({ sec, timeInZone: ps.timeInZone, position: ps.position })
       }
     }
   },
@@ -104,6 +117,42 @@ registerGame({
       timeLeft: Math.max(0, GAME_DURATION - elapsed),
       status: state.status,
       startTime: state.startTime
+    }
+  },
+
+  getReplayMeta(state) {
+    const names = state.playerNames || {}
+    const players = Object.entries(state.playerStates).map(([pid, ps]) => {
+      const bySec = {}
+      for (const h of (ps.history || [])) bySec[h.sec] = h.timeInZone
+      const row = []
+      let last = 0
+      for (let s = 1; s <= 15; s++) {
+        if (bySec[s] !== undefined) last = bySec[s]
+        row.push((last / 1000).toFixed(1))
+      }
+      return {
+        playerId: pid,
+        playerName: names[pid] || pid,
+        score: Math.round(ps.timeInZone),
+        status: '已完成',
+        details: [
+          { label: '停留时间', value: `${(ps.timeInZone / 1000).toFixed(1)}s` },
+          { label: '最终位置', value: `${(ps.position * 100).toFixed(0)}%` }
+        ],
+        _row: row
+      }
+    }).sort((a, b) => b.score - a.score)
+    const columns = ['选手', ...Array.from({ length: 15 }, (_, i) => `${i + 1}s`)]
+    const rows = players.map(p => [p.playerName, ...p._row])
+    for (const p of players) delete p._row
+    return {
+      type: 'balance-bar',
+      title: '保持平衡',
+      description: `按住空格键把指针保持在中心 ±${Math.round(TARGET_ZONE * 100)}% 的绿色区域，累计停留时间最长者获胜。`,
+      summary: [{ label: '比赛时长', value: '15 秒' }, { label: '目标区域', value: `中心 ±${Math.round(TARGET_ZONE * 100)}%` }],
+      players,
+      tables: [{ title: '每秒累计停留（秒）', columns, rows }]
     }
   },
 

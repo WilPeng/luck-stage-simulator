@@ -64,6 +64,7 @@ registerGame({
       lastEliminated: [],
       winner: null,
       finished: false,
+      roundHistory: [],
       _replayEvents: []
     }
   },
@@ -152,6 +153,22 @@ registerGame({
     let eliminated = []
 
     const nameOf = pid => (state.playerStates[pid] && state.playerStates[pid].name) || pid
+
+    const record = {
+      round: state.round,
+      seqLen: state.seqLen,
+      questionIndex: state.questionIndex,
+      correctEmoji: state.correctEmoji,
+      options: [...(state.options || [])],
+      sequence: [...(state.sequence || [])],
+      answers: Object.fromEntries(alive.map(([pid]) => {
+        const a = state.roundAnswers[pid]
+        return [pid, { choice: a ? a.choice : null, time: a ? a.time : null }]
+      })),
+      eliminated: [],
+      winnerId: null
+    }
+    state.roundHistory.push(record)
     const ansText = alive.map(([pid]) => {
       const a = state.roundAnswers[pid]
       return `${nameOf(pid)}:${a ? a.choice : '未作答'}`
@@ -176,6 +193,7 @@ registerGame({
       }
       state.finished = true
       state.winner = last
+      record.winnerId = last
       pushReplay(state, 'finish', `全部答错，最后作答的 ${nameOf(last)} 获胜`, { winnerId: last })
       return
     } else {
@@ -183,6 +201,7 @@ registerGame({
       if (eliminated.length) pushReplay(state, 'eliminate', `${eliminated.map(nameOf).join('、')} 出局`, { eliminated })
     }
 
+    record.eliminated = [...eliminated]
     for (const pid of eliminated) {
       state.playerStates[pid].alive = false
       state.playerStates[pid].eliminatedRound = state.round
@@ -193,6 +212,7 @@ registerGame({
     if (survivors.length === 1) {
       state.finished = true
       state.winner = survivors[0][0]
+      record.winnerId = state.winner
       pushReplay(state, 'finish', `${nameOf(state.winner)} 获胜`, { winnerId: state.winner })
       return
     }
@@ -239,6 +259,52 @@ registerGame({
       winner: state.winner,
       finished: state.finished,
       status: state.status
+    }
+  },
+
+  getReplayMeta(state) {
+    const players = Object.entries(state.playerStates).map(([pid, ps]) => ({
+      playerId: pid,
+      playerName: ps.name || pid,
+      score: ps.alive ? (state.round + 1) : (ps.eliminatedRound != null ? ps.eliminatedRound + 1 : 0),
+      status: ps.alive ? '存活' : '出局',
+      details: [
+        { label: '状态', value: ps.alive ? '存活' : '出局' },
+        { label: '坚持轮次', value: ps.alive ? `${state.round + 1}+` : `${(ps.eliminatedRound ?? -1) + 1}` }
+      ]
+    }))
+    const roundRows = (state.roundHistory || []).map(r => [
+      `第${r.round + 1}轮`,
+      r.seqLen,
+      `第${r.questionIndex}个 emoji`,
+      r.correctEmoji,
+      (r.options || []).join('、'),
+      (r.eliminated || []).map(id => (state.playerStates[id] && state.playerStates[id].name) || id).join('、') || '—',
+      r.winnerId ? `${(state.playerStates[r.winnerId] && state.playerStates[r.winnerId].name) || r.winnerId} 获胜` : '—'
+    ])
+    const answerRows = []
+    for (const r of (state.roundHistory || [])) {
+      for (const [pid, a] of Object.entries(r.answers || {})) {
+        answerRows.push([
+          `第${r.round + 1}轮`,
+          (state.playerStates[pid] && state.playerStates[pid].name) || pid,
+          a.choice || '未作答',
+          a.time == null ? '—' : `${(a.time / 1000).toFixed(2)}s`,
+          a.choice === r.correctEmoji ? '✅ 正确' : (a.choice ? '❌ 错误' : '未作答')
+        ])
+      }
+    }
+    return {
+      type: 'sequence-memory',
+      title: '顺序记忆',
+      description: '记住 emoji 闪动顺序并回答第 N 个；答错或超时出局，存活到最后者获胜。',
+      summary: [{ label: '总轮次', value: state.round + 1 }, { label: '获胜者', value: state.winner ? ((state.playerStates[state.winner] && state.playerStates[state.winner].name) || state.winner) : '无' }],
+      players,
+      rounds: state.roundHistory || [],
+      tables: [
+        { title: '每轮题目与出局', columns: ['轮次', '序列长度', '问题', '正确答案', '选项', '出局', '结果'], rows: roundRows },
+        { title: '每人每轮作答', columns: ['轮次', '选手', '选择', '用时', '结果'], rows: answerRows }
+      ]
     }
   },
 

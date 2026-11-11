@@ -61,23 +61,41 @@
             <button class="bb-btn bb-btn-danger" @click="removeReplay(detail.id)">删除</button>
           </div>
 
+          <!-- 比赛说明 -->
+          <div class="dg-block">
+            <div class="dg-title">比赛说明</div>
+            <div class="game-rule">{{ gameRuleText }}</div>
+          </div>
+
           <!-- 最终战况板 -->
           <div class="dg-block">
             <div class="dg-title">最终战况</div>
             <div class="board-grid">
-              <div v-for="p in boardPlayers" :key="p.playerId" class="board-card"
+              <div v-for="(p, i) in boardPlayers" :key="p.playerId" class="board-card"
                 :class="{ winner: detail.winner && detail.winner.playerId === p.playerId }">
                 <div class="board-top">
+                  <span class="board-rank">{{ i + 1 }}</span>
                   <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
                   <span class="board-name">{{ p.playerName }}</span>
+                  <span class="board-score">{{ finalScore(p.playerId) }}</span>
                   <span v-if="detail.winner && detail.winner.playerId === p.playerId" class="board-crown">🏆</span>
                   <span v-else-if="isEliminated(p.playerId)" class="board-out">出局</span>
                 </div>
                 <div class="board-stats">
                   <span v-if="fs(p.playerId) && fs(p.playerId).label" class="board-stat">{{ fs(p.playerId).label }}</span>
+                  <span v-if="fs(p.playerId)?.done" class="board-stat done">已完成</span>
+                </div>
+                <div v-if="finalMax(p.playerId)" class="board-bar">
+                  <div class="board-fill" :style="{ width: finalPct(p.playerId) + '%' }"></div>
                 </div>
               </div>
             </div>
+          </div>
+
+          <!-- 拼图最终盘面 -->
+          <div v-if="isJigsawMeta" class="dg-block">
+            <div class="dg-title">拼图最终盘面</div>
+            <JigsawSpectator :board="meta.board" />
           </div>
 
           <!-- 明牌回放：逐步查看每位选手面临决策时的完整局面 -->
@@ -93,8 +111,14 @@
               <span v-if="curSnap?.data?.round"> · 第{{ curSnap.data.round }}轮</span>
             </div>
 
+            <!-- 毒酒：明牌转盘盘面 -->
+            <PoisonDrinkSpectator v-if="isPoisonSnap" :board="curSnap?.data?.board" />
+
+            <!-- 拼图：明牌盘面 -->
+            <JigsawSpectator v-else-if="isJigsawSnap" :board="curSnap?.data?.board" />
+
             <!-- 出包魔法师：明牌（按快照结构自动识别，无需依赖 meta） -->
-            <div v-if="isAbracaSnap" class="ab-board">
+            <div v-else-if="isAbracaSnap" class="ab-board">
               <div v-for="p in (curSnap?.data?.players || [])" :key="p.playerId" class="ab-p"
                 :class="{ turn: p.isTurn, dead: !p.alive }">
                 <div class="ab-p-head">
@@ -158,8 +182,33 @@
           <div v-if="meta" class="dg-block">
             <div class="dg-title">专属复盘 · 真实答案与过程</div>
 
+            <!-- 毒酒：最终转盘盘面 -->
+            <template v-if="meta.type === 'poison-drink' && meta.board">
+              <PoisonDrinkSpectator :board="meta.board" />
+            </template>
+
+            <!-- 记忆翻牌：完整牌面 + 每次翻牌过程 -->
+            <template v-else-if="meta.type === 'memory-match'">
+              <MemoryMatchReplay :meta="meta" />
+            </template>
+
+            <!-- 自定义对战模式：题目、每轮答案、得分与淘汰 -->
+            <template v-else-if="meta.type === 'custom-mode'">
+              <CustomModeReplay :meta="meta" />
+            </template>
+
+            <!-- 积分/技能类游戏：最终排名 + 过程明细表 -->
+            <template v-else-if="isSimpleMeta">
+              <SimpleGameReplay :meta="meta" />
+            </template>
+
+            <!-- 17 Poker：逐轮底池、手牌、牌型与筹码变化 -->
+            <template v-else-if="meta.type === 'poker17'">
+              <Poker17Replay :meta="meta" :participants="detail.participants" />
+            </template>
+
             <!-- 快速算术 -->
-            <template v-if="meta.type === 'quick-math'">
+            <template v-else-if="meta.type === 'quick-math'">
               <div class="golden-answers">
                 <span v-for="(q, i) in meta.questions" :key="i" class="ga-item">
                   {{ q.expression }} = <strong>{{ q.answer }}</strong>
@@ -477,6 +526,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { bbGetMinigameReplays, bbGetMinigameReplay, bbDeleteMinigameReplay, bbBatchDeleteMinigameReplays } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
+import JigsawSpectator from '../../../components/bigbrother/minigames/JigsawSpectator.vue'
+import MemoryMatchReplay from '../../../components/bigbrother/minigames/MemoryMatchReplay.vue'
+import PoisonDrinkSpectator from '../../../components/bigbrother/minigames/PoisonDrinkSpectator.vue'
+import CustomModeReplay from '../../../components/bigbrother/minigames/CustomModeReplay.vue'
+import SimpleGameReplay from '../../../components/bigbrother/minigames/SimpleGameReplay.vue'
+import Poker17Replay from '../../../components/bigbrother/minigames/Poker17Replay.vue'
 
 const list = ref<any[]>([])
 const detail = ref<any>(null)
@@ -492,6 +547,39 @@ const eventFilters = [
   { value: 'eliminate', label: '出局' },
   { value: 'finish', label: '结果' }
 ]
+
+const GAME_RULES: Record<string, string> = {
+  'click-speed': '限定时间内尽可能多地点击目标，点击次数/得分最高者获胜。',
+  'memory-match': '4×4 共 8 对卡片，翻开两张相同图案即可配对；完成全部配对用时最短者获胜。',
+  'quick-math': '连续完成算术题，答对得分；按正确题数/用时排名。',
+  'balance-bar': '控制平衡杆停留在目标区域，累计停留时间最长者获胜。',
+  'dice-duel': '按轮次掷骰子比大小，累计得分最高者获胜。',
+  'power-challenge': '抢答题目并占领题目，答对最多/占领最多者获胜。',
+  'klotski': '移动滑块将目标块移到出口，步数最少/用时最短者获胜。',
+  'swing-pointer': '在指针摆到目标区域时点击，命中次数/得分最高者获胜。',
+  'minority': '每轮在选项中选择少数派，少数派存活，最后存活者获胜。',
+  'spot-difference': '在限定时间内找出图片中的所有不同处，找得最多/最快者获胜。',
+  'reaction': '看到信号后尽快点击，反应时间最短者获胜。',
+  'sequence-memory': '记住并复现逐渐变长的序列，坚持轮次最多者获胜。',
+  'jigsaw': '5×5 拼图，交换拼图块还原完整图片；第一个拼对并提交者获胜。',
+  'missing-number': '观察数字序列，找出缺失的数字；答对且用时最短者获胜。',
+  'abraca': '出包魔法师：使用法术卡牌进行对战，最后存活者获胜。',
+  'describe-guess': '根据逐渐放出的描述猜答案，答对得分，总分最高者获胜。',
+  'stay-or-fold': '估算目标 emoji 的数量，选择 Stay 或 Fold，积分最高者获胜。',
+  'catch-mistress': '选择藏身地点并抓捕/躲避，最后存活或获胜者获胜。',
+  'german-heart': '德国心脏：抢在正确时机按铃，先达到目标分数者获胜。',
+  'number-divination': '数字占卜：选择数字并预测结果，累计得分最高者获胜。',
+  'poker17': '17 张扑克对战，按牌型与筹码结算，最终筹码最多者获胜。',
+  'poison-drink': '毒酒：庄家分配酒杯，玩家轮流转动转盘；喝到毒酒扣血，最后存活者获胜。',
+  'custom': '自定义游戏，按管理员配置的题目、计分与胜负规则结算。'
+}
+
+const gameRuleText = computed(() => {
+  const id = detail.value?.minigameId || ''
+  if (GAME_RULES[id]) return GAME_RULES[id]
+  if (id.startsWith('custom-')) return GAME_RULES['custom']
+  return '按游戏内规则进行，最终结果与过程详见下方复盘。'
+})
 
 const allSelected = computed(() => list.value.length > 0 && list.value.every(r => selectedIds.value.includes(r.id)))
 
@@ -528,11 +616,36 @@ function isEliminated(pid: string) {
   const s = fs(pid)
   return !!(s && s.done && detail.value?.winner && detail.value.winner.playerId !== pid)
 }
+function finalScore(pid: string) {
+  const s = fs(pid)
+  const v = s?.score ?? detail.value?.scores?.[pid]
+  return v == null ? '' : v
+}
+function finalMax(pid: string) {
+  return Number(fs(pid)?.max) || 0
+}
+function finalPct(pid: string) {
+  const max = finalMax(pid)
+  if (!max) return 0
+  const v = Number(fs(pid)?.progress) || 0
+  return Math.max(0, Math.min(100, Math.round((v / max) * 100)))
+}
 
 const meta = computed<any>(() => detail.value?.meta || null)
+const isJigsawMeta = computed(() => meta.value?.type === 'jigsaw' && !!meta.value?.board)
+const SIMPLE_META_TYPES = ['click-speed', 'balance-bar', 'dice-duel', 'reaction', 'swing-pointer', 'klotski', 'spot-difference', 'sequence-memory']
+const isSimpleMeta = computed(() => SIMPLE_META_TYPES.includes(meta.value?.type))
 const snapshots = computed<any[]>(() => detail.value?.snapshots || [])
 const snapIndex = ref(0)
 const curSnap = computed<any>(() => snapshots.value[snapIndex.value] || null)
+const isJigsawSnap = computed(() => {
+  const d = curSnap.value?.data
+  return !!(d && d.type === 'jigsaw' && d.board)
+})
+const isPoisonSnap = computed(() => {
+  const d = curSnap.value?.data
+  return !!(d && d.type === 'poison-drink' && d.board)
+})
 const SPELL_ICON: Record<string, string> = { 1: '🐉', 2: '👻', 3: '💤', 4: '🦉', 5: '⚡', 6: '❄️', 7: '🔥', 8: '🧪' }
 const isAbracaSnap = computed(() => { const d = curSnap.value?.data; return !!(d && Array.isArray(d.players) && d.tower) })
 const isSofSnap = computed(() => { const d = curSnap.value?.data; return !!(d && d.estimates !== undefined && (d.scores !== undefined || d.trueCount !== undefined)) })
@@ -746,14 +859,20 @@ onMounted(loadList)
 .dh-sub { font-size: 13px; color: #b3a6d6; margin-top: 4px; }
 .dg-block { margin-bottom: 18px; }
 .dg-title { font-size: 14px; color: #b39bff; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.game-rule { font-size: 13px; color: #b9c6e6; line-height: 1.7; padding: 10px 12px; background: #b39bff0e; border-left: 3px solid #b39bff; border-radius: 6px; }
 .board-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 .board-card { background: #ffffff06; border: 1px solid #ffffff12; border-radius: 10px; padding: 10px 12px; }
 .board-card.winner { border-color: #e6c988; background: #e6c98812; }
 .board-top { display: flex; align-items: center; gap: 8px; }
-.board-name { font-size: 14px; color: #ece7fb; font-weight: 600; }
-.board-crown { margin-left: auto; }
-.board-out { margin-left: auto; font-size: 11px; color: #ff6b6b; }
-.board-stats { margin-top: 6px; font-size: 12px; color: #b9c6e6; }
+.board-rank { width: 18px; font-size: 12px; color: #7d6fa6; font-variant-numeric: tabular-nums; }
+.board-name { flex: 1; font-size: 14px; color: #ece7fb; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board-score { font-size: 15px; font-weight: 800; color: #e6c988; font-variant-numeric: tabular-nums; }
+.board-crown { font-size: 14px; }
+.board-out { font-size: 11px; color: #ff6b6b; }
+.board-stats { margin-top: 6px; font-size: 12px; color: #b9c6e6; display: flex; gap: 8px; flex-wrap: wrap; }
+.board-stat.done { color: #e6c988; }
+.board-bar { height: 4px; margin-top: 7px; background: #ffffff12; border-radius: 2px; overflow: hidden; }
+.board-fill { height: 100%; background: linear-gradient(90deg, #b39bff, #e6c988); border-radius: 2px; transition: width 0.25s ease; }
 .player-logs { display: flex; flex-direction: column; gap: 12px; }
 .plog { background: #ffffff05; border: 1px solid #ffffff10; border-radius: 10px; padding: 10px 12px; }
 .plog-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }

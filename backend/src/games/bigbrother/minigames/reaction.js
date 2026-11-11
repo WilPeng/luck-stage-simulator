@@ -26,14 +26,16 @@ registerGame({
   init(participants) {
     const greenTimes = randomGreenTimes()
     const playerStates = {}
+    const playerNames = {}
     participants.forEach(p => {
       playerStates[p.playerId] = {
         results: new Array(PANELS).fill(null), // null | ms
         finishTime: null,
         done: false
       }
+      playerNames[p.playerId] = p.playerName || p.playerId
     })
-    return { playerStates, status: 'ready', startTime: null, greenTimes }
+    return { playerStates, playerNames, status: 'ready', startTime: null, greenTimes }
   },
 
   handleAction(state, playerId, action) {
@@ -110,6 +112,39 @@ registerGame({
       earlyPenalty: EARLY_PENALTY,
       timeLeft: Math.max(0, Math.ceil((TIME_LIMIT - elapsed) / 1000)),
       status: state.status
+    }
+  },
+
+  getReplayMeta(state) {
+    const names = state.playerNames || {}
+    const entries = Object.entries(state.playerStates).map(([pid, ps]) => {
+      const total = ps.results.reduce((a, r) => a + (r == null ? EARLY_PENALTY : r), 0)
+      const done = ps.results.filter(r => r != null).length
+      return {
+        playerId: pid,
+        playerName: names[pid] || pid,
+        score: total,
+        status: ps.done ? '已完成' : '进行中',
+        details: [
+          { label: '总反应时间', value: `${total}ms` },
+          { label: '完成面板', value: `${done}/${PANELS}` }
+        ],
+        _row: ps.results.map(r => r == null ? '—' : `${r}ms`)
+      }
+    }).sort((a, b) => a.score - b.score)
+    const rows = entries.map(e => [e.playerName, ...e._row, `${e.score}ms`])
+    for (const e of entries) delete e._row
+    return {
+      type: 'reaction',
+      title: '反应力',
+      description: `共 ${PANELS} 个面板，看到绿色亮起后尽快点击；提前点击会按 ${EARLY_PENALTY}ms 惩罚，总反应时间最短者获胜。`,
+      summary: [{ label: '面板数', value: PANELS }, { label: '提前点击惩罚', value: `${EARLY_PENALTY}ms` }],
+      players: entries,
+      tables: [{
+        title: '各面板反应时间',
+        columns: ['选手', ...Array.from({ length: PANELS }, (_, i) => `面板${i + 1}`), '总计'],
+        rows
+      }]
     }
   },
 

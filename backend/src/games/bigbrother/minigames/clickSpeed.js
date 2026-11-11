@@ -16,11 +16,15 @@ registerGame({
   init(participants) {
     const scores = {}
     const clickTimes = {} // 防作弊：记录每次点击时间戳
+    const scoreHistory = {} // 每秒得分，用于复盘
+    const playerNames = {}
     participants.forEach(p => {
       scores[p.playerId] = 0
       clickTimes[p.playerId] = []
+      scoreHistory[p.playerId] = []
+      playerNames[p.playerId] = p.playerName || p.playerId
     })
-    return { scores, clickTimes, status: 'ready', startTime: null }
+    return { scores, clickTimes, scoreHistory, playerNames, status: 'ready', startTime: null }
   },
 
   handleAction(state, playerId, action) {
@@ -44,6 +48,16 @@ registerGame({
     }
 
     state.scores[playerId]++
+    // 记录每秒得分（同一秒只保留最新分数）
+    const sec = Math.max(0, Math.min(10, Math.floor(elapsed)))
+    const hist = state.scoreHistory?.[playerId]
+    if (hist) {
+      if (!hist.length || hist[hist.length - 1].sec !== sec) {
+        hist.push({ sec, score: state.scores[playerId] })
+      } else {
+        hist[hist.length - 1].score = state.scores[playerId]
+      }
+    }
     return { updated: true, finished: false }
   },
 
@@ -61,6 +75,43 @@ registerGame({
 
   getState(state) {
     return { scores: state.scores, status: state.status, startTime: state.startTime }
+  },
+
+  getReplayMeta(state) {
+    const names = state.playerNames || {}
+    const players = Object.entries(state.scores).map(([pid, score]) => {
+      const hist = state.scoreHistory?.[pid] || []
+      const bySec = {}
+      for (const h of hist) bySec[h.sec] = h.score
+      const row = []
+      let last = 0
+      for (let s = 0; s <= 10; s++) {
+        if (bySec[s] !== undefined) last = bySec[s]
+        row.push(last)
+      }
+      return {
+        playerId: pid,
+        playerName: names[pid] || pid,
+        score,
+        status: '已完成',
+        details: [
+          { label: '点击次数', value: score },
+          { label: '平均每秒', value: (score / 10).toFixed(1) }
+        ],
+        _row: row
+      }
+    }).sort((a, b) => b.score - a.score)
+    const columns = ['选手', ...Array.from({ length: 11 }, (_, i) => `${i}s`)]
+    const rows = players.map(p => [p.playerName, ...p._row])
+    for (const p of players) delete p._row
+    return {
+      type: 'click-speed',
+      title: '快速点击',
+      description: '10 秒内尽可能多地点击目标区域，点击次数最多者获胜。',
+      summary: [{ label: '比赛时长', value: '10 秒' }],
+      players,
+      tables: [{ title: '每秒累计点击', columns, rows }]
+    }
   },
 
   // 所有玩家的实时进度（管理员观察 + 目标判定）

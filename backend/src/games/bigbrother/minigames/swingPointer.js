@@ -27,10 +27,12 @@ registerGame({
 
   init(participants) {
     const playerStates = {}
+    const playerNames = {}
     participants.forEach(p => {
       playerStates[p.playerId] = { checks: [], score: 0, finishTime: null, done: false }
+      playerNames[p.playerId] = p.playerName || p.playerId
     })
-    return { playerStates, status: 'ready', startTime: null }
+    return { playerStates, playerNames, status: 'ready', startTime: null }
   },
 
   handleAction(state, playerId, action) {
@@ -98,6 +100,35 @@ registerGame({
       timeLeft: Math.max(0, Math.ceil((TIME_LIMIT - elapsed) / 1000)),
       totalTime: TIME_LIMIT,
       status: state.status
+    }
+  },
+
+  getReplayMeta(state) {
+    const names = state.playerNames || {}
+    const entries = Object.entries(state.playerStates).map(([pid, ps]) => ({
+      playerId: pid,
+      playerName: names[pid] || pid,
+      score: ps.score || 0,
+      status: ps.done ? '已完成' : '进行中',
+      details: [
+        { label: '总分', value: ps.score || 0 },
+        { label: '完成次数', value: `${ps.checks.length}/${TOTAL_CHECKS}` }
+      ],
+      _row: (ps.checks || []).map(v => `${v}分`)
+    })).sort((a, b) => b.score - a.score)
+    const rows = entries.map(e => [e.playerName, ...e._row])
+    for (const e of entries) delete e._row
+    return {
+      type: 'swing-pointer',
+      title: '指针摆动',
+      description: `指针在 0~1 之间摆动，在中心附近点击得分最高；共 ${TOTAL_CHECKS} 次机会，总分最高者获胜。`,
+      summary: [{ label: '点击次数', value: TOTAL_CHECKS }],
+      players: entries,
+      tables: [{
+        title: '每次点击得分',
+        columns: ['选手', ...Array.from({ length: TOTAL_CHECKS }, (_, i) => `第${i + 1}次`)],
+        rows
+      }]
     }
   },
 
