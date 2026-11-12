@@ -656,6 +656,8 @@ registerGame({
       phase: state.phase,
       dealerId: state.dealerId || null,
       dealerName: state.players[state.dealerId]?.playerName || '',
+      // 本轮毒酒数量对所有玩家公开（具体位置仅庄家可见）
+      poisonCount: (state.cups || []).filter(c => c.poison).length,
       secondsLeft: Math.max(0, Math.ceil((state.phaseEndsAt - now) / 1000)),
       aliveCount: Object.values(state.players).filter(p => p.alive).length,
       players,
@@ -798,6 +800,7 @@ registerGame({
       phase: state.phase,
       dealerId: state.dealerId || null,
       dealerName: state.players[state.dealerId]?.playerName || '',
+      poisonCount: (state.cups || []).filter(c => c.poison).length,
       secondsLeft: Math.max(0, Math.ceil((state.phaseEndsAt - now) / 1000)),
       aliveCount: Object.values(state.players).filter(p => p.alive).length,
       players,

@@ -26,7 +26,7 @@
       <div class="game-icon">🍷</div>
       <h2>毒酒</h2>
       <p>每位玩家初始 <strong>3 点生命</strong>。比赛开始前先按<strong>随机顺序自由选座</strong>，选定后座位固定；随后随机产生庄家。</p>
-      <p>每轮根据存活人数生成同样数量的酒杯，其中随机 <strong>1 ~ N-1 杯有毒</strong>，只有庄家知道毒酒位置。</p>
+      <p>每轮根据存活人数生成同样数量的酒杯，其中随机 <strong>1 ~ N-1 杯有毒</strong>；毒酒具体位置仅庄家知道，但所有玩家都能看到本轮毒酒数量。</p>
       <p>庄家把酒杯分配给所有存活玩家；非庄家玩家从庄家下一位开始，按顺时针依次选择「不动 / 顺时针 1 格 / 顺时针 2 格」，选择结果即时公开并转动转盘。</p>
       <p>喝到毒酒生命 -1，生命归零淘汰；最后存活者获胜。</p>
       <div v-if="countdown > 0" class="countdown-big"><CountdownDisplay :value="countdown" /></div>
@@ -38,6 +38,7 @@
         <span v-if="phase !== 'seat'">第 {{ state.round }} 轮</span>
         <span v-else>比赛准备</span>
         <span v-if="phase !== 'seat'" class="dealer-tag">庄家：{{ dealerName }}</span>
+        <span v-if="phase !== 'seat'" class="poison-tag" title="本轮毒酒数量（位置未知）">☠️ 毒酒 {{ state.poisonCount || 0 }} 杯</span>
         <span class="phase-tag" :class="phase">{{ phaseLabel }}</span>
         <span class="timer" :class="{ urgent: secondsLeft <= 5 }">⏱ {{ secondsLeft }}s</span>
       </div>
@@ -197,6 +198,7 @@
         </template>
         <template v-else>
           <div class="waiting-msg">庄家正在分配酒杯，请稍候…（庄家超时将随机分配）</div>
+          <div class="poison-count-hint">本轮毒酒数量：<strong>{{ state.poisonCount || 0 }}</strong> 杯（具体位置仅庄家可见）</div>
           <div class="cup-pool">
             <div v-for="c in state.cups || []" :key="c.id" class="cup-chip">
               <span class="cup-emoji">{{ c.emoji }}</span>
@@ -492,6 +494,7 @@ p strong { color: #b39bff; }
 .waiting-text { color: #6b5f92; margin-top: 12px; }
 .game-header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: #a99bd0; font-size: 14px; margin-bottom: 14px; }
 .dealer-tag { color: #e6c988; }
+.poison-tag { color: #ff8f8f; }
 .phase-tag { padding: 2px 10px; border-radius: 999px; font-size: 12px; background: #b39bff1a; color: #b39bff; }
 .phase-tag.seat { background: #e6c9881a; color: #e6c988; }
 .phase-tag.rotate { background: #00c8ff1a; color: #7fd8ff; }
@@ -627,6 +630,7 @@ p strong { color: #b39bff; }
 .rotate-btn:hover { border-color: #b39bff; color: #b39bff; }
 .rotate-btn small { font-size: 12px; font-weight: 400; color: #a99bd0; }
 .submit-count, .waiting-msg { text-align: center; color: #b3a6d6; font-size: 14px; padding: 10px 0; }
+.poison-count-hint { text-align: center; color: #ff8f8f; font-size: 13px; padding: 2px 0 8px; }
 .reveal-list { display: flex; flex-direction: column; gap: 8px; }
 .reveal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; background: #ffffff06; border: 1px solid #ffffff12; border-radius: 8px; font-size: 13px; color: #ddd; }
 .reveal-row.me { border-color: #b39bff66; }
