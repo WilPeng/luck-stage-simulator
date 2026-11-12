@@ -197,6 +197,19 @@ router.post('/vote', async (req, res) => {
     const actualVoterName = specVoterName || admin.name
     const isAdminVote = admin.role === 'admin' && !!specVoterId
 
+    // 已淘汰 / 陪审团 / 退赛选手不能参与淘汰投票（管理员代投时校验被代投人）
+    const eligibleVoterStatuses = ['active', 'f2']
+    if (!isAdminVote) {
+      if (admin.role === 'houseguest' && !eligibleVoterStatuses.includes(admin.status)) {
+        return res.status(403).json({ success: false, error: '你已被淘汰或进入陪审团，无法投票', code: 'VOTER_NOT_ACTIVE' })
+      }
+    } else {
+      const targetVoter = await BBHouseguest.findOne({ id: actualVoterId, gameId: 'bigbrother' })
+      if (!targetVoter || !eligibleVoterStatuses.includes(targetVoter.status)) {
+        return res.status(400).json({ success: false, error: '该选手已被淘汰或进入陪审团，无法代投', code: 'VOTER_NOT_ACTIVE' })
+      }
+    }
+
     // 检查投票人是否为被提名人（被提名人不能投票；BBBB 胜者除外，其安全可投票）
     const allNomineeIds = [...(nominationDoc?.nomineeIds || [])]
     if (nominationDoc?.replacementNomineeId) allNomineeIds.push(nominationDoc.replacementNomineeId)

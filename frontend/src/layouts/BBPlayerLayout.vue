@@ -66,6 +66,14 @@
       </div>
     </header>
 
+    <div v-if="isRestrictedPlayer" class="restricted-banner">
+      <span class="restricted-icon">🚫</span>
+      <span v-if="isJuryPlayer">
+        你已进入陪审团，只能进入 BB House{{ canJuryVote ? '；冠军投票阶段可前往终局投票' : '' }}。
+      </span>
+      <span v-else>你已被淘汰，只能进入 BB House。</span>
+    </div>
+
     <!-- 管理员广播通知记录（可展开） -->
     <div v-if="broadcastHistoryOpen" class="bh-overlay" @click.self="broadcastHistoryOpen = false">
       <div class="bh-panel">
@@ -88,11 +96,11 @@
       </div>
     </div>
 
-    <div class="layout-body">
+    <div class="layout-body" :class="{ 'with-restricted-banner': isRestrictedPlayer }">
       <aside class="bb-sidebar" :class="{ open: mobileMenuOpen }">
         <div class="sidebar-nav">
           <div class="nav-section">
-            <router-link v-for="item in fixedItems" :key="item.path"
+            <router-link v-for="item in visibleFixedItems" :key="item.path"
               :to="item.path" class="nav-item" :class="{ active: isActive(item.path) }"
               @click="mobileMenuOpen = false">
               <span class="nav-icon">{{ item.icon }}</span>
@@ -235,6 +243,17 @@ let stateTimer: ReturnType<typeof setInterval> | null = null
 let tickTimer: ReturnType<typeof setInterval> | null = null
 async function refreshState() {
   try { myState.value = await bbGetMyState() } catch {}
+  try {
+    await authStore.refreshCurrentUser()
+    enforceRestrictedRoute()
+  } catch {}
+}
+function enforceRestrictedRoute() {
+  if (!isRestrictedPlayer.value) return
+  const path = route.path
+  if (path === '/games/bigbrother/player/house') return
+  if (isJuryPlayer.value && path === '/games/bigbrother/player/finale' && seasonStore.season?.currentStage === 'champion_vote') return
+  router.replace('/games/bigbrother/player/house')
 }
 async function doWake() {
   try { await bbSleepWake(); await refreshState() } catch (e: any) { alert(e?.message || '无法醒来') }
@@ -242,6 +261,9 @@ async function doWake() {
 
 const currentUser = computed(() => authStore.currentUser)
 const totalRounds = computed(() => seasonStore.totalRounds)
+const isRestrictedPlayer = computed(() => authStore.isRestrictedPlayer)
+const isJuryPlayer = computed(() => authStore.isJuryPlayer)
+const canJuryVote = computed(() => isJuryPlayer.value && seasonStore.season?.currentStage === 'champion_vote')
 
 const fixedItems = [
   { icon: '🏠', text: '首页', path: '/games/bigbrother/player/home' },
@@ -249,6 +271,16 @@ const fixedItems = [
   { icon: '🏡', text: 'BB House', path: '/games/bigbrother/player/house' },
   { icon: '📝', text: '历史记录', path: '/games/bigbrother/player/history' },
 ]
+
+// 已淘汰/陪审团：只保留 BB House（陪审团冠军投票阶段额外显示终局入口）
+const visibleFixedItems = computed(() => {
+  if (!isRestrictedPlayer.value) return fixedItems
+  const items = fixedItems.filter(i => i.path === '/games/bigbrother/player/house')
+  if (canJuryVote.value) {
+    items.push({ icon: '🏆', text: '冠军投票', path: '/games/bigbrother/player/finale' })
+  }
+  return items
+})
 
 const stageMeta: Record<string, { icon: string; route: string }> = {
   hoh_competition: { icon: '👑', route: 'hoh' },
@@ -267,6 +299,7 @@ const ENDGAME_STAGES = ['final3', 'champion_vote']
 
 // 依据赛季配置（菜单）生成左侧树：每周包含哪些环节、终局两轮
 const roundGroups = computed(() => {
+  if (isRestrictedPlayer.value) return []
   const items = seasonStore.menuItems || []
   const byRound = new Map<number, any[]>()
   for (const it of items) {
@@ -411,6 +444,22 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
 }
+.restricted-banner {
+  position: fixed;
+  top: 60px; left: 0; right: 0;
+  z-index: 99;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  color: #ffb4b4;
+  background: rgba(90, 20, 30, 0.9);
+  border-bottom: 1px solid #ff444455;
+  backdrop-filter: blur(10px);
+}
+.restricted-icon { font-size: 14px; }
 .header-content {
   width: 100%;
   padding: 0 20px;
@@ -450,6 +499,7 @@ onUnmounted(() => {
 .menu-icon.open span:nth-child(2) { opacity: 0; }
 .menu-icon.open span:nth-child(3) { transform: rotate(-45deg) translate(4px, -4px); }
 .layout-body { display: flex; padding-top: 60px; }
+.layout-body.with-restricted-banner { padding-top: 104px; }
 .bb-sidebar {
   width: 240px; height: calc(100vh - 60px);
   position: sticky; top: 60px; align-self: flex-start;

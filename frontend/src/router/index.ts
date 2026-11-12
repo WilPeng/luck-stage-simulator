@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useBbAuthStore } from '../stores/bbAuthStore'
+import { useBbSeasonStore } from '../stores/bbSeasonStore'
 
 const routes: RouteRecordRaw[] = [
   // ===== 登录入口（选手 / 管理员分离）=====
@@ -87,7 +88,7 @@ const router = createRouter({
 
 const PUBLIC_ROUTES = ['BBLogin', 'BBAdminLogin']
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const authStore = useBbAuthStore()
 
   if (PUBLIC_ROUTES.includes(String(to.name))) return true
@@ -106,6 +107,20 @@ router.beforeEach((to) => {
   }
   if (to.meta.requiresPlayer && !authStore.isHouseguest) {
     return '/games/bigbrother/admin/dashboard'
+  }
+
+  // 已淘汰/退赛/陪审团选手：只能进入 BB House；陪审团在冠军投票阶段可进入终局投票
+  if (to.meta.requiresPlayer && authStore.isHouseguest) {
+    await authStore.refreshCurrentUser()
+    if (authStore.isRestrictedPlayer) {
+      if (to.path === '/games/bigbrother/player/house') return true
+      if (authStore.isJuryPlayer && to.path === '/games/bigbrother/player/finale') {
+        const seasonStore = useBbSeasonStore()
+        await seasonStore.fetchProgress()
+        if (seasonStore.season?.currentStage === 'champion_vote') return true
+      }
+      return '/games/bigbrother/player/house'
+    }
   }
 
   return true

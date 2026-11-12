@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { BBHouseguest } from '../types/bigbrother'
-import { bbLogin, bbAdminLogin, bbLogout } from '../services/bbApi'
+import { bbLogin, bbAdminLogin, bbLogout, bbGetCurrentUser } from '../services/bbApi'
 
 export const useBbAuthStore = defineStore('bbAuth', () => {
   const currentUser = ref<BBHouseguest | null>(null)
@@ -9,6 +9,11 @@ export const useBbAuthStore = defineStore('bbAuth', () => {
   const isLoggedIn = computed(() => !!currentUser.value)
   const isAdmin = computed(() => currentUser.value?.role === 'admin')
   const isHouseguest = computed(() => currentUser.value?.role === 'houseguest')
+  const playerStatus = computed(() => currentUser.value?.status || '')
+  const isEvictedPlayer = computed(() => ['evicted', 'walked'].includes(playerStatus.value))
+  const isJuryPlayer = computed(() => playerStatus.value === 'jury')
+  // 已淘汰/退赛/陪审团：只能进入 BB House（陪审团在冠军投票阶段可进终局投票）
+  const isRestrictedPlayer = computed(() => isEvictedPlayer.value || isJuryPlayer.value)
 
   function gameKey(base: string): string {
     return `bigbrother_${base}`
@@ -62,8 +67,28 @@ export const useBbAuthStore = defineStore('bbAuth', () => {
     return false
   }
 
+  // 从后端刷新当前用户（用于及时获取淘汰/陪审团状态变化），默认 15 秒内不重复请求
+  let lastRefreshAt = 0
+  async function refreshCurrentUser(force = false) {
+    if (!currentUser.value) return null
+    const now = Date.now()
+    if (!force && now - lastRefreshAt < 15000) return currentUser.value
+    lastRefreshAt = now
+    try {
+      const user = await bbGetCurrentUser()
+      currentUser.value = user
+      const userKey = gameKey('user')
+      sessionStorage.setItem(userKey, JSON.stringify(user))
+      try { localStorage.setItem(userKey, JSON.stringify(user)) } catch {}
+      return user
+    } catch {
+      return currentUser.value
+    }
+  }
+
   return {
     currentUser, isLoggedIn, isAdmin, isHouseguest,
-    gameKey, loginUser, adminLogin, logout, restoreSession
+    playerStatus, isEvictedPlayer, isJuryPlayer, isRestrictedPlayer,
+    gameKey, loginUser, adminLogin, logout, restoreSession, refreshCurrentUser
   }
 })
