@@ -131,6 +131,9 @@ function createModeHandler(gameDef) {
       finished: false,
       winner: null,
       started: false,
+      // 数字加时赛分阶段公示：answers（公示所有人提交的数字）→ target（公示最终答案）→ finished
+      tbStage: null,
+      tbWinner: null,
       roundHistory: [],
       // 模式6/7 运行时数据
       lives: initialLives,
@@ -216,6 +219,8 @@ function createModeHandler(gameDef) {
     state.correctOrder = []
     state.roundAwards = {}
     state.pendingWinner = null
+    state.tbStage = null
+    state.tbWinner = null
   }
 
   function finishWith(state, winnerId) {
@@ -453,32 +458,36 @@ function createModeHandler(gameDef) {
     const correctOnes = alive
       .filter(p => p.answered && p.correct)
       .sort((a, b) => (a.correctAt || 0) - (b.correctAt || 0))
-    let loser = null
-    if (correctOnes.length === alive.length) {
-      // 全部答对：最后一个答对（最慢）的选手失去 1 点生命
-      loser = correctOnes[correctOnes.length - 1]
-    } else {
-      // 超时仍有未答对者：最后一个未答对者失去 1 点生命
-      const notCorrect = alive.filter(p => !(p.answered && p.correct))
-      loser = notCorrect.length ? notCorrect[notCorrect.length - 1] : correctOnes[correctOnes.length - 1] || null
-    }
-    let eliminated = false
-    if (loser) {
+    // 时间到 / 本轮结束：所有未答对的选手各失去 1 点生命
+    const losers = alive.filter(p => !(p.answered && p.correct))
+    const loserResults = []
+    for (const loser of losers) {
       loser.lives = Math.max(0, (loser.lives == null ? initialLives : loser.lives) - 1)
-      if (loser.lives <= 0) {
+      const eliminated = loser.lives <= 0
+      if (eliminated) {
         loser.alive = false
         loser.eliminated = true
-        eliminated = true
       }
+      loserResults.push({
+        playerId: loser.playerId,
+        playerName: loser.playerName,
+        livesLeft: loser.lives,
+        eliminated
+      })
       pushEvent(state, 'eliminate', `${loser.playerName} 失去 1 点生命${eliminated ? '，生命耗尽出局' : `（剩余 ${loser.lives} 点）`}`, {
         playerId: loser.playerId, lives: loser.lives, eliminated
       })
     }
     state.roundResult = {
       lives: true,
-      loserId: loser ? loser.playerId : null,
-      livesLeft: loser ? loser.lives : null,
-      eliminated,
+      // 兼容旧字段：第一条失去生命的记录
+      loserId: loserResults.length ? loserResults[0].playerId : null,
+      livesLeft: loserResults.length ? loserResults[0].livesLeft : null,
+      eliminated: loserResults.some(x => x.eliminated),
+      // 所有未答对的选手
+      loserIds: loserResults.map(x => x.playerId),
+      losers: loserResults,
+      allCorrect: loserResults.length === 0,
       timedOut: !!timedOut,
       correctOrder: correctOnes.map(p => ({ playerId: p.playerId, at: p.correctAt })),
       livesMap: Object.fromEntries(alive.map(p => [p.playerId, p.lives]))
@@ -596,6 +605,15 @@ function createModeHandler(gameDef) {
       pushEvent(state, 'tiebreak', `数字加时题目标 ${state.target}，${nameOf(state, best)} 最接近且不超过，获胜`, { winnerId: best, target: state.target })
       state.roundResult = { tiebreak: true, winnerId: best, target: state.target, lockedAt: now }
       snapshotRound(state)
+      if (mode === 'score-tb') {
+        // 限时积分：先公示所有人提交的数字，再公示最终答案，最后公布胜者
+        state.tbWinner = best
+        state.tbStage = 'answers'
+        state.phase = 'reveal'
+        state.nextAt = now + modeRevealMs
+        pushEvent(state, 'tiebreak', '数字加时题结束，公示所有选手提交的数字', { stage: 'answers' })
+        return false
+      }
       return finishWith(state, best)
     }
 
@@ -640,6 +658,34 @@ function createModeHandler(gameDef) {
     if (state.qIndex >= basicQuestions.length) return setupTiebreak(state)
     beginQuestion(state, basicQuestions[state.qIndex])
     return false
+  }
+
+  // 限时积分 · 数字加时赛公示推进：answers → target → finished
+  function advanceTiebreakReveal(state) {
+    const now = Date.now()
+    if (state.tbStage === 'answers') {
+      state.tbStage = 'target'
+      state.nextAt = now + modeRevealMs
+      pushEvent(state, 'tiebreak', `最终答案：${state.target}`, { stage: 'target', target: state.target })
+      return false
+    }
+    if (state.tbStage === 'target') {
+      return finishWith(state, state.tbWinner)
+    }
+    return false
+  }
+
+  // 对外状态中，数字加时赛的结果按阶段逐步公开
+  function publicRoundResult(state) {
+    const rr = state.roundResult
+    if (!rr) return null
+    if (rr.tiebreak && mode === 'score-tb' && !state.finished) {
+      const out = { ...rr }
+      if (state.tbStage !== 'target') delete out.target
+      delete out.winnerId
+      return out
+    }
+    return rr
   }
 
   function tick(state) {
@@ -718,6 +764,9 @@ function createModeHandler(gameDef) {
         return lockRound(state)
       }
       if (state.phase === 'reveal' && state.nextAt && now >= state.nextAt) {
+        if (mode === 'score-tb' && state.tiebreak && state.tbStage) {
+          return advanceTiebreakReveal(state)
+        }
         return advanceLimit(state)
       }
     }
@@ -780,6 +829,9 @@ function createModeHandler(gameDef) {
           if (state.phase === 'reveal') return { updated: true, finished: advanceRace(state) }
           if (state.phase === 'answering') return { updated: true, finished: resolveRaceRound(state, false) }
           return { updated: true }
+        }
+        if (mode === 'score-tb' && state.tiebreak && state.tbStage && state.phase === 'reveal') {
+          return { updated: true, finished: advanceTiebreakReveal(state) }
         }
         if (state.phase === 'reveal') return { updated: true, finished: advanceLimit(state) }
         if (state.phase === 'answering') return { updated: true, finished: lockRound(state) }
@@ -845,7 +897,9 @@ function createModeHandler(gameDef) {
         p.correctAt = Date.now()
         p.submittedAt = p.correctAt
         const alive = aliveList(state)
-        if (alive.every(x => x.correct)) resolveLivesRound(state, false)
+        // 只剩 1 人未答对（或全员已答对）时立即结算；多人未答对则等到时间到再统一扣血
+        const notCorrect = alive.filter(x => !(x.answered && x.correct))
+        if (notCorrect.length <= 1) resolveLivesRound(state, false)
         return { updated: true, finished: false, result: { correct: true, lives: p.lives } }
       }
 
@@ -975,13 +1029,14 @@ function createModeHandler(gameDef) {
         : (mode === 'survive-tb' || mode === 'score-tb' ? Math.round(basicLimitMs / 1000) : Math.round(answerLimitMs / 1000)),
       pickDeadline: state.pickDeadline || 0,
       tiebreak: !!state.tiebreak,
-      target: state.finished || state.phase === 'reveal' ? state.target : null,
+      tbStage: state.tbStage || null,
+      target: (state.finished || (state.phase === 'reveal' && (!state.tiebreak || state.tbStage === 'target'))) ? state.target : null,
       current: state.current || null,
       pickerId: state.pickerId || null,
       firstId: state.firstId || null,
       nextAt: state.nextAt || 0,
       duelWinnerId: state.duelWinnerId || null,
-      roundResult: state.roundResult || null,
+      roundResult: publicRoundResult(state),
       showSubmissions: gameDef.showSubmissions !== false,
       players: buildPlayers(state, playerId),
       winner: state.winner || null,
@@ -1128,7 +1183,9 @@ function createModeHandler(gameDef) {
     if (state.roundResult && state.roundResult.race) {
       summary['上题结算'] = (state.roundResult.order || []).map(r => `${nameOf(state, r.playerId)} 第${r.rank}位 +${r.points}`).join('、') || '无人答对'
     }
-    if (state.roundResult && state.roundResult.lives && state.roundResult.loserId) {
+    if (state.roundResult && state.roundResult.lives && Array.isArray(state.roundResult.losers) && state.roundResult.losers.length) {
+      summary['上轮失去生命'] = state.roundResult.losers.map(x => `${nameOf(state, x.playerId)}（剩余 ${x.livesLeft}）`).join('、')
+    } else if (state.roundResult && state.roundResult.lives && state.roundResult.loserId) {
       summary['上轮失去生命'] = nameOf(state, state.roundResult.loserId)
     }
     const players = {}

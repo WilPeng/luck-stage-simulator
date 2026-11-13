@@ -157,6 +157,9 @@ function roundOutcome(r: any): string {
   if (res.eliminatedIds) return `本轮出局：${res.eliminatedIds.map(nameOf).join('、')}`
   if (res.eliminatedId) return `本轮出局：${nameOf(res.eliminatedId)}`
   if (res.selfEliminated) return `首个作答错误，自己出局：${nameOf(res.eliminatedId)}`
+  if (Array.isArray(res.losers) && res.losers.length) {
+    return `失去 1 点生命：${res.losers.map((l: any) => `${nameOf(l.playerId)}（剩余 ${l.livesLeft ?? '-'}）`).join('、')}`
+  }
   if (res.loserId) return `失去 1 点生命：${nameOf(res.loserId)}（剩余 ${res.livesLeft ?? '-'}）`
   if (res.winnerId) return `本轮胜者：${nameOf(res.winnerId)}`
   if (res.bothEliminated) return '双方均未作答，两人淘汰'

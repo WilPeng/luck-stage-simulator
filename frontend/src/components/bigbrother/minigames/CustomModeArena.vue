@@ -7,6 +7,7 @@
       <span v-if="mode === 'race-score'" class="tb-tag">目标 {{ state.raceTarget }} 分</span>
       <span v-if="mode === 'lives-build' && state.my" class="tb-tag">我的生命 {{ state.my.lives }} ❤️</span>
       <span v-if="timerActive" class="arena-timer" :class="{ urgent: remain <= 5 }">⏱ {{ remain }}s</span>
+      <span v-if="revealActive" class="arena-timer reveal">⏳ {{ state.tiebreak ? '公示' : '下一题' }} {{ revealRemain }}s</span>
     </div>
 
     <div class="players-strip">
@@ -41,14 +42,28 @@
 
     <div v-if="state.roundResult" class="round-result">
       <template v-if="state.roundResult.tiebreak">
-        加时题目标：<strong>{{ state.roundResult.target }}</strong>
+        <div class="tb-reveal">
+          <div class="tb-reveal-title">
+            {{ state.finished ? '数字加时赛结果' : (state.tbStage === 'target' ? '数字加时赛 · 最终答案' : '数字加时赛 · 所有人提交的数字') }}
+          </div>
+          <div class="tb-answer-list">
+            <span v-for="p in tiebreakPlayers" :key="p.playerId" class="tb-answer-item">
+              {{ p.playerName }}：<strong>{{ p.answer === null || p.answer === undefined || p.answer === '' ? '未作答' : p.answer }}</strong>
+            </span>
+          </div>
+          <div v-if="state.target !== null && state.target !== undefined" class="tb-target-line">
+            最终答案：<strong>{{ state.target }}</strong>
+          </div>
+        </div>
       </template>
       <template v-else-if="state.roundResult.lives">
-        <span v-if="state.roundResult.loserId">
-          {{ nameOf(state.roundResult.loserId) }} 失去 1 点生命
-          <span v-if="state.roundResult.eliminated">，生命耗尽出局</span>
-          <span v-else>（剩余 {{ state.roundResult.livesLeft }} 点）</span>
-        </span>
+        <div v-if="state.roundResult.losers && state.roundResult.losers.length" class="lives-lost-list">
+          <div v-for="l in state.roundResult.losers" :key="l.playerId" class="lives-lost-row">
+            {{ nameOf(l.playerId) }} 失去 1 点生命
+            <span v-if="l.eliminated">，生命耗尽出局</span>
+            <span v-else>（剩余 {{ l.livesLeft }} 点）</span>
+          </div>
+        </div>
         <span v-else>本轮无人失去生命</span>
       </template>
       <template v-else-if="state.roundResult.race">
@@ -68,8 +83,14 @@
         {{ nameOf(state.roundResult.eliminatedId) }} 出局
       </template>
       <template v-else-if="state.roundResult.locked">
-        <span v-if="state.roundResult.anyCorrect">本轮错误/未作答者出局</span>
-        <span v-else>全员错误，本轮无人出局</span>
+        <template v-if="mode === 'score-tb'">
+          <span v-if="scoreCorrectNames.length">本题答对：{{ scoreCorrectNames.join('、') }}</span>
+          <span v-else>本题无人答对</span>
+        </template>
+        <template v-else>
+          <span v-if="state.roundResult.anyCorrect">本轮错误/未作答者出局</span>
+          <span v-else>全员错误，本轮无人出局</span>
+        </template>
       </template>
       <template v-else-if="state.roundResult.winnerId">
         {{ nameOf(state.roundResult.winnerId) }} 胜出本回合
@@ -279,6 +300,9 @@ const timerActive = computed(() =>
   props.state.phase === 'answering' && !!props.state.deadline
 )
 const remain = computed(() => Math.max(0, Math.ceil((props.state.deadline - now.value) / 1000)))
+// 公示阶段：选手端也显示倒计时，提示下一题何时开始
+const revealActive = computed(() => props.state.phase === 'reveal' && !!props.state.nextAt)
+const revealRemain = computed(() => Math.max(0, Math.ceil(((props.state.nextAt || 0) - now.value) / 1000)))
 
 const canInput = computed(() => {
   if (!props.state.my || !props.state.my.canAnswer) return false
@@ -292,6 +316,13 @@ const aliveOthers = computed(() =>
 const alivePlayers = computed(() =>
   (props.state.players || []).filter((p: any) => p.alive)
 )
+const tiebreakPlayers = computed(() =>
+  (props.state.players || []).filter((p: any) => p.inTiebreak)
+)
+const scoreCorrectNames = computed(() => {
+  const results = props.state.roundResult?.results || []
+  return results.filter((r: any) => r.correct).map((r: any) => nameOf(r.playerId))
+})
 const duelPickSelected = ref<string[]>([])
 const duelAnnounceRemain = computed(() => Math.max(0, Math.ceil(((props.state.nextAt || 0) - now.value) / 1000)))
 const duelPickRemain = computed(() => Math.max(0, Math.ceil(((props.state.pickDeadline || 0) - now.value) / 1000)))
@@ -352,6 +383,7 @@ function submitMatch() {
 .tb-tag { background: #e6c98822; color: #e6c988; border-radius: 6px; padding: 2px 8px; font-size: 12px; }
 .arena-timer { margin-left: auto; font-weight: 700; color: #b39bff; }
 .arena-timer.urgent { color: #ff4444; }
+.arena-timer.reveal { color: #7fd8ff; }
 .players-strip { display: flex; flex-wrap: wrap; gap: 8px; }
 .p-chip { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; border: 1px solid #ffffff18; background: #1b1130; font-size: 13px; color: #ddd; }
 .p-chip.me { border-color: #b39bff66; }
@@ -384,6 +416,15 @@ function submitMatch() {
 .da-timer { font-size: 14px; color: #e6c988; }
 .round-result { text-align: center; font-size: 14px; color: #e6c988; background: #e6c98814; border: 1px solid #e6c98833; border-radius: 8px; padding: 8px; }
 .round-result strong { color: #b39bff; }
+.lives-lost-list { display: flex; flex-direction: column; gap: 4px; }
+.lives-lost-row { color: #ffb4b4; }
+.tb-reveal { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.tb-reveal-title { color: #e6c988; font-weight: 700; }
+.tb-answer-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.tb-answer-item { background: #ffffff0a; border: 1px solid #b39bff33; border-radius: 999px; padding: 3px 12px; font-size: 13px; color: #dcd3f5; }
+.tb-answer-item strong { color: #b39bff; }
+.tb-target-line { margin-top: 4px; font-size: 15px; color: #7ee0a0; }
+.tb-target-line strong { color: #7ee0a0; }
 .arena-finished { text-align: center; font-size: 22px; font-weight: 700; color: #b39bff; padding: 24px 0; }
 .pick-hint { color: #ece7fb; font-size: 15px; }
 .pick-countdown { text-align: center; color: #e6c988; font-size: 13px; }
