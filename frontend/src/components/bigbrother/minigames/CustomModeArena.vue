@@ -20,7 +20,7 @@
         <span v-if="mode === 'score-tb' || mode === 'race-score'" class="p-score">{{ p.score }}分</span>
         <span v-if="mode === 'lives-build'" class="p-lives">{{ '❤️'.repeat(Math.max(0, p.lives || 0)) || '💀' }}</span>
         <span v-if="p.roundPoints > 0" class="p-gain">+{{ p.roundPoints }}</span>
-        <span v-if="p.answered && mode !== 'lives-build'" class="p-dot">✓</span>
+        <span v-if="p.answered && mode !== 'lives-build'" class="p-dot" title="已作答">已答</span>
         <span v-if="!p.alive" class="p-out">出局</span>
       </div>
     </div>
@@ -360,7 +360,7 @@ function submitMatch() {
 .p-score { color: #e6c988; font-size: 12px; }
 .p-lives { font-size: 12px; letter-spacing: -1px; }
 .p-gain { color: #7ee0a0; font-size: 12px; font-weight: 700; }
-.p-dot { color: #b39bff; }
+.p-dot { color: #b39bff; font-size: 11px; }
 .p-out { color: #ff4444; font-size: 11px; }
 .race-order { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 6px; }
 .race-order-item { background: #ffffff0a; border: 1px solid #e6c98833; border-radius: 999px; padding: 2px 10px; font-size: 12px; color: #f0e2b6; }
