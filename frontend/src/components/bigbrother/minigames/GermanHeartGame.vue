@@ -13,7 +13,7 @@
       <div class="game-icon">🍓🔔</div>
       <h2>德国心脏病</h2>
       <p>观察桌面上的水果牌：当<strong>恰好出现 5 个相同水果</strong>时，最快抢铃者 +1 分。</p>
-      <p>没有 5 个相同水果时抢铃视为错误，每次 -3 分（每人每轮仅可抢一次）。</p>
+      <p>没有 5 个相同水果时抢铃视为错误，每次 -3 分，并且<strong>下一轮不得抢铃</strong>（每人每轮仅可抢一次）。</p>
       <p>先得到 <strong>{{ targetPoints }}</strong> 分获胜；或只剩一人得分为正数时获胜。</p>
       <div v-if="countdown > 0" class="countdown-big"><CountdownDisplay :value="countdown" /></div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
@@ -30,9 +30,10 @@
           v-for="p in participants"
           :key="p.playerId"
           class="score-chip"
-          :class="{ me: p.playerId === myId, neg: scoreOf(p.playerId) < 0 }"
+          :class="{ me: p.playerId === myId, neg: scoreOf(p.playerId) < 0, ban: isSuspended(p.playerId) }"
         >
           {{ p.playerName }}<b>{{ scoreOf(p.playerId) }}</b>
+          <em v-if="isSuspended(p.playerId)" class="ban-tag">禁抢</em>
         </span>
       </div>
 
@@ -54,12 +55,18 @@
         <div class="timer-bar">
           <div class="timer-fill" :class="{ low: secondsLeft <= 2 }" :style="{ width: timeProgress + '%' }"></div>
         </div>
-        <button class="bell-btn" :class="{ rung: !!myRing, wrong: myRing && !myRing.correct }" :disabled="!!myRing" @click="ring">
-          <span class="bell-icon">🔔</span>
-          <span class="bell-text">{{ myRing ? (myRing.correct ? '抢铃成功' : '抢铃错误') : '抢铃！' }}</span>
+        <button
+          class="bell-btn"
+          :class="{ rung: !!myRing, wrong: myRing && !myRing.correct, banned: mySuspended }"
+          :disabled="!!myRing || mySuspended"
+          @click="ring"
+        >
+          <span class="bell-icon">{{ mySuspended ? '🔕' : '🔔' }}</span>
+          <span class="bell-text">{{ mySuspended ? '本轮禁抢' : (myRing ? (myRing.correct ? '抢铃成功' : '抢铃错误') : '抢铃！') }}</span>
         </button>
-        <p v-if="!myRing" class="hint">恰好 5 个相同水果出现时立刻抢铃；抢错扣 3 分。</p>
-        <p v-else-if="!myRing.correct" class="hint bad">本轮没有 5 个相同水果，你被扣除 3 分。</p>
+        <p v-if="mySuspended" class="hint bad">你上轮抢铃失败，本轮不得抢铃，请等待下一轮。</p>
+        <p v-else-if="!myRing" class="hint">恰好 5 个相同水果出现时立刻抢铃；抢错扣 3 分且下一轮禁抢。</p>
+        <p v-else-if="!myRing.correct" class="hint bad">本轮没有 5 个相同水果，你被扣除 3 分，下一轮禁抢。</p>
         <p v-else class="hint good">抢铃成功，+1 分！</p>
       </div>
 
@@ -71,7 +78,7 @@
           🏆 {{ nameOf(roundResult.winnerId) }} 抢铃成功 +1 分
         </div>
         <div v-else-if="wrongList.length" class="reveal-line bad">
-          错误抢铃：{{ wrongList.map(nameOf).join('、') }}（各 -3 分）
+          错误抢铃：{{ wrongList.map(nameOf).join('、') }}（各 -3 分，下一轮禁抢）
         </div>
         <div v-else class="reveal-line">本轮无人抢铃</div>
         <div class="next-hint">下一轮 {{ secondsLeft }} 秒后开始…</div>
@@ -102,6 +109,8 @@ const round = computed(() => state.value.round || 0)
 const cards = computed<string[]>(() => Array.isArray(state.value.cards) ? state.value.cards : [])
 const scores = computed<Record<string, number>>(() => state.value.scores || {})
 const myScore = computed(() => state.value.myScore || 0)
+const suspended = computed<string[]>(() => Array.isArray(state.value.suspended) ? state.value.suspended : [])
+const mySuspended = computed(() => !!state.value.mySuspended || (!!myId.value && suspended.value.includes(myId.value)))
 const myRing = computed<any>(() => state.value.myRing || null)
 const targetPoints = computed(() => state.value.targetPoints || 5)
 const roundTime = computed(() => state.value.roundTime || 5)
@@ -119,9 +128,12 @@ function scoreOf(pid: string): number {
 function nameOf(pid: string): string {
   return props.participants.find(p => p.playerId === pid)?.playerName || pid.slice(0, 4)
 }
+function isSuspended(pid: string): boolean {
+  return suspended.value.includes(pid)
+}
 
 function ring() {
-  if (ringSent.value || myRing.value) return
+  if (ringSent.value || myRing.value || mySuspended.value) return
   ringSent.value = true
   sendAction({ type: 'ring' })
 }
@@ -151,6 +163,8 @@ p strong { color: #b39bff; }
 .score-chip b { color: #b39bff; font-size: 14px; }
 .score-chip.me { border-color: #b39bff; background: #b39bff1a; }
 .score-chip.neg b { color: #ff6b6b; }
+.score-chip.ban { opacity: 0.75; border-color: #ff6b6b55; }
+.ban-tag { font-style: normal; font-size: 10px; color: #ff8f8f; background: #ff6b6b22; border-radius: 999px; padding: 1px 6px; }
 .table-area { background: radial-gradient(ellipse at 50% 0%, #2a1a4a 0%, #120a22 75%); border: 1px solid #b39bff33; border-radius: 16px; padding: 16px; margin-bottom: 16px; }
 .table-label { font-size: 12px; color: #7d6fa6; letter-spacing: 1px; margin-bottom: 10px; }
 .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 8px; justify-items: center; }
@@ -165,6 +179,7 @@ p strong { color: #b39bff; }
 .bell-btn:disabled { cursor: default; }
 .bell-btn.rung { border-color: #b39bff; background: radial-gradient(circle at 35% 30%, #ded2ff, #8f74d8 55%, #5a3fa8); color: #fff; box-shadow: 0 0 0 8px #b39bff22, 0 14px 30px rgba(0, 0, 0, 0.45); }
 .bell-btn.rung.wrong { border-color: #ff6b6b; background: radial-gradient(circle at 35% 30%, #ffc4c4, #ff6b6b 55%, #a11f1f); }
+.bell-btn.banned { border-color: #6b5f92; background: radial-gradient(circle at 35% 30%, #b9b3c9, #7d738f 55%, #4a4360); color: #e6e2ef; box-shadow: 0 0 0 8px #6b5f9222, 0 14px 30px rgba(0, 0, 0, 0.35); opacity: 0.85; }
 .bell-icon { font-size: 46px; line-height: 1; }
 .bell-text { font-size: 16px; }
 .hint { color: #8f83b8; font-size: 13px; margin: 0; }

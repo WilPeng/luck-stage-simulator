@@ -3,7 +3,7 @@
  * 规则：
  *  - 每轮桌面翻开一组水果牌；
  *  - 当恰好出现 5 个相同水果时，最快抢铃者 +1 分；
- *  - 没有 5 个相同水果时抢铃视为错误，-3 分（每人每轮只能抢一次）；
+ *  - 没有 5 个相同水果时抢铃视为错误，-3 分，并且下一轮不得抢铃（每人每轮只能抢一次）；
  *  - 先达到目标分（默认 5 分）者获胜；
  *  - 或只剩一人得分为正数（其余人均为负分）时，该玩家获胜。
  */
@@ -72,7 +72,7 @@ registerGame({
   id: 'german-heart',
   name: '德国心脏病',
   icon: '🔔',
-  description: '恰好出现 5 个相同水果时最快抢铃得 1 分，错误抢铃扣 3 分；先到目标分者获胜',
+  description: '恰好出现 5 个相同水果时最快抢铃得 1 分，错误抢铃扣 3 分且下一轮禁抢；先到目标分者获胜',
   category: 'reaction',
   playerCount: { min: 2, max: 20 },
   duration: 900,
@@ -105,6 +105,8 @@ registerGame({
       cards: [],
       roundRing: {},
       roundResult: null,
+      suspended: {},
+      suspendRound: {},
       scores,
       names,
       history: [],
@@ -134,6 +136,11 @@ registerGame({
     state.round += 1
     state.roundRing = {}
     state.roundResult = null
+    // 上一轮抢铃失败的玩家，本轮禁抢
+    state.suspended = {}
+    for (const pid of Object.keys(state.scores)) {
+      if ((state.suspendRound[pid] || 0) === state.round) state.suspended[pid] = true
+    }
     // 有效轮概率约 40%，且不会连续出现有效轮
     const lastWasValid = state.lastValidRound === state.round - 1
     const valid = !lastWasValid && Math.random() < 0.4
@@ -172,7 +179,7 @@ registerGame({
     let text = `第${result.round}轮：`
     text += result.valid ? `出现 5 个 ${result.fruit}` : '没有 5 个相同水果'
     if (winnerName) text += `，${winnerName} 抢铃成功 +1`
-    if (wrongNames.length) text += `，${wrongNames.join('、')} 错误抢铃 -${WRONG_PENALTY}`
+    if (wrongNames.length) text += `，${wrongNames.join('、')} 错误抢铃 -${WRONG_PENALTY}（下一轮禁抢）`
     if (!winnerName && !wrongNames.length) text += '，无人抢铃'
     state._replayEvents.push({
       type: 'round',
@@ -217,6 +224,9 @@ registerGame({
     if (!state.scores.hasOwnProperty(playerId)) return { updated: false }
     if (!action || action.type !== 'ring') return { updated: false }
     if (state.finished || state.phase !== 'live') return { updated: false }
+    if (state.suspended && state.suspended[playerId]) {
+      return { updated: false, result: { error: '你本轮因上轮抢铃失败被禁抢' } }
+    }
     if (state.roundRing[playerId]) return { updated: false, result: { error: '本轮已经抢过铃了' } }
 
     const now = Date.now()
@@ -239,10 +249,12 @@ registerGame({
 
     state.scores[playerId] -= WRONG_PENALTY
     state.roundRing[playerId] = { at: now, correct: false, points: -WRONG_PENALTY }
+    state.suspendRound[playerId] = state.round + 1
     this._checkWin(state)
 
-    // 所有人都已抢过铃（且本轮无效）→ 提前结算；若已产生胜者也记录本轮结果
-    const allRung = Object.keys(state.roundRing).length >= Object.keys(state.scores).length
+    // 所有可抢铃的玩家都已抢过铃（且本轮无效）→ 提前结算；若已产生胜者也记录本轮结果
+    const eligible = Object.keys(state.scores).filter(pid => !(state.suspended && state.suspended[pid]))
+    const allRung = eligible.length > 0 && eligible.every(pid => state.roundRing[pid])
     if (state.finished || allRung) {
       this._endRound(state, now, null)
     }
@@ -291,6 +303,9 @@ registerGame({
       cards: state.cards,
       scores: state.scores,
       myScore: state.scores[pid] || 0,
+      suspended: Object.keys(state.suspended || {}),
+      mySuspended: !!(state.suspended && state.suspended[pid]),
+      mySuspendedNext: (state.suspendRound[pid] || 0) === state.round + 1,
       myRing: state.roundRing[pid] || null,
       ringedCount: Object.keys(state.roundRing).length,
       secondsLeft: Math.max(0, Math.ceil((state.phaseEndsAt - now) / 1000))
@@ -304,12 +319,13 @@ registerGame({
   getAllStates(state) {
     const result = {}
     for (const pid of Object.keys(state.scores)) {
+      const banned = !!(state.suspended && state.suspended[pid])
       result[pid] = {
         score: state.scores[pid] || 0,
         progress: Math.max(0, state.scores[pid] || 0),
         max: state.opts.targetPoints,
         done: state.finished,
-        label: `${state.scores[pid] || 0} 分`
+        label: `${state.scores[pid] || 0} 分${banned ? ' · 禁抢' : ''}`
       }
     }
     return result
@@ -331,8 +347,8 @@ registerGame({
       }
     }
     return {
-      text: `${name} 错误抢铃 -${WRONG_PENALTY}`,
-      data: { correct: false, points: -WRONG_PENALTY }
+      text: `${name} 错误抢铃 -${WRONG_PENALTY}，下一轮禁抢`,
+      data: { correct: false, points: -WRONG_PENALTY, suspendedNextRound: true }
     }
   },
 
@@ -355,9 +371,10 @@ registerGame({
     const players = {}
     for (const pid of Object.keys(state.scores)) {
       const ring = state.roundRing[pid]
+      const banned = !!(state.suspended && state.suspended[pid])
       players[pid] = {
         得分: state.scores[pid] || 0,
-        本轮抢铃: ring ? (ring.correct ? '成功 +1' : `错误 -${WRONG_PENALTY}`) : '—'
+        本轮状态: banned ? '禁抢' : (ring ? (ring.correct ? '抢铃成功 +1' : `抢铃失败 -${WRONG_PENALTY}`) : '—')
       }
     }
     return {
@@ -373,6 +390,7 @@ registerGame({
         本轮是否有效: info.valid ? '是' : '否',
         五连水果: info.fruit || '无',
         目标分: state.opts.targetPoints,
+        禁抢玩家: Object.keys(state.suspended || {}).map(pid => state.names[pid] || pid).join('、') || '无',
         当前牌面: state.cards.join(' ')
       },
       players

@@ -321,7 +321,7 @@
                   </div>
                   <div v-if="r.winnerId" class="mc ok">抢铃成功：{{ playerName(r.winnerId) }} +1</div>
                   <div v-if="r.wrong && r.wrong.length" class="mc bad">
-                    错误抢铃：{{ r.wrong.map(playerName).join('、') }}（各 -3）
+                    错误抢铃：{{ r.wrong.map(playerName).join('、') }}（各 -3，下一轮禁抢）
                   </div>
                   <div v-if="!r.winnerId && (!r.wrong || !r.wrong.length)" class="empty-hint">本轮无人抢铃</div>
                   <div class="snap-sub">牌面：{{ r.counts ? Object.entries(r.counts).map(([f, n]) => `${f}×${n}`).join(' ') : '-' }}</div>

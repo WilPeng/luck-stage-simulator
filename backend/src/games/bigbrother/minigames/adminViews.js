@@ -173,9 +173,10 @@ function buildAdminView(minigameId, state) {
         const players = {}
         for (const [pid, score] of Object.entries(state.scores || {})) {
           const ring = state.roundRing ? state.roundRing[pid] : null
+          const banned = !!(state.suspended && state.suspended[pid])
           players[pid] = {
             得分: score,
-            本轮抢铃: ring ? (ring.correct ? '成功 +1' : '错误 -3') : '—'
+            本轮状态: banned ? '禁抢' : (ring ? (ring.correct ? '抢铃成功 +1' : '抢铃失败 -3') : '—')
           }
         }
         const counts = {}

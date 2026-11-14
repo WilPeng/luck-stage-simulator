@@ -115,7 +115,7 @@
 
               <!-- 德国心脏病：目标分 / 每轮牌数 / 节奏 -->
               <template v-if="pendingGame.id === 'german-heart'">
-                <p class="opt-hint">每轮桌面翻出一组水果牌。恰好出现 5 个相同水果时，最快抢铃者 +1 分；没有 5 个相同水果时抢铃，每次 -3 分（每人每轮仅可抢一次）。先到目标分者胜；或只剩一人得分为正数时获胜。</p>
+                <p class="opt-hint">每轮桌面翻出一组水果牌。恰好出现 5 个相同水果时，最快抢铃者 +1 分；没有 5 个相同水果时抢铃，每次 -3 分且下一轮禁抢（每人每轮仅可抢一次）。先到目标分者胜；或只剩一人得分为正数时获胜。</p>
                 <div class="opt-row">
                   <label class="opt-label">目标分
                     <input v-model.number="options.targetPoints" type="number" min="1" max="20" class="opt-number" />
