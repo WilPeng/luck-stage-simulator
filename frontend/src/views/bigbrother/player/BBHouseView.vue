@@ -330,9 +330,10 @@ const canControlHohDoor = computed(() =>
 const canSeeBackyardDoor = computed(() => currentRoomId.value === 'living_room' || currentRoomId.value === 'backyard')
 const canSeeHohDoor = computed(() => currentRoomId.value === 'hoh_room' || currentRoomId.value === 'hoh_door')
 
-// 睡眠 / 洗澡
-const isSleeping = computed(() => !!myState.value.isSleeping)
-const isShowering = computed(() => !!myState.value.isShowering)
+// 睡眠 / 洗澡（赛季结束并公开聊天记录后解除限制，方便所有房客自由移动）
+const seasonEnded = computed(() => !!seasonStore.season?.allChatsRevealed)
+const isSleeping = computed(() => !!myState.value.isSleeping && !seasonEnded.value)
+const isShowering = computed(() => !!myState.value.isShowering && !seasonEnded.value)
 const canSleepHere = computed(() => !!currentRoomDef.value?.canSleep)
 const wakeReady = computed(() => myState.value.wakeAt ? nowTs.value >= new Date(myState.value.wakeAt).getTime() : false)
 const sleepCountdown = computed(() => {

@@ -225,7 +225,8 @@ async function toggleBroadcastHistory() {
 // 睡眠全局状态
 const myState = ref<any>({ isSleeping: false, wakeAt: null, sleepDurationMinutes: 360 })
 const nowTs = ref(Date.now())
-const isSleeping = computed(() => !!myState.value.isSleeping)
+const seasonEnded = computed(() => !!seasonStore.season?.allChatsRevealed)
+const isSleeping = computed(() => !!myState.value.isSleeping && !seasonEnded.value)
 const wakeReady = computed(() => myState.value.wakeAt ? nowTs.value >= new Date(myState.value.wakeAt).getTime() : false)
 const sleepDurationText = computed(() => {
   const minutes = Math.max(1, Number(myState.value.sleepDurationMinutes) || 360)

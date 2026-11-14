@@ -202,7 +202,7 @@ router.get('/all-chats', auth, async (req, res) => {
 router.get('/reachable', auth, async (req, res) => {
   try {
     const { getCollection } = require('../../../config/db')
-    const [loc, rooms, doors, hoh, countRows] = await Promise.all([
+    const [loc, rooms, doors, hoh, countRows, season] = await Promise.all([
       BBPlayerLocation.findOne({ playerId: req.user.userId, gameId: 'bigbrother' }),
       BBHouseRoom.find({ gameId: 'bigbrother' }),
       BBHouseDoor.find({ gameId: 'bigbrother' }),
@@ -210,8 +210,11 @@ router.get('/reachable', auth, async (req, res) => {
       getCollection('BBPlayerLocation').aggregate([
         { $match: { gameId: 'bigbrother' } },
         { $group: { _id: '$currentRoomId', n: { $sum: 1 } } }
-      ]).toArray()
+      ]).toArray(),
+      getCurrentSeason()
     ])
+    // 赛季结束后：所有房客都可以自由移动（含已淘汰/陪审团）
+    const seasonEnded = !!(season && (season.status === 'finished' || season.championId || season.allChatsRevealed))
     const currentRoomId = loc?.currentRoomId || 'living_room'
     const counts = {}
     for (const r of countRows) counts[r._id] = r.n
@@ -219,8 +222,8 @@ router.get('/reachable', auth, async (req, res) => {
     const roomMap = {}
     rooms.forEach(r => { roomMap[r.id] = r })
 
-    // 特殊隔离区域（初入屋/陪审屋）：无法自行移动，仅管理员可安排
-    if (roomMap[currentRoomId]?.accessRule === 'admin_only') {
+    // 特殊隔离区域（初入屋/陪审屋）：无法自行移动，仅管理员可安排；赛季结束后解除
+    if (!seasonEnded && roomMap[currentRoomId]?.accessRule === 'admin_only') {
       return res.json({
         success: true,
         data: { currentRoomId, rooms: [], backyardDoorOpen: null, hohDoorOpen: null, locked: true, lockReason: '你当前处于特殊区域，只能由管理员安排移动' }
@@ -247,20 +250,22 @@ router.get('/reachable', auth, async (req, res) => {
     }
 
     const reachable = reachableIds
-      .filter(id => roomMap[id] && roomMap[id].accessRule !== 'admin_only')
+      .filter(id => roomMap[id] && (seasonEnded || roomMap[id].accessRule !== 'admin_only'))
       .map(id => {
         const room = roomMap[id]
         let canEnter = true
         let denyReason = ''
         let isFull = false
-        if (room.accessRule === 'hoh_only') {
-          if (hohId !== req.user.userId) { canEnter = false; denyReason = '仅 HOH 可进入' }
-        } else if (room.accessRule === 'hoh_or_invited') {
-          if (hohId !== req.user.userId) { canEnter = false; denyReason = '需要 HOH 邀请' }
-        } else if (room.accessRule === 'have_not_only') {
-          // 任何人（无论是否 Have-Not）都可进入贫民屋
-        } else if (room.accessRule === 'single') {
-          if ((counts[id] || 0) >= 1) { canEnter = false; denyReason = '已有人在内' }
+        if (!seasonEnded) {
+          if (room.accessRule === 'hoh_only') {
+            if (hohId !== req.user.userId) { canEnter = false; denyReason = '仅 HOH 可进入' }
+          } else if (room.accessRule === 'hoh_or_invited') {
+            if (hohId !== req.user.userId) { canEnter = false; denyReason = '需要 HOH 邀请' }
+          } else if (room.accessRule === 'have_not_only') {
+            // 任何人（无论是否 Have-Not）都可进入贫民屋
+          } else if (room.accessRule === 'single') {
+            if ((counts[id] || 0) >= 1) { canEnter = false; denyReason = '已有人在内' }
+          }
         }
 
         // 人数上限：前端仍允许点击，进入时再由服务端返回“人数已满”
@@ -305,26 +310,31 @@ router.post('/move', auth, async (req, res) => {
     }
 
     const gameId = 'bigbrother'
+    const season = await getCurrentSeason()
+    // 赛季结束后：所有房客都可以自由移动（含已淘汰/陪审团）
+    const seasonEnded = !!(season && (season.status === 'finished' || season.championId || season.allChatsRevealed))
 
     // 1. 玩家状态
     const player = await BBHouseguest.findOne({ id: req.user.userId, gameId })
-    if (!player || player.status !== 'active') {
+    if (!player || (!seasonEnded && player.status !== 'active')) {
       return res.status(403).json({ success: false, error: '非活跃玩家' })
     }
 
-    // 睡眠/洗澡期间不可移动
-    if (player.isSleeping) {
-      return res.status(403).json({ success: false, error: '睡眠中无法移动' })
-    }
-    if (player.isShowering) {
-      return res.status(403).json({ success: false, error: '洗澡中无法离开浴室' })
+    // 睡眠/洗澡期间不可移动（赛季结束后解除）
+    if (!seasonEnded) {
+      if (player.isSleeping) {
+        return res.status(403).json({ success: false, error: '睡眠中无法移动' })
+      }
+      if (player.isShowering) {
+        return res.status(403).json({ success: false, error: '洗澡中无法离开浴室' })
+      }
     }
     if (player.isMoving) {
       return res.status(403).json({ success: false, error: '移动中' })
     }
 
-    // 进入浴室：需确认已过洗澡冷却
-    if (targetRoomId === 'bathroom' && player.showerCooldownUntil) {
+    // 进入浴室：需确认已过洗澡冷却（赛季结束后解除）
+    if (!seasonEnded && targetRoomId === 'bathroom' && player.showerCooldownUntil) {
       const remainMs = new Date(player.showerCooldownUntil).getTime() - Date.now()
       if (remainMs > 0) {
         const minutes = Math.ceil(remainMs / 60000)
@@ -351,13 +361,15 @@ router.post('/move', auth, async (req, res) => {
       return res.status(400).json({ success: false, error: '你已经在这个房间了' })
     }
 
-    // 特殊隔离区域（初入屋/陪审屋）：选手无法自行进出，仅管理员可安排
+    // 特殊隔离区域（初入屋/陪审屋）：选手无法自行进出，仅管理员可安排；赛季结束后解除
     const currentRoomDoc = await BBHouseRoom.findOne({ id: loc.currentRoomId, gameId })
-    if (currentRoomDoc?.accessRule === 'admin_only') {
-      return res.status(403).json({ success: false, error: '你当前处于特殊区域，只能由管理员安排移动' })
-    }
-    if (targetRoom.accessRule === 'admin_only') {
-      return res.status(403).json({ success: false, error: '该区域只能由管理员安排进入' })
+    if (!seasonEnded) {
+      if (currentRoomDoc?.accessRule === 'admin_only') {
+        return res.status(403).json({ success: false, error: '你当前处于特殊区域，只能由管理员安排移动' })
+      }
+      if (targetRoom.accessRule === 'admin_only') {
+        return res.status(403).json({ success: false, error: '该区域只能由管理员安排进入' })
+      }
     }
 
     // 4. 通道存在
@@ -376,24 +388,26 @@ router.post('/move', auth, async (req, res) => {
       }
     }
 
-    // 6. 权限检查
-    const hoh = await getCurrentHoh()
-    const hohId = hoh ? hoh.id : null
-    if (targetRoom.accessRule === 'hoh_only') {
-      if (hohId !== req.user.userId) {
-        return res.status(403).json({ success: false, error: '仅 HOH 可进入' })
-      }
-    } else if (targetRoom.accessRule === 'hoh_or_invited') {
-      if (hohId !== req.user.userId) {
-        // 检查是否被邀请（第一阶段简化：只允许 HOH）
-        return res.status(403).json({ success: false, error: '需要 HOH 邀请' })
-      }
-    } else if (targetRoom.accessRule === 'have_not_only') {
-      // 任何人（无论是否 Have-Not）都可进入贫民屋
-    } else if (targetRoom.accessRule === 'single') {
-      const count = await BBPlayerLocation.countDocuments({ currentRoomId: targetRoomId, gameId })
-      if (count >= 1) {
-        return res.status(403).json({ success: false, error: 'Diary Room 已有人在内' })
+    // 6. 权限检查（赛季结束后解除房间权限限制，自由参观）
+    if (!seasonEnded) {
+      const hoh = await getCurrentHoh()
+      const hohId = hoh ? hoh.id : null
+      if (targetRoom.accessRule === 'hoh_only') {
+        if (hohId !== req.user.userId) {
+          return res.status(403).json({ success: false, error: '仅 HOH 可进入' })
+        }
+      } else if (targetRoom.accessRule === 'hoh_or_invited') {
+        if (hohId !== req.user.userId) {
+          // 检查是否被邀请（第一阶段简化：只允许 HOH）
+          return res.status(403).json({ success: false, error: '需要 HOH 邀请' })
+        }
+      } else if (targetRoom.accessRule === 'have_not_only') {
+        // 任何人（无论是否 Have-Not）都可进入贫民屋
+      } else if (targetRoom.accessRule === 'single') {
+        const count = await BBPlayerLocation.countDocuments({ currentRoomId: targetRoomId, gameId })
+        if (count >= 1) {
+          return res.status(403).json({ success: false, error: 'Diary Room 已有人在内' })
+        }
       }
     }
 
