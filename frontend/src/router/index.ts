@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useBbAuthStore } from '../stores/bbAuthStore'
 import { useBbSeasonStore } from '../stores/bbSeasonStore'
+import { bbGetEndgameStatus } from '../services/bbApi'
 
 const routes: RouteRecordRaw[] = [
   // ===== 登录入口（选手 / 管理员分离）=====
@@ -117,7 +118,15 @@ router.beforeEach(async (to) => {
       if (authStore.isJuryPlayer && to.path === '/games/bigbrother/player/finale') {
         const seasonStore = useBbSeasonStore()
         await seasonStore.fetchProgress()
-        if (seasonStore.season?.currentStage === 'champion_vote') return true
+        const stage = seasonStore.season?.currentStage
+        // 冠军投票阶段可直接进入；F2 问答在 final3 阶段、决赛二人确定后开放
+        if (stage === 'champion_vote') return true
+        if (stage === 'final3') {
+          try {
+            const eg = await bbGetEndgameStatus()
+            if ((eg?.finalTwo || []).length === 2) return true
+          } catch {}
+        }
       }
       return '/games/bigbrother/player/house'
     }

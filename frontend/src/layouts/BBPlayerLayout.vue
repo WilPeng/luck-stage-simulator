@@ -69,7 +69,7 @@
     <div v-if="isRestrictedPlayer" class="restricted-banner">
       <span class="restricted-icon">🚫</span>
       <span v-if="isJuryPlayer">
-        你已进入陪审团，只能进入 BB House{{ canJuryVote ? '；冠军投票阶段可前往终局投票' : '' }}。
+        你已进入陪审团，只能进入 BB House{{ canJuryEnterFinale ? (seasonStore.season?.currentStage === 'champion_vote' ? '；冠军投票阶段可前往终局投票' : '；F2 问答阶段可前往问答室') : '' }}。
       </span>
       <span v-else>你已被淘汰，只能进入 BB House。</span>
     </div>
@@ -147,6 +147,7 @@ import { useBbSeasonStore } from '../stores/bbSeasonStore'
 import { useBbRealtimeStore } from '../stores/bbRealtimeStore'
 import { BB_STAGE_NAME } from '../types/bigbrother'
 import { bbGetMyState, bbSleepWake, bbGetBroadcastHistory } from '../services/bbHouseApi'
+import { bbGetEndgameStatus } from '../services/bbApi'
 import AllChatLogsModal from '../components/bigbrother/AllChatLogsModal.vue'
 import { applyGamePageMeta } from '../router'
 
@@ -245,6 +246,7 @@ async function refreshState() {
   try { myState.value = await bbGetMyState() } catch {}
   try {
     await authStore.refreshCurrentUser()
+    await refreshJuryFinale()
     enforceRestrictedRoute()
   } catch {}
 }
@@ -252,7 +254,7 @@ function enforceRestrictedRoute() {
   if (!isRestrictedPlayer.value) return
   const path = route.path
   if (path === '/games/bigbrother/player/house') return
-  if (isJuryPlayer.value && path === '/games/bigbrother/player/finale' && seasonStore.season?.currentStage === 'champion_vote') return
+  if (canJuryEnterFinale.value && path === '/games/bigbrother/player/finale') return
   router.replace('/games/bigbrother/player/house')
 }
 async function doWake() {
@@ -263,7 +265,10 @@ const currentUser = computed(() => authStore.currentUser)
 const totalRounds = computed(() => seasonStore.totalRounds)
 const isRestrictedPlayer = computed(() => authStore.isRestrictedPlayer)
 const isJuryPlayer = computed(() => authStore.isJuryPlayer)
-const canJuryVote = computed(() => isJuryPlayer.value && seasonStore.season?.currentStage === 'champion_vote')
+// 陪审团：F2 问答（final3 阶段决赛二人确定后）或冠军投票阶段可进入终局页
+const juryFinaleReady = ref(false)
+const juryFinaleLabel = computed(() => seasonStore.season?.currentStage === 'champion_vote' ? '冠军投票' : 'F2 问答')
+const canJuryEnterFinale = computed(() => isJuryPlayer.value && juryFinaleReady.value)
 
 const fixedItems = [
   { icon: '🏠', text: '首页', path: '/games/bigbrother/player/home' },
@@ -272,15 +277,33 @@ const fixedItems = [
   { icon: '📝', text: '历史记录', path: '/games/bigbrother/player/history' },
 ]
 
-// 已淘汰/陪审团：只保留 BB House（陪审团冠军投票阶段额外显示终局入口）
+// 已淘汰/陪审团：只保留 BB House（陪审团在 F2 问答/冠军投票阶段额外显示终局入口）
 const visibleFixedItems = computed(() => {
   if (!isRestrictedPlayer.value) return fixedItems
   const items = fixedItems.filter(i => i.path === '/games/bigbrother/player/house')
-  if (canJuryVote.value) {
-    items.push({ icon: '🏆', text: '冠军投票', path: '/games/bigbrother/player/finale' })
+  if (canJuryEnterFinale.value) {
+    items.push({
+      icon: seasonStore.season?.currentStage === 'champion_vote' ? '🏆' : '🎤',
+      text: juryFinaleLabel.value,
+      path: '/games/bigbrother/player/finale'
+    })
   }
   return items
 })
+
+async function refreshJuryFinale() {
+  if (!isJuryPlayer.value) { juryFinaleReady.value = false; return }
+  const stage = seasonStore.season?.currentStage
+  if (stage === 'champion_vote') { juryFinaleReady.value = true; return }
+  if (stage === 'final3') {
+    try {
+      const eg = await bbGetEndgameStatus()
+      juryFinaleReady.value = (eg?.finalTwo || []).length === 2
+    } catch { juryFinaleReady.value = false }
+    return
+  }
+  juryFinaleReady.value = false
+}
 
 const stageMeta: Record<string, { icon: string; route: string }> = {
   hoh_competition: { icon: '👑', route: 'hoh' },
