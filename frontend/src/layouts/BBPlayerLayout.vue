@@ -145,11 +145,13 @@ import { useRouter, useRoute } from 'vue-router'
 import { useBbAuthStore } from '../stores/bbAuthStore'
 import { useBbSeasonStore } from '../stores/bbSeasonStore'
 import { useBbRealtimeStore } from '../stores/bbRealtimeStore'
+import { useHouseSocket } from '../composables/useHouseSocket'
 import { BB_STAGE_NAME } from '../types/bigbrother'
 import { bbGetMyState, bbSleepWake, bbGetBroadcastHistory } from '../services/bbHouseApi'
 import { bbGetEndgameStatus } from '../services/bbApi'
 import AllChatLogsModal from '../components/bigbrother/AllChatLogsModal.vue'
 import { applyGamePageMeta } from '../router'
+import { bindAudioUnlock, playNotificationSound, refreshNotificationPermission, showBrowserNotification } from '../composables/useBbNotification'
 
 const router = useRouter()
 const route = useRoute()
@@ -162,11 +164,36 @@ watch(() => seasonStore.stageName, (s) => {
 }, { immediate: true })
 const realtime = useBbRealtimeStore()
 
+// 全局房间消息提醒：离开 BB House 页面时也能收到设备提醒（House 页面内由 BBHouseView 处理）
+const houseAlerts = useHouseSocket()
+const isHousePage = computed(() => route.path.startsWith('/games/bigbrother/player/house'))
+houseAlerts.onNewMessage.value = (data) => {
+  if (isHousePage.value) return
+  const msg = data.message
+  if (!msg || msg.senderId === 'system' || msg.senderId === authStore.currentUser?.id) return
+  playNotificationSound('message')
+  const preview = msg.content.length > 100 ? `${msg.content.slice(0, 100)}…` : msg.content
+  showBrowserNotification(
+    'BB House · 房间新消息',
+    `${msg.senderName}：${preview}`,
+    `bb-room-${data.roomId}`
+  )
+}
+
 // 管理员召集：切换到比赛页面并提示进入准备
 const summonNotice = ref<any>(null)
+let lastSummonAlertAt = 0
+function fireSummonAlert(title: string, body: string) {
+  const now = Date.now()
+  if (now - lastSummonAlertAt < 2000) return
+  lastSummonAlertAt = now
+  playNotificationSound('summon')
+  showBrowserNotification(title, body, 'bb-summon')
+}
 watch(() => realtime.lastMinigameSummon, (s) => {
   if (!s || !s.path) return
   summonNotice.value = s
+  fireSummonAlert('🏆 比赛召集', `管理员召集你参加「${s.minigameName || '小游戏'}」，请尽快点击准备。`)
   try { if (router.currentRoute.value.path !== s.path) router.push(s.path) } catch {}
 })
 
@@ -185,7 +212,17 @@ const pageSummonName = computed(() => {
 watch(() => realtime.lastSummon, (s) => {
   if (!s || !s.path) return
   pageSummonNotice.value = s
+  fireSummonAlert('📢 管理员召集', `管理员召集大家前往「${pageSummonName.value}」页面，已为你切换。`)
   try { if (router.currentRoute.value.path !== s.path) router.push(s.path) } catch {}
+})
+
+// 管理员广播通知（例如比赛即将开始）也使用专属提示音
+watch(() => realtime.lastBroadcast, (b) => {
+  if (!b) return
+  fireSummonAlert(
+    b.type === 'invite' ? '📣 管理员邀请' : '🔔 管理员通知',
+    b.message || '管理员发布了一条新通知'
+  )
 })
 
 const mobileMenuOpen = ref(false)
@@ -407,6 +444,8 @@ onMounted(async () => {
   await seasonStore.fetchProgress()
   await seasonStore.fetchMenu()
   await refreshState()
+  bindAudioUnlock()
+  refreshNotificationPermission()
   realtime.connect()
   stateTimer = setInterval(refreshState, 8000)
   tickTimer = setInterval(() => { nowTs.value = Date.now() }, 1000)

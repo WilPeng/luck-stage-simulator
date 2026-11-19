@@ -9,6 +9,7 @@
     <div class="page-header">
       <h1>🏠 BB House</h1>
       <div class="header-meta">
+        <NotificationSettings />
         <button v-if="canSleepHere && !isSleeping && !isShowering" class="bb-btn bb-btn-sm" :disabled="!canStartSleep" @click="doSleep">😴 睡觉</button>
         <span class="location-tag">
           📍 {{ currentRoomName }}
@@ -16,6 +17,18 @@
         <span class="ws-status" :class="{ connected: house.connected.value }">
           {{ house.connected.value ? '🟢 在线' : '🔴 离线' }}
         </span>
+      </div>
+    </div>
+
+    <!-- 浏览器通知权限申请 -->
+    <div v-if="showNotifyBanner" class="notify-banner">
+      <div class="notify-banner-main">
+        <span class="notify-banner-icon">🔔</span>
+        <span>开启浏览器通知后，即使切换到其他页面，也能收到房间新消息和比赛召集提醒。</span>
+      </div>
+      <div class="notify-banner-actions">
+        <button class="bb-btn bb-btn-sm" @click="enableBrowserNotify">允许通知</button>
+        <button class="bb-btn bb-btn-sm bb-btn-outline" @click="dismissNotifyBanner">暂不</button>
       </div>
     </div>
 
@@ -238,17 +251,34 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
 import { useHouseSocket, type HouseMessage, type HousePlayer } from '../../../composables/useHouseSocket'
+import {
+  bindAudioUnlock,
+  playNotificationSound,
+  refreshNotificationPermission,
+  requestNotificationPermission,
+  showBrowserNotification,
+  useBbNotification
+} from '../../../composables/useBbNotification'
 import { bbGetMyLocation, bbGetReachableRooms, bbMoveToRoom, bbGetHouseRooms, bbGetRoomPlayers, bbGetMyState, bbSleep, bbSleepWake, bbSleepApprove, bbGetPhotoWall } from '../../../services/bbHouseApi'
 import { bbGetActiveHouseguests, bbGetCurrentHoh } from '../../../services/bbApi'
 import HouseMap from '../../../components/bigbrother/house/HouseMap.vue'
 import RoomChat from '../../../components/bigbrother/house/RoomChat.vue'
 import PhotoWall from '../../../components/bigbrother/PhotoWall.vue'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
+import NotificationSettings from '../../../components/bigbrother/house/NotificationSettings.vue'
 import type { BBHouseRoomWithCount, BBHohMonitorRoom } from '../../../types/bigbrother'
 
 const authStore = useBbAuthStore()
 const seasonStore = useBbSeasonStore()
 const house = useHouseSocket()
+const notify = useBbNotification()
+const NOTIFY_BANNER_KEY = 'bb:notify-banner-dismissed'
+const notifyBannerDismissed = ref((() => {
+  try { return sessionStorage.getItem(NOTIFY_BANNER_KEY) === '1' } catch { return false }
+})())
+const showNotifyBanner = computed(() =>
+  notify.enabled && notify.permission === 'default' && !notifyBannerDismissed.value
+)
 
 const currentRoomId = ref('living_room')
 const mobileTab = ref<'move' | 'chat'>('move')
@@ -396,6 +426,18 @@ house.onHistory.value = (data) => {
 house.onNewMessage.value = (data) => {
   if (data.roomId === currentRoomId.value) {
     messages.value.push(data.message)
+    // 房间内其他玩家发来新消息：播放消息提示音（自己发送的不提醒）
+    if (data.message.senderId !== myId.value && data.message.senderId !== 'system') {
+      playNotificationSound('message')
+      const preview = data.message.content.length > 100
+        ? `${data.message.content.slice(0, 100)}…`
+        : data.message.content
+      showBrowserNotification(
+        `BB House · ${currentRoomName.value}`,
+        `${data.message.senderName}：${preview}`,
+        `bb-room-${data.roomId}`
+      )
+    }
   }
 }
 
@@ -783,12 +825,27 @@ async function loadActivePlayers() {
   } catch {}
 }
 
+async function enableBrowserNotify() {
+  await requestNotificationPermission()
+  if (notify.permission === 'granted') {
+    notifyBannerDismissed.value = true
+    try { sessionStorage.setItem(NOTIFY_BANNER_KEY, '1') } catch {}
+  }
+}
+
+function dismissNotifyBanner() {
+  notifyBannerDismissed.value = true
+  try { sessionStorage.setItem(NOTIFY_BANNER_KEY, '1') } catch {}
+}
+
 let stateTicker: ReturnType<typeof setInterval> | null = null
 let washroomTicker: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   loadData()
   loadActivePlayers()
+  bindAudioUnlock()
+  refreshNotificationPermission()
   stateTicker = setInterval(() => { nowTs.value = Date.now() }, 1000)
   // 洗漱间：定时刷新浴室内人员（聊天仍按房间隔离，不可见）
   washroomTicker = setInterval(async () => {
@@ -855,6 +912,24 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   color: #8f83b8;
 }
 .ws-status.connected { color: #b39bff; }
+
+.notify-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: linear-gradient(135deg, #2a2a12, #1b1b10);
+  border: 1px solid #e6c98855;
+  border-radius: 9px;
+  color: #e6c988;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.notify-banner-main { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; }
+.notify-banner-icon { font-size: 18px; }
+.notify-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
 .invite-banner {
   display: flex;
@@ -1018,6 +1093,7 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   overflow: hidden;
 }
 .bb-house > .page-header,
+.bb-house > .notify-banner,
 .bb-house > .locked-banner,
 .bb-house > .invite-banner,
 .bb-house > .doorbell-banner,
@@ -1155,6 +1231,8 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
   .house-right { overflow: hidden; }
   .house-left:not(.mobile-active),
   .house-right:not(.mobile-active) { display: none; }
+  .notify-banner { flex-direction: column; align-items: stretch; gap: 8px; }
+  .notify-banner-actions { justify-content: flex-end; }
 }
 .locked-banner { background: #e6c98815; border: 1px solid #e6c98844; color: #e6c988; border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; text-align: center; }
 .photo-wall-top { margin-bottom: 14px; }
