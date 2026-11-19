@@ -48,12 +48,49 @@
         @click="askPermission"
       >申请浏览器通知权限</button>
 
-      <div v-if="notify.enabled" class="np-preview">
-        <button type="button" class="np-btn" @click="preview('message')">▶ 消息提示音</button>
-        <button type="button" class="np-btn" @click="preview('summon')">▶ 召集提示音</button>
+      <div class="np-sounds">
+        <div class="np-sounds-head">
+          <span>新消息提示音</span>
+          <button type="button" class="np-preview-btn" @click="preview('message')">▶ 试听</button>
+        </div>
+        <div class="np-sound-list">
+          <button
+            v-for="opt in messageOptions"
+            :key="opt.id"
+            type="button"
+            class="np-sound"
+            :class="{ selected: notify.messageSound === opt.id }"
+            @click="chooseSound('message', opt.id)"
+          >
+            <span class="np-radio"></span>
+            <span class="np-sound-name">{{ opt.label }}</span>
+            <span class="np-play">▶</span>
+          </button>
+        </div>
       </div>
 
-      <div class="np-tip">关闭后，将不再播放提示音，也不会推送浏览器通知。</div>
+      <div class="np-sounds">
+        <div class="np-sounds-head">
+          <span>比赛召集提示音</span>
+          <button type="button" class="np-preview-btn" @click="preview('summon')">▶ 试听</button>
+        </div>
+        <div class="np-sound-list">
+          <button
+            v-for="opt in summonOptions"
+            :key="opt.id"
+            type="button"
+            class="np-sound"
+            :class="{ selected: notify.summonSound === opt.id }"
+            @click="chooseSound('summon', opt.id)"
+          >
+            <span class="np-radio"></span>
+            <span class="np-sound-name">{{ opt.label }}</span>
+            <span class="np-play">▶</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="np-tip">所选提示音保存在当前设备。关闭提醒后，将不再播放提示音，也不会推送浏览器通知。</div>
     </div>
   </div>
 </template>
@@ -61,9 +98,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
-  playNotificationSound,
+  MESSAGE_SOUND_OPTIONS,
+  SUMMON_SOUND_OPTIONS,
+  previewNotificationSound,
   refreshNotificationPermission,
   requestNotificationPermission,
+  setNotificationSound,
   setNotificationsEnabled,
   useBbNotification,
   type BbNotificationSound
@@ -72,6 +112,8 @@ import {
 const notify = useBbNotification()
 const open = ref(false)
 const rootEl = ref<HTMLElement | null>(null)
+const messageOptions = MESSAGE_SOUND_OPTIONS
+const summonOptions = SUMMON_SOUND_OPTIONS
 
 const permissionText = computed(() => {
   switch (notify.permission) {
@@ -91,7 +133,11 @@ async function askPermission() {
 }
 
 function preview(kind: BbNotificationSound) {
-  playNotificationSound(kind)
+  previewNotificationSound(kind)
+}
+
+function chooseSound(kind: BbNotificationSound, id: string) {
+  setNotificationSound(kind, id)
 }
 
 function handleDocumentClick(event: MouseEvent) {
@@ -146,6 +192,8 @@ onUnmounted(() => {
   z-index: 1200;
   width: 300px;
   max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
   padding: 14px;
   background: linear-gradient(135deg, #2a1a4a, #1b1130);
   border: 1px solid #b39bff55;
@@ -234,17 +282,73 @@ onUnmounted(() => {
 .np-btn:hover { background: #b39bff18; }
 .np-btn-primary { border-color: #e6c98866; color: #e6c988; }
 .np-btn-primary:hover { background: #e6c98818; }
-.np-preview {
+.np-sounds { margin-top: 14px; }
+.np-sounds-head {
   display: flex;
-  gap: 8px;
-  margin-top: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  color: #cfc4ea;
+  font-size: 12px;
+  font-weight: 600;
 }
-.np-preview .np-btn { flex: 1; }
-.np-tip { margin-top: 10px; color: #6b5f92; font-size: 10px; line-height: 1.4; }
+.np-preview-btn {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #b39bff44;
+  background: transparent;
+  color: #b39bff;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.np-preview-btn:hover { background: #b39bff18; }
+.np-sound-list { display: flex; flex-direction: column; gap: 5px; }
+.np-sound {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 7px;
+  border: 1px solid #ffffff12;
+  background: #ffffff05;
+  color: #a99bd0;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.np-sound:hover { background: #b39bff12; border-color: #b39bff44; }
+.np-sound.selected { background: #e6c98812; border-color: #e6c98866; color: #e6c988; }
+.np-radio {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid #6b5f92;
+  transition: all 0.2s;
+}
+.np-sound.selected .np-radio {
+  border-color: #e6c988;
+  background: radial-gradient(circle, #e6c988 0 42%, transparent 46%);
+}
+.np-sound-name { flex: 1; min-width: 0; }
+.np-play { flex: none; font-size: 9px; color: #7d6fa6; }
+.np-sound.selected .np-play { color: #e6c988; }
+.np-tip { margin-top: 12px; color: #6b5f92; font-size: 10px; line-height: 1.4; }
 
 @media (max-width: 768px) {
   .notify-label { display: none; }
   .notify-trigger { padding: 6px 9px; }
-  .notify-popover { position: fixed; top: 58px; right: 10px; left: 10px; width: auto; max-width: none; }
+  .notify-popover {
+    position: fixed;
+    top: 58px;
+    right: 10px;
+    left: 10px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100vh - 72px);
+  }
 }
 </style>
