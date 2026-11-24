@@ -151,6 +151,7 @@ import GermanHeartGame from '../../../components/bigbrother/minigames/GermanHear
 import NumberDivinationGame from '../../../components/bigbrother/minigames/NumberDivinationGame.vue'
 import Poker17Game from '../../../components/bigbrother/minigames/Poker17Game.vue'
 import PoisonDrinkGame from '../../../components/bigbrother/minigames/PoisonDrinkGame.vue'
+import MarbleScoreGame from '../../../components/bigbrother/minigames/MarbleScoreGame.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import type { BBVetoRecord, MinigameRoom } from '../../../types/bigbrother'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
@@ -232,7 +233,8 @@ const gameComponentMap: Record<string, Component> = {
   'german-heart': markRaw(GermanHeartGame),
   'number-divination': markRaw(NumberDivinationGame),
   'poker17': markRaw(Poker17Game),
-  'poison-drink': markRaw(PoisonDrinkGame)
+  'poison-drink': markRaw(PoisonDrinkGame),
+  'marble-score': markRaw(MarbleScoreGame)
 }
 
 function isMe(name: string): boolean { return name === myName.value }

@@ -159,6 +159,16 @@
               </table>
             </div>
 
+            <!-- 弹珠得分：地图 + 落点 -->
+            <div v-else-if="isMarbleSnap" class="marble-snap">
+              <div class="snap-sub">
+                {{ curSnap?.data?.mode === 'single' ? '单轮模式' : '淘汰模式' }}
+                · 第 {{ curSnap?.data?.round }} {{ curSnap?.data?.mode === 'single' ? '位' : '轮' }}
+                · 已发射 {{ (curSnap?.data?.throws || []).length }} 次
+              </div>
+              <MarbleMap :map="curSnap?.data?.map" :throws="curSnap?.data?.throws || []" />
+            </div>
+
             <!-- 通用：按快照 players 渲染 -->
             <div v-else-if="genericSnapPlayers.length" class="gen-board">
               <div v-for="p in genericSnapPlayers" :key="p.playerId" class="gen-p"
@@ -439,6 +449,11 @@
               </div>
             </template>
 
+            <!-- 弹珠得分：地图、落点与逐轮得分 -->
+            <template v-else-if="meta.type === 'marble-score'">
+              <MarbleScoreReplay :meta="meta" />
+            </template>
+
             <!-- 自定义游戏 -->
             <template v-else-if="meta.type === 'custom'">
               <table class="meta-table">
@@ -532,6 +547,8 @@ import PoisonDrinkSpectator from '../../../components/bigbrother/minigames/Poiso
 import CustomModeReplay from '../../../components/bigbrother/minigames/CustomModeReplay.vue'
 import SimpleGameReplay from '../../../components/bigbrother/minigames/SimpleGameReplay.vue'
 import Poker17Replay from '../../../components/bigbrother/minigames/Poker17Replay.vue'
+import MarbleScoreReplay from '../../../components/bigbrother/minigames/MarbleScoreReplay.vue'
+import MarbleMap from '../../../components/bigbrother/minigames/MarbleMap.vue'
 
 const list = ref<any[]>([])
 const detail = ref<any>(null)
@@ -571,6 +588,7 @@ const GAME_RULES: Record<string, string> = {
   'number-divination': '数字占卜：选择数字并预测结果，累计得分最高者获胜。',
   'poker17': '17 张扑克对战，按牌型与筹码结算，最终筹码最多者获胜。',
   'poison-drink': '毒酒：庄家分配酒杯，玩家轮流转动转盘；喝到毒酒扣血，最后存活者获胜。',
+  'marble-score': '弹珠得分：随机生成固定得分地图，方向箭与蓄力条以不同周期摆动；淘汰模式每轮最低分淘汰1人，单轮模式随机顺序比最高分。',
   'custom': '自定义游戏，按管理员配置的题目、计分与胜负规则结算。'
 }
 
@@ -649,6 +667,10 @@ const isPoisonSnap = computed(() => {
 const SPELL_ICON: Record<string, string> = { 1: '🐉', 2: '👻', 3: '💤', 4: '🦉', 5: '⚡', 6: '❄️', 7: '🔥', 8: '🧪' }
 const isAbracaSnap = computed(() => { const d = curSnap.value?.data; return !!(d && Array.isArray(d.players) && d.tower) })
 const isSofSnap = computed(() => { const d = curSnap.value?.data; return !!(d && d.estimates !== undefined && (d.scores !== undefined || d.trueCount !== undefined)) })
+const isMarbleSnap = computed(() => {
+  const d = curSnap.value?.data
+  return !!(d && d.type === 'marble-score' && d.map)
+})
 const towerSpellList = computed(() => {
   const spells = meta.value?.spells
   if (Array.isArray(spells) && spells.length) return spells

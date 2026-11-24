@@ -167,6 +167,29 @@
                 </div>
               </template>
 
+              <!-- 弹珠得分：地图区域 / 两种模式 / 节奏 -->
+              <template v-if="pendingGame.id === 'marble-score'">
+                <p class="opt-hint">每局开始随机生成一张由若干不规则区域组成的地图，每个区域有固定分值，本局内不变。方向箭头左右摆动、蓄力条上下起伏，两者周期与幅度都随机且不同；选手点击发射后按落点所在区域计分。</p>
+                <div class="opt-row">
+                  <label class="opt-label">比赛模式
+                    <select v-model="options.mode" class="opt-number" style="min-width: 260px">
+                      <option value="elimination">淘汰模式 · 每轮最低分淘汰 1 人</option>
+                      <option value="single">单轮模式 · 随机顺序，最高分获胜</option>
+                    </select>
+                  </label>
+                  <label class="opt-label">每次发射时限(秒)
+                    <input v-model.number="options.aimTime" type="number" min="5" max="60" class="opt-number" />
+                  </label>
+                  <label class="opt-label">结算展示(秒)
+                    <input v-model.number="options.resultTime" type="number" min="1" max="15" class="opt-number" />
+                  </label>
+                  <label class="opt-label">区域数量
+                    <input v-model.number="options.cellCount" type="number" min="6" max="16" class="opt-number" />
+                  </label>
+                </div>
+                <p class="opt-hint">淘汰模式：每轮所有存活选手同时发射一次，最低分淘汰 1 人，直到剩最后一人。单轮模式：随机顺序轮流发射，每人仅 1 次机会，最高分获胜。</p>
+              </template>
+
               <!-- 规则说明：所有游戏通用，选手准备页展示 -->
               <div class="opt-block">
                 <label class="opt-label">比赛规则说明（选手准备页展示）
@@ -262,6 +285,10 @@ function onSelect(id: string, game?: MinigameDef) {
     options.seatTime = 30
     options.assignTime = 90
     options.rotateTime = 60
+    options.mode = 'elimination'
+    options.aimTime = 12
+    options.resultTime = 4
+    options.cellCount = 10
     options.questions = [{ text: '', optionA: '', optionB: '' }]
     if (game.id === 'describe-guess') {
       options.revealTime = 8

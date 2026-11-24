@@ -170,7 +170,8 @@ const targetInputHint = computed(() => {
     'reaction': '填写任意正整数（完成9块即胜）',
     'sequence-memory': '填写任意正整数（存活到最后即胜）',
     'german-heart': '留空即可（默认先到 5 分；此处可设定达成即胜分数）',
-    'number-divination': '留空即可（按最终得分判定，无需目标值）'
+    'number-divination': '留空即可（按最终得分判定，无需目标值）',
+    'marble-score': '留空即可（按所选模式自动判定胜负）'
   }
   return hints[selectedMinigameId.value] || '目标值（可选）'
 })

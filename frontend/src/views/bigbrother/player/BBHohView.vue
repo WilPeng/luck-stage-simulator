@@ -94,6 +94,7 @@ import GermanHeartGame from '../../../components/bigbrother/minigames/GermanHear
 import NumberDivinationGame from '../../../components/bigbrother/minigames/NumberDivinationGame.vue'
 import Poker17Game from '../../../components/bigbrother/minigames/Poker17Game.vue'
 import PoisonDrinkGame from '../../../components/bigbrother/minigames/PoisonDrinkGame.vue'
+import MarbleScoreGame from '../../../components/bigbrother/minigames/MarbleScoreGame.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import type { BBHohRecord, MinigameRoom } from '../../../types/bigbrother'
 
@@ -145,6 +146,7 @@ const gameComponentMap: Record<string, Component> = {
   'number-divination': markRaw(NumberDivinationGame),
   'poker17': markRaw(Poker17Game),
   'poison-drink': markRaw(PoisonDrinkGame),
+  'marble-score': markRaw(MarbleScoreGame),
   'power-challenge': markRaw(PowerChallengeGame)
 }
 

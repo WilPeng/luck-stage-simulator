@@ -29,6 +29,11 @@
       <div v-if="adminView" class="obs-admin">
         <div class="obs-admin-title">🔎 完整局面（管理员视角 · 含隐藏信息）</div>
 
+        <!-- 弹珠得分：地图与所有落点 -->
+        <div v-if="adminView.type === 'marble-score' && adminView.map" class="oa-marble">
+          <MarbleMap :map="adminView.map" :throws="adminView.throws || []" />
+        </div>
+
         <!-- 毒酒：图形化转盘盘面（含毒酒位置） -->
         <PoisonDrinkSpectator v-if="adminView.type === 'poison-drink' && adminView.board" :board="adminView.board" />
 
@@ -131,6 +136,7 @@ import BBAvatar from './BBAvatar.vue'
 import PoisonDrinkSpectator from './minigames/PoisonDrinkSpectator.vue'
 import JigsawSpectator from './minigames/JigsawSpectator.vue'
 import MemoryMatchSpectator from './minigames/MemoryMatchSpectator.vue'
+import MarbleMap from './minigames/MarbleMap.vue'
 
 const props = defineProps<{
   roomId: string | null
@@ -240,6 +246,7 @@ watch(() => props.roomId, (v) => {
 .ev-text { color: #ddd; }
 .obs-admin { border-top: 1px solid #ffffff10; padding-top: 12px; margin-bottom: 12px; }
 .obs-admin-title { font-size: 13px; color: #4488ff; margin-bottom: 10px; font-weight: 600; }
+.oa-marble { max-width: 420px; margin-bottom: 12px; }
 .oa-players { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
 .oa-p { display: flex; gap: 8px; padding: 8px 10px; background: #ffffff06; border: 1px solid #ffffff12; border-radius: 8px; }
 .oa-p.turn { border-color: #b39bff; background: #b39bff10; }

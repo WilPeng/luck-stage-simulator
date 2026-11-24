@@ -23,6 +23,7 @@ require('./germanHeart')
 require('./numberDivination')
 require('./poker17')
 require('./poisonDrink')
+require('./marbleScore')
 
 const { getAllGames, getGame, GAME_REGISTRY } = require('./index')
 const { loadCustomGame, createCustomGameHandler, getCustomHandlerId, clearCustomGameCache } = require('./customGame')
