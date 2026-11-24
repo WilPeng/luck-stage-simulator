@@ -589,6 +589,7 @@ const GAME_RULES: Record<string, string> = {
   'poker17': '17 张扑克对战，按牌型与筹码结算，最终筹码最多者获胜。',
   'poison-drink': '毒酒：庄家分配酒杯，玩家轮流转动转盘；喝到毒酒扣血，最后存活者获胜。',
   'marble-score': '弹珠得分：随机生成固定得分地图，方向箭与蓄力条以不同周期摆动；淘汰模式每轮最低分淘汰1人，单轮模式随机顺序比最高分。',
+  'hide-and-go-veto': '藏否决权牌寻宝赛：每人秘密藏好写有自己名字的否决权卡，随后轮流进屋翻找；卡被翻出即淘汰，最后一张没被找到的卡获胜。',
   'custom': '自定义游戏，按管理员配置的题目、计分与胜负规则结算。'
 }
 
@@ -651,7 +652,7 @@ function finalPct(pid: string) {
 
 const meta = computed<any>(() => detail.value?.meta || null)
 const isJigsawMeta = computed(() => meta.value?.type === 'jigsaw' && !!meta.value?.board)
-const SIMPLE_META_TYPES = ['click-speed', 'balance-bar', 'dice-duel', 'reaction', 'swing-pointer', 'klotski', 'spot-difference', 'sequence-memory']
+const SIMPLE_META_TYPES = ['click-speed', 'balance-bar', 'dice-duel', 'reaction', 'swing-pointer', 'klotski', 'spot-difference', 'sequence-memory', 'hide-and-go-veto']
 const isSimpleMeta = computed(() => SIMPLE_META_TYPES.includes(meta.value?.type))
 const snapshots = computed<any[]>(() => detail.value?.snapshots || [])
 const snapIndex = ref(0)

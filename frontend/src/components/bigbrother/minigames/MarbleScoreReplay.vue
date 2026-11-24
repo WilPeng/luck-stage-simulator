@@ -35,22 +35,24 @@
     <div v-if="isSingle" class="msr-block">
       <div class="msr-block-title">出场顺序与得分</div>
       <div v-if="tieText" class="msr-tie">{{ tieText }}</div>
-      <table class="msr-table">
-        <thead><tr><th>顺序</th><th>选手</th><th>方向</th><th>力度</th><th>落点</th><th>得分</th><th>结果</th></tr></thead>
-        <tbody>
-          <tr v-for="row in singleRows" :key="row.playerId">
-            <td>{{ row.index }}</td>
-            <td class="mc-name">{{ row.playerName }}</td>
-            <td>{{ row.throw ? row.throw.angle + '°' : '—' }}</td>
-            <td>{{ row.throw ? row.throw.power + '%' : '—' }}</td>
-            <td>{{ row.throw ? `${row.throw.x}, ${row.throw.y}` : '—' }}</td>
-            <td class="mc ok">{{ row.throw ? row.throw.score : '—' }}</td>
-            <td :class="meta.winners?.includes(row.playerId) ? 'mc ok' : ''">
-              {{ meta.winners?.includes(row.playerId) ? '🏆 获胜' : '—' }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="msr-table-wrap">
+        <table class="msr-table">
+          <thead><tr><th>顺序</th><th>选手</th><th>方向</th><th>力度</th><th>落点</th><th>得分</th><th>结果</th></tr></thead>
+          <tbody>
+            <tr v-for="row in singleRows" :key="row.playerId">
+              <td>{{ row.index }}</td>
+              <td class="mc-name">{{ row.playerName }}</td>
+              <td>{{ row.throw ? row.throw.angle + '°' : '—' }}</td>
+              <td>{{ row.throw ? row.throw.power + '%' : '—' }}</td>
+              <td>{{ row.throw ? `${row.throw.x}, ${row.throw.y}` : '—' }}</td>
+              <td class="mc ok">{{ row.throw ? row.throw.score : '—' }}</td>
+              <td :class="meta.winners?.includes(row.playerId) ? 'mc ok' : ''">
+                {{ meta.winners?.includes(row.playerId) ? '🏆 获胜' : '—' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <div v-else class="msr-block">
@@ -146,7 +148,7 @@ function statusClass(s: string) {
 .msr-map { min-width: 0; }
 .msr-legend { background: #ffffff05; border: 1px solid #ffffff10; border-radius: 10px; padding: 11px 12px; }
 .msr-legend-title { font-size: 12px; color: #b39bff; font-weight: 700; margin-bottom: 7px; }
-.msr-cells { display: flex; flex-wrap: wrap; gap: 5px; }
+.msr-cells { display: flex; flex-wrap: wrap; gap: 5px; max-height: 200px; overflow-y: auto; }
 .msr-cell { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: #cfc4ea; background: #ffffff06; border-radius: 5px; padding: 2px 6px; }
 .msr-cell i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 .msr-players { display: flex; flex-direction: column; gap: 4px; }
@@ -161,6 +163,7 @@ function statusClass(s: string) {
 .msr-block-title { font-size: 13px; color: #b39bff; font-weight: 700; margin-bottom: 10px; }
 .msr-tie { font-size: 12.5px; color: #e6c988; background: #e6c98810; border: 1px solid #e6c98833; border-radius: 7px; padding: 7px 10px; margin-bottom: 10px; }
 .msr-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.msr-table-wrap { overflow-x: auto; }
 .msr-table th, .msr-table td { border: 1px solid #ffffff12; padding: 5px 8px; text-align: center; color: #cfc4ea; white-space: nowrap; }
 .msr-table th { background: #ffffff08; color: #b9c6e6; font-weight: 600; }
 .msr-table td.mc-name { text-align: left; }
@@ -179,6 +182,10 @@ function statusClass(s: string) {
 
 @media (max-width: 720px) {
   .msr-main { grid-template-columns: 1fr; }
+  .msr-map { max-width: min(100%, 56vh); margin: 0 auto; }
   .msr-throws { grid-template-columns: 1fr; }
+  .msr-cells { max-height: 92px; overflow-y: auto; }
+  .msr-table { font-size: 12px; }
+  .msr-table th, .msr-table td { padding: 4px 6px; }
 }
 </style>

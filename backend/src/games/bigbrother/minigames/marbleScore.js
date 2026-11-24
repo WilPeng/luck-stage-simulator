@@ -2,16 +2,16 @@
  * 弹珠得分 (Marble Score)
  *
  * 规则：
- *  - 每局开始时随机生成一张不规则区域地图（Voronoi 区域），每个区域有固定分值，本局内不再变化；
+ *  - 每局开始时随机生成一张不规则区域地图（Voronoi 区域），每个区域分值互不相同且本局固定；
  *  - 选手发射弹珠时有两个因素：
  *      方向：地图上的方向箭头围绕正上方左右摆动；
- *      力度：蓄力条来回起伏，决定弹珠飞出的距离；
+ *      力度：地图外的蓄力条来回起伏，决定弹珠飞出的距离；
  *    两者分别以不同周期、不同幅度持续变化，选手需要在合适的瞬间点击发射；
- *  - 落点所在区域的分值即为本次得分。
+ *  - 落点所在区域的分值即为本次得分（不在图内提前展示落点）。
  *
  * 模式：
  *  - elimination：每轮所有存活选手同时发射一次，本轮最低分淘汰 1 人，直到剩下最后一人；
- *  - single：随机顺序轮流发射，每人仅 1 次机会，最高分者获胜。
+ *  - single：随机顺序轮流发射，每人仅 1 次机会，最高分者获胜（同分按落点精度判定）。
  */
 const { registerGame } = require('./index')
 
@@ -109,8 +109,10 @@ function voronoiCell(seed, seeds) {
   return cleanPolygon(poly)
 }
 
-function cellColor(score) {
-  const t = Math.max(0, Math.min(1, (score - 10) / 90))
+function cellColor(score, maxScore) {
+  const minScore = 10
+  const span = Math.max(1, (maxScore || 100) - minScore)
+  const t = Math.max(0, Math.min(1, (score - minScore) / span))
   const hue = 255 - t * 200
   const sat = 62 + t * 18
   const light = 56 - t * 8
@@ -118,12 +120,16 @@ function cellColor(score) {
 }
 
 function generateMap(cellCount, retry = 0) {
-  const n = Math.round(clamp(cellCount, 6, 16, 10))
+  const parsed = Math.round(Number(cellCount))
+  const n = Math.max(3, Number.isFinite(parsed) ? parsed : 10)
   const seeds = []
   let attempts = 0
-  const minGap = n >= 12 ? 9 : (n >= 8 ? 11 : 14)
+  // 区域越多，种子间距越小；数量不设上限
+  const minGap = Math.max(1.2, Math.min(14, Math.sqrt(4000 / n) * 0.9))
+  const useGap = n <= 80
+  const maxAttempts = Math.max(n * 120, 600)
 
-  while (seeds.length < n && attempts < n * 160) {
+  while (seeds.length < n && attempts < maxAttempts) {
     attempts++
     const angle = rand((-MAX_ANGLE + 2) * Math.PI / 180, (MAX_ANGLE - 2) * Math.PI / 180)
     const r = Math.sqrt(Math.random())
@@ -131,30 +137,34 @@ function generateMap(cellCount, retry = 0) {
     const x = ORIGIN.x + Math.sin(angle) * dist
     const y = ORIGIN.y - Math.cos(angle) * dist
     if (x < 3 || x > MAP_W - 3 || y < 4 || y > MAP_H - 8) continue
-    if (seeds.some(s => Math.hypot(s.x - x, s.y - y) < minGap)) continue
+    if (useGap && seeds.some(s => Math.hypot(s.x - x, s.y - y) < minGap)) continue
     seeds.push({ x, y, dist })
   }
 
-  // 极端情况下兜底补点
-  while (seeds.length < n) {
-    const x = rand(8, MAP_W - 8)
-    const y = rand(6, MAP_H - 16)
-    if (seeds.some(s => Math.hypot(s.x - x, s.y - y) < 6)) {
-      if (attempts++ > n * 600) break
-      continue
-    }
-    seeds.push({ x, y, dist: Math.hypot(x - ORIGIN.x, y - ORIGIN.y) })
+  // 兜底补点：保证达到管理员设置的区域数量
+  let guard = 0
+  while (seeds.length < n && guard++ < n * 8 + 1000) {
+    const angle = rand((-MAX_ANGLE + 2) * Math.PI / 180, (MAX_ANGLE - 2) * Math.PI / 180)
+    const r = Math.sqrt(Math.random())
+    const dist = MIN_DIST + 5 + r * (MAX_DIST - MIN_DIST - 9)
+    const x = ORIGIN.x + Math.sin(angle) * dist
+    const y = ORIGIN.y - Math.cos(angle) * dist
+    if (x < 1 || x > MAP_W - 1 || y < 1 || y > MAP_H - 1) continue
+    if (useGap && guard < n * 2 && seeds.some(s => Math.hypot(s.x - x, s.y - y) < minGap * 0.6)) continue
+    seeds.push({ x, y, dist })
   }
 
+  // 按距离远近分配互不相同的分值：越远越高分
+  const ranked = [...seeds].sort((a, b) => a.dist - b.dist)
+  const scoreMap = new Map(ranked.map((s, i) => [s, (i + 1) * 10]))
+  const maxScore = Math.max(10, seeds.length * 10)
+
   const cells = seeds.map((seed, idx) => {
-    const norm = clamp(seed.dist / MAX_DIST, 0, 1)
-    // 越远越高分，再叠加少量随机；取 5 的倍数方便阅读
-    const raw = 10 + 85 * Math.pow(norm, 1.12) + rand(-8, 8)
-    const score = Math.round(clamp(raw, 10, 100) / 5) * 5
+    const score = scoreMap.get(seed) || 10
     return {
       id: idx + 1,
       score,
-      color: cellColor(score),
+      color: cellColor(score, maxScore),
       seed: { x: round1(seed.x), y: round1(seed.y) },
       points: voronoiCell(seed, seeds)
     }
@@ -254,7 +264,7 @@ registerGame({
   id: 'marble-score',
   name: '弹珠得分',
   icon: '🎱',
-  description: '随机生成不规则得分地图，方向箭头与蓄力条以不同周期摆动，点击发射弹珠；淘汰模式每轮最低分淘汰1人，单轮模式随机顺序比最高分（同分看落点精度）',
+  description: '随机生成每个区域分值互不相同的不规则地图，方向箭头与蓄力条以不同周期摆动，点击发射弹珠；淘汰模式每轮最低分淘汰1人，单轮模式随机顺序比最高分（同分看落点精度）',
   category: 'skill',
   playerCount: { min: 2, max: 20 },
   duration: 1800,
@@ -268,7 +278,7 @@ registerGame({
       mode,
       aimTime: clamp(options.aimTime, 5, 60, 12),
       resultTime: clamp(options.resultTime, 1, 15, 4),
-      cellCount: Math.round(clamp(options.cellCount, 6, 16, 10))
+      cellCount: Math.max(3, Math.round(Number(options.cellCount) || 10))
     }
     const map = generateMap(opts.cellCount)
     const players = {}
@@ -686,6 +696,7 @@ registerGame({
 
   getAllStates(state) {
     const result = {}
+    const maxScore = Math.max(10, ...(state.map.cells || []).map(c => c.score))
     for (const pid of state.order) {
       const ps = state.players[pid]
       const shot = state.roundThrows[pid]
@@ -698,8 +709,8 @@ registerGame({
       }
       result[pid] = {
         score,
-        progress: Math.max(0, Math.min(100, score)),
-        max: 100,
+        progress: Math.max(0, Math.min(maxScore, score)),
+        max: maxScore,
         done: state.mode === 'elimination' ? !ps.alive : false,
         label
       }

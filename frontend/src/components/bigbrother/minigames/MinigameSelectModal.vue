@@ -184,10 +184,31 @@
                     <input v-model.number="options.resultTime" type="number" min="1" max="15" class="opt-number" />
                   </label>
                   <label class="opt-label">区域数量
-                    <input v-model.number="options.cellCount" type="number" min="6" max="16" class="opt-number" />
+                    <input v-model.number="options.cellCount" type="number" min="3" class="opt-number" />
                   </label>
                 </div>
-                <p class="opt-hint">淘汰模式：每轮所有存活选手同时发射一次，最低分淘汰 1 人，直到剩最后一人。单轮模式：随机顺序轮流发射，每人仅 1 次机会，最高分获胜。</p>
+                <p class="opt-hint">淘汰模式：每轮所有存活选手同时发射一次，最低分淘汰 1 人，直到剩最后一人。单轮模式：随机顺序轮流发射，每人仅 1 次机会，最高分获胜。区域数量至少 3 个，不设上限；每个区域分值互不相同，地图越远的分区通常分值越高。</p>
+              </template>
+
+              <!-- 藏否决权牌寻宝赛：藏牌 / 回合 / 翻找次数 -->
+              <template v-if="pendingGame.id === 'hide-and-go-veto'">
+                <p class="opt-hint">每位选手秘密选择一个藏点，藏好写有自己名字的否决权卡；随后按随机顺序轮流进屋翻找。翻出谁的卡，谁立即淘汰；同一藏点可藏多张卡，一次全部翻出。最后一张没被找到的卡的主人获胜。允许翻自己的藏点，若因此导致全员出局，翻找者获胜。</p>
+                <div class="opt-row">
+                  <label class="opt-label">藏牌时长(秒)
+                    <input v-model.number="options.hideTime" type="number" min="10" max="120" class="opt-number" />
+                  </label>
+                  <label class="opt-label">每回合时限(秒)
+                    <input v-model.number="options.turnTime" type="number" min="5" max="120" class="opt-number" />
+                  </label>
+                  <label class="opt-label">每回合翻找次数
+                    <select v-model.number="options.searchesPerTurn" class="opt-number">
+                      <option :value="1">1 次</option>
+                      <option :value="2">2 次</option>
+                      <option :value="3">3 次</option>
+                    </select>
+                  </label>
+                </div>
+                <p class="opt-hint">默认每回合 1 次，先手更公平；选 2–3 次会缩短对局，但先手优势更明显。开放房间数会按参赛人数自动调整（2–6 间）。</p>
               </template>
 
               <!-- 规则说明：所有游戏通用，选手准备页展示 -->
@@ -300,6 +321,11 @@ function onSelect(id: string, game?: MinigameDef) {
     }
     if (game.id === 'poison-drink') {
       options.revealTime = 8
+    }
+    if (game.id === 'hide-and-go-veto') {
+      options.hideTime = 40
+      options.turnTime = 20
+      options.searchesPerTurn = 1
     }
     uploadError.value = ''
     return
@@ -511,7 +537,7 @@ function parseMinorityQuestions(raw: any): { text: string; options: [string, str
 .opt-media-preview { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #17112a; border: 1px solid #b39bff44; border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #e0d7ff; word-break: break-all; }
 .opt-radio-row { display: flex; gap: 18px; flex-wrap: wrap; }
 .opt-row { display: flex; flex-wrap: wrap; gap: 16px; }
-.opt-number { width: 140px; padding: 8px 12px; background: #17112a; border: 1px solid #b39bff44; border-radius: 6px; color: #ece7fb; }
+.opt-number { width: 140px; max-width: 100%; padding: 8px 12px; background: #17112a; border: 1px solid #b39bff44; border-radius: 6px; color: #ece7fb; }
 .opt-textarea { width: 100%; padding: 8px 12px; background: #17112a; border: 1px solid #b39bff44; border-radius: 6px; color: #ece7fb; font-family: inherit; font-size: 13px; resize: vertical; box-sizing: border-box; }
 .opt-questions { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
 .opt-question-row { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: #ffffff06; border: 1px solid #b39bff22; border-radius: 8px; }

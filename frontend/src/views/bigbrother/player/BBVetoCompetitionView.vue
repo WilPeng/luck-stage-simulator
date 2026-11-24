@@ -152,6 +152,7 @@ import NumberDivinationGame from '../../../components/bigbrother/minigames/Numbe
 import Poker17Game from '../../../components/bigbrother/minigames/Poker17Game.vue'
 import PoisonDrinkGame from '../../../components/bigbrother/minigames/PoisonDrinkGame.vue'
 import MarbleScoreGame from '../../../components/bigbrother/minigames/MarbleScoreGame.vue'
+import HideAndGoVetoGame from '../../../components/bigbrother/minigames/HideAndGoVeto.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import type { BBVetoRecord, MinigameRoom } from '../../../types/bigbrother'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
@@ -234,7 +235,8 @@ const gameComponentMap: Record<string, Component> = {
   'number-divination': markRaw(NumberDivinationGame),
   'poker17': markRaw(Poker17Game),
   'poison-drink': markRaw(PoisonDrinkGame),
-  'marble-score': markRaw(MarbleScoreGame)
+  'marble-score': markRaw(MarbleScoreGame),
+  'hide-and-go-veto': markRaw(HideAndGoVetoGame)
 }
 
 function isMe(name: string): boolean { return name === myName.value }

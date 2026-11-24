@@ -52,7 +52,6 @@
             :map="map"
             :throws="mapThrows"
             :aim-angle="showAim ? liveAngle : null"
-            :preview-point="showAim ? previewPoint : null"
             :active-color="me?.color || '#ffd166'"
           />
 
@@ -84,49 +83,51 @@
         </div>
 
         <div class="ms-side">
-          <div class="turn-banner" :class="{ active: canLaunch, waiting: !canLaunch }">
-            <template v-if="!myAlive">你已被淘汰，观战中</template>
-            <template v-else-if="mode === 'elimination'">
-              <template v-if="canLaunch">🎯 选择你的发射时机</template>
-              <template v-else-if="myThrownThisRound">✅ 你已发射，等待其他选手</template>
-              <template v-else>等待本轮发射</template>
-            </template>
-            <template v-else>
-              <template v-if="myTurn">🎯 轮到你了</template>
-              <template v-else>等待 {{ currentTurnName }} 发射…</template>
-            </template>
-          </div>
-
-          <div class="specs" :class="{ dim: !showAim }">
-            <div class="spec-head">
-              <span>方向</span>
-              <span class="spec-value">{{ showAim ? liveAngle.toFixed(1) + '°' : '—' }}</span>
-            </div>
-            <div class="dir-track">
-              <div class="dir-center"></div>
-              <div class="dir-needle" :style="{ transform: `translateX(-50%) rotate(${showAim ? liveAngle : 0}deg)` }"></div>
+          <div class="ms-controls">
+            <div class="turn-banner" :class="{ active: canLaunch, waiting: !canLaunch }">
+              <template v-if="!myAlive">你已被淘汰，观战中</template>
+              <template v-else-if="mode === 'elimination'">
+                <template v-if="canLaunch">🎯 选择你的发射时机</template>
+                <template v-else-if="myThrownThisRound">✅ 你已发射，等待其他选手</template>
+                <template v-else>等待本轮发射</template>
+              </template>
+              <template v-else>
+                <template v-if="myTurn">🎯 轮到你了</template>
+                <template v-else>等待 {{ currentTurnName }} 发射…</template>
+              </template>
             </div>
 
-            <div class="spec-head power-head">
-              <span>力度</span>
-              <span class="spec-value">{{ showAim ? Math.round(livePower * 100) + '%' : '—' }}</span>
-            </div>
-            <div class="power-track">
-              <div class="power-fill" :style="{ width: (showAim ? livePower * 100 : 0) + '%' }"></div>
-              <div class="power-ticks">
-                <span v-for="n in 9" :key="n" class="power-tick"></span>
+            <div class="specs" :class="{ dim: !showAim }">
+              <div class="spec-head">
+                <span>方向</span>
+                <span class="spec-value">{{ showAim ? liveAngle.toFixed(1) + '°' : '—' }}</span>
               </div>
-            </div>
-            <div class="power-hint">力度决定弹珠飞出的距离</div>
-          </div>
+              <div class="dir-track">
+                <div class="dir-center"></div>
+                <div class="dir-needle" :style="{ transform: `translateX(-50%) rotate(${showAim ? liveAngle : 0}deg)` }"></div>
+              </div>
 
-          <button class="launch-btn" :class="{ ready: canLaunch }" :disabled="!canLaunch" @click="launch">
-            <template v-if="canLaunch">🚀 发射弹珠</template>
-            <template v-else-if="!myAlive">观战中</template>
-            <template v-else-if="myThrownThisRound">已发射</template>
-            <template v-else>等待轮次</template>
-          </button>
-          <p class="launch-hint">点击按钮或按空格发射；方向与力度会在你点击的瞬间被锁定。</p>
+              <div class="spec-head power-head">
+                <span>力度</span>
+                <span class="spec-value">{{ showAim ? Math.round(livePower * 100) + '%' : '—' }}</span>
+              </div>
+              <div class="power-track">
+                <div class="power-fill" :style="{ width: (showAim ? livePower * 100 : 0) + '%' }"></div>
+                <div class="power-ticks">
+                  <span v-for="n in 9" :key="n" class="power-tick"></span>
+                </div>
+              </div>
+              <div class="power-hint">力度决定弹珠飞出的距离</div>
+            </div>
+
+            <button class="launch-btn" :class="{ ready: canLaunch }" :disabled="!canLaunch" @click="launch">
+              <template v-if="canLaunch">🚀 发射弹珠</template>
+              <template v-else-if="!myAlive">观战中</template>
+              <template v-else-if="myThrownThisRound">已发射</template>
+              <template v-else>等待轮次</template>
+            </button>
+            <p class="launch-hint">点击按钮或按空格发射；方向与力度会在你点击的瞬间被锁定。</p>
+          </div>
 
           <div class="players-box">
             <div class="players-title">
@@ -273,21 +274,9 @@ const clockLeft = ref(0)
 const osc = ref<any>(null)
 const liveAngle = ref(0)
 const livePower = ref(0)
-const previewPoint = ref<{ x: number; y: number } | null>(null)
 const showAim = computed(() => phase.value === 'aim' && canLaunch.value && !!osc.value)
 
 let rafTimer: ReturnType<typeof setInterval> | null = null
-
-function landingPoint(angle: number, power: number) {
-  const m = map.value
-  if (!m) return null
-  const rad = angle * Math.PI / 180
-  const dist = m.minDistance + power * (m.maxDistance - m.minDistance)
-  return {
-    x: m.origin.x + Math.sin(rad) * dist,
-    y: m.origin.y - Math.cos(rad) * dist
-  }
-}
 
 function tickClock() {
   const s = state.value
@@ -295,17 +284,13 @@ function tickClock() {
   const serverNow = Date.now() + clockOffset.value
   clockLeft.value = Math.max(0, ((s.phaseEndsAt || 0) - serverNow) / 1000)
 
-  if (s.phase !== 'aim' || !osc.value || !canLaunch.value) {
-    previewPoint.value = null
-    return
-  }
+  if (s.phase !== 'aim' || !osc.value || !canLaunch.value) return
   const t = Math.max(0, serverNow - (s.phaseStartAt || 0))
   const angle = osc.value.dirAmp * Math.sin((2 * Math.PI * t) / osc.value.dirPeriod + osc.value.dirPhase)
   const powerRaw = 0.5 + 0.5 * osc.value.powAmp * Math.sin((2 * Math.PI * t) / osc.value.powPeriod + osc.value.powPhase)
   const power = Math.max(0, Math.min(1, powerRaw))
   liveAngle.value = angle
   livePower.value = power
-  previewPoint.value = landingPoint(angle, power)
 }
 
 function syncClock(s: any) {
@@ -319,9 +304,6 @@ function syncClock(s: any) {
   }
   clockLeft.value = Math.max(0, ((s.phaseEndsAt || 0) - (Date.now() + clockOffset.value)) / 1000)
   osc.value = s.osc || null
-  if (s.phase !== 'aim' || !s.osc) {
-    previewPoint.value = null
-  }
 }
 
 watch(gameState, (s) => {
@@ -473,6 +455,7 @@ h2 { color: #ece7fb; margin: 0 0 10px; font-size: 24px; }
 .overlay-small { font-size: 13px; color: #c9c0e6; text-shadow: 0 1px 8px #000; }
 
 .ms-side { display: flex; flex-direction: column; gap: 10px; }
+.ms-controls { display: flex; flex-direction: column; gap: 10px; }
 .turn-banner {
   padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 600;
   border: 1px solid #ffffff12; background: #ffffff06; color: #b9c6e6; text-align: center;
@@ -544,24 +527,41 @@ h2 { color: #ece7fb; margin: 0 0 10px; font-size: 24px; }
 .lr-out { font-size: 10px; }
 
 @media (max-width: 760px) {
-  .marble-score { padding-bottom: 84px; }
-  .ms-main { grid-template-columns: 1fr; }
-  .ms-side { flex-direction: column; }
-  .players-list { max-height: 200px; }
-  .ms-header { gap: 8px; }
-  .ms-timer { margin-left: 0; }
-  .overlay-big { font-size: 16px; }
-  .launch-btn {
+  .game-playing { padding-bottom: 210px; }
+  .ms-main { grid-template-columns: 1fr; gap: 10px; }
+  .ms-map-wrap { width: 100%; max-width: min(100%, 52vh); margin: 0 auto; }
+  .ms-side { gap: 8px; }
+  .ms-controls {
     position: fixed;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    width: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
     z-index: 90;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+    padding: 8px 10px;
+    gap: 8px;
+    background: rgba(18, 13, 36, 0.95);
+    border: 1px solid #b39bff33;
+    border-radius: 14px;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.62);
+    backdrop-filter: blur(10px);
   }
-  .launch-btn:not(.ready) { background: #1b1130ee; backdrop-filter: blur(6px); }
-  .launch-btn.ready { background: linear-gradient(180deg, #ffd16633, #ffd16618); backdrop-filter: blur(6px); }
+  .ms-controls .specs { background: transparent; border: none; padding: 0; }
+  .players-list { max-height: 220px; }
+  .ms-header { gap: 8px; margin-bottom: 8px; }
+  .ms-title { font-size: 16px; }
+  .ms-icon { font-size: 20px; }
+  .ms-timer { margin-left: 0; font-size: 13px; }
+  .specs { padding: 9px 11px; }
+  .dir-track { display: none; }
+  .power-track { height: 20px; margin-top: 5px; }
+  .power-head { margin-top: 0; }
+  .power-hint { display: none; }
+  .launch-btn { padding: 13px 16px; font-size: 17px; touch-action: manipulation; }
   .launch-hint { display: none; }
+  .overlay-big { font-size: 15px; }
+  .overlay-small { font-size: 12px; }
+  .round-log { margin-top: 12px; }
+  .log-card { min-width: 180px; }
+  .turn-banner { padding: 8px 10px; font-size: 13px; }
 }
 </style>

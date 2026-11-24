@@ -23,10 +23,10 @@
             fill-opacity="0.42"
             :stroke="cell.color"
             stroke-opacity="0.95"
-            stroke-width="0.45"
+            :stroke-width="strokeWidth"
             stroke-linejoin="round"
           />
-          <circle :cx="cell.seed.x" :cy="cell.seed.y" r="0.7" :fill="cell.color" fill-opacity="0.9" />
+          <circle :cx="cell.seed.x" :cy="cell.seed.y" :r="seedDotRadius" :fill="cell.color" fill-opacity="0.9" />
           <text
             :x="cell.seed.x"
             :y="cell.seed.y + 1.4"
@@ -35,13 +35,6 @@
           >{{ cell.score }}</text>
         </g>
       </g>
-
-      <!-- 落点轨迹 -->
-      <line
-        v-if="previewPoint"
-        :x1="origin.x" :y1="origin.y" :x2="previewPoint.x" :y2="previewPoint.y"
-        class="mm-path"
-      />
 
       <!-- 历史落点 -->
       <g class="mm-throws">
@@ -72,12 +65,6 @@
         <polygon :points="arrowHead" :fill="activeColor || '#ffd166'" />
         <circle :cx="aimLineEnd.x" :cy="aimLineEnd.y" r="0.7" :fill="activeColor || '#ffd166'" />
       </g>
-
-      <!-- 当前预览落点 -->
-      <g v-if="previewPoint" class="mm-preview">
-        <circle :cx="previewPoint.x" :cy="previewPoint.y" r="1.9" class="mm-preview-ring" />
-        <circle :cx="previewPoint.x" :cy="previewPoint.y" r="0.8" class="mm-preview-dot" />
-      </g>
     </svg>
   </div>
 </template>
@@ -89,13 +76,11 @@ const props = withDefaults(defineProps<{
   map: any
   throws?: any[]
   aimAngle?: number | null
-  previewPoint?: { x: number; y: number } | null
   activeColor?: string
   compact?: boolean
 }>(), {
   throws: () => [],
   aimAngle: null,
-  previewPoint: null,
   activeColor: '',
   compact: false
 })
@@ -114,8 +99,20 @@ function pointsAttr(cell: any) {
   return (cell.points || []).map((p: any) => `${p.x},${p.y}`).join(' ')
 }
 
+const cellCount = computed(() => cells.value.length)
+const scoreRange = computed(() => {
+  const list = cells.value.map((c: any) => Number(c.score) || 0)
+  if (!list.length) return { min: 0, max: 1 }
+  return { min: Math.min(...list), max: Math.max(...list) }
+})
+const strokeWidth = computed(() => cellCount.value > 200 ? 0.1 : cellCount.value > 80 ? 0.16 : cellCount.value > 30 ? 0.28 : 0.45)
+const seedDotRadius = computed(() => cellCount.value > 150 ? 0.3 : cellCount.value > 50 ? 0.45 : 0.7)
+
 function labelSize(score: number) {
-  return 2.6 + Math.max(0, Math.min(1, (score - 10) / 90)) * 1.8
+  const { min, max } = scoreRange.value
+  const t = max > min ? (score - min) / (max - min) : 0.5
+  const density = Math.max(0.45, Math.min(1, 8 / Math.sqrt(Math.max(1, cellCount.value))))
+  return (2.5 + t * 1.7) * density
 }
 
 const aimLineEnd = computed(() => {
@@ -176,22 +173,8 @@ const arrowHead = computed(() => {
   pointer-events: none;
   user-select: none;
 }
-.mm-path {
-  stroke: #ffd166;
-  stroke-width: 0.42;
-  stroke-dasharray: 1.6 1.4;
-  stroke-opacity: 0.55;
-}
 .mm-origin-halo { fill: #ffd16622; }
 .mm-origin { fill: #ffd166; stroke: #120a22; stroke-width: 0.4; }
 .mm-aim { filter: drop-shadow(0 0 1.2px rgba(255, 209, 102, 0.7)); }
-.mm-preview-ring {
-  fill: none;
-  stroke: #ffffff;
-  stroke-width: 0.5;
-  stroke-dasharray: 1.2 1.2;
-  opacity: 0.85;
-}
-.mm-preview-dot { fill: #fff8db; }
 .marble-map.compact { border-radius: 10px; }
 </style>

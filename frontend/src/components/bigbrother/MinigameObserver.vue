@@ -43,6 +43,9 @@
         <!-- 记忆翻牌：所有选手牌面 -->
         <MemoryMatchSpectator v-else-if="adminView.type === 'memory-match' && adminView.board" :board="adminView.board" />
 
+        <!-- 藏否决权牌寻宝赛：管理员全图透视 -->
+        <HideAndGoVetoSpectator v-else-if="adminView.type === 'hide-and-go-veto' && adminView.board" :board="adminView.board" />
+
         <!-- 出包魔法师 -->
         <template v-else-if="Array.isArray(adminView.players) && adminView.tower">
           <div class="oa-players">
@@ -136,6 +139,7 @@ import BBAvatar from './BBAvatar.vue'
 import PoisonDrinkSpectator from './minigames/PoisonDrinkSpectator.vue'
 import JigsawSpectator from './minigames/JigsawSpectator.vue'
 import MemoryMatchSpectator from './minigames/MemoryMatchSpectator.vue'
+import HideAndGoVetoSpectator from './minigames/HideAndGoVetoSpectator.vue'
 import MarbleMap from './minigames/MarbleMap.vue'
 
 const props = defineProps<{
@@ -246,7 +250,7 @@ watch(() => props.roomId, (v) => {
 .ev-text { color: #ddd; }
 .obs-admin { border-top: 1px solid #ffffff10; padding-top: 12px; margin-bottom: 12px; }
 .obs-admin-title { font-size: 13px; color: #4488ff; margin-bottom: 10px; font-weight: 600; }
-.oa-marble { max-width: 420px; margin-bottom: 12px; }
+.oa-marble { width: 100%; max-width: 420px; margin-bottom: 12px; }
 .oa-players { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
 .oa-p { display: flex; gap: 8px; padding: 8px 10px; background: #ffffff06; border: 1px solid #ffffff12; border-radius: 8px; }
 .oa-p.turn { border-color: #b39bff; background: #b39bff10; }

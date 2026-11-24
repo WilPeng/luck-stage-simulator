@@ -886,6 +886,9 @@ function finishGame(room, minigameNs) {
 
   minigameNs.to(room.roomId).emit('game_progress', buildProgress(room))
 
+  // 补推最终状态：让所有参赛者（不只是最后操作者）都能看到结算/全场公开信息
+  pushPlayerStates(room, handler, minigameNs)
+
   // 记录结束事件并落库复盘
   recordAndBroadcast(minigameNs, room, {
     type: 'game_end',
