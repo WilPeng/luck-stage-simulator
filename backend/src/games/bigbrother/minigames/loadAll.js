@@ -24,6 +24,7 @@ require('./numberDivination')
 require('./poker17')
 require('./poisonDrink')
 require('./marbleScore')
+require('./otev')
 require('./hideAndGoVeto')
 
 const { getAllGames, getGame, GAME_REGISTRY } = require('./index')

@@ -211,6 +211,81 @@
                 <p class="opt-hint">默认每回合 1 次，先手更公平；选 2–3 次会缩短对局，但先手优势更明显。开放房间数会按参赛人数自动调整（2–6 间）。</p>
               </template>
 
+              <!-- OTEV 抢座问答赛：公共牌池 / 查看与拿牌 / 提交揭晓 -->
+              <template v-if="pendingGame.id === 'otev'">
+                <p class="opt-hint">
+                  所有玩家共享一个公共牌池：查看是私有的、非独占的，可以多人同时看同一张；拿走是独占的，先到先得。
+                  每题答案是 1 人或 2 人；单人答案必须拿“只有这个人”的牌，双人答案必须拿“同时有这两个人”的牌。
+                  提交后统一揭晓：第一个答错者淘汰；如果前 N−1 人都正确，最后提交者淘汰。
+                  超时未提交会自动携带最近查看过的牌；从未查看则随机带走一张，不会卡住本轮。
+                </p>
+                <div class="opt-row">
+                  <label class="opt-label">OTEV 唱歌(秒)
+                    <input v-model.number="options.riddleTime" type="number" min="3" max="20" class="opt-number" />
+                  </label>
+                  <label class="opt-label">公共翻找(秒)
+                    <input v-model.number="options.searchTime" type="number" min="15" max="120" class="opt-number" />
+                  </label>
+                  <label class="opt-label">揭晓间隔(秒/人)
+                    <input v-model.number="options.revealStepTime" type="number" min="0.6" max="3" step="0.1" class="opt-number" />
+                  </label>
+                  <label class="opt-label">结算展示(秒)
+                    <input v-model.number="options.resultTime" type="number" min="2" max="15" class="opt-number" />
+                  </label>
+                  <label class="opt-label">总牌数(0=自动)
+                    <input v-model.number="options.cardCount" type="number" min="0" max="48" class="opt-number" />
+                  </label>
+                </div>
+                <p class="opt-hint">自动牌数 = 存活人数张正确牌 + 约 1.5N 张干扰牌；正确牌数量始终等于当前存活人数。</p>
+
+                <div class="opt-row">
+                  <label class="opt-label">题目来源
+                    <select v-model="options.questionMode" class="opt-number" style="min-width: 250px">
+                      <option value="auto">自动（本季淘汰/提名/角色数据）</option>
+                      <option value="custom">自定义</option>
+                    </select>
+                  </label>
+                  <label class="opt-label">泥浆主题
+                    <select v-model="options.theme" class="opt-number">
+                      <option value="random">随机</option>
+                      <option value="mud">泥浆</option>
+                      <option value="foam">泡沫</option>
+                      <option value="ruins">废墟</option>
+                    </select>
+                  </label>
+                  <label class="opt-label">OTEV 形象
+                    <select v-model="options.otveAvatar" class="opt-number">
+                      <option value="🐐">🐐 山羊</option>
+                      <option value="🦎">🦎 变色龙</option>
+                      <option value="🐷">🐷 猪</option>
+                      <option value="👽">👽 外星人</option>
+                      <option value="🕊️">🕊️ 鸽子</option>
+                    </select>
+                  </label>
+                </div>
+
+                <template v-if="options.questionMode === 'custom'">
+                  <label class="opt-label">自定义题目（每行：答案|线索1|线索2；两人答案用 + 连接）
+                    <textarea v-model="options.questionsText" class="opt-textarea" rows="6"
+                      placeholder="示例：&#10;小明|第 3 周我被 7 票淘汰|我进了陪审团&#10;小明+小红|第 4 周我们两人一起被提名|HOH 是阿力"></textarea>
+                  </label>
+                  <p class="opt-hint">答案必须是 1 个或 2 个房客姓名；超过 2 人、线索为空、线索中直接出现答案名字的行会被过滤。</p>
+                </template>
+                <p v-else class="opt-hint">自动模式会读取本季淘汰、提名、HOH、否决权、贫民屋等记录；数据不足时使用示例题兜底，建议重要比赛使用自定义题目。</p>
+
+                <div class="opt-block">
+                  <div class="opt-subtitle">OTEV 之歌（可选）</div>
+                  <p class="opt-hint">上传后会在 OTEV 唱歌阶段播放；不传也能正常游玩。</p>
+                  <div v-if="options.audioUrl" class="opt-media-preview">
+                    <span>🎵 {{ options.audioName || options.audioUrl }}</span>
+                    <button class="opt-remove" type="button" @click="removeAudio">移除</button>
+                  </div>
+                  <BBUploadBox v-else accept="audio/*" icon="🎵" label="点击或拖拽上传 OTEV 之歌"
+                    hint="支持 MP3 / WAV / OGG 等" :busy="uploadingAudio" @file="onAudioFile" />
+                  <p v-if="audioError" class="opt-error">{{ audioError }}</p>
+                </div>
+              </template>
+
               <!-- 规则说明：所有游戏通用，选手准备页展示 -->
               <div class="opt-block">
                 <label class="opt-label">比赛规则说明（选手准备页展示）
@@ -248,7 +323,7 @@
 import { ref, reactive, computed } from 'vue'
 import MinigameSelector from './MinigameSelector.vue'
 import BBUploadBox from '../BBUploadBox.vue'
-import { bbUploadGameImage } from '../../../services/bbApi'
+import { bbUploadGameImage, bbUploadGameMedia } from '../../../services/bbApi'
 import type { MinigameDef } from '../../../types/bigbrother'
 
 withDefaults(defineProps<{ open: boolean; title?: string }>(), {
@@ -263,6 +338,8 @@ const pendingGame = ref<MinigameDef | null>(null)
 const options = reactive<Record<string, any>>({})
 const uploadingImage = ref(false)
 const uploadError = ref('')
+const uploadingAudio = ref(false)
+const audioError = ref('')
 
 const previewUrl = computed(() => {
   const u = options.imageUrl as string
@@ -276,6 +353,11 @@ const previewUrl = computed(() => {
 const canConfirm = computed(() => {
   if (!pendingGame.value) return false
   if (pendingGame.value.id === 'jigsaw') return !uploadingImage.value && !!options.imageUrl
+  if (pendingGame.value.id === 'otev') {
+    if (uploadingAudio.value) return false
+    if (options.questionMode === 'custom') return parseOtevQuestions(options.questionsText).length > 0
+    return true
+  }
   return true
 })
 
@@ -327,7 +409,22 @@ function onSelect(id: string, game?: MinigameDef) {
       options.turnTime = 20
       options.searchesPerTurn = 1
     }
+    if (game.id === 'otev') {
+      options.riddleTime = 5
+      options.searchTime = 35
+      options.revealStepTime = 1.2
+      options.resultTime = 4
+      options.cardCount = 0
+      options.questionMode = 'auto'
+      options.questionsText = ''
+      options.theme = 'random'
+      options.otveAvatar = '🐐'
+      options.audioUrl = ''
+      options.audioName = ''
+      options.timeLimit = 1200
+    }
     uploadError.value = ''
+    audioError.value = ''
     return
   }
   emit('select', id)
@@ -347,11 +444,39 @@ async function onImageFile(file: File) {
   }
 }
 
+async function onAudioFile(file: File) {
+  uploadingAudio.value = true
+  audioError.value = ''
+  try {
+    const res = await bbUploadGameMedia(file)
+    options.audioUrl = res.url
+    options.audioName = res.name || ''
+  } catch (err: any) {
+    audioError.value = err?.message || '上传失败'
+  } finally {
+    uploadingAudio.value = false
+  }
+}
+
+function removeAudio() {
+  options.audioUrl = ''
+  options.audioName = ''
+  audioError.value = ''
+}
+
 function confirmOptions() {
   if (!pendingGame.value || !canConfirm.value) return
   const payload: Record<string, any> = { ...options }
   if (payload.noTimeLimit) payload.timeLimit = 0
   delete payload.noTimeLimit
+  if (pendingGame.value.id === 'otev') {
+    if (payload.questionMode === 'custom') {
+      payload.questions = parseOtevQuestions(payload.questionsText)
+    } else {
+      delete payload.questions
+    }
+    delete payload.questionsText
+  }
   if (pendingGame.value.id === 'describe-guess') {
     const qs = parseQuestions(payload.questionsText)
     if (qs.length) payload.questions = qs
@@ -380,6 +505,22 @@ function parseQuestions(text: string): { answer: string; clues: string[] }[] {
     const answer = parts.shift() || ''
     return { answer, clues: parts.filter(Boolean) }
   }).filter(q => q.answer && q.clues.length)
+}
+
+// 解析 OTEV 题目：每行“答案|线索1|线索2…”，答案可为 1 人或 2 人（用 + 连接）
+function parseOtevQuestions(text: string): { answers: string[]; clues: string[] }[] {
+  if (!text) return []
+  return String(text).split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
+    const parts = line.split(/[|｜]/).map(s => s.trim())
+    const rawAnswer = parts.shift() || ''
+    const answers = Array.from(new Set(
+      rawAnswer.split(/[+＋、,&，]/).map(s => s.trim()).filter(Boolean)
+    )).slice(0, 2)
+    const clues = parts.filter(Boolean)
+    const clueText = clues.join(' ')
+    if (answers.some(a => clueText.includes(a))) return null
+    return { answers, clues }
+  }).filter(q => q && q.answers.length > 0 && q.clues.length > 0) as { answers: string[]; clues: string[] }[]
 }
 
 function parseCounts(text: string): number[] {

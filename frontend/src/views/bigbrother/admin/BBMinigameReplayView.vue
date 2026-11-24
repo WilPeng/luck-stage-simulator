@@ -11,13 +11,13 @@
           <option value="finale">终局</option>
         </select>
         <button class="bb-btn" @click="loadList">🔄 刷新</button>
-        <button v-if="selectedIds.length" class="bb-btn bb-btn-danger" @click="batchDelete">🗑 批量删除（{{ selectedIds.length }}）</button>
+        <button v-if="!readonly && selectedIds.length" class="bb-btn bb-btn-danger" @click="batchDelete">🗑 批量删除（{{ selectedIds.length }}）</button>
       </div>
     </div>
 
     <div class="replay-layout">
       <div class="list-panel">
-        <div class="list-tools" v-if="list.length">
+        <div class="list-tools" v-if="list.length && !readonly">
           <label class="sel-all"><input type="checkbox" :checked="allSelected" @change="toggleAll" /> 全选</label>
         </div>
         <div v-if="!list.length" class="empty-hint">暂无复盘记录</div>
@@ -28,7 +28,7 @@
           :class="{ active: detail && detail.id === r.id }"
           @click="openReplay(r.id)"
         >
-          <label class="item-check" @click.stop>
+          <label v-if="!readonly" class="item-check" @click.stop>
             <input type="checkbox" :value="r.id" v-model="selectedIds" />
           </label>
           <div class="item-main">
@@ -58,7 +58,7 @@
                 <span> · 共 {{ (detail.events || []).length }} 条操作 · 时长 {{ durationText }}</span>
               </div>
             </div>
-            <button class="bb-btn bb-btn-danger" @click="removeReplay(detail.id)">删除</button>
+            <button v-if="!readonly" class="bb-btn bb-btn-danger" @click="removeReplay(detail.id)">删除</button>
           </div>
 
           <!-- 比赛说明 -->
@@ -76,8 +76,9 @@
                 <div class="board-top">
                   <span class="board-rank">{{ i + 1 }}</span>
                   <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
+                  <span v-if="marbleColor(p.playerId)" class="board-color" :style="{ background: marbleColor(p.playerId) }"></span>
                   <span class="board-name">{{ p.playerName }}</span>
-                  <span class="board-score">{{ finalScore(p.playerId) }}</span>
+                  <span class="board-score" :style="{ color: marbleColor(p.playerId) || undefined }">{{ finalScore(p.playerId) }}</span>
                   <span v-if="detail.winner && detail.winner.playerId === p.playerId" class="board-crown">🏆</span>
                   <span v-else-if="isEliminated(p.playerId)" class="board-out">出局</span>
                 </div>
@@ -169,6 +170,11 @@
               <MarbleMap :map="curSnap?.data?.map" :throws="curSnap?.data?.throws || []" />
             </div>
 
+            <!-- 藏否决权牌寻宝赛：与实时观战一致的全屋明牌 -->
+            <div v-else-if="isHgvSnap" class="hgv-replay-snap">
+              <HideAndGoVetoSpectator :board="curSnap?.data?.board" />
+            </div>
+
             <!-- 通用：按快照 players 渲染 -->
             <div v-else-if="genericSnapPlayers.length" class="gen-board">
               <div v-for="p in genericSnapPlayers" :key="p.playerId" class="gen-p"
@@ -205,6 +211,19 @@
             <!-- 自定义对战模式：题目、每轮答案、得分与淘汰 -->
             <template v-else-if="meta.type === 'custom-mode'">
               <CustomModeReplay :meta="meta" />
+            </template>
+
+            <!-- 藏否决权牌寻宝赛：最终全屋态势 + 明细 -->
+            <template v-else-if="meta.type === 'hide-and-go-veto'">
+              <div v-if="meta.board" class="hgv-replay-final">
+                <div class="snap-sub">
+                  最终全屋态势
+                  <span v-if="meta.board.winnerName"> · 🏆 {{ meta.board.winnerName }}</span>
+                  · 破坏度 {{ meta.board.destruction || 0 }}%
+                </div>
+                <HideAndGoVetoSpectator :board="meta.board" />
+              </div>
+              <SimpleGameReplay :meta="meta" />
             </template>
 
             <!-- 积分/技能类游戏：最终排名 + 过程明细表 -->
@@ -549,6 +568,9 @@ import SimpleGameReplay from '../../../components/bigbrother/minigames/SimpleGam
 import Poker17Replay from '../../../components/bigbrother/minigames/Poker17Replay.vue'
 import MarbleScoreReplay from '../../../components/bigbrother/minigames/MarbleScoreReplay.vue'
 import MarbleMap from '../../../components/bigbrother/minigames/MarbleMap.vue'
+import HideAndGoVetoSpectator from '../../../components/bigbrother/minigames/HideAndGoVetoSpectator.vue'
+
+defineProps<{ readonly?: boolean }>()
 
 const list = ref<any[]>([])
 const detail = ref<any>(null)
@@ -590,6 +612,7 @@ const GAME_RULES: Record<string, string> = {
   'poison-drink': '毒酒：庄家分配酒杯，玩家轮流转动转盘；喝到毒酒扣血，最后存活者获胜。',
   'marble-score': '弹珠得分：随机生成固定得分地图，方向箭与蓄力条以不同周期摆动；淘汰模式每轮最低分淘汰1人，单轮模式随机顺序比最高分。',
   'hide-and-go-veto': '藏否决权牌寻宝赛：每人秘密藏好写有自己名字的否决权卡，随后轮流进屋翻找；卡被翻出即淘汰，最后一张没被找到的卡获胜。',
+  'otev': 'OTEV 抢座问答赛：所有玩家共享公共牌池，查看不锁定、拿走才独占；答案可能是 1 人或 2 人，必须找到精确匹配的牌；提交后按顺序揭晓，答错或最后提交者淘汰。',
   'custom': '自定义游戏，按管理员配置的题目、计分与胜负规则结算。'
 }
 
@@ -652,8 +675,12 @@ function finalPct(pid: string) {
 
 const meta = computed<any>(() => detail.value?.meta || null)
 const isJigsawMeta = computed(() => meta.value?.type === 'jigsaw' && !!meta.value?.board)
-const SIMPLE_META_TYPES = ['click-speed', 'balance-bar', 'dice-duel', 'reaction', 'swing-pointer', 'klotski', 'spot-difference', 'sequence-memory', 'hide-and-go-veto']
+const SIMPLE_META_TYPES = ['click-speed', 'balance-bar', 'dice-duel', 'reaction', 'swing-pointer', 'klotski', 'spot-difference', 'sequence-memory', 'hide-and-go-veto', 'otev']
 const isSimpleMeta = computed(() => SIMPLE_META_TYPES.includes(meta.value?.type))
+function marbleColor(pid: string) {
+  if (meta.value?.type !== 'marble-score') return ''
+  return meta.value?.players?.find((p: any) => p.playerId === pid)?.color || ''
+}
 const snapshots = computed<any[]>(() => detail.value?.snapshots || [])
 const snapIndex = ref(0)
 const curSnap = computed<any>(() => snapshots.value[snapIndex.value] || null)
@@ -672,6 +699,10 @@ const isMarbleSnap = computed(() => {
   const d = curSnap.value?.data
   return !!(d && d.type === 'marble-score' && d.map)
 })
+const isHgvSnap = computed(() => {
+  const d = curSnap.value?.data
+  return !!(d && d.type === 'hide-and-go-veto' && d.board)
+})
 const towerSpellList = computed(() => {
   const spells = meta.value?.spells
   if (Array.isArray(spells) && spells.length) return spells
@@ -689,7 +720,7 @@ function fmtFields(obj: any) {
 }
 const genericSnapPlayers = computed(() => {
   const d = curSnap.value?.data
-  if (!d || !d.players || isAbracaSnap.value || isSofSnap.value) return []
+  if (!d || !d.players || isAbracaSnap.value || isSofSnap.value || isHgvSnap.value) return []
   const nameOf = (pid: string) => detail.value?.participants?.find((p: any) => p.playerId === pid)?.playerName || pid
   const list: any[] = []
   if (Array.isArray(d.players)) {
@@ -889,6 +920,7 @@ onMounted(loadList)
 .board-top { display: flex; align-items: center; gap: 8px; }
 .board-rank { width: 18px; font-size: 12px; color: #7d6fa6; font-variant-numeric: tabular-nums; }
 .board-name { flex: 1; font-size: 14px; color: #ece7fb; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board-color { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .board-score { font-size: 15px; font-weight: 800; color: #e6c988; font-variant-numeric: tabular-nums; }
 .board-crown { font-size: 14px; }
 .board-out { font-size: 11px; color: #ff6b6b; }
@@ -955,6 +987,8 @@ onMounted(loadList)
 .snap-range { flex: 1; accent-color: #b39bff; }
 .snap-label { font-size: 13px; color: #b9c6e6; margin-bottom: 10px; }
 .snap-sub { font-size: 13px; color: #ddd; margin-bottom: 8px; }
+.hgv-replay-snap { margin-bottom: 12px; }
+.hgv-replay-final { margin-bottom: 14px; }
 .ab-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
 .ab-p { background: #ffffff06; border: 1px solid #ffffff12; border-radius: 10px; padding: 10px 12px; }
 .ab-p.turn { border-color: #b39bff; background: #b39bff12; }

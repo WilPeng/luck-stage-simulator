@@ -14,6 +14,22 @@ const BBCustomGame = require('../models/BBCustomGame')
 const BBGameLibrary = require('../models/BBGameLibrary')
 const BBMinigameReplay = require('../models/BBMinigameReplay')
 
+// 小游戏复盘：管理员随时可看；普通选手需等赛季结束、公开聊天记录后开放
+async function canViewReplays(req) {
+  if (req.user?.role === 'admin') return true
+  const season = await getCurrentSeason()
+  return !!season?.allChatsRevealed
+}
+
+// 房间选项对外展示时去掉题目/答案等隐藏信息；游戏内部仍保留完整 options。
+function publicRoomOptions(options) {
+  const safe = { ...(options || {}) }
+  delete safe.questions
+  delete safe.questionsText
+  delete safe.correctCounts
+  return safe
+}
+
 // 小游戏图片（拼图等）上传目录
 const BBGAME_DIR = path.join(__dirname, '..', '..', '..', '..', 'uploads', 'bbgame')
 try { if (!fs.existsSync(BBGAME_DIR)) fs.mkdirSync(BBGAME_DIR, { recursive: true }) } catch (e) { /* ignore */ }
@@ -226,8 +242,11 @@ router.get('/active-rooms', async (req, res) => {
 })
 
 // GET /replays - 历史对局复盘列表
-router.get('/replays', async (req, res) => {
+router.get('/replays', auth, async (req, res) => {
   try {
+    if (!(await canViewReplays(req))) {
+      return res.status(403).json({ success: false, error: '赛季结束后才能查看小游戏复盘', code: 'REPLAYS_LOCKED' })
+    }
     const { gameType, minigameId, limit } = req.query
     const query = { gameId: 'bigbrother' }
     if (gameType) query.gameType = gameType
@@ -256,8 +275,11 @@ router.get('/replays', async (req, res) => {
 })
 
 // GET /replay/:id - 复盘详情（含完整事件日志）
-router.get('/replay/:id', async (req, res) => {
+router.get('/replay/:id', auth, async (req, res) => {
   try {
+    if (!(await canViewReplays(req))) {
+      return res.status(403).json({ success: false, error: '赛季结束后才能查看小游戏复盘', code: 'REPLAYS_LOCKED' })
+    }
     const doc = await BBMinigameReplay.findOne({ id: req.params.id })
     if (!doc) return res.status(404).json({ success: false, error: '复盘记录不存在' })
     res.json({ success: true, data: doc.toObject() })
@@ -268,7 +290,7 @@ router.get('/replay/:id', async (req, res) => {
 })
 
 // DELETE /replay/:id
-router.delete('/replay/:id', async (req, res) => {
+router.delete('/replay/:id', auth, requireAdmin, async (req, res) => {
   try {
     await BBMinigameReplay.deleteOne({ id: req.params.id })
     res.json({ success: true })
@@ -279,7 +301,7 @@ router.delete('/replay/:id', async (req, res) => {
 })
 
 // POST /replay/batch-delete - 批量删除复盘
-router.post('/replay/batch-delete', async (req, res) => {
+router.post('/replay/batch-delete', auth, requireAdmin, async (req, res) => {
   try {
     const { ids } = req.body || {}
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -435,7 +457,7 @@ router.post('/create-room', async (req, res) => {
         participants: room.participants,
         targetScore: room.targetScore,
         status: room.status,
-        options: room.options || {}
+        options: publicRoomOptions(room.options)
       }
     })
   } catch (e) {
@@ -494,7 +516,7 @@ router.get('/room/:roomId', (req, res) => {
         participants: room.participants,
         status: room.status,
         winner: room.winner,
-        options: room.options || {}
+        options: publicRoomOptions(room.options)
       }
     })
   } catch (e) {
@@ -527,7 +549,7 @@ router.get('/active-room/:gameType', (req, res) => {
         participants: room.participants,
         status: room.status,
         winner: room.winner,
-        options: room.options || {}
+        options: publicRoomOptions(room.options)
       }
     })
   } catch (e) {

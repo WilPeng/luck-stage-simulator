@@ -152,6 +152,7 @@ import NumberDivinationGame from '../../../components/bigbrother/minigames/Numbe
 import Poker17Game from '../../../components/bigbrother/minigames/Poker17Game.vue'
 import PoisonDrinkGame from '../../../components/bigbrother/minigames/PoisonDrinkGame.vue'
 import MarbleScoreGame from '../../../components/bigbrother/minigames/MarbleScoreGame.vue'
+import OtevGame from '../../../components/bigbrother/minigames/OtevGame.vue'
 import HideAndGoVetoGame from '../../../components/bigbrother/minigames/HideAndGoVeto.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import type { BBVetoRecord, MinigameRoom } from '../../../types/bigbrother'
@@ -236,6 +237,7 @@ const gameComponentMap: Record<string, Component> = {
   'poker17': markRaw(Poker17Game),
   'poison-drink': markRaw(PoisonDrinkGame),
   'marble-score': markRaw(MarbleScoreGame),
+  'otev': markRaw(OtevGame),
   'hide-and-go-veto': markRaw(HideAndGoVetoGame)
 }
 

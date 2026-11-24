@@ -447,6 +447,54 @@ function autoSearchTurn(state, now) {
   return state.finished
 }
 
+function buildAdminBoard(state) {
+  const spotById = new Map(state.spots.map(s => [s.id, s]))
+  const currentPid = state.phase === 'searching' ? (state.turnOrder[state.turnIndex] || null) : null
+  const destruction = Math.min(100, Math.round(state.searchLog.length / Math.max(1, state.totalSpots) * 100))
+  const wid = winnerIdOf(state)
+  return {
+    phase: state.phase,
+    phaseLabel: phaseLabel(state.phase),
+    currentTurnName: currentPid ? nameOf(state, currentPid) : '',
+    actionsLeft: state.actionsLeft || 0,
+    aliveCount: alivePlayers(state).length,
+    hiddenCount: alivePlayers(state).length,
+    totalSpots: state.totalSpots,
+    destruction,
+    winnerId: wid || '',
+    winnerName: wid ? nameOf(state, wid) : '',
+    players: Object.values(state.players).sort((a, b) => a.seat - b.seat).map(p => {
+      const s = p.hideSpot ? spotById.get(p.hideSpot) : null
+      return {
+        playerId: p.playerId,
+        playerName: p.playerName,
+        eliminated: p.eliminated,
+        hideSpotName: s ? spotLabel(s) : '未藏',
+        searches: p.searches,
+        finds: p.finds,
+        foundByName: p.foundBy ? nameOf(state, p.foundBy) : ''
+      }
+    }),
+    rooms: state.rooms.map(r => ({
+      id: r.id,
+      name: r.name,
+      icon: r.icon,
+      spots: r.spotIds.map(id => {
+        const s = spotById.get(id)
+        return {
+          id,
+          icon: s.icon,
+          name: s.name,
+          searched: s.searched,
+          searchedByName: s.searched ? s.searchedByName : '',
+          found: s.searched ? s.found.map(c => c.playerName) : [],
+          owners: s.searched ? [] : cardsAtSpot(state, id).map(p => p.playerName)
+        }
+      })
+    }))
+  }
+}
+
 registerGame({
   id: 'hide-and-go-veto',
   name: '藏否决权牌寻宝赛',
@@ -782,55 +830,11 @@ registerGame({
         被谁找到: p.foundBy ? nameOf(state, p.foundBy) : '—'
       }
     }
-    return { type: 'hide-and-go-veto', phase: state.phase, summary, players }
+    return { type: 'hide-and-go-veto', phase: state.phase, summary, players, board: buildAdminBoard(state) }
   },
 
   getAdminState(state) {
-    const spotById = new Map(state.spots.map(s => [s.id, s]))
-    const currentPid = state.phase === 'searching' ? (state.turnOrder[state.turnIndex] || null) : null
-    const destruction = Math.min(100, Math.round(state.searchLog.length / Math.max(1, state.totalSpots) * 100))
-    const wid = winnerIdOf(state)
-    return {
-      phase: state.phase,
-      phaseLabel: phaseLabel(state.phase),
-      currentTurnName: currentPid ? nameOf(state, currentPid) : '',
-      actionsLeft: state.actionsLeft || 0,
-      aliveCount: alivePlayers(state).length,
-      hiddenCount: alivePlayers(state).length,
-      totalSpots: state.totalSpots,
-      destruction,
-      winnerId: wid || '',
-      winnerName: wid ? nameOf(state, wid) : '',
-      players: Object.values(state.players).sort((a, b) => a.seat - b.seat).map(p => {
-        const s = p.hideSpot ? spotById.get(p.hideSpot) : null
-        return {
-          playerId: p.playerId,
-          playerName: p.playerName,
-          eliminated: p.eliminated,
-          hideSpotName: s ? spotLabel(s) : '未藏',
-          searches: p.searches,
-          finds: p.finds,
-          foundByName: p.foundBy ? nameOf(state, p.foundBy) : ''
-        }
-      }),
-      rooms: state.rooms.map(r => ({
-        id: r.id,
-        name: r.name,
-        icon: r.icon,
-        spots: r.spotIds.map(id => {
-          const s = spotById.get(id)
-          return {
-            id,
-            icon: s.icon,
-            name: s.name,
-            searched: s.searched,
-            searchedByName: s.searched ? s.searchedByName : '',
-            found: s.searched ? s.found.map(c => c.playerName) : [],
-            owners: s.searched ? [] : cardsAtSpot(state, id).map(p => p.playerName)
-          }
-        })
-      }))
-    }
+    return buildAdminBoard(state)
   },
 
   getReplayMeta(state) {
@@ -908,7 +912,8 @@ registerGame({
           columns: ['时间', '选手', '藏点', '结果', '方式'],
           rows: logRows
         }
-      ]
+      ],
+      board: buildAdminBoard(state)
     }
   }
 })

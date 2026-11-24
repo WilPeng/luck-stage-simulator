@@ -17,9 +17,10 @@
           :class="{ winner: isWinner(p.playerId), done: p.done }"
         >
           <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
+          <span v-if="p.color" class="op-color" :style="{ background: p.color }"></span>
           <span class="op-name">{{ p.playerName }}</span>
-          <span class="op-label">{{ p.label || p.score }}</span>
-          <div v-if="p.max" class="op-bar"><div class="op-fill" :style="{ width: pct(p) + '%' }"></div></div>
+          <span class="op-label" :style="{ color: p.color || undefined }">{{ p.label || p.score }}</span>
+          <div v-if="p.max" class="op-bar"><div class="op-fill" :style="{ width: pct(p) + '%', background: p.color || undefined }"></div></div>
           <span v-if="isWinner(p.playerId)" class="op-badge">🏆</span>
           <span v-else-if="p.done" class="op-badge done">✓</span>
         </div>
@@ -234,6 +235,7 @@ watch(() => props.roomId, (v) => {
 .obs-player.winner { border-color: #e6c988; background: #e6c98812; }
 .obs-player.done { opacity: 0.7; }
 .op-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.op-color { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 6px currentColor; }
 .op-label { color: #b3a6d6; font-size: 12px; }
 .op-bar { width: 50px; height: 4px; background: #ffffff14; border-radius: 2px; overflow: hidden; }
 .op-fill { height: 100%; background: linear-gradient(90deg, #b39bff, #4488ff); }

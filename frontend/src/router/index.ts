@@ -28,6 +28,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'profile', name: 'BBPlayerProfile', component: () => import('../views/bigbrother/player/BBProfileView.vue') },
       { path: 'house', name: 'BBPlayerHouse', component: () => import('../views/bigbrother/player/BBHouseView.vue') },
       { path: 'history', name: 'BBPlayerHistory', component: () => import('../views/bigbrother/player/BBHistoryView.vue') },
+      { path: 'replays', name: 'BBPlayerReplays', component: () => import('../views/bigbrother/admin/BBMinigameReplayView.vue'), props: { readonly: true } },
       { path: 'finale', name: 'BBPlayerFinale', component: () => import('../views/bigbrother/player/BBFinaleView.vue') },
       { path: 'round/:round/hoh', name: 'BBPlayerHoh', component: () => import('../views/bigbrother/player/BBHohView.vue') },
       { path: 'round/:round/nomination', name: 'BBPlayerNomination', component: () => import('../views/bigbrother/player/BBNominationView.vue') },
@@ -115,6 +116,11 @@ router.beforeEach(async (to) => {
     await authStore.refreshCurrentUser()
     if (authStore.isRestrictedPlayer) {
       if (to.path === '/games/bigbrother/player/house') return true
+      if (to.path === '/games/bigbrother/player/replays') {
+        const seasonStore = useBbSeasonStore()
+        await seasonStore.fetchProgress()
+        if (seasonStore.season?.allChatsRevealed) return true
+      }
       if (authStore.isJuryPlayer && to.path === '/games/bigbrother/player/finale') {
         const seasonStore = useBbSeasonStore()
         await seasonStore.fetchProgress()

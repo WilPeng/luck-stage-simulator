@@ -55,6 +55,7 @@
           <span class="stage-tag">{{ seasonStore.stageName }}</span>
           <span class="user-name">{{ currentUser?.name }}</span>
           <button v-if="seasonStore.season?.allChatsRevealed" class="bb-btn bb-btn-sm" @click="allChatsOpen = true">📜 全部聊天记录</button>
+          <button v-if="seasonStore.season?.allChatsRevealed" class="bb-btn bb-btn-sm" @click="router.push('/games/bigbrother/player/replays')">🎬 小游戏复盘</button>
           <button class="bb-btn bb-btn-sm" @click="toggleBroadcastHistory">🔔 广播记录</button>
           <button class="bb-btn bb-btn-sm" @click="handleLogout">退出</button>
         </div>
@@ -292,6 +293,7 @@ function enforceRestrictedRoute() {
   if (!isRestrictedPlayer.value) return
   const path = route.path
   if (path === '/games/bigbrother/player/house') return
+  if (seasonStore.season?.allChatsRevealed && path === '/games/bigbrother/player/replays') return
   if (canJuryEnterFinale.value && path === '/games/bigbrother/player/finale') return
   router.replace('/games/bigbrother/player/house')
 }
@@ -325,6 +327,9 @@ const visibleFixedItems = computed(() => {
       text: juryFinaleLabel.value,
       path: '/games/bigbrother/player/finale'
     })
+  }
+  if (seasonStore.season?.allChatsRevealed) {
+    items.push({ icon: '🎬', text: '小游戏复盘', path: '/games/bigbrother/player/replays' })
   }
   return items
 })

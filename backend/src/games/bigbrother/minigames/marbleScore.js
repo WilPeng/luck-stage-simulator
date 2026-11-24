@@ -708,6 +708,7 @@ registerGame({
           : `第 ${ps.eliminatedRound || '?'} 轮淘汰`
       }
       result[pid] = {
+        color: ps.color,
         score,
         progress: Math.max(0, Math.min(maxScore, score)),
         max: maxScore,

@@ -208,8 +208,11 @@ const initBBMinigameSocket = (io) => {
       const result = handler.handleAction(room.gameState, userId, data.action, { isAdmin: socket.user.role === 'admin' })
       if (!result || !result.updated) return
 
-      // 记录操作事件（跳过高频 tick）
-      if (data.action && data.action.type !== 'tick') {
+      const actionType = data.action && data.action.type
+      const isSilentAction = !!actionType && Array.isArray(handler.silentActions) && handler.silentActions.includes(actionType)
+
+      // 记录操作事件（跳过高频 tick 与静默操作，如 OTEV 的查看牌）
+      if (actionType && actionType !== 'tick' && !isSilentAction) {
         const player = room.getParticipant(userId)
         const pname = player?.playerName || userName
         let text = ''
@@ -220,11 +223,11 @@ const initBBMinigameSocket = (io) => {
           else if (typeof d === 'string') text = d
         } catch (e) { /* ignore */ }
         if (!text) text = defaultDescribe(pname, data.action)
-        const isPrivateAction = Array.isArray(handler.privateActions) && handler.privateActions.includes(data.action.type)
+        const isPrivateAction = Array.isArray(handler.privateActions) && handler.privateActions.includes(actionType)
         recordAndBroadcast(minigameNs, room, {
           playerId: userId,
           playerName: pname,
-          type: data.action.type,
+          type: actionType,
           text,
           data: { action: isPrivateAction ? null : data.action, result: result.result || null, extra }
         })
@@ -233,11 +236,13 @@ const initBBMinigameSocket = (io) => {
       drainHandlerEvents(minigameNs, room, handler)
 
       // 记录“明牌快照”（该选手决策后的完整局面，仅复盘可见）
-      try {
-        const p = room.getParticipant(userId)
-        const label = `${p?.playerName || userName} ${data.action && data.action.type ? data.action.type : '操作'}`
-        pushReplaySnapshot(room, handler, label)
-      } catch (e) { /* ignore */ }
+      if (!isSilentAction) {
+        try {
+          const p = room.getParticipant(userId)
+          const label = `${p?.playerName || userName} ${actionType || '操作'}`
+          pushReplaySnapshot(room, handler, label)
+        } catch (e) { /* ignore */ }
+      }
 
       // 发送操作结果给该玩家
       const playerState = handler.getState
