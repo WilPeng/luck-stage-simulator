@@ -14,6 +14,7 @@
           :key="r.roomId"
           class="room-item"
           :class="{ active: selectedRoomId === r.roomId }"
+          tabindex="0" @keydown.enter.self="selectRoom(r)" @keydown.space.self.prevent="selectRoom(r)"
           @click="selectRoom(r)"
         >
           <div class="ri-top">
@@ -28,15 +29,15 @@
       </div>
 
       <div class="observer-panel">
-        <MinigameObserver v-if="selectedRoomId" :roomId="selectedRoomId" :room="selectedRoom" />
-        <div v-else class="empty-hint">选择左侧房间开始观战</div>
-
         <div v-if="selectedRoomId" class="controls">
           <MinigameStartButton v-if="selectedRoom?.status === 'waiting'" label="▶ 开始比赛" @start="start" />
           <button v-if="selectedRoom?.status === 'playing'" class="bb-btn bb-btn-warn" @click="pause">⏸ 暂停</button>
           <button v-if="selectedRoom?.status === 'paused'" class="bb-btn bb-btn-primary" @click="resume">▶ 恢复</button>
           <button v-if="selectedRoom && ['waiting','playing','paused'].includes(selectedRoom.status)" class="bb-btn bb-btn-danger" @click="stop">⏹ 停止</button>
         </div>
+        <MinigameObserver v-if="selectedRoomId" :roomId="selectedRoomId" :room="selectedRoom" />
+        <div v-else class="empty-hint">选择左侧房间开始观战</div>
+
       </div>
     </div>
   </div>
@@ -118,7 +119,12 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 .ri-meta { font-size: 12px; color: #b3a6d6; }
 .observer-panel { min-width: 0; }
 .empty-hint { color: #6b5f92; font-size: 13px; padding: 24px 0; text-align: center; }
-.controls { display: flex; gap: 10px; margin-top: 12px; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+@media (max-width: 800px) {
+  .live-layout { grid-template-columns: minmax(0, 1fr); }
+  .rooms-panel { max-height: 230px; overflow-y: auto; }
+  .page-header h1 { font-size: 20px; }
+}
 .bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 .bb-btn:hover { background: #b39bff22; }
 .bb-btn-primary { border-color: #b39bff; background: #b39bff22; }

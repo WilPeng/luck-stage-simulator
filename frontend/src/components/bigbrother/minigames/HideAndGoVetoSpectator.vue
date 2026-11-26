@@ -19,18 +19,20 @@
         :class="{ out: p.eliminated, winner: p.playerId === board.winnerId }"
       >
         <b>{{ p.playerName }}</b>
-        <i>🃏 {{ p.hideSpotName }}</i>
+        <i v-if="showOwners">🃏 {{ p.hideSpotName }}</i>
         <i>翻 {{ p.searches }} · 找到 {{ p.finds }}</i>
         <em v-if="p.playerId === board.winnerId">🏆</em>
         <em v-else-if="p.eliminated">被 {{ p.foundByName || '?' }} 找到</em>
       </span>
     </div>
 
+    <label v-if="replay">查看房间 <select v-model="roomId"><option value="">全屋</option><option v-for="r in board.rooms" :key="r.id" :value="r.id">{{ r.name }}</option></select></label>
+    <label v-if="replay"><input v-model="revealOwners" type="checkbox"> 揭晓藏牌点</label>
     <div class="hgvab-house">
-      <section v-for="room in board.rooms || []" :key="room.id" class="hgvab-room">
+      <section v-for="room in (board.rooms || []).filter((r:any)=>!roomId || roomId===r.id)" :key="room.id" class="hgvab-room">
         <div class="hgvab-room-head">
           <span>{{ room.icon }} {{ room.name }}</span>
-          <span class="hgvab-room-tip">👁 管理员可见</span>
+          <span class="hgvab-room-tip">{{ showOwners ? '全屋藏牌' : '搜索记录' }}</span>
         </div>
         <div class="hgvab-spots">
           <div
@@ -38,16 +40,16 @@
             :key="spot.id"
             class="hgvab-spot"
             :class="{
-              hidden: !spot.searched && spot.owners && spot.owners.length,
+              hidden: showOwners && !spot.searched && spot.owners && spot.owners.length,
               empty: spot.searched && !(spot.found && spot.found.length),
               found: spot.searched && spot.found && spot.found.length
             }"
           >
             <div class="hgvab-spot-name">{{ spot.icon }} {{ spot.name }}</div>
-            <div v-if="!spot.searched && spot.owners && spot.owners.length" class="hgvab-owners">
+            <div v-if="showOwners && !spot.searched && spot.owners && spot.owners.length" class="hgvab-owners">
               🃏 {{ spot.owners.join('、') }}
             </div>
-            <div v-else-if="!spot.searched" class="hgvab-note dim">空</div>
+            <div v-else-if="!spot.searched" class="hgvab-note dim">{{ showOwners ? '空' : '未搜索' }}</div>
             <div v-else-if="spot.found && spot.found.length" class="hgvab-note found">
               已翻出：{{ spot.found.join('、') }}
               <i v-if="spot.searchedByName">（{{ spot.searchedByName }}）</i>
@@ -61,7 +63,11 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ board: any }>()
+import { computed, ref } from 'vue'
+const roomId = ref('')
+const props = defineProps<{ board: any; replay?: boolean }>()
+const revealOwners = ref(false)
+const showOwners = computed(() => !props.replay || revealOwners.value)
 </script>
 
 <style scoped>

@@ -452,6 +452,7 @@ registerGame({
     }
     return {
       type: 'catch-mistress',
+      locations: LOCATIONS.map((_, index) => locName(index)),
       winnerId: state.winnerId || null,
       winnerName: state.winnerId ? nameOf(state, state.winnerId) : '',
       choices,

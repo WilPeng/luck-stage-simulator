@@ -33,8 +33,11 @@
       </table>
     </div>
 
-    <!-- 每位选手的完整盘面与翻牌过程 -->
-    <div v-for="p in sortedPlayers" :key="'detail-' + p.playerId" class="mmr-player">
+    <div class="mmr-selector" aria-label="选择选手">
+      <button v-for="p in sortedPlayers" :key="p.playerId" type="button" :class="{ active: activePlayer?.playerId === p.playerId }" @click="selectPlayer(p.playerId)">{{ p.playerName }}</button>
+    </div>
+    <div v-if="activePlayer" :key="activePlayer.playerId" class="mmr-player">
+      <template v-for="p in [activePlayer]" :key="p.playerId">
       <div class="mmr-p-head">
         <BBAvatar :name="p.playerName" size="sm" />
         <span class="mmr-p-name">{{ p.playerName }}</span>
@@ -45,15 +48,16 @@
       <div class="mmr-body">
         <!-- 固定牌面：让复盘者知道这道题的布局 -->
         <div class="mmr-board-wrap">
-          <div class="mmr-board-title">牌面布局</div>
+          <div class="mmr-board-title">{{ revealAll ? '赛后全牌面' : '本次翻牌时的盘面' }}</div>
+          <label class="mmr-reveal"><input v-model="revealAll" type="checkbox" /> 显示全部牌面</label>
           <div class="mmr-board">
             <div
               v-for="(card, idx) in (p.board || [])"
               :key="idx"
               class="mmr-card"
-              :class="{ matched: (p.matched || []).includes(idx) }"
+              :class="{ matched: matchedAtStep.includes(idx), current: currentFlip && (currentFlip.a === idx || currentFlip.b === idx) }"
             >
-              <span class="mmr-emoji">{{ card }}</span>
+              <span class="mmr-emoji">{{ revealAll || matchedAtStep.includes(idx) || (currentFlip && (currentFlip.a === idx || currentFlip.b === idx)) ? card : '？' }}</span>
               <span class="mmr-idx">#{{ idx + 1 }}</span>
             </div>
           </div>
@@ -62,6 +66,11 @@
         <!-- 每一次翻牌两张牌的过程 -->
         <div class="mmr-history">
           <div class="mmr-board-title">翻牌过程</div>
+          <div v-if="p.history?.length" class="mmr-step-controls">
+            <button type="button" :disabled="step <= 0" @click="step--">上一轮</button>
+            <span>第 {{ step + 1 }} / {{ p.history.length }} 次</span>
+            <button type="button" :disabled="step >= p.history.length - 1" @click="step++">下一轮</button>
+          </div>
           <div v-if="(p.history || []).length" class="mmr-hscroll">
             <table class="mmr-table compact">
               <thead>
@@ -74,7 +83,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(h, i) in p.history" :key="i" :class="{ good: h.matched, bad: !h.matched }">
+                <tr v-for="(h, i) in p.history" :key="i" :class="{ good: h.matched, bad: !h.matched, selected: step === i }" @click="step = i">
                   <td>{{ i + 1 }}</td>
                   <td><span class="mmr-flip">#{{ h.a + 1 }} {{ h.cardA }}</span></td>
                   <td><span class="mmr-flip">#{{ h.b + 1 }} {{ h.cardB }}</span></td>
@@ -89,6 +98,7 @@
           <div v-else class="mmr-empty">该选手没有翻牌记录</div>
         </div>
       </div>
+      </template>
     </div>
 
     <div v-if="!sortedPlayers.length" class="mmr-empty">暂无复盘数据</div>
@@ -96,10 +106,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import BBAvatar from '../BBAvatar.vue'
 
 const props = defineProps<{ meta: any }>()
+const selectedPlayer = ref('')
+const step = ref(0)
+const revealAll = ref(false)
+watch(() => props.meta, () => { selectedPlayer.value = ''; step.value = 0; revealAll.value = false })
+function selectPlayer(id: string) { selectedPlayer.value = id; step.value = 0; revealAll.value = false }
+const activePlayer = computed<any>(() => sortedPlayers.value.find((p: any) => p.playerId === selectedPlayer.value) || sortedPlayers.value[0])
+const currentFlip = computed<any>(() => activePlayer.value?.history?.[step.value])
+const matchedAtStep = computed<number[]>(() => (activePlayer.value?.history || []).slice(0, step.value).filter((h: any) => h.matched).flatMap((h: any) => [h.a, h.b]))
 
 const totalPairs = computed(() => Number(props.meta?.totalPairs) || 8)
 
@@ -127,6 +145,14 @@ function fmtOffset(at: number, start: number | null) {
 </script>
 
 <style scoped>
+.mmr-selector, .mmr-step-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.mmr-selector button, .mmr-step-controls button { color: #e9e2ff; background: #292044; border: 1px solid #66558e; border-radius: 7px; padding: 7px 12px; cursor: pointer; }
+.mmr-selector button.active { background: #67509a; border-color: #d2b8ff; }
+.mmr-step-controls button:disabled { opacity: .4; cursor: default; }
+.mmr-reveal { display: block; color: #b9c6e6; font-size: 12px; margin-bottom: 8px; }
+.mmr-card.current { border-color: #ffd27c; box-shadow: 0 0 12px #ffd27c44; }
+.mmr-table tr.selected td { outline: 1px solid #b39bff; }
+.mmr-table tbody tr { cursor: pointer; }
 .mm-replay { display: flex; flex-direction: column; gap: 14px; }
 .mmr-overview { background: #ffffff05; border: 1px solid #ffffff10; border-radius: 10px; padding: 12px; }
 .mmr-rules {

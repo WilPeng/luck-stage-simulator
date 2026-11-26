@@ -11,7 +11,10 @@
  *
  * 模式：
  *  - elimination：每轮所有存活选手同时发射一次，本轮最低分淘汰 1 人，直到剩下最后一人；
- *  - single：随机顺序轮流发射，每人仅 1 次机会，最高分者获胜（同分按落点精度判定）。
+ *  - single：随机顺序轮流发射，每人仅 1 次机会，最高分者获胜（同分按落点精度判定）；
+ *  - points-all：若干轮，每轮所有选手同时发射，累计得分最高者获胜；
+ *  - points-turn：若干轮，每轮选手按随机顺序逐个发射，累计得分最高者获胜；
+ *  - pk：随机 2 人 PK，低分者淘汰；获胜者从剩余选手中选择 2 人进行下一场，直到剩下 1 人。
  */
 const { registerGame } = require('./index')
 
@@ -249,6 +252,7 @@ function publicThrow(shot) {
     playerId: shot.playerId,
     playerName: shot.playerName,
     color: shot.color,
+    seat: shot.seat,
     round: shot.round,
     angle: shot.angle,
     power: shot.power,
@@ -260,25 +264,51 @@ function publicThrow(shot) {
   }
 }
 
+const MODE_LABELS = {
+  elimination: '淘汰模式',
+  single: '单轮模式',
+  'points-all': '多轮积分 · 同时发射',
+  'points-turn': '多轮积分 · 轮流发射',
+  pk: '随机PK淘汰'
+}
+
+const MODE_DESCRIPTIONS = {
+  elimination: '随机地图固定不变。每轮所有存活选手同时发射，最低分淘汰 1 人（并列最低随机淘汰其中 1 人），直到最后一人。',
+  single: '随机地图固定不变。随机顺序轮流发射，每人 1 次机会，最高分获胜；若最高分并列，落点更接近区域中心者胜。',
+  'points-all': '随机地图固定不变。共进行若干轮，每轮所有选手同时发射，得分累计；总积分最高者获胜。',
+  'points-turn': '随机地图固定不变。共进行若干轮，每轮选手按随机顺序逐个发射，得分累计；总积分最高者获胜。',
+  pk: '随机选出 2 人进行弹珠 PK，低分者淘汰；获胜者从剩余选手中挑选 2 人进行下一场 PK，直到剩下最后 1 人。'
+}
+
+function hitDistance(map, shot) {
+  if (!map || !shot) return Infinity
+  const cell = map.cells.find(c => c.id === shot.cellId)
+  if (!cell) return Infinity
+  return Math.hypot(shot.x - cell.seed.x, shot.y - cell.seed.y)
+}
+
 registerGame({
   id: 'marble-score',
   name: '弹珠得分',
   icon: '🎱',
-  description: '随机生成每个区域分值互不相同的不规则地图，方向箭头与蓄力条以不同周期摆动，点击发射弹珠；淘汰模式每轮最低分淘汰1人，单轮模式随机顺序比最高分（同分看落点精度）',
+  description: '随机生成每个区域分值互不相同的不规则地图，方向箭头与蓄力条以不同周期摆动，点击发射弹珠；支持淘汰、单轮、多轮积分、轮流积分与随机PK淘汰五种模式',
   category: 'skill',
   playerCount: { min: 2, max: 20 },
-  duration: 1800,
+  duration: 3600,
   needsServerTick: true,
   serverTickMs: 300,
   broadcastState: true,
 
   init(participants, _pool, options = {}) {
-    const mode = options.mode === 'single' ? 'single' : 'elimination'
+    const allowedModes = ['elimination', 'single', 'points-all', 'points-turn', 'pk']
+    const mode = allowedModes.includes(options.mode) ? options.mode : 'elimination'
     const opts = {
       mode,
       aimTime: clamp(options.aimTime, 5, 60, 12),
       resultTime: clamp(options.resultTime, 1, 15, 4),
-      cellCount: Math.max(3, Math.round(Number(options.cellCount) || 10))
+      cellCount: Math.max(3, Math.round(Number(options.cellCount) || 10)),
+      roundCount: Math.round(clamp(options.roundCount, 1, 99, 5)),
+      pickTime: clamp(options.pickTime, 5, 180, 15)
     }
     const map = generateMap(opts.cellCount)
     const players = {}
@@ -289,6 +319,7 @@ registerGame({
         playerId: p.playerId,
         playerName: p.playerName || p.playerId,
         color: PLAYER_COLORS[i % PLAYER_COLORS.length],
+        seat: i + 1,
         alive: true,
         totalScore: 0,
         lastScore: null,
@@ -312,6 +343,7 @@ registerGame({
       names,
       scores,
       order,
+      roundOrder: [],
       turnIndex: 0,
       turnId: null,
       round: 0,
@@ -326,6 +358,9 @@ registerGame({
       tieBreak: null,
       history: [],
       osc: {},
+      pkPair: [],
+      pickerId: null,
+      pkMatchWinnerId: null,
       _replayEvents: []
     }
   },
@@ -336,12 +371,16 @@ registerGame({
 
     if (!state.started) {
       state.started = true
-      if (state.mode === 'elimination') this._startEliminationRound(state, now)
-      else this._startSingleTurn(state, now, 0)
+      this._startMode(state, now)
       return
     }
 
     if (now < state.phaseEndsAt) return
+
+    if (state.phase === 'pick') {
+      this._autoPickPair(state, now)
+      return
+    }
 
     if (state.phase === 'aim') {
       this._autoLaunch(state, now)
@@ -349,34 +388,111 @@ registerGame({
     }
 
     if (state.phase === 'result') {
-      if (state.mode === 'elimination') {
-        if (state.winnerPending) {
-          this._finish(state, [state.winnerPending])
-        } else {
-          this._startEliminationRound(state, now)
-        }
+      this._afterResult(state, now)
+    }
+  },
+
+  _startMode(state, now) {
+    if (state.mode === 'elimination') return this._startEliminationRound(state, now)
+    if (state.mode === 'single') return this._startSingleTurn(state, now, 0)
+    if (state.mode === 'points-all') return this._startPointsAllRound(state, now)
+    if (state.mode === 'points-turn') return this._startPointsTurnRound(state, now)
+    if (state.mode === 'pk') {
+      const alive = this._aliveIds(state)
+      const pair = shuffle([...alive]).slice(0, 2)
+      return this._startPkMatch(state, pair, now)
+    }
+  },
+
+  _afterResult(state, now) {
+    if (state.finished) return
+
+    if (state.mode === 'elimination') {
+      if (state.winnerPending) this._finish(state, [state.winnerPending])
+      else this._startEliminationRound(state, now)
+      return
+    }
+
+    if (state.mode === 'single') {
+      if (state.turnIndex + 1 >= state.order.length) this._finishTopScore(state, { single: true })
+      else this._startSingleTurn(state, now, state.turnIndex + 1)
+      return
+    }
+
+    if (state.mode === 'points-all') {
+      if (state.round >= state.opts.roundCount) this._finishTopScore(state)
+      else this._startPointsAllRound(state, now)
+      return
+    }
+
+    if (state.mode === 'points-turn') {
+      if (state.turnIndex + 1 < state.roundOrder.length) {
+        this._startPointsTurn(state, now, state.turnIndex + 1)
       } else {
-        if (state.turnIndex + 1 >= state.order.length) this._finishSingle(state)
-        else this._startSingleTurn(state, now, state.turnIndex + 1)
+        this._recordPointsRoundHistory(state)
+        if (state.round >= state.opts.roundCount) this._finishTopScore(state)
+        else this._startPointsTurnRound(state, now)
+      }
+      return
+    }
+
+    if (state.mode === 'pk') {
+      const alive = this._aliveIds(state)
+      if (alive.length <= 1) {
+        state.tieBreak = null
+        this._finish(state, alive)
+      } else {
+        state.phase = 'pick'
+        state.phaseStartAt = now
+        state.phaseEndsAt = now + state.opts.pickTime * 1000
+        state.pickerId = state.pkMatchWinnerId && alive.includes(state.pkMatchWinnerId)
+          ? state.pkMatchWinnerId
+          : alive[0]
+        state.turnId = state.pickerId
+        state.osc = {}
+        state._replayEvents.push({
+          type: 'turn',
+          text: `${state.players[state.pickerId]?.playerName || state.pickerId} 请选择下一组 PK 选手`,
+          data: { pickerId: state.pickerId, alive }
+        })
       }
     }
   },
 
   handleAction(state, playerId, action) {
     if (!state.players[playerId]) return { updated: false }
-    if (!action || action.type !== 'launch') return { updated: false }
-    if (state.finished || !state.started || state.phase !== 'aim') return { updated: false }
+    if (!action) return { updated: false }
+    if (state.finished || !state.started) return { updated: false }
+
+    if (action.type === 'pick_pair') {
+      if (state.phase !== 'pick') return { updated: false }
+      if (state.pickerId !== playerId) {
+        return { updated: false, result: { error: '还没有轮到你选择对决' } }
+      }
+      const pair = Array.isArray(action.pair) ? [...new Set(action.pair)] : []
+      if (pair.length !== 2) return { updated: false, result: { error: '请选择 2 名选手' } }
+      const alive = this._aliveIds(state)
+      if (!pair.every(pid => alive.includes(pid) && state.players[pid])) {
+        return { updated: false, result: { error: '只能选择仍在场上的选手' } }
+      }
+      this._startPkMatch(state, pair, Date.now())
+      return { updated: true, finished: false, result: { pair } }
+    }
+
+    if (action.type !== 'launch') return { updated: false }
+    if (state.phase !== 'aim') return { updated: false }
     if (state.phaseEndsAt && Date.now() > state.phaseEndsAt) {
       return { updated: false, result: { error: '本轮发射时间已到' } }
     }
 
     const ps = state.players[playerId]
     if (!ps.alive) return { updated: false, result: { error: '你已被淘汰，暂时无法发射' } }
-    if (state.mode === 'single') {
-      if (state.turnId !== playerId) {
-        const current = state.turnId ? state.players[state.turnId]?.playerName : ''
-        return { updated: false, result: { error: `还未轮到你，当前轮到 ${current || '其他选手'}` } }
-      }
+    if ((state.mode === 'single' || state.mode === 'points-turn') && state.turnId !== playerId) {
+      const current = state.turnId ? state.players[state.turnId]?.playerName : ''
+      return { updated: false, result: { error: `还未轮到你，当前轮到 ${current || '其他选手'}` } }
+    }
+    if (state.mode === 'pk' && !state.pkPair.includes(playerId)) {
+      return { updated: false, result: { error: '本场 PK 没有你，请等待下一场' } }
     }
     if (state.roundThrows[playerId]) {
       return { updated: false, result: { error: '本轮你已经发射过了' } }
@@ -405,7 +521,8 @@ registerGame({
     const ps = state.players[playerId]
     if (!ps || !ps.alive) return false
     if (state.roundThrows[playerId]) return false
-    if (state.mode === 'single') return state.turnId === playerId
+    if (state.mode === 'single' || state.mode === 'points-turn') return state.turnId === playerId
+    if (state.mode === 'pk') return state.pkPair.includes(playerId)
     return true
   },
 
@@ -435,7 +552,7 @@ registerGame({
 
   _startSingleTurn(state, now, index) {
     if (index >= state.order.length) {
-      this._finishSingle(state)
+      this._finishTopScore(state, { single: true })
       return
     }
     const pid = state.order[index]
@@ -458,6 +575,102 @@ registerGame({
     })
   },
 
+  _startPointsAllRound(state, now) {
+    state.round += 1
+    state.phase = 'aim'
+    state.phaseStartAt = now
+    state.phaseEndsAt = now + state.opts.aimTime * 1000
+    state.roundThrows = {}
+    state.lastThrow = null
+    state.lastEliminated = []
+    state.winnerPending = null
+    state.tieBreak = null
+    state.turnId = null
+    state.osc = {}
+    for (const pid of state.order) state.osc[pid] = makeOscillator()
+
+    state._replayEvents.push({
+      type: 'round',
+      text: `积分赛第 ${state.round}/${state.opts.roundCount} 轮开始，所有选手同时发射`,
+      data: { round: state.round, roundCount: state.opts.roundCount, mode: state.mode }
+    })
+  },
+
+  _startPointsTurnRound(state, now) {
+    state.round += 1
+    state.roundOrder = shuffle([...state.order])
+    state.roundThrows = {}
+    state.lastThrow = null
+    state.lastEliminated = []
+    state.winnerPending = null
+    state.tieBreak = null
+    state.turnIndex = 0
+    state._replayEvents.push({
+      type: 'round',
+      text: `积分赛第 ${state.round}/${state.opts.roundCount} 轮开始，选手依次发射`,
+      data: { round: state.round, roundCount: state.opts.roundCount, order: state.roundOrder }
+    })
+    this._startPointsTurn(state, now, 0)
+  },
+
+  _startPointsTurn(state, now, index) {
+    if (index >= state.roundOrder.length) return
+    const pid = state.roundOrder[index]
+    state.turnIndex = index
+    state.turnId = pid
+    state.phase = 'aim'
+    state.phaseStartAt = now
+    state.phaseEndsAt = now + state.opts.aimTime * 1000
+    state.lastThrow = null
+    state.osc = { [pid]: makeOscillator() }
+
+    state._replayEvents.push({
+      type: 'turn',
+      text: `第 ${state.round} 轮 · 轮到 ${state.names[pid] || pid} 发射`,
+      data: { round: state.round, playerId: pid, turnIndex: index }
+    })
+  },
+
+  _startPkMatch(state, pair, now) {
+    state.round += 1
+    state.pkPair = [...pair]
+    state.pickerId = null
+    state.turnId = null
+    state.phase = 'aim'
+    state.phaseStartAt = now
+    state.phaseEndsAt = now + state.opts.aimTime * 1000
+    state.roundThrows = {}
+    state.lastThrow = null
+    state.lastEliminated = []
+    state.winnerPending = null
+    state.tieBreak = null
+    state.osc = {}
+    for (const pid of pair) state.osc[pid] = makeOscillator()
+
+    state._replayEvents.push({
+      type: 'round',
+      text: `第 ${state.round} 场 PK：${pair.map(pid => state.names[pid] || pid).join(' vs ')}`,
+      data: { round: state.round, pair, mode: state.mode }
+    })
+  },
+
+  _autoPickPair(state, now) {
+    if (state.phase !== 'pick') return
+    const alive = this._aliveIds(state)
+    if (alive.length < 2) {
+      this._finish(state, alive)
+      return
+    }
+    const shuffled = shuffle([...alive])
+    const pair = [shuffled[0], shuffled[1]]
+    state._replayEvents.push({
+      type: 'turn',
+      text: `超时未选择，自动指定 ${pair.map(pid => state.names[pid] || pid).join(' vs ')}`,
+      data: { pair, auto: true }
+    })
+    this._startPkMatch(state, pair, now)
+  },
+
   _recordThrow(state, playerId, at, opts = {}) {
     const ps = state.players[playerId]
     const osc = state.osc[playerId]
@@ -465,6 +678,7 @@ registerGame({
     shot.playerId = playerId
     shot.playerName = ps.playerName
     shot.color = ps.color
+    shot.seat = ps.seat
     shot.round = state.round
     shot.at = at || Date.now()
 
@@ -498,9 +712,17 @@ registerGame({
 
   _autoLaunch(state, now) {
     if (state.phase !== 'aim') return
-    if (state.mode === 'single') {
+    if (state.mode === 'single' || state.mode === 'points-turn') {
       if (state.turnId && !state.roundThrows[state.turnId]) {
         this._recordThrow(state, state.turnId, now)
+      }
+    } else if (state.mode === 'pk') {
+      for (const pid of state.pkPair) {
+        if (!state.roundThrows[pid]) this._recordThrow(state, pid, now)
+      }
+    } else if (state.mode === 'points-all') {
+      for (const pid of state.order) {
+        if (!state.roundThrows[pid]) this._recordThrow(state, pid, now)
       }
     } else {
       const alive = this._aliveIds(state)
@@ -513,6 +735,7 @@ registerGame({
 
   _afterAllThrows(state, now) {
     if (state.finished || state.phase !== 'aim') return
+
     if (state.mode === 'elimination') {
       const alive = this._aliveIds(state)
       if (!alive.every(pid => state.roundThrows[pid])) return
@@ -520,7 +743,130 @@ registerGame({
       return
     }
 
-    // 单轮模式：本次发射结算后展示，再由 tick 切换到下一位
+    if (state.mode === 'points-all') {
+      if (!state.order.every(pid => state.roundThrows[pid])) return
+      this._resolvePointsRound(state, now)
+      return
+    }
+
+    if (state.mode === 'pk') {
+      if (!state.pkPair.every(pid => state.roundThrows[pid])) return
+      this._resolvePkMatch(state, now)
+      return
+    }
+
+    // 单轮 / 多轮轮流积分：本次发射结算后展示，再由 tick 切换到下一位
+    state.phase = 'result'
+    state.phaseEndsAt = now + state.opts.resultTime * 1000
+  },
+
+  _resolvePointsRound(state, now) {
+    this._recordPointsRoundHistory(state)
+    state.phase = 'result'
+    state.phaseEndsAt = now + state.opts.resultTime * 1000
+  },
+
+  _recordPointsRoundHistory(state) {
+    const order = state.mode === 'points-turn'
+      ? (state.roundOrder.length ? state.roundOrder : state.order)
+      : state.order
+    const throws = order.map(pid => publicThrow(state.roundThrows[pid])).filter(Boolean)
+    state.history.push({
+      round: state.round,
+      mode: state.mode,
+      throws,
+      eliminated: []
+    })
+
+    const scoreText = order
+      .filter(pid => state.roundThrows[pid])
+      .map(pid => `${state.players[pid].playerName} ${state.roundThrows[pid].score}`)
+      .join('，')
+    state._replayEvents.push({
+      type: 'round',
+      text: `第 ${state.round} 轮结算：${scoreText}`,
+      data: {
+        round: state.round,
+        throws,
+        totals: { ...state.scores }
+      }
+    })
+  },
+
+  _resolvePkMatch(state, now) {
+    const [a, b] = state.pkPair
+    const ta = state.roundThrows[a]
+    const tb = state.roundThrows[b]
+    if (!ta || !tb) return
+
+    let loserId = null
+    let winnerId = null
+    let tieBreak = null
+
+    if (ta.score > tb.score) {
+      winnerId = a
+      loserId = b
+    } else if (tb.score > ta.score) {
+      winnerId = b
+      loserId = a
+    } else {
+      const da = hitDistance(state.map, ta)
+      const db = hitDistance(state.map, tb)
+      if (da < db) {
+        winnerId = a
+        loserId = b
+      } else if (db < da) {
+        winnerId = b
+        loserId = a
+      } else {
+        winnerId = Math.random() < 0.5 ? a : b
+        loserId = winnerId === a ? b : a
+        tieBreak = { type: 'random', tied: [a, b], winnerId }
+      }
+      if (!tieBreak) {
+        tieBreak = {
+          type: 'distance',
+          tied: [a, b],
+          winnerId,
+          distances: {
+            [a]: Math.round(da * 10) / 10,
+            [b]: Math.round(db * 10) / 10
+          }
+        }
+      }
+    }
+
+    const loser = state.players[loserId]
+    loser.alive = false
+    loser.eliminatedRound = state.round
+    state.lastEliminated = [loserId]
+    state.pkMatchWinnerId = winnerId
+    state.pkLastTieBreak = tieBreak
+    state.tieBreak = tieBreak
+
+    const entry = {
+      round: state.round,
+      mode: 'pk',
+      pair: [a, b],
+      throws: [publicThrow(ta), publicThrow(tb)],
+      eliminated: [loserId],
+      winnerId,
+      tieBreak
+    }
+    state.history.push(entry)
+    state._replayEvents.push({
+      type: 'eliminate',
+      text: `第 ${state.round} 场 PK：${state.players[winnerId].playerName} 胜出，${loser.playerName} 被淘汰`,
+      data: {
+        round: state.round,
+        pair: [a, b],
+        winnerId,
+        eliminated: [loserId],
+        tieBreak,
+        throws: entry.throws
+      }
+    })
+
     state.phase = 'result'
     state.phaseEndsAt = now + state.opts.resultTime * 1000
   },
@@ -578,7 +924,8 @@ registerGame({
     }
   },
 
-  _finishSingle(state) {
+  _finishTopScore(state, opts = {}) {
+    const single = !!opts.single
     let best = -Infinity
     for (const pid of state.order) {
       best = Math.max(best, state.scores[pid] || 0)
@@ -587,19 +934,35 @@ registerGame({
     let tieBreak = null
 
     if (winners.length > 1) {
-      // 最高分并列：先比较落点与所在区域中心的距离（更准者胜），再比较发射先后
+      const lastHistory = state.history[state.history.length - 1]
+      const lastRoundScores = new Map()
+      for (const t of (lastHistory?.throws || [])) lastRoundScores.set(t.playerId, t.score)
+
       const ranked = winners.map(pid => {
-        const shot = [...state.allThrows].reverse().find(t => t.playerId === pid)
-        const cell = shot ? state.map.cells.find(c => c.id === shot.cellId) : null
-        const dist = (shot && cell) ? Math.hypot(shot.x - cell.seed.x, shot.y - cell.seed.y) : Infinity
-        return { pid, dist, at: shot ? shot.at : Infinity }
-      }).sort((a, b) => (a.dist - b.dist) || (a.at - b.at))
+        const throws = state.allThrows.filter(t => t.playerId === pid)
+        const precision = throws.length
+          ? throws.reduce((sum, t) => sum + hitDistance(state.map, t), 0)
+          : Infinity
+        const lastAt = throws.length ? throws[throws.length - 1].at : Infinity
+        return {
+          pid,
+          lastRoundScore: single ? (state.scores[pid] || 0) : (lastRoundScores.get(pid) ?? 0),
+          precision,
+          lastAt
+        }
+      }).sort((a, b) =>
+        (b.lastRoundScore - a.lastRoundScore) ||
+        (a.precision - b.precision) ||
+        (a.lastAt - b.lastAt)
+      )
+
       winners = [ranked[0].pid]
       tieBreak = {
-        type: 'distance',
+        type: single ? 'distance' : 'points',
         tied: ranked.map(r => r.pid),
         winnerId: ranked[0].pid,
-        distances: Object.fromEntries(ranked.map(r => [r.pid, Math.round(r.dist * 10) / 10]))
+        lastRoundScores: Object.fromEntries(ranked.map(r => [r.pid, r.lastRoundScore])),
+        precisions: Object.fromEntries(ranked.map(r => [r.pid, Math.round(r.precision * 10) / 10]))
       }
     }
 
@@ -617,9 +980,16 @@ registerGame({
     state.winnerPending = null
 
     const names = winners.map(pid => state.players[pid].playerName)
-    const tieNote = state.tieBreak && state.tieBreak.type === 'distance'
-      ? `（最高分并列，${state.players[state.tieBreak.winnerId]?.playerName || ''} 落点更接近区域中心）`
-      : ''
+    let tieNote = ''
+    if (state.tieBreak && state.tieBreak.winnerId === state.winnerId) {
+      if (state.tieBreak.type === 'distance') {
+        tieNote = `（最高分并列，${state.players[state.tieBreak.winnerId]?.playerName || ''} 落点更接近区域中心）`
+      } else if (state.tieBreak.type === 'points') {
+        tieNote = `（总积分并列，按最后一轮得分与落点精度判定）`
+      } else if (state.tieBreak.type === 'random') {
+        tieNote = '（同分，随机判定）'
+      }
+    }
     state._replayEvents.push({
       type: 'finish',
       text: names.length
@@ -652,7 +1022,7 @@ registerGame({
         playerId: id,
         playerName: ps.playerName,
         color: ps.color,
-        seat: idx + 1,
+        seat: ps.seat || (idx + 1),
         alive: !!ps.alive,
         score: state.scores[id] || 0,
         lastScore: ps.lastScore,
@@ -667,18 +1037,26 @@ registerGame({
       started: state.started,
       finished: state.finished,
       mode: state.mode,
+      modeLabel: MODE_LABELS[state.mode] || state.mode,
       now,
       phase: state.phase,
       round: state.round,
+      roundCount: state.opts.roundCount,
       phaseStartAt: state.phaseStartAt,
       phaseEndsAt: state.phaseEndsAt,
       aimTime: state.opts.aimTime,
       resultTime: state.opts.resultTime,
+      pickTime: state.opts.pickTime,
       map: state.map,
       players,
       order: state.order,
+      roundOrder: state.roundOrder,
       turnId: state.turnId,
       turnIndex: state.turnIndex,
+      pkPair: state.pkPair || [],
+      pickerId: state.pickerId || null,
+      isPicker: state.phase === 'pick' && state.pickerId === pid,
+      pkMatchWinnerId: state.pkMatchWinnerId || null,
       myTurn: this._canAct(state, pid),
       myAlive: !!(state.players[pid] && state.players[pid].alive),
       myThrownThisRound: !!state.roundThrows[pid],
@@ -686,7 +1064,7 @@ registerGame({
       roundThrows: Object.values(state.roundThrows).map(publicThrow).filter(Boolean),
       lastThrow: publicThrow(state.lastThrow),
       lastEliminated: state.lastEliminated || [],
-      history: state.history.slice(-50),
+      history: state.history.slice(-80),
       scores: state.scores,
       winnerId: state.winnerId,
       winners: state.winners,
@@ -696,7 +1074,9 @@ registerGame({
 
   getAllStates(state) {
     const result = {}
-    const maxScore = Math.max(10, ...(state.map.cells || []).map(c => c.score))
+    const maxCell = Math.max(10, ...(state.map.cells || []).map(c => c.score))
+    const isPoints = state.mode === 'points-all' || state.mode === 'points-turn'
+    const maxScore = isPoints ? maxCell * state.opts.roundCount : maxCell
     for (const pid of state.order) {
       const ps = state.players[pid]
       const shot = state.roundThrows[pid]
@@ -706,13 +1086,20 @@ registerGame({
         label = ps.alive
           ? `本轮 ${shot ? shot.score : '—'} 分 · 累计 ${score}`
           : `第 ${ps.eliminatedRound || '?'} 轮淘汰`
+      } else if (state.mode === 'points-all' || state.mode === 'points-turn') {
+        label = `本轮 ${shot ? shot.score : '—'} 分 · 累计 ${score}`
+      } else if (state.mode === 'pk') {
+        label = ps.alive
+          ? `本场 ${shot ? shot.score : '—'} 分 · 累计 ${score}`
+          : `第 ${ps.eliminatedRound || '?'} 场淘汰`
       }
       result[pid] = {
+        seat: ps.seat,
         color: ps.color,
         score,
         progress: Math.max(0, Math.min(maxScore, score)),
         max: maxScore,
-        done: state.mode === 'elimination' ? !ps.alive : false,
+        done: (state.mode === 'elimination' || state.mode === 'pk') ? !ps.alive : false,
         label
       }
     }
@@ -724,8 +1111,16 @@ registerGame({
   },
 
   describeEvent(state, playerId, action, result) {
-    if (!action || action.type !== 'launch') return null
+    if (!action) return null
     const name = state.names[playerId] || playerId
+    if (action.type === 'pick_pair') {
+      const pair = (result && result.pair) || action.pair || []
+      return {
+        text: `${name} 选择 ${pair.map(pid => state.names[pid] || pid).join(' 与 ')} 进行 PK`,
+        data: { pickerId: playerId, pair }
+      }
+    }
+    if (action.type !== 'launch') return null
     const r = result || {}
     return {
       text: `${name} 发射 → ${r.score != null ? r.score : 0} 分（方向 ${r.angle != null ? r.angle : '—'}°，力度 ${r.power != null ? r.power : '—'}%）`,
@@ -752,19 +1147,20 @@ registerGame({
       const ps = state.players[pid]
       const isAlive = !!ps.alive
       let status = '完成'
-      if (state.mode === 'elimination') status = isAlive ? '存活' : '淘汰'
+      if (state.mode === 'elimination' || state.mode === 'pk') status = isAlive ? '存活' : '淘汰'
       if (winners.includes(pid)) status = '获胜'
       return {
         playerId: pid,
         playerName: ps.playerName,
+        seat: ps.seat,
         score: state.scores[pid] || 0,
         color: ps.color,
         status,
         details: [
           { label: '总得分', value: state.scores[pid] || 0 },
           { label: '发射次数', value: ps.throwCount || 0 },
-          ...(state.mode === 'elimination' && !isAlive
-            ? [{ label: '淘汰轮次', value: `第 ${ps.eliminatedRound || '?'} 轮` }]
+          ...((state.mode === 'elimination' || state.mode === 'pk') && !isAlive
+            ? [{ label: state.mode === 'pk' ? '淘汰场次' : '淘汰轮次', value: `第 ${ps.eliminatedRound || '?'} ${state.mode === 'pk' ? '场' : '轮'}` }]
             : [])
         ]
       }
@@ -774,21 +1170,24 @@ registerGame({
       type: 'marble-score',
       title: '弹珠得分',
       mode: state.mode,
-      modeLabel: state.mode === 'elimination' ? '淘汰模式' : '单轮模式',
-      description: state.mode === 'elimination'
-        ? '随机地图固定不变。每轮所有存活选手同时发射，最低分淘汰 1 人（并列最低随机淘汰其中 1 人），直到最后一人。'
-        : '随机地图固定不变。随机顺序轮流发射，每人 1 次机会，最高分获胜；若最高分并列，落点更接近区域中心者胜。',
+      modeLabel: MODE_LABELS[state.mode] || state.mode,
+      description: MODE_DESCRIPTIONS[state.mode] || '',
       map: state.map,
       summary: [
-        { label: '模式', value: state.mode === 'elimination' ? '淘汰模式' : '单轮模式' },
+        { label: '模式', value: MODE_LABELS[state.mode] || state.mode },
         { label: '区域数', value: (state.map.cells || []).length },
+        ...(state.mode === 'points-all' || state.mode === 'points-turn'
+          ? [{ label: '轮数', value: state.opts.roundCount }]
+          : []),
         { label: '回合数', value: state.history.length }
       ],
       players,
       order: state.order.map((pid, i) => ({
         index: i + 1,
+        seat: state.players[pid].seat || (i + 1),
         playerId: pid,
-        playerName: state.names[pid] || pid
+        playerName: state.names[pid] || pid,
+        color: state.players[pid].color
       })),
       history: state.history,
       allThrows: state.allThrows.map(publicThrow),
@@ -804,7 +1203,7 @@ registerGame({
       const ps = state.players[pid]
       const shot = state.roundThrows[pid]
       players[pid] = {
-        状态: state.mode === 'elimination' ? (ps.alive ? '存活' : '已淘汰') : '参赛中',
+        状态: (state.mode === 'elimination' || state.mode === 'pk') ? (ps.alive ? '存活' : '已淘汰') : '参赛中',
         本轮得分: shot ? shot.score : '—',
         累计得分: state.scores[pid] || 0,
         落点: shot ? `${shot.x}, ${shot.y}` : '—'
@@ -817,14 +1216,22 @@ registerGame({
       phase: state.phase,
       map: state.map,
       summary: {
-        模式: state.mode === 'elimination' ? '淘汰模式' : '单轮模式',
+        模式: MODE_LABELS[state.mode] || state.mode,
         轮次: state.round,
-        阶段: state.phase === 'aim' ? '发射中' : (state.phase === 'result' ? '结算展示' : '已结束'),
+        阶段: state.phase === 'aim'
+          ? '发射中'
+          : (state.phase === 'result' ? '结算展示' : (state.phase === 'pick' ? '选择下一组对决' : '已结束')),
         存活人数: this._aliveIds(state).length,
-        本轮已发射: Object.keys(state.roundThrows).length
+        本轮已发射: Object.keys(state.roundThrows).length,
+        ...(state.mode === 'pk'
+          ? {
+              当前对阵: (state.pkPair || []).map(pid => state.players[pid]?.playerName || pid).join(' vs ') || '—',
+              选择者: state.pickerId ? (state.players[state.pickerId]?.playerName || state.pickerId) : '—'
+            }
+          : {})
       },
       players,
-      throws: state.allThrows.map(publicThrow),
+      throws: Object.values(state.roundThrows).map(publicThrow).filter(Boolean),
       lastEliminated: state.lastEliminated || [],
       winnerId: state.winnerId
     }

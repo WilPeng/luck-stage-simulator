@@ -100,6 +100,7 @@ registerGame({
     if (!ps.startTime) ps.startTime = Date.now()
     ps.board = applyMove(ps.board, tileIndex)
     ps.moves++
+    ;(ps.path ||= []).push(tileIndex)
 
     const solved = isSolved(ps.board)
     if (solved) {
@@ -180,6 +181,7 @@ registerGame({
       playerId: pid,
       playerName: names[pid] || pid,
       board: [...(ps.board || [])],
+      path: ps.path || [],
       solved: !!ps.solved,
       moves: ps.moves || 0
     }))

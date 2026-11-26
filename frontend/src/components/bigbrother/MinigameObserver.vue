@@ -9,30 +9,23 @@
 
     <div v-if="!roomId" class="obs-empty">暂无进行中的比赛</div>
     <template v-else>
-      <div class="obs-players">
-        <div
-          v-for="p in playerRows"
-          :key="p.playerId"
-          class="obs-player"
-          :class="{ winner: isWinner(p.playerId), done: p.done }"
-        >
-          <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
-          <span v-if="p.color" class="op-color" :style="{ background: p.color }"></span>
-          <span class="op-name">{{ p.playerName }}</span>
-          <span class="op-label" :style="{ color: p.color || undefined }">{{ p.label || p.score }}</span>
-          <div v-if="p.max" class="op-bar"><div class="op-fill" :style="{ width: pct(p) + '%', background: p.color || undefined }"></div></div>
-          <span v-if="isWinner(p.playerId)" class="op-badge">🏆</span>
-          <span v-else-if="p.done" class="op-badge done">✓</span>
-        </div>
-        <div v-if="!playerRows.length" class="op-empty">等待选手状态…</div>
-      </div>
+      <ContestStandings :key="roomId" :players="playerRows" :states="rankingStates"
+        :game-id="progress?.minigameId || room?.minigameId || ''" :mode="adminView?.mode"
+        :target="progress?.targetScore ?? room?.targetScore ?? 0" :winners="winningIds"
+        :selected="focusedPlayer" :final="status === 'finished'" :live-active="status === 'playing'" inspectable @inspect="focusPlayer" />
+      <nav class="obs-tabs" aria-label="观战内容">
+        <button type="button" :aria-pressed="tab === 'board'" @click="tab = 'board'">完整局面</button>
+        <button type="button" :aria-pressed="tab === 'events'" @click="tab = 'events'">事件记录</button>
+      </nav>
+      <p v-if="tab === 'board' && !adminView" class="obs-empty">等待比赛局面…</p>
 
-      <div v-if="adminView" class="obs-admin">
+      <div v-if="tab === 'board' && adminView" class="obs-admin">
         <div class="obs-admin-title">🔎 完整局面（管理员视角 · 含隐藏信息）</div>
 
         <!-- 弹珠得分：地图与所有落点 -->
         <div v-if="adminView.type === 'marble-score' && adminView.map" class="oa-marble">
           <MarbleMap :map="adminView.map" :throws="adminView.throws || []" />
+          <div class="oa-marble-note">数字 = 选手编号 · 颜色 = 选手专属颜色</div>
         </div>
 
         <!-- 毒酒：图形化转盘盘面（含毒酒位置） -->
@@ -91,6 +84,9 @@
           </div>
         </template>
 
+        <div v-else-if="adminView.type === 'poker17'" class="poker-table">
+          {{ adminView.phaseLabel }} · 底池 {{ adminView.pot }} · 牌库余 {{ adminView.deckRemaining }} 张
+        </div>
         <pre v-else-if="!isGenericView" class="oa-json">{{ pretty(adminView) }}</pre>
 
         <!-- 通用：摘要 + 每位选手字段 -->
@@ -119,14 +115,27 @@
         </template>
       </div>
 
-      <div class="obs-events">
-        <div class="events-title">📜 实时事件流（{{ events.length }}）</div>
+      <div v-if="tab === 'events'" class="obs-events">
+        <div class="events-title">📜 事件记录（{{ visibleEvents.length }} / {{ events.length }}）</div>
+        <label class="event-player">选手
+          <select v-model="focusedPlayer"><option value="">全部选手</option>
+            <option v-for="p in playerRows" :key="p.playerId" :value="p.playerId">{{ p.playerName }}</option>
+          </select>
+        </label>
+        <p v-if="earlierEventCount">加入前还有 {{ earlierEventCount }} 条更早记录，可在赛后复盘查看。</p>
+        <label class="event-player">事件类型
+          <select v-model="eventType"><option value="">全部类型</option>
+            <option v-for="type in eventTypes" :key="type" :value="type">{{ eventLabel(type) }}</option>
+          </select>
+        </label>
         <div class="events-scroll">
-          <div v-for="(e, i) in events" :key="i" class="ev-row" :class="e.type">
+          <div v-for="(e, i) in visibleEvents" :key="i" class="ev-row" :class="e.type">
             <span class="ev-time">{{ fmtTime(e.t) }}</span>
-            <span class="ev-text">{{ e.text }}</span>
+            <div class="ev-text">{{ e.text }}
+              <details v-if="e.data != null"><summary>操作详情</summary><pre class="oa-json">{{ pretty(e.data) }}</pre></details>
+            </div>
           </div>
-          <div v-if="!events.length" class="ev-empty">等待事件…</div>
+          <div v-if="!visibleEvents.length" class="ev-empty">暂无符合条件的事件</div>
         </div>
       </div>
     </template>
@@ -134,8 +143,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch, nextTick, ref } from 'vue'
+import { computed, onMounted, watch, ref } from 'vue'
 import { useMinigameSocket } from '../../composables/useMinigameSocket'
+import ContestStandings from './minigames/ContestStandings.vue'
 import BBAvatar from './BBAvatar.vue'
 import PoisonDrinkSpectator from './minigames/PoisonDrinkSpectator.vue'
 import JigsawSpectator from './minigames/JigsawSpectator.vue'
@@ -148,8 +158,11 @@ const props = defineProps<{
   room?: any
 }>()
 
+const tab = ref('board')
+const focusedPlayer = ref('')
+const eventType = ref('')
 const roomRef = ref<string | null>(props.roomId)
-const { connected, progress, events, winner, adminView, connect, joinRoom } = useMinigameSocket(roomRef)
+const { connected, progress, events, earlierEventCount, winner, finished, adminView, connect, disconnect } = useMinigameSocket(roomRef)
 
 function phaseLabel(p: string) {
   return ({ show: '展示', estimate: '估算', reveal: '公布估算', decide: 'Stay/Fold', resolve: '结算' } as Record<string, string>)[p] || p || ''
@@ -173,7 +186,7 @@ function fmtVal(v: any): string {
   return String(v)
 }
 
-const status = computed(() => progress.value?.status || props.room?.status || '')
+const status = computed(() => finished.value ? 'finished' : progress.value?.status || props.room?.status || '')
 const statusText = computed(() => ({
   waiting: '等待开始',
   countdown: '倒计时',
@@ -184,9 +197,8 @@ const statusText = computed(() => ({
 
 const playerRows = computed(() => {
   const pr = progress.value
-  if (!pr) return []
-  const states = pr.states || {}
-  return (pr.participants || []).map((p: any) => ({
+  const states = pr?.states || {}
+  return (pr?.participants || props.room?.participants || []).map((p: any) => ({
     playerId: p.playerId,
     playerName: p.playerName,
     avatar: p.avatar || null,
@@ -194,12 +206,31 @@ const playerRows = computed(() => {
   }))
 })
 
-function isWinner(id: string) {
-  return winner.value?.playerId === id || progress.value?.winner?.playerId === id
+const winningIds = computed(() => [
+  winner.value?.playerId || progress.value?.winner?.playerId,
+  ...(progress.value?.winners || []).map((p: any) => typeof p === 'string' ? p : p.playerId)
+].filter(Boolean) as string[])
+const rankingStates = computed(() => Object.fromEntries(playerRows.value.map((player: any) => {
+  const view = adminView.value
+  const state = progress.value?.states?.[player.playerId] || {}
+  const boardPlayer = view?.board?.players?.find((p: any) => p.playerId === player.playerId)
+  return [player.playerId, {
+    ...state,
+    alive: state.alive ?? (Array.isArray(view?.alive) ? view.alive.includes(player.playerId) : undefined),
+    eliminated: state.eliminated ?? boardPlayer?.eliminated
+  }]
+})))
+const eventTypes = computed<string[]>(() => [...new Set(events.value.map(e => String(e.type)).filter(Boolean))])
+const visibleEvents = computed(() => events.value
+  .filter(e => (!focusedPlayer.value || e.playerId === focusedPlayer.value) && (!eventType.value || e.type === eventType.value))
+  .reverse())
+function eventLabel(type: string) {
+  return ({ game_start: '开始', game_end: '结算', game_stop: '停止', answer: '回答', round: '回合', eliminate: '淘汰', action: '操作' } as Record<string,string>)[type] || type
 }
-function pct(p: any) {
-  if (!p.max) return 0
-  return Math.min(100, ((p.progress || 0) / p.max) * 100)
+function focusPlayer(id: string) {
+  focusedPlayer.value = focusedPlayer.value === id ? '' : id
+  eventType.value = ''
+  tab.value = 'events'
 }
 function fmtTime(t: number) {
   if (!t) return ''
@@ -207,18 +238,25 @@ function fmtTime(t: number) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
 }
 
-onMounted(() => {
-  connect()
-  nextTick(() => { if (props.roomId) joinRoom(props.roomId) })
-})
+onMounted(connect)
 
 watch(() => props.roomId, (v) => {
+  disconnect()
+  tab.value = 'board'
+  focusedPlayer.value = ''
+  eventType.value = ''
   roomRef.value = v
-  if (v) joinRoom(v)
+  if (v) connect()
 })
 </script>
 
 <style scoped>
+.obs-tabs {display:flex;gap:7px;margin:12px 0}
+.obs-tabs button,.event-player select {border:1px solid #7e6b9a;border-radius:6px;padding:7px 10px;background:#251b37;color:#e6d8fa}
+.obs-tabs button[aria-pressed=true] {background:#4a3b62}
+.event-player {display:flex;align-items:center;gap:8px;margin:8px 0;color:#e6d8fa}
+.poker-table {padding:16px;border-radius:14px;background:#204c40;color:#f6f8f2}
+
 .mg-observer { background: #1b1130; border: 1px solid #4488ff44; border-radius: 12px; padding: 16px; }
 .obs-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .obs-title { font-size: 15px; font-weight: 700; color: #4488ff; }
@@ -229,18 +267,7 @@ watch(() => props.roomId, (v) => {
 .obs-status.finished { background: #ff444422; color: #ff4444; }
 .obs-conn { margin-left: auto; font-size: 11px; color: #6b5f92; }
 .obs-conn.on { color: #b39bff; }
-.obs-empty, .op-empty, .ev-empty { color: #6b5f92; font-size: 13px; padding: 16px 0; text-align: center; }
-.obs-players { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-bottom: 14px; }
-.obs-player { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #ffffff06; border: 1px solid #ffffff10; border-radius: 8px; font-size: 13px; color: #ddd; }
-.obs-player.winner { border-color: #e6c988; background: #e6c98812; }
-.obs-player.done { opacity: 0.7; }
-.op-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.op-color { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 6px currentColor; }
-.op-label { color: #b3a6d6; font-size: 12px; }
-.op-bar { width: 50px; height: 4px; background: #ffffff14; border-radius: 2px; overflow: hidden; }
-.op-fill { height: 100%; background: linear-gradient(90deg, #b39bff, #4488ff); }
-.op-badge { font-size: 14px; }
-.op-badge.done { color: #b39bff; }
+.obs-empty, .ev-empty { color: #6b5f92; font-size: 13px; padding: 16px 0; text-align: center; }
 .obs-events { border-top: 1px solid #ffffff10; padding-top: 12px; }
 .events-title { font-size: 13px; color: #b3a6d6; margin-bottom: 8px; }
 .events-scroll { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
@@ -253,6 +280,7 @@ watch(() => props.roomId, (v) => {
 .obs-admin { border-top: 1px solid #ffffff10; padding-top: 12px; margin-bottom: 12px; }
 .obs-admin-title { font-size: 13px; color: #4488ff; margin-bottom: 10px; font-weight: 600; }
 .oa-marble { width: 100%; max-width: 420px; margin-bottom: 12px; }
+.oa-marble-note { font-size: 10.5px; color: #8f83b8; margin-top: 5px; text-align: center; }
 .oa-players { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
 .oa-p { display: flex; gap: 8px; padding: 8px 10px; background: #ffffff06; border: 1px solid #ffffff12; border-radius: 8px; }
 .oa-p.turn { border-color: #b39bff; background: #b39bff10; }

@@ -3,7 +3,7 @@
  */
 import { ref, onUnmounted, type Ref } from 'vue'
 import { io, Socket } from 'socket.io-client'
-import type { MinigameId, MinigameParticipant } from '../types/bigbrother'
+import type { MinigameParticipant } from '../types/bigbrother'
 
 function getApiRoot(): string {
   // socket.io namespace 在后端是根路径（/bigbrother-minigame），不带 /api
@@ -28,6 +28,7 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
   const finished = ref(false)
   const progress = ref<any>(null)
   const events = ref<any[]>([])
+  const earlierEventCount = ref(0)
   const paused = ref(false)
   const allReady = ref(false)
   const summoned = ref(false)
@@ -74,12 +75,12 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
       }
     })
 
-    s.on('game_paused', (data: any) => {
+    s.on('game_paused', () => {
       paused.value = true
       if (gameState.value) gameState.value.status = 'paused'
     })
 
-    s.on('game_resumed', (data: any) => {
+    s.on('game_resumed', () => {
       paused.value = false
       if (gameState.value) gameState.value.status = 'playing'
     })
@@ -97,6 +98,12 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
     s.on('game_progress', (data: any) => {
       progress.value = data
       if (data && Array.isArray(data.participants)) participants.value = data.participants
+    })
+
+    s.on('game_event_history', (data: any) => {
+      if (data?.roomId !== roomId.value || !Array.isArray(data.events)) return
+      events.value = data.events
+      earlierEventCount.value = Math.max(0, data.total - data.events.length)
     })
 
     s.on('game_event', (data: any) => {
@@ -172,6 +179,7 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
     finished.value = false
     progress.value = null
     events.value = []
+    earlierEventCount.value = 0
     paused.value = false
     allReady.value = false
     summoned.value = false
@@ -184,7 +192,7 @@ export function useMinigameSocket(roomId: Ref<string | null>) {
 
   return {
     socket, connected, gameState, countdown, participants,
-    winner, scores, error, finished, progress, events, paused, allReady, summoned, adminView,
+    winner, scores, error, finished, progress, events, earlierEventCount, paused, allReady, summoned, adminView,
     connect, joinRoom, sendAction, setReady, disconnect
   }
 }

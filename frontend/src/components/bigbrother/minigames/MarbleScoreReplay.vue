@@ -11,7 +11,20 @@
 
     <div class="msr-main">
       <div class="msr-map">
-        <MarbleMap :map="meta.map" :throws="allThrows" />
+        <MarbleMap :map="meta.map" :throws="displayedThrows" />
+        <div class="msr-map-legend">数字 = 选手编号 · 颜色 = 选手专属颜色</div>
+        <div class="msr-round-filter">
+          <span class="msr-filter-label">落点筛选</span>
+          <button class="msr-filter-btn" :class="{ active: selectedRound === 'all' }" @click="selectedRound = 'all'">全部</button>
+          <button
+            v-for="r in roundNumbers"
+            :key="r"
+            class="msr-filter-btn"
+            :class="{ active: selectedRound === r }"
+            @click="selectedRound = r"
+          >{{ roundLabel(r) }}</button>
+        </div>
+        <div class="msr-filter-hint">默认显示最后一轮（单轮模式显示全部）；切换轮次可确认每个数字对应的选手与轮次。</div>
       </div>
       <div class="msr-legend">
         <div class="msr-legend-title">区域分值</div>
@@ -20,16 +33,17 @@
             <i :style="{ background: cell.color }"></i>{{ cell.score }} 分
           </span>
         </div>
-        <div class="msr-legend-title" style="margin-top: 12px">选手</div>
+        <div class="msr-legend-title" style="margin-top: 12px">选手颜色 / 编号</div>
         <div class="msr-players">
           <div
-            v-for="p in meta.players || []"
+            v-for="(p, idx) in meta.players || []"
             :key="p.playerId"
             class="msr-player"
             :style="{ borderLeftColor: p.color }"
           >
+            <span class="mp-seat">#{{ p.seat || idx + 1 }}</span>
             <span class="mp-dot" :style="{ background: p.color }"></span>
-            <span class="mp-name">{{ p.playerName }}</span>
+            <span class="mp-name" :style="{ color: p.color }">{{ p.playerName }}</span>
             <span class="mp-score" :style="{ color: p.color }">{{ p.score }}</span>
             <span class="mp-status" :class="statusClass(p.status)">{{ p.status }}</span>
           </div>
@@ -55,7 +69,7 @@
                 <th>落点</th>
               </template>
               <template v-else>
-                <th v-for="r in roundNumbers" :key="r">第{{ r }}轮</th>
+                <th v-for="r in roundNumbers" :key="r">{{ meta.mode === 'pk' ? `第${r}场` : `第${r}轮` }}</th>
               </template>
               <th>总得分</th>
               <th>结果</th>
@@ -65,8 +79,9 @@
             <tr v-for="row in scoreRows" :key="row.playerId">
               <td class="col-player">
                 <span class="player-cell">
+                  <span class="mp-seat">#{{ row.seat }}</span>
                   <span class="mp-dot" :style="{ background: row.color }"></span>
-                  <span class="mp-name">{{ row.playerName }}</span>
+                  <span class="mp-name" :style="{ color: row.color }">{{ row.playerName }}</span>
                 </span>
               </td>
               <template v-if="isSingle">
@@ -93,16 +108,25 @@
       </div>
     </div>
 
-    <div v-if="!isSingle" class="msr-block">
+    <div class="msr-block">
       <div class="msr-block-title">每轮发射细节</div>
       <div class="msr-rounds">
         <div v-for="h in meta.history || []" :key="h.round" class="msr-round">
           <div class="msr-round-head">
-            <span>第 {{ h.round }} 轮</span>
-            <span v-if="h.eliminated?.length" class="msr-out">
-              淘汰：{{ h.eliminated.map(nameOf).join('、') }}
-              <em v-if="h.tie">（并列最低 {{ h.lowestScore }} 分，随机判定）</em>
-              <em v-else>（最低 {{ h.lowestScore }} 分）</em>
+            <span>
+              {{ meta.mode === 'pk' ? `第 ${h.round} 场 PK` : (meta.mode === 'single' ? `第 ${h.round} 位` : `第 ${h.round} 轮`) }}
+              <template v-if="meta.mode === 'pk' && h.pair"> · {{ h.pair.map(nameOf).join(' vs ') }}</template>
+              <template v-else-if="meta.mode === 'single' && h.throws?.[0]"> · {{ h.throws[0].playerName }}</template>
+            </span>
+            <span class="msr-round-tags">
+              <span v-if="h.winnerId" class="msr-win">胜者：{{ nameOf(h.winnerId) }}</span>
+              <span v-if="h.eliminated?.length" class="msr-out">
+                淘汰：{{ h.eliminated.map(nameOf).join('、') }}
+                <em v-if="h.tie">（并列最低 {{ h.lowestScore }} 分，随机判定）</em>
+                <em v-else-if="h.tieBreak?.type === 'distance'">（同分，按落点精度判定）</em>
+                <em v-else-if="h.tieBreak?.type === 'random'">（同分，随机判定）</em>
+                <em v-else-if="h.lowestScore != null">（最低 {{ h.lowestScore }} 分）</em>
+              </span>
             </span>
           </div>
           <div class="msr-throws">
@@ -113,8 +137,9 @@
               :class="{ out: h.eliminated?.includes(t.playerId) }"
               :style="{ borderLeftColor: t.color }"
             >
+              <span class="mp-seat">#{{ t.seat ?? '—' }}</span>
               <span class="mp-dot" :style="{ background: t.color }"></span>
-              <span class="mp-name">{{ t.playerName }}</span>
+              <span class="mp-name" :style="{ color: t.color }">{{ t.playerName }}</span>
               <span class="msr-throw-fields">{{ t.angle }}° / {{ t.power }}%</span>
               <span class="msr-throw-score" :style="{ color: t.color }">{{ t.score }} 分</span>
             </div>
@@ -127,7 +152,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import MarbleMap from './MarbleMap.vue'
 
 const props = defineProps<{ meta: any }>()
@@ -158,6 +183,31 @@ const roundNumbers = computed(() => {
   return [...set].sort((a, b) => a - b)
 })
 
+const selectedRound = ref<number | 'all'>('all')
+watch(roundNumbers, (rs) => {
+  if (!rs.length) {
+    selectedRound.value = 'all'
+    return
+  }
+  if (props.meta?.mode === 'single') {
+    selectedRound.value = 'all'
+    return
+  }
+  if (selectedRound.value === 'all' || !rs.includes(Number(selectedRound.value))) {
+    selectedRound.value = rs[rs.length - 1]
+  }
+}, { immediate: true })
+const displayedThrows = computed(() => {
+  if (selectedRound.value === 'all') return allThrows.value
+  return allThrows.value.filter((t: any) => Number(t.round) === selectedRound.value)
+})
+
+function roundLabel(r: number) {
+  if (props.meta?.mode === 'pk') return `第${r}场`
+  if (props.meta?.mode === 'single') return `第${r}位`
+  return `第${r}轮`
+}
+
 const scoreRows = computed(() => {
   const players: any[] = props.meta?.players || []
   const byId = new Map(players.map((p: any) => [p.playerId, p]))
@@ -176,7 +226,7 @@ const scoreRows = computed(() => {
   for (const t of allThrows.value) throwByPlayer.set(t.playerId, t)
 
   const winners: string[] = props.meta?.winners || []
-  return order.map((o: any) => {
+  return order.map((o: any, idx: number) => {
     const p = byId.get(o.playerId) || {}
     const color = p.color || '#c9a6ff'
     const isWinner = winners.includes(o.playerId) || props.meta?.winnerId === o.playerId
@@ -185,6 +235,7 @@ const scoreRows = computed(() => {
     return {
       playerId: o.playerId,
       playerName: p.playerName || o.playerName || o.playerId,
+      seat: o.seat || p.seat || (idx + 1),
       color,
       score: p.score ?? 0,
       status,
@@ -200,9 +251,18 @@ const scoreRows = computed(() => {
 
 const tieText = computed(() => {
   const tb = props.meta?.tieBreak
-  if (!tb || tb.type !== 'distance') return ''
+  if (!tb) return ''
   const tied = (tb.tied || []).map(nameOf).join('、')
-  return `最高分并列：${tied}。按落点与区域中心的距离判定，${nameOf(tb.winnerId)} 胜出。`
+  if (tb.type === 'distance') {
+    return `最高分并列：${tied}。按落点与区域中心的距离判定，${nameOf(tb.winnerId)} 胜出。`
+  }
+  if (tb.type === 'points') {
+    return `总积分并列：${tied}。按最后一轮得分与落点精度判定，${nameOf(tb.winnerId)} 胜出。`
+  }
+  if (tb.type === 'random') {
+    return `同分并列：${tied}。随机判定，${nameOf(tb.winnerId)} 胜出。`
+  }
+  return ''
 })
 
 function nameOf(id: string) {
@@ -225,7 +285,22 @@ function statusClass(s: string) {
 .msr-tag { font-size: 12px; color: #c9a6ff; background: #b39bff18; border: 1px solid #b39bff33; border-radius: 6px; padding: 2px 8px; }
 .msr-desc { font-size: 13px; color: #b9c6e6; line-height: 1.6; margin-top: 8px; }
 .msr-main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr); gap: 14px; align-items: start; }
-.msr-map { min-width: 0; }
+.msr-map { min-width: 0; position: relative; }
+.msr-map-legend {
+  position: absolute; top: 8px; left: 8px; z-index: 2;
+  font-size: 10.5px; color: #d9d2f2; background: rgba(10, 7, 22, 0.74);
+  border: 1px solid #ffffff14; border-radius: 6px; padding: 3px 7px;
+  pointer-events: none; backdrop-filter: blur(4px);
+}
+.msr-round-filter { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+.msr-filter-label { font-size: 11px; color: #8f83b8; }
+.msr-filter-btn {
+  font-size: 11px; color: #b9a9e6; background: #ffffff06; border: 1px solid #ffffff14;
+  border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: all 0.15s;
+}
+.msr-filter-btn:hover { border-color: #b39bff66; }
+.msr-filter-btn.active { color: #120a22; background: #b39bff; border-color: #b39bff; font-weight: 700; }
+.msr-filter-hint { font-size: 10.5px; color: #7d6fa6; margin-top: 5px; line-height: 1.5; }
 .msr-legend { background: #ffffff05; border: 1px solid #ffffff10; border-radius: 10px; padding: 11px 12px; }
 .msr-legend-title { font-size: 12px; color: #b39bff; font-weight: 700; margin-bottom: 7px; }
 .msr-cells { display: flex; flex-wrap: wrap; gap: 5px; max-height: 200px; overflow-y: auto; }
@@ -234,6 +309,7 @@ function statusClass(s: string) {
 .msr-players { display: flex; flex-direction: column; gap: 4px; }
 .msr-player { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #ddd; padding: 4px 7px; background: #ffffff05; border-radius: 6px; border-left: 2px solid transparent; }
 .mp-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.mp-seat { font-size: 10px; color: #7d6fa6; font-variant-numeric: tabular-nums; }
 .mp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mp-score { font-weight: 800; }
 .mp-status { font-size: 11px; color: #8f83b8; }
@@ -267,6 +343,8 @@ function statusClass(s: string) {
 .msr-rounds { display: flex; flex-direction: column; gap: 8px; max-height: 460px; overflow-y: auto; }
 .msr-round { background: #ffffff05; border: 1px solid #ffffff10; border-radius: 8px; padding: 8px 10px; }
 .msr-round-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; font-size: 12.5px; color: #ece7fb; font-weight: 700; margin-bottom: 6px; }
+.msr-round-tags { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.msr-win { color: #7ee0a0; font-weight: 500; }
 .msr-out { color: #ff8a8a; font-weight: 500; }
 .msr-out em { font-style: normal; color: #b39bff; font-size: 11px; }
 .msr-throws { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px; }

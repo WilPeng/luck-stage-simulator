@@ -10,10 +10,10 @@ const TOTAL_CHECKS = 5
 const TIME_LIMIT = 30000
 
 // 指针摆动位置 0..1；最中心(0.5)得100分，两侧(0/1)得0分
-function pointerScore(startTime, now) {
+function pointerPosition(startTime, now) {
   const t = ((now - startTime) % PERIOD) / PERIOD
   const pos = t < 0.5 ? t * 2 : (1 - t) * 2
-  return Math.round(100 * (1 - Math.abs(pos * 2 - 1)))
+  return pos
 }
 
 registerGame({
@@ -52,7 +52,9 @@ registerGame({
       return { updated: false, result: { error: '时间已到' } }
     }
 
-    const value = pointerScore(state.startTime, Date.now())
+    const position = pointerPosition(state.startTime, Date.now())
+    const value = Math.round(100 * (1 - Math.abs(position * 2 - 1)))
+    ;(ps.positions ||= []).push(position)
     ps.checks.push(value)
     ps.score += value
 
@@ -120,6 +122,7 @@ registerGame({
     for (const e of entries) delete e._row
     return {
       type: 'swing-pointer',
+      positions: Object.fromEntries(Object.entries(state.playerStates).map(([id, p]) => [id, p.positions || []])),
       title: '指针摆动',
       description: `指针在 0~1 之间摆动，在中心附近点击得分最高；共 ${TOTAL_CHECKS} 次机会，总分最高者获胜。`,
       summary: [{ label: '点击次数', value: TOTAL_CHECKS }],

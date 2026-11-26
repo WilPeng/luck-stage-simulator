@@ -1,5 +1,6 @@
 <template>
   <div class="pd-spectator">
+    <label v-if="replay"><input v-model="showPoison" type="checkbox"> 揭晓毒杯位置</label>
     <div class="pds-header">
       <span v-if="board.phase !== 'seat'" class="pds-round">第 {{ board.round }} 轮</span>
       <span v-else class="pds-round">比赛准备</span>
@@ -49,7 +50,7 @@
         <div class="pds-turntable">
           <div class="pds-disc" :style="{ transform: `rotate(${wheelRotationDeg}deg)` }">
             <div v-for="(cup, i) in wheelCups" :key="i" class="pds-arm" :style="{ transform: `rotate(${i * wheelStepDeg}deg)` }">
-              <div class="pds-cup" :class="{ poison: !!cup && cup.poison, empty: !cup }">
+              <div class="pds-cup" :class="{ poison: visiblePoison && !!cup && cup.poison, empty: !cup }">
                 <span v-if="cup">{{ cup.emoji }}</span>
                 <span v-else>·</span>
               </div>
@@ -68,10 +69,10 @@
           >
             <div class="pds-seat-name">{{ p.playerName }}<span v-if="p.isDealer" class="pds-crown">👑</span></div>
             <div class="pds-seat-hp">{{ '❤️'.repeat(Math.max(0, p.hp)) || '💀' }}</div>
-            <div v-if="cupAtSeat(i)" class="pds-seat-cup" :class="{ poison: !!cupAtSeat(i)?.poison }">
+            <div v-if="cupAtSeat(i)" class="pds-seat-cup" :class="{ poison: visiblePoison && !!cupAtSeat(i)?.poison }">
               <span>{{ cupAtSeat(i)?.emoji }}</span>
               <span class="pds-seat-cup-name">{{ cupAtSeat(i)?.name }}</span>
-              <span v-if="cupAtSeat(i)?.poison" class="pds-poison">☠️</span>
+              <span v-if="visiblePoison && cupAtSeat(i)?.poison" class="pds-poison">☠️</span>
             </div>
             <div v-if="!p.alive" class="pds-out">已淘汰</div>
           </div>
@@ -87,8 +88,8 @@
 
       <!-- 本轮酒杯池 -->
       <div v-if="board.phase === 'assign'" class="pds-cups">
-        <span v-for="c in board.cups || []" :key="c.id" class="pds-cup-chip" :class="{ poison: c.poison }">
-          {{ c.emoji }} {{ c.name }}<span v-if="c.poison" class="pds-poison">☠️</span>
+        <span v-for="c in board.cups || []" :key="c.id" class="pds-cup-chip" :class="{ poison: visiblePoison && c.poison }">
+          {{ c.emoji }} {{ c.name }}<span v-if="visiblePoison && c.poison" class="pds-poison">☠️</span>
         </span>
       </div>
 
@@ -125,9 +126,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
-const props = defineProps<{ board: any }>()
+const props = defineProps<{ board: any; replay?: boolean }>()
+const showPoison = ref(false)
+const visiblePoison = computed(() => !props.replay || showPoison.value)
 
 const phaseLabel = computed(() => ({
   seat: '自由选座',

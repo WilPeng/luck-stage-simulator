@@ -24,7 +24,7 @@
       <h2>{{ gameTitle || '弹珠得分' }}</h2>
       <p class="waiting-desc">{{ rulesText }}</p>
       <p class="waiting-sub">地图每局随机生成，本局内固定不变。方向箭头与蓄力条会以不同节奏持续摆动，看准时机发射！</p>
-      <p class="waiting-sub waiting-modes">淘汰模式：每轮所有存活选手同时发射，最低分淘汰 1 人，直到最后一人。<br />单轮模式：随机顺序轮流发射，每人 1 次机会，最高分获胜。</p>
+      <p class="waiting-sub waiting-modes">淘汰：每轮最低分淘汰 1 人 · 单轮：每人 1 次机会比最高分 · 多轮积分：累计得分最高者胜 · 随机 PK：低分淘汰，胜者挑选下一组</p>
       <div v-if="countdown > 0" class="countdown-big"><CountdownDisplay :value="countdown" /></div>
       <p v-else class="waiting-text">等待管理员开始比赛...</p>
     </div>
@@ -37,12 +37,9 @@
           <span>弹珠得分</span>
           <span class="mode-badge" :class="mode">{{ modeLabel }}</span>
         </div>
-        <div class="ms-round">
-          <template v-if="mode === 'elimination'">第 {{ roundNum }} 轮 · 存活 {{ aliveCount }} 人</template>
-          <template v-else>第 {{ roundNum }} / {{ totalPlayers }} 位</template>
-        </div>
+        <div class="ms-round">{{ roundInfo }}</div>
         <div class="ms-timer" :class="{ warn: clockLeft <= 3 }">
-          {{ phase === 'aim' ? `⏱ ${Math.ceil(clockLeft)}s` : `结算 ${Math.max(0, Math.ceil(clockLeft))}s` }}
+          {{ phase === 'aim' ? `⏱ ${Math.ceil(clockLeft)}s` : (phase === 'pick' ? `选择 ${Math.max(0, Math.ceil(clockLeft))}s` : `结算 ${Math.max(0, Math.ceil(clockLeft))}s`) }}
         </div>
       </div>
 
@@ -54,19 +51,26 @@
             :aim-angle="showAim ? liveAngle : null"
             :active-color="me?.color || '#ffd166'"
           />
+          <div class="map-legend">数字 = 选手编号 · 颜色 = 选手颜色 · 仅显示本轮落点</div>
 
           <!-- 地图上层提示 -->
           <div v-if="phase === 'result'" class="map-overlay result-overlay">
-            <div v-if="eliminatedNames" class="overlay-big out">
-              ⚠️ {{ eliminatedNames }} 被淘汰
-            </div>
-            <div v-if="mode === 'elimination' && eliminatedNames" class="overlay-small">
-              本轮最低分 {{ lastRoundLow }} 分
-            </div>
-            <div v-else-if="lastThrow" class="overlay-big">
-              {{ lastThrow.playerName }} 得到 {{ lastThrow.score }} 分
-            </div>
+            <template v-if="mode === 'pk'">
+              <div class="overlay-big">{{ pkResultText }}</div>
+              <div v-if="eliminatedNames" class="overlay-small out">⚠️ {{ eliminatedNames }} 被淘汰</div>
+            </template>
+            <template v-else-if="mode === 'elimination' && eliminatedNames">
+              <div class="overlay-big out">⚠️ {{ eliminatedNames }} 被淘汰</div>
+              <div class="overlay-small">本轮最低分 {{ lastRoundLow }} 分</div>
+            </template>
+            <template v-else>
+              <div class="overlay-big">{{ roundResultText }}</div>
+            </template>
             <div class="overlay-small">{{ nextPhaseHint }}</div>
+          </div>
+          <div v-else-if="phase === 'pick'" class="map-overlay soft">
+            <div class="overlay-big">{{ isPicker ? '🏆 请选择下一组 PK 选手' : `等待 ${pickerName} 选择下一组` }}</div>
+            <div class="overlay-small">从场上剩余选手中选择 2 人</div>
           </div>
           <div v-else-if="!myAlive" class="map-overlay">
             <div class="overlay-big">👀 你已被淘汰</div>
@@ -76,19 +80,36 @@
             <div class="overlay-big">等待 {{ currentTurnName }} 发射</div>
             <div class="overlay-small">每位选手 1 次机会，随机顺序进行</div>
           </div>
+          <div v-else-if="mode === 'points-turn' && !myTurn" class="map-overlay soft">
+            <div class="overlay-big">等待 {{ currentTurnName }} 发射</div>
+            <div class="overlay-small">第 {{ roundNum }} / {{ roundCount }} 轮 · 按顺序轮流发射</div>
+          </div>
+          <div v-else-if="mode === 'pk' && phase === 'aim' && !pkPair.includes(myId)" class="map-overlay soft">
+            <div class="overlay-big">{{ pkPairNames.join(' vs ') }}</div>
+            <div class="overlay-small">本场 PK 进行中，请等待结果</div>
+          </div>
           <div v-else-if="myThrownThisRound && phase === 'aim'" class="map-overlay soft">
             <div class="overlay-big">已发射，等待本轮结算</div>
-            <div class="overlay-small">已发射 {{ roundThrows.length }} / {{ aliveCount }} 人</div>
+            <div class="overlay-small">已发射 {{ roundThrows.length }} / {{ mode === 'pk' ? 2 : aliveCount }} 人</div>
           </div>
         </div>
 
         <div class="ms-side">
           <div class="ms-controls">
-            <div class="turn-banner" :class="{ active: canLaunch, waiting: !canLaunch }">
-              <template v-if="!myAlive">你已被淘汰，观战中</template>
-              <template v-else-if="mode === 'elimination'">
+            <div class="turn-banner" :class="{ active: canLaunch, waiting: !canLaunch && phase !== 'pick' }">
+              <template v-if="phase === 'pick'">
+                <template v-if="isPicker">🏆 你赢得了本场 PK，请选择下一组对决</template>
+                <template v-else>等待 {{ pickerName }} 选择下一组对决…</template>
+              </template>
+              <template v-else-if="!myAlive">你已被淘汰，观战中</template>
+              <template v-else-if="mode === 'pk'">
                 <template v-if="canLaunch">🎯 选择你的发射时机</template>
-                <template v-else-if="myThrownThisRound">✅ 你已发射，等待其他选手</template>
+                <template v-else-if="pkPair.includes(myId)">✅ 你已发射，等待对手</template>
+                <template v-else>等待 {{ currentTurnName }} 对决…</template>
+              </template>
+              <template v-else-if="mode === 'elimination' || mode === 'points-all'">
+                <template v-if="canLaunch">🎯 选择你的发射时机</template>
+                <template v-else-if="myThrownThisRound">✅ 你已发射，等待本轮结算</template>
                 <template v-else>等待本轮发射</template>
               </template>
               <template v-else>
@@ -97,42 +118,75 @@
               </template>
             </div>
 
-            <div class="specs" :class="{ dim: !showAim }">
-              <div class="spec-head">
-                <span>方向</span>
-                <span class="spec-value">{{ showAim ? liveAngle.toFixed(1) + '°' : '—' }}</span>
+            <template v-if="phase === 'pick'">
+              <div class="pick-panel">
+                <template v-if="isPicker">
+                  <div class="pick-title">选择 2 名选手进行下一场 PK</div>
+                  <div class="pick-hint">可以包含自己；选择完成后立即开始，超时会自动随机选择。</div>
+                  <div class="pick-candidates">
+                    <button
+                      v-for="p in pickCandidates"
+                      :key="p.playerId"
+                      type="button"
+                      class="pick-chip"
+                      :class="{ selected: pickSelection.includes(p.playerId) }"
+                      @click="togglePick(p.playerId)"
+                    >
+                      <span class="p-seat">{{ p.seat }}</span>
+                      <span class="p-dot" :style="{ background: p.color }"></span>
+                      <span class="pick-name">{{ p.playerName }}</span>
+                      <span v-if="pickSelection.includes(p.playerId)" class="pick-mark">✓</span>
+                    </button>
+                  </div>
+                  <button class="launch-btn" :class="{ ready: pickSelection.length === 2 }" :disabled="pickSelection.length !== 2" @click="confirmPick">
+                    确认对决（{{ pickSelection.length }}/2）
+                  </button>
+                </template>
+                <template v-else>
+                  <div class="pick-title">等待 {{ pickerName }} 选择下一组</div>
+                  <div class="pick-hint">剩余 {{ Math.ceil(clockLeft) }} 秒；超时将自动随机选择 2 人。</div>
+                </template>
               </div>
-              <div class="dir-track">
-                <div class="dir-center"></div>
-                <div class="dir-needle" :style="{ transform: `translateX(-50%) rotate(${showAim ? liveAngle : 0}deg)` }"></div>
-              </div>
-
-              <div class="spec-head power-head">
-                <span>力度</span>
-                <span class="spec-value">{{ showAim ? Math.round(livePower * 100) + '%' : '—' }}</span>
-              </div>
-              <div class="power-track">
-                <div class="power-fill" :style="{ width: (showAim ? livePower * 100 : 0) + '%' }"></div>
-                <div class="power-ticks">
-                  <span v-for="n in 9" :key="n" class="power-tick"></span>
+            </template>
+            <template v-else>
+              <div class="specs" :class="{ dim: !showAim }">
+                <div class="spec-head">
+                  <span>方向</span>
+                  <span class="spec-value">{{ showAim ? liveAngle.toFixed(1) + '°' : '—' }}</span>
                 </div>
-              </div>
-              <div class="power-hint">力度决定弹珠飞出的距离</div>
-            </div>
+                <div class="dir-track">
+                  <div class="dir-center"></div>
+                  <div class="dir-needle" :style="{ transform: `translateX(-50%) rotate(${showAim ? liveAngle : 0}deg)` }"></div>
+                </div>
 
-            <button class="launch-btn" :class="{ ready: canLaunch }" :disabled="!canLaunch" @click="launch">
-              <template v-if="canLaunch">🚀 发射弹珠</template>
-              <template v-else-if="!myAlive">观战中</template>
-              <template v-else-if="myThrownThisRound">已发射</template>
-              <template v-else>等待轮次</template>
-            </button>
-            <p class="launch-hint">点击按钮或按空格发射；方向与力度会在你点击的瞬间被锁定。</p>
+                <div class="spec-head power-head">
+                  <span>力度</span>
+                  <span class="spec-value">{{ showAim ? Math.round(livePower * 100) + '%' : '—' }}</span>
+                </div>
+                <div class="power-track">
+                  <div class="power-fill" :style="{ width: (showAim ? livePower * 100 : 0) + '%' }"></div>
+                  <div class="power-ticks">
+                    <span v-for="n in 9" :key="n" class="power-tick"></span>
+                  </div>
+                </div>
+                <div class="power-hint">力度决定弹珠飞出的距离</div>
+              </div>
+
+              <button class="launch-btn" :class="{ ready: canLaunch }" :disabled="!canLaunch" @click="launch">
+                <template v-if="canLaunch">🚀 发射弹珠</template>
+                <template v-else-if="!myAlive">观战中</template>
+                <template v-else-if="myThrownThisRound">已发射</template>
+                <template v-else-if="mode === 'pk'">等待对手</template>
+                <template v-else>等待轮次</template>
+              </button>
+              <p class="launch-hint">点击按钮或按空格发射；方向与力度会在你点击的瞬间被锁定。</p>
+            </template>
           </div>
 
           <div class="players-box">
             <div class="players-title">
               <span>选手</span>
-              <span class="players-sub">{{ mode === 'elimination' ? '本轮得分 / 累计' : '得分' }}</span>
+              <span class="players-sub">{{ scoreColumnLabel }}</span>
             </div>
             <div class="players-list">
               <div
@@ -141,22 +195,22 @@
                 class="p-row"
                 :class="{
                   me: p.playerId === myId,
-                  turn: mode === 'single' && p.playerId === turnId,
+                  turn: (phase === 'pick' && p.playerId === pickerId) || ((mode === 'single' || mode === 'points-turn') && p.playerId === turnId) || (mode === 'pk' && phase !== 'pick' && pkPair.includes(p.playerId)),
                   out: !p.alive,
                   thrown: p.roundScore !== null && p.roundScore !== undefined
                 }"
               >
                 <span class="p-seat">{{ p.seat }}</span>
                 <span class="p-dot" :style="{ background: p.color }"></span>
-                <span class="p-name">{{ p.playerName }}<i v-if="p.playerId === myId">（我）</i></span>
+                <span class="p-name" :style="{ color: p.color }">{{ p.playerName }}<i v-if="p.playerId === myId">（我）</i></span>
                 <span v-if="!p.alive" class="p-out">淘汰</span>
-                <span v-else-if="mode === 'elimination'" class="p-score">
+                <span v-else-if="mode !== 'single'" class="p-score">
                   <b>{{ p.roundScore !== null && p.roundScore !== undefined ? p.roundScore : '—' }}</b>
                   <em>/ {{ p.score }}</em>
                 </span>
                 <span v-else class="p-score"><b>{{ p.score }}</b></span>
-                <span v-if="mode === 'single' && p.playerId === turnId" class="p-turn-dot">●</span>
-                <span v-else-if="mode === 'elimination' && p.roundScore !== null && p.roundScore !== undefined" class="p-check">✓</span>
+                <span v-if="((mode === 'single' || mode === 'points-turn') && p.playerId === turnId)" class="p-turn-dot">●</span>
+                <span v-else-if="mode !== 'single' && p.roundScore !== null && p.roundScore !== undefined" class="p-check">✓</span>
               </div>
             </div>
           </div>
@@ -169,10 +223,14 @@
           <div v-for="log in roundLogs" :key="log.key" class="log-card">
             <div class="log-head">
               <span>{{ log.title }}</span>
-              <span v-if="log.eliminatedName" class="log-out">淘汰：{{ log.eliminatedName }}</span>
+              <span class="log-tags">
+                <span v-if="log.winnerName" class="log-win">胜者：{{ log.winnerName }}</span>
+                <span v-if="log.eliminatedName" class="log-out">淘汰：{{ log.eliminatedName }}</span>
+              </span>
             </div>
             <div class="log-rows">
               <div v-for="row in log.rows" :key="row.playerId" class="log-row" :class="{ out: row.eliminated }">
+                <span class="lr-seat">#{{ row.seat }}</span>
                 <span class="lr-dot" :style="{ background: row.color }"></span>
                 <span class="lr-name">{{ row.playerName }}</span>
                 <span class="lr-score">{{ row.score }} 分</span>
@@ -210,9 +268,18 @@ const state = computed<any>(() => gameState.value || null)
 const map = computed<any>(() => state.value?.map || null)
 const players = computed<any[]>(() => state.value?.players || [])
 const mode = computed(() => state.value?.mode || 'elimination')
-const modeLabel = computed(() => mode.value === 'elimination' ? '淘汰模式' : '单轮模式')
+const MODE_LABELS: Record<string, string> = {
+  elimination: '淘汰模式',
+  single: '单轮模式',
+  'points-all': '多轮积分 · 同时发射',
+  'points-turn': '多轮积分 · 轮流发射',
+  pk: '随机PK淘汰'
+}
+const modeLabel = computed(() => MODE_LABELS[mode.value] || mode.value)
+const isPoints = computed(() => mode.value === 'points-all' || mode.value === 'points-turn')
 const phase = computed(() => state.value?.phase || '')
 const roundNum = computed(() => state.value?.round || 0)
+const roundCount = computed(() => Number(state.value?.roundCount) || 0)
 const turnId = computed(() => state.value?.turnId || '')
 const myTurn = computed(() => !!state.value?.myTurn)
 const myAlive = computed(() => state.value?.myAlive !== false)
@@ -222,6 +289,10 @@ const lastThrow = computed<any>(() => state.value?.lastThrow || null)
 const lastEliminated = computed<string[]>(() => state.value?.lastEliminated || [])
 const history = computed<any[]>(() => state.value?.history || [])
 const scores = computed<Record<string, number>>(() => state.value?.scores || {})
+const pkPair = computed<string[]>(() => state.value?.pkPair || [])
+const pickerId = computed(() => state.value?.pickerId || '')
+const isPicker = computed(() => !!state.value?.isPicker)
+const pkMatchWinnerId = computed(() => state.value?.pkMatchWinnerId || '')
 
 const me = computed(() => players.value.find(p => p.playerId === myId.value) || null)
 const aliveCount = computed(() => players.value.filter(p => p.alive).length)
@@ -230,24 +301,58 @@ const sortedPlayers = computed(() => {
   const list = [...players.value]
   return list.sort((a, b) => {
     if (a.alive !== b.alive) return a.alive ? -1 : 1
-    if (mode.value === 'single') return b.score - a.score
+    if (mode.value !== 'elimination') {
+      const sa = scores.value[a.playerId] ?? a.score ?? 0
+      const sb = scores.value[b.playerId] ?? b.score ?? 0
+      if (sb !== sa) return sb - sa
+    }
     return (a.seat || 0) - (b.seat || 0)
   })
 })
-const currentTurnName = computed(() => players.value.find(p => p.playerId === turnId.value)?.playerName || '其他选手')
-const eliminatedNames = computed(() => lastEliminated.value
-  .map(id => players.value.find(p => p.playerId === id)?.playerName)
-  .filter(Boolean)
-  .join('、'))
+const nameOf = (id: string) => players.value.find(p => p.playerId === id)?.playerName || ''
+const pkPairNames = computed(() => pkPair.value.map(nameOf).filter(Boolean))
+const pickerName = computed(() => nameOf(pickerId.value) || '其他选手')
+const pkMatchWinnerName = computed(() => nameOf(pkMatchWinnerId.value))
+const currentTurnName = computed(() => {
+  if (mode.value === 'pk') {
+    if (phase.value === 'pick') return pickerName.value
+    if (pkPairNames.value.length === 2) return pkPairNames.value.join(' vs ')
+  }
+  return nameOf(turnId.value) || '其他选手'
+})
+const eliminatedNames = computed(() => lastEliminated.value.map(nameOf).filter(Boolean).join('、'))
 const lastRoundLow = computed(() => {
   const rows = history.value[history.value.length - 1]
   return rows?.lowestScore ?? 0
+})
+const roundInfo = computed(() => {
+  if (mode.value === 'elimination') return `第 ${roundNum.value} 轮 · 存活 ${aliveCount.value} 人`
+  if (mode.value === 'single') return `第 ${roundNum.value} / ${totalPlayers.value} 位`
+  if (isPoints.value) return `第 ${roundNum.value} / ${roundCount.value} 轮`
+  if (mode.value === 'pk') return `第 ${roundNum.value} 场 PK · 存活 ${aliveCount.value} 人`
+  return ''
+})
+const scoreColumnLabel = computed(() => {
+  if (mode.value === 'single') return '得分'
+  if (mode.value === 'pk') return '本场 / 累计'
+  return '本轮 / 累计'
 })
 const nextPhaseHint = computed(() => {
   if (mode.value === 'single') {
     return (state.value?.turnIndex ?? 0) + 1 >= totalPlayers.value
       ? '即将公布最终结果…'
       : '下一位即将开始…'
+  }
+  if (mode.value === 'points-turn') {
+    const orderLen = state.value?.roundOrder?.length || totalPlayers.value
+    if ((state.value?.turnIndex ?? 0) + 1 < orderLen) return '下一位即将开始…'
+    return roundNum.value >= roundCount.value ? '即将公布最终结果…' : '下一轮即将开始…'
+  }
+  if (mode.value === 'points-all') {
+    return roundNum.value >= roundCount.value ? '即将公布最终结果…' : '下一轮即将开始…'
+  }
+  if (mode.value === 'pk') {
+    return aliveCount.value <= 1 ? '即将决出胜者…' : '即将进入选择阶段…'
   }
   return aliveCount.value <= 1 ? '即将决出胜者…' : '下一轮即将开始…'
 })
@@ -256,14 +361,24 @@ const rulesText = computed(() => {
   if (!state.value) {
     return '方向箭头左右摆动决定方向，蓄力条起伏决定距离；两者周期与幅度都随机且不同，点击发射后按落点所在区域计分。'
   }
-  return mode.value === 'elimination'
-    ? '每轮所有存活选手同时发射 1 次弹珠，本轮得分最低者淘汰 1 人；若最低分并列，随机淘汰其中 1 人，直到剩下最后一人。'
-    : '随机顺序轮流发射，每人仅 1 次机会，得分最高者获胜；若最高分并列，落点更接近区域中心者胜。'
+  if (mode.value === 'elimination') {
+    return '每轮所有存活选手同时发射 1 次弹珠，本轮得分最低者淘汰 1 人；若最低分并列，随机淘汰其中 1 人，直到剩下最后一人。'
+  }
+  if (mode.value === 'single') {
+    return '随机顺序轮流发射，每人仅 1 次机会，得分最高者获胜；若最高分并列，落点更接近区域中心者胜。'
+  }
+  if (mode.value === 'points-all') {
+    return `共 ${roundCount.value} 轮，每轮所有选手同时发射，得分累计；总积分最高者获胜，同分时比较最后一轮得分与落点精度。`
+  }
+  if (mode.value === 'points-turn') {
+    return `共 ${roundCount.value} 轮，每轮所有选手按随机顺序逐个发射，得分累计；总积分最高者获胜，同分时比较最后一轮得分与落点精度。`
+  }
+  return '先随机选出 2 人进行弹珠 PK，低分者淘汰；获胜者从场上剩余选手中选择 2 人进行下一场 PK，直到剩下最后 1 人。'
 })
 
 const gameStarted = computed(() => {
   const s = state.value
-  return !!(s && s.started && (s.status === 'playing' || s.status === 'paused' || s.phase === 'aim' || s.phase === 'result' || s.phase === 'finished'))
+  return !!(s && s.started && (s.status === 'playing' || s.status === 'paused' || ['aim', 'result', 'pick', 'finished'].includes(s.phase)))
 })
 
 const canLaunch = computed(() => phase.value === 'aim' && myTurn.value)
@@ -330,18 +445,8 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
-// 地图上展示所有已发射的落点（历史 + 本轮）
-const mapThrows = computed(() => {
-  const out: any[] = []
-  for (const h of history.value) {
-    for (const t of (h.throws || [])) out.push(t)
-  }
-  for (const t of roundThrows.value) {
-    const dup = out.some(x => x.playerId === t.playerId && x.round === t.round)
-    if (!dup) out.push(t)
-  }
-  return out.slice(-40)
-})
+// 地图上只展示本轮/本场的落点，避免不同轮次混在一起
+const mapThrows = computed(() => roundThrows.value)
 
 const winnerIds = computed<string[]>(() => {
   const w = state.value?.winners
@@ -355,12 +460,51 @@ const winnerNames = computed(() => winnerIds.value
   .join('、'))
 const tieBreakNote = computed(() => {
   const tb = state.value?.tieBreak
-  if (!tb || tb.type !== 'distance') return ''
-  const tied = (tb.tied || [])
-    .map((id: string) => players.value.find(p => p.playerId === id)?.playerName)
-    .filter(Boolean)
-    .join('、')
-  return `最高分并列（${tied}），按落点与区域中心的距离判定胜负`
+  if (!tb) return ''
+  const tied = (tb.tied || []).map((id: string) => nameOf(id)).filter(Boolean).join('、')
+  if (tb.type === 'distance') return `最高分并列（${tied}），按落点与区域中心的距离判定胜负`
+  if (tb.type === 'points') return `总积分并列（${tied}），按最后一轮得分与落点精度判定胜负`
+  if (tb.type === 'random') return `同分（${tied}），随机判定胜负`
+  return ''
+})
+
+const pickCandidates = computed(() => [...players.value]
+  .filter(p => p.alive)
+  .sort((a, b) => (a.seat || 0) - (b.seat || 0)))
+const pickSelection = ref<string[]>([])
+watch(() => [phase.value, pickerId.value], () => {
+  pickSelection.value = []
+})
+
+function togglePick(pid: string) {
+  if (!isPicker.value || phase.value !== 'pick') return
+  const idx = pickSelection.value.indexOf(pid)
+  if (idx >= 0) {
+    pickSelection.value.splice(idx, 1)
+  } else if (pickSelection.value.length < 2) {
+    pickSelection.value.push(pid)
+  }
+}
+
+function confirmPick() {
+  if (!isPicker.value || pickSelection.value.length !== 2) return
+  sendAction({ type: 'pick_pair', pair: [...pickSelection.value] })
+}
+
+const pkResultText = computed(() => {
+  if (mode.value !== 'pk' || phase.value !== 'result') return ''
+  return pkMatchWinnerName.value ? `${pkMatchWinnerName.value} 胜出` : ''
+})
+
+const roundResultText = computed(() => {
+  if (phase.value !== 'result') return ''
+  if (mode.value === 'pk') return pkMatchWinnerName.value ? `胜者：${pkMatchWinnerName.value}` : ''
+  if (mode.value === 'elimination') return eliminatedNames.value ? '最低分淘汰' : ''
+  if (mode.value === 'points-all') {
+    const best = [...roundThrows.value].sort((a, b) => b.score - a.score)[0]
+    return best ? `本轮最高：${best.playerName} ${best.score} 分` : '本轮结算'
+  }
+  return lastThrow.value ? `${lastThrow.value.playerName} 得到 ${lastThrow.value.score} 分` : ''
 })
 
 const finalPlayers = computed(() => [...players.value].sort((a, b) => {
@@ -378,10 +522,15 @@ const roundLogs = computed(() => {
   return history.value.slice(-10).map((h: any) => {
     const throws = h.throws || []
     const isSingle = h.mode === 'single' || mode.value === 'single'
+    const isPk = h.mode === 'pk' || mode.value === 'pk'
     const first = throws[0]
-    const title = isSingle
-      ? `第 ${h.round} 位 · ${first?.playerName || '—'}`
-      : `第 ${h.round} 轮`
+    let title = `第 ${h.round} 轮`
+    if (isPk) {
+      const pairNames = (h.pair || []).map((id: string) => nameOf(id)).filter(Boolean).join(' vs ')
+      title = `第 ${h.round} 场${pairNames ? ` · ${pairNames}` : ''}`
+    } else if (isSingle) {
+      title = `第 ${h.round} 位 · ${first?.playerName || '—'}`
+    }
     return {
       key: `${h.mode || mode.value}-${h.round}-${first?.playerId || ''}`,
       title,
@@ -389,10 +538,8 @@ const roundLogs = computed(() => {
         ...t,
         eliminated: (h.eliminated || []).includes(t.playerId)
       })),
-      eliminatedName: (h.eliminated || [])
-        .map((id: string) => players.value.find(p => p.playerId === id)?.playerName)
-        .filter(Boolean)
-        .join('、')
+      eliminatedName: (h.eliminated || []).map((id: string) => nameOf(id)).filter(Boolean).join('、'),
+      winnerName: h.winnerId ? nameOf(h.winnerId) : ''
     }
   })
 })
@@ -443,6 +590,12 @@ h2 { color: #ece7fb; margin: 0 0 10px; font-size: 24px; }
 
 .ms-main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(270px, 0.85fr); gap: 16px; align-items: start; }
 .ms-map-wrap { position: relative; min-width: 0; }
+.map-legend {
+  position: absolute; top: 8px; left: 8px; z-index: 2;
+  font-size: 10.5px; color: #d9d2f2; background: rgba(10, 7, 22, 0.72);
+  border: 1px solid #ffffff14; border-radius: 6px; padding: 3px 7px;
+  pointer-events: none; backdrop-filter: blur(4px);
+}
 .map-overlay {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 6px; padding: 20px; text-align: center; border-radius: 14px;
@@ -453,6 +606,7 @@ h2 { color: #ece7fb; margin: 0 0 10px; font-size: 24px; }
 .overlay-big { font-size: 19px; font-weight: 800; color: #ece7fb; text-shadow: 0 2px 12px #000; }
 .overlay-big.out { color: #ff8a8a; }
 .overlay-small { font-size: 13px; color: #c9c0e6; text-shadow: 0 1px 8px #000; }
+.overlay-small.out { color: #ff8a8a; }
 
 .ms-side { display: flex; flex-direction: column; gap: 10px; }
 .ms-controls { display: flex; flex-direction: column; gap: 10px; }
@@ -491,6 +645,20 @@ h2 { color: #ece7fb; margin: 0 0 10px; font-size: 24px; }
 .launch-btn.ready:active { transform: translateY(0) scale(0.99); }
 .launch-hint { font-size: 11px; color: #7d6fa6; text-align: center; margin: -2px 0 0; }
 
+.pick-panel { display: flex; flex-direction: column; gap: 8px; }
+.pick-title { font-size: 13.5px; font-weight: 700; color: #ffd166; line-height: 1.5; }
+.pick-hint { font-size: 11.5px; color: #9d90c4; line-height: 1.5; }
+.pick-candidates { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 5px; max-height: 190px; overflow-y: auto; padding-right: 2px; }
+.pick-chip {
+  display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 8px;
+  background: #ffffff06; border: 1px solid #ffffff14; color: #ddd; font-size: 12px;
+  cursor: pointer; text-align: left; transition: all 0.15s; touch-action: manipulation;
+}
+.pick-chip:hover { border-color: #ffd16666; }
+.pick-chip.selected { border-color: #ffd166; background: #ffd16616; color: #ffe2a0; }
+.pick-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick-mark { color: #ffd166; font-weight: 900; }
+
 .players-box { background: #ffffff05; border: 1px solid #ffffff10; border-radius: 10px; padding: 10px 11px; }
 .players-title { display: flex; justify-content: space-between; font-size: 12px; color: #b3a6d6; margin-bottom: 7px; }
 .players-sub { color: #7d6fa6; }
@@ -517,10 +685,13 @@ h2 { color: #ece7fb; margin: 0 0 10px; font-size: 24px; }
 .round-log-scroll { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 .log-card { min-width: 200px; flex: 0 0 auto; background: #ffffff05; border: 1px solid #ffffff10; border-radius: 9px; padding: 9px 10px; }
 .log-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #ece7fb; font-weight: 700; margin-bottom: 6px; }
+.log-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.log-win { color: #7ee0a0; font-weight: 500; }
 .log-out { color: #ff8a8a; font-weight: 500; }
 .log-rows { display: flex; flex-direction: column; gap: 3px; }
 .log-row { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #c9c0e6; }
 .log-row.out { color: #ff8a8a; opacity: 0.75; }
+.lr-seat { color: #7d6fa6; font-size: 10px; min-width: 16px; }
 .lr-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .lr-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lr-score { color: #e6c988; font-variant-numeric: tabular-nums; }
@@ -539,6 +710,8 @@ h2 { color: #ece7fb; margin: 0 0 10px; font-size: 24px; }
     z-index: 90;
     padding: 8px 10px;
     gap: 8px;
+    max-height: 72vh;
+    overflow-y: auto;
     background: rgba(18, 13, 36, 0.95);
     border: 1px solid #b39bff33;
     border-radius: 14px;
@@ -546,6 +719,8 @@ h2 { color: #ece7fb; margin: 0 0 10px; font-size: 24px; }
     backdrop-filter: blur(10px);
   }
   .ms-controls .specs { background: transparent; border: none; padding: 0; }
+  .pick-candidates { max-height: 34vh; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); }
+  .pick-chip { padding: 8px; font-size: 12.5px; }
   .players-list { max-height: 220px; }
   .ms-header { gap: 8px; margin-bottom: 8px; }
   .ms-title { font-size: 16px; }

@@ -67,6 +67,7 @@ registerGame({
       score = elapsed - green
     }
     ps.results[idx] = score
+    ;(ps.signals ||= {})[idx] = { green, elapsed, early }
 
     let finished = false
     if (ps.results.every(r => r != null)) {
@@ -136,6 +137,7 @@ registerGame({
     for (const e of entries) delete e._row
     return {
       type: 'reaction',
+      signals: Object.fromEntries(Object.entries(state.playerStates).map(([id, p]) => [id, p.signals || {}])),
       title: '反应力',
       description: `共 ${PANELS} 个面板，看到绿色亮起后尽快点击；提前点击会按 ${EARLY_PENALTY}ms 惩罚，总反应时间最短者获胜。`,
       summary: [{ label: '面板数', value: PANELS }, { label: '提前点击惩罚', value: `${EARLY_PENALTY}ms` }],

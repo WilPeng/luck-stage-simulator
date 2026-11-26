@@ -1,5 +1,33 @@
 <template>
   <div class="sg-replay">
+    <div v-if="meta.type === 'spot-difference'" class="arena">
+      <div class="sgr-section-title">比赛现场 · 颜色矩阵</div>
+      <template v-if="meta.gridA?.length && meta.gridB?.length">
+        <div class="arena-tabs"><button v-for="p in meta.submissions || []" :key="p.playerId" :class="{ selected: spotPlayer?.playerId === p.playerId }" @click="spotId = p.playerId; spotStep = 0">{{ p.playerName }}</button></div>
+        <div v-if="spotPlayer?.entries?.length" class="arena-tabs"><button v-for="(entry, i) in spotPlayer.entries" :key="i" :class="{ selected: spotStep === i }" @click="spotStep = i">第 {{ i + 1 }} 次 · {{ entry.correct ? '正确' : '错误' }}</button></div>
+        <p class="arena-note">白框：选手标记　金框：正确位置（赛后揭晓）</p>
+        <label class="arena-note"><input v-model="spotReveal" type="checkbox"> 显示正确位置</label>
+        <div class="spot-boards"><div v-for="(board, b) in [meta.gridA, meta.gridB]" :key="b"><div class="arena-note">{{ b === 0 ? '原图' : '选手提交' }}</div><div class="spot-grid"><div v-for="(color, i) in board" :key="i" :style="{ background: palette[color] || color }" :class="{ mark: b === 1 && spotPlayer?.entries?.[spotStep]?.marks?.includes(i), answer: spotReveal && meta.diffs?.includes(i) }"></div></div></div></div>
+        <p v-if="!spotPlayer?.entries?.length" class="arena-note">该选手没有提交记录。</p>
+      </template>
+      <p v-else class="arena-note">这场历史比赛没有保存矩阵，无法还原题面。下方仍可查看已有提交记录。</p>
+    </div>
+    <div v-if="meta.type === 'dice-duel' && dicePlayers.length" class="arena">
+      <div class="sgr-section-title">比赛现场 · 第 {{ diceRound + 1 }} 轮</div>
+      <div class="arena-tabs"><button v-for="n in diceRounds" :key="n" :class="{ selected: diceRound === n - 1 }" @click="diceRound = n - 1">第 {{ n }} 轮</button></div>
+      <div class="dice-players"><div v-for="p in dicePlayers" :key="p.playerId" class="dice-player"><b>{{ p.playerName }}</b><div class="dice-faces"><span v-for="(die, i) in p.rounds?.[diceRound]?.results || []" :key="i">{{ die }}</span><small v-if="!p.rounds?.[diceRound]">未记录</small></div><div>本轮 {{ p.rounds?.[diceRound]?.total ?? '—' }} 分</div></div></div>
+    </div>
+    <div v-if="meta.type === 'sequence-memory' && meta.rounds?.length" class="arena">
+      <div class="sgr-section-title">比赛现场 · 第 {{ sequenceRound + 1 }} 轮</div>
+      <div class="arena-tabs"><button v-for="(_, i) in meta.rounds" :key="i" :class="{ selected: sequenceRound === i }" @click="sequenceRound = i">第 {{ i + 1 }} 轮</button></div>
+      <template v-if="meta.rounds[sequenceRound]">
+        <p class="arena-note">问题：第 {{ meta.rounds[sequenceRound].questionIndex }} 个图案是什么？</p>
+        <div v-if="meta.rounds[sequenceRound].sequence?.length" class="sequence-cards"><span v-for="(item, i) in meta.rounds[sequenceRound].sequence" :key="i">{{ item }}</span></div>
+        <p v-else class="arena-note">本轮完整序列未记录。</p>
+        <p class="arena-note">选项：{{ (meta.rounds[sequenceRound].options || []).join('　') }}　·　赛后答案：{{ meta.rounds[sequenceRound].correctEmoji ?? '未记录' }}</p>
+        <div class="dice-players"><div v-for="(answer, pid) in meta.rounds[sequenceRound].answers || {}" :key="pid" class="dice-player"><b>{{ playerName(String(pid)) }}</b><div>选择：{{ answer.choice || '未作答' }}</div><div>{{ answer.choice === meta.rounds[sequenceRound].correctEmoji ? '正确' : '未答对' }}</div></div></div>
+      </template>
+    </div>
     <div class="sgr-rules">
       <div class="sgr-title">{{ meta.title || meta.type }}</div>
       <div v-if="meta.description" class="sgr-desc">{{ meta.description }}</div>
@@ -8,6 +36,7 @@
       </div>
     </div>
 
+    <details class="final-details"><summary>最终排名与明细</summary>
     <!-- 最终排名 -->
     <div class="sgr-section">
       <div class="sgr-section-title">最终排名</div>
@@ -47,9 +76,14 @@
       </div>
     </div>
 
-    <!-- 棋盘类（华容道）：初始棋盘 + 每位选手最终棋盘 -->
-    <div v-if="meta.boards && meta.boards.length" class="sgr-section">
-      <div class="sgr-section-title">棋盘过程</div>
+    </details>
+    <!-- 华容道：以选手视角对照起始和结束盘面 -->
+    <div v-if="meta.boards && meta.boards.length" class="sgr-section arena">
+      <div class="sgr-section-title">选手视角 · 盘面回顾</div>
+      <p class="arena-note">选择选手，对照所有人共同的起始盘面与该选手结束时的盘面。{{ selectedBoard?.path?.length ? '拖动步数查看每次移动后的棋盘。' : '本局仅保存了起始和结束盘面。' }}</p>
+      <div class="arena-tabs" aria-label="选择选手">
+        <button v-for="b in meta.boards" :key="b.playerId" type="button" :class="{ selected: selectedBoard?.playerId === b.playerId }" @click="selectedPlayer = b.playerId; moveStep = 0">{{ b.playerName }}</button>
+      </div>
       <div class="sgr-boards">
         <div class="sgr-board-card">
           <div class="sgr-board-title">初始棋盘</div>
@@ -57,13 +91,14 @@
             <div v-for="(v, i) in (meta.initialBoard || [])" :key="i" class="sgr-cell" :class="{ blank: v === 0 }">{{ v === 0 ? '' : v }}</div>
           </div>
         </div>
-        <div v-for="b in meta.boards" :key="b.playerId" class="sgr-board-card">
+        <div v-if="selectedBoard" class="sgr-board-card">
           <div class="sgr-board-title">
-            {{ b.playerName }}
-            <span class="sgr-board-meta">{{ b.solved ? '✅ 已完成' : '未完成' }} · {{ b.moves }} 步</span>
+            {{ selectedBoard.playerName }} · {{ selectedBoard.path?.length ? '第 '+moveStep+' 步' : '结束盘面' }}
+            <span class="sgr-board-meta">{{ selectedBoard.solved ? '✅ 已完成' : '未完成' }} · {{ selectedBoard.moves }} 步</span>
           </div>
-          <div class="sgr-board" :class="{ solved: b.solved }">
-            <div v-for="(v, i) in b.board || []" :key="i" class="sgr-cell" :class="{ blank: v === 0, correct: v !== 0 && v === i + 1 }">{{ v === 0 ? '' : v }}</div>
+          <input v-if="selectedBoard.path?.length" v-model.number="moveStep" type="range" aria-label="查看移动步数" min="0" :max="selectedBoard.path.length">
+          <div class="sgr-board">
+            <div v-for="(v, i) in moveBoard" :key="i" class="sgr-cell" :class="{ blank: v === 0, correct: v !== 0 && v === i + 1 }">{{ v === 0 ? '' : v }}</div>
           </div>
         </div>
       </div>
@@ -72,9 +107,33 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
+const palette: Record<string,string> = {red:'#e74c3c',orange:'#e67e22',yellow:'#f1c40f',green:'#7ee0b0',blue:'#3498db',purple:'#9b59b6',black:'#1a1a1a',white:'#f5f5f5',gray:'#95a5a6',pink:'#ff7eb3'}
 const props = defineProps<{ meta: any }>()
+const selectedPlayer = ref('')
+const spotId = ref('')
+const spotStep = ref(0)
+const spotReveal = ref(false)
+const diceRound = ref(0)
+const sequenceRound = ref(0)
+const spotPlayer = computed(() => props.meta?.submissions?.find((p: any) => p.playerId === spotId.value) || props.meta?.submissions?.[0])
+const dicePlayers = computed<any[]>(() => {
+  if (props.meta.roundsByPlayer) return props.meta.roundsByPlayer
+  if (props.meta.type !== 'dice-duel') return []
+  return (props.meta.tables?.[0]?.rows || []).map((row: any[], i:number) => ({
+    playerId: i,
+    playerName: row[0],
+    rounds: row.slice(1,-1).map(cell => {
+      const match = /^(\d+(?:\+\d+)*) = (\d+)$/.exec(String(cell))
+      return match ? { results: match[1]!.split('+').map(Number), total: Number(match[2]) } : null
+    })
+  }))
+})
+const diceRounds = computed(() => Math.max(1, ...dicePlayers.value.map(p => p.rounds.length)))
+function playerName(id: string) { return props.meta?.players?.find((p: any) => p.playerId === id)?.playerName || id }
+watch(() => props.meta, () => { selectedPlayer.value = '' })
+const selectedBoard = computed(() => props.meta?.boards?.find((b: any) => b.playerId === selectedPlayer.value) || props.meta?.boards?.[0])
 
 const summaryList = computed(() => {
   const s = props.meta?.summary
@@ -83,6 +142,18 @@ const summaryList = computed(() => {
   return Object.entries(s).map(([label, value]) => ({ label, value }))
 })
 
+const moveStep = ref(0)
+const moveBoard = computed(() => {
+  const b = selectedBoard.value
+  if (!b?.path?.length || !props.meta.initialBoard?.length) return b?.board || []
+  const board = [...props.meta.initialBoard]
+  for (const index of b.path.slice(0, moveStep.value)) {
+    const blank = board.indexOf(0)
+    board[blank] = board[index]
+    board[index] = 0
+  }
+  return board
+})
 function statusClass(s: string) {
   if (!s) return ''
   if (/完成|存活|获胜/.test(s)) return 'ok'
@@ -98,6 +169,20 @@ function cellClass(cell: any) {
 </script>
 
 <style scoped>
+.arena { background: linear-gradient(145deg, #182849, #11182b); padding: 20px; }
+.arena-note { color: #aebedc; font-size: 13px; line-height: 1.6; }
+.arena-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.arena-tabs button { color: #dce8ff; background: #ffffff0b; border: 1px solid #ffffff24; border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+.arena-tabs button.selected { background: #365da4; border-color: #8ab5ff; }
+.spot-boards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; max-width: 700px; }
+.spot-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; }
+.spot-grid div { aspect-ratio: 1; border: 1px solid #ffffff33; }
+.spot-grid div.mark { outline: 2px solid white; outline-offset: -3px; }
+.spot-grid div.answer { box-shadow: inset 0 0 0 3px #f4ba35; }
+.dice-players { display: flex; flex-wrap: wrap; gap: 10px; }
+.dice-player { padding: 14px; border-radius: 10px; background: #ffffff0c; color: #e9efff; min-width: 130px; }
+.dice-faces, .sequence-cards { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.dice-faces span, .sequence-cards span { display: grid; place-items: center; min-width: 38px; height: 38px; border-radius: 6px; background: #f5f1e7; color: #202744; font-size: 22px; font-weight: bold; }
 .sg-replay { display: flex; flex-direction: column; gap: 14px; }
 .sgr-rules { background: #b39bff0e; border-left: 3px solid #b39bff; border-radius: 8px; padding: 12px 14px; }
 .sgr-title { font-size: 15px; font-weight: 700; color: #ece7fb; }

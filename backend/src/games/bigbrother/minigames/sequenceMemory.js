@@ -315,6 +315,7 @@ registerGame({
         score: ps.alive ? 1 : 0,
         progress: 0,
         max: 1,
+        alive: ps.alive,
         done: !ps.alive,
         label: ps.alive ? `存活 · 第${state.round + 1}轮` : `第${ps.eliminatedRound + 1}轮出局`
       }

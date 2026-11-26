@@ -36,7 +36,9 @@
     <!-- 逐轮过程 -->
     <div class="p17r-section">
       <div class="p17r-section-title">逐轮过程</div>
-      <div v-for="r in meta.rounds || []" :key="r.round" class="p17r-round">
+      <label>轮次 <select v-model.number="roundIndex"><option v-for="(r,i) in meta.rounds" :key="i" :value="i">第 {{ r.round }} 轮</option></select></label>
+      <label>查看手牌 <select v-model="seat"><option value="">全桌摊牌</option><option v-for="p in participants" :key="p.playerId" :value="p.playerId">{{ p.playerName }}</option></select></label>
+      <div v-for="r in (meta.rounds || []).slice(roundIndex, roundIndex+1)" :key="r.round" class="p17r-round">
         <div class="p17r-round-head">
           <span class="p17r-round-no">第 {{ r.round }} 轮</span>
           <span class="p17r-round-type">{{ typeLabel(r.type) }}</span>
@@ -53,10 +55,10 @@
             <tr v-for="p in participants" :key="p.playerId">
               <td class="p17r-name">{{ p.playerName }}</td>
               <td class="p17r-hand">
-                <span v-for="(c, ci) in (r.hands?.[p.playerId] || [])" :key="ci" class="p17r-card" :class="cardClass(c)">{{ cardLabel(c) }}</span>
+                <span v-for="(c, ci) in (r.hands?.[p.playerId] || [])" :key="ci" class="p17r-card" :class="cardClass(c)">{{ !seat || seat === p.playerId ? cardLabel(c) : '牌背' }}</span>
                 <span v-if="!r.hands || !r.hands[p.playerId]" class="p17r-dim">未摊牌</span>
               </td>
-              <td class="p17r-eval">{{ evalText(r, p.playerId) }}</td>
+              <td class="p17r-eval">{{ !seat || seat === p.playerId ? evalText(r, p.playerId) : '隐藏' }}</td>
               <td :class="(r.chipDeltas?.[p.playerId] || 0) >= 0 ? 'p17r-ok' : 'p17r-bad'">
                 {{ deltaText(r.chipDeltas?.[p.playerId]) }}
               </td>
@@ -71,8 +73,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
+const roundIndex = ref(0)
+const seat = ref('')
 const props = defineProps<{ meta: any; participants?: { playerId: string; playerName: string }[] }>()
 
 const participants = computed(() => props.participants || [])

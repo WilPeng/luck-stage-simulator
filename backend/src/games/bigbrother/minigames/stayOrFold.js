@@ -155,6 +155,7 @@ registerGame({
       state.alive = state.alive.filter(pid => !farthest.includes(pid))
     }
     state.lastResult = {
+      grid: state.grid.slice(),
       round: state.round,
       target: state.target,
       trueCount: state.trueCount,
@@ -261,7 +262,7 @@ registerGame({
   getAllStates(state) {
     const result = {}
     for (const pid of Object.keys(state.scores)) {
-      result[pid] = { score: state.scores[pid] || 0, done: state.finished, label: `${state.scores[pid] || 0} 分` }
+      result[pid] = { score: state.scores[pid] || 0, done: state.finished, eliminated: state.eliminated.includes(pid), label: `${state.scores[pid] || 0} 分` }
     }
     return result
   },

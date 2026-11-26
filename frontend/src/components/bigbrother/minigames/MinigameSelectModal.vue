@@ -175,6 +175,9 @@
                     <select v-model="options.mode" class="opt-number" style="min-width: 260px">
                       <option value="elimination">淘汰模式 · 每轮最低分淘汰 1 人</option>
                       <option value="single">单轮模式 · 随机顺序，最高分获胜</option>
+                      <option value="points-all">多轮积分 · 每轮同时发射</option>
+                      <option value="points-turn">多轮积分 · 逐个人轮流发射</option>
+                      <option value="pk">随机 PK · 低分淘汰，胜者选下一组</option>
                     </select>
                   </label>
                   <label class="opt-label">每次发射时限(秒)
@@ -186,8 +189,14 @@
                   <label class="opt-label">区域数量
                     <input v-model.number="options.cellCount" type="number" min="3" class="opt-number" />
                   </label>
+                  <label v-if="options.mode === 'points-all' || options.mode === 'points-turn'" class="opt-label">积分轮数
+                    <input v-model.number="options.roundCount" type="number" min="1" max="99" class="opt-number" />
+                  </label>
+                  <label v-if="options.mode === 'pk'" class="opt-label">选择对决时限(秒)
+                    <input v-model.number="options.pickTime" type="number" min="5" max="180" class="opt-number" />
+                  </label>
                 </div>
-                <p class="opt-hint">淘汰模式：每轮所有存活选手同时发射一次，最低分淘汰 1 人，直到剩最后一人。单轮模式：随机顺序轮流发射，每人仅 1 次机会，最高分获胜。区域数量至少 3 个，不设上限；每个区域分值互不相同，地图越远的分区通常分值越高。</p>
+                <p class="opt-hint">淘汰模式：每轮所有存活选手同时发射一次，最低分淘汰 1 人，直到剩最后一人。单轮模式：随机顺序轮流发射，每人仅 1 次机会，最高分获胜。多轮积分：进行若干轮，累计得分最高者获胜；「同时发射」每轮全员一起投，「轮流发射」每轮按随机顺序逐个投。随机 PK：先随机 2 人 PK，低分者淘汰；胜者从场上剩余选手中选择 2 人进行下一场，直到剩最后 1 人。区域数量至少 3 个，不设上限；每个区域分值互不相同。</p>
               </template>
 
               <!-- 藏否决权牌寻宝赛：藏牌 / 回合 / 翻找次数 -->
@@ -392,6 +401,8 @@ function onSelect(id: string, game?: MinigameDef) {
     options.aimTime = 12
     options.resultTime = 4
     options.cellCount = 10
+    options.roundCount = 5
+    options.pickTime = 15
     options.questions = [{ text: '', optionA: '', optionB: '' }]
     if (game.id === 'describe-guess') {
       options.revealTime = 8

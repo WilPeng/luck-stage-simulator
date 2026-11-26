@@ -175,7 +175,7 @@ registerGame({
     }
     state.scores[playerId] = (state.scores[playerId] || 0) + gain
     state.records[playerId] = state.records[playerId] || {}
-    state.records[playerId][qIndex] = { value, correct, gain }
+    state.records[playerId][qIndex] = { value, correct, gain, clueCount: state.revealedClues }
 
     return { updated: true }
   },

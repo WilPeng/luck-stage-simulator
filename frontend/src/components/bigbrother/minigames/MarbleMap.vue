@@ -40,14 +40,14 @@
       <g class="mm-throws">
         <g v-for="(t, i) in throwList" :key="i">
           <circle
-            :cx="t.x" :cy="t.y" r="1.65"
+            :cx="t.x" :cy="t.y" r="2"
             :fill="t.color || '#ffd166'"
             stroke="#120a22" stroke-width="0.5"
             :filter="`url(#${shadowId})`"
           >
-            <title>{{ t.playerName }} · {{ t.score }} 分</title>
+            <title>{{ t.playerName }} · 第{{ t.round }}回合 · {{ t.score }} 分（方向 {{ t.angle }}° / 力度 {{ t.power }}%）</title>
           </circle>
-          <text :x="t.x" :y="t.y + 0.75" class="mm-throw-score">{{ t.score }}</text>
+          <text :x="t.x" :y="t.y + 0.7" class="mm-throw-label">{{ t.seat != null ? t.seat : t.score }}</text>
         </g>
       </g>
 
@@ -164,9 +164,9 @@ const arrowHead = computed(() => {
   pointer-events: none;
   user-select: none;
 }
-.mm-throw-score {
+.mm-throw-label {
   fill: #120a22;
-  font-size: 1.8px;
+  font-size: 1.65px;
   font-weight: 900;
   text-anchor: middle;
   dominant-baseline: middle;

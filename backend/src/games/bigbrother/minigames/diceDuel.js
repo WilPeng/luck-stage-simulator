@@ -145,6 +145,7 @@ registerGame({
     })
     return {
       type: 'dice-duel',
+      roundsByPlayer: Object.entries(state.playerStates).map(([playerId, ps]) => ({ playerId, playerName: names[playerId] || playerId, rounds: ps.rounds || [] })),
       title: '骰子对决',
       description: `共 ${TOTAL_ROUNDS} 轮，每轮可选择 1-4 颗骰子，累计点数最高者获胜。`,
       summary: [{ label: '总轮数', value: TOTAL_ROUNDS }],

@@ -191,6 +191,10 @@ registerGame({
     }
     return {
       type: 'spot-difference',
+      gridA: state.gridA,
+      gridB: state.gridB,
+      diffs: state.diffs,
+      submissions: Object.entries(state.playerStates).map(([playerId, ps]) => ({ playerId, playerName: names[playerId] || playerId, entries: ps.submissions || [] })),
       title: '找不同',
       description: `共 ${state.diffs.length} 处不同，标记所有不同并提交；第一个找齐并正确的选手获胜。`,
       summary: [

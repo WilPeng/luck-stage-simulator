@@ -148,6 +148,8 @@ registerGame({
     for (const p of players) delete p._row
     return {
       type: 'balance-bar',
+      zone: TARGET_ZONE,
+      samples: Object.fromEntries(Object.entries(state.playerStates).map(([id, p]) => [id, p.history || []])),
       title: '保持平衡',
       description: `按住空格键把指针保持在中心 ±${Math.round(TARGET_ZONE * 100)}% 的绿色区域，累计停留时间最长者获胜。`,
       summary: [{ label: '比赛时长', value: '15 秒' }, { label: '目标区域', value: `中心 ±${Math.round(TARGET_ZONE * 100)}%` }],

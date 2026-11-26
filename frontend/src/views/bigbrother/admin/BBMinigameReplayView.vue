@@ -15,7 +15,7 @@
       </div>
     </div>
 
-    <div class="replay-layout">
+    <div class="replay-layout" :class="{ opened: detail }">
       <div class="list-panel">
         <div class="list-tools" v-if="list.length && !readonly">
           <label class="sel-all"><input type="checkbox" :checked="allSelected" @change="toggleAll" /> 全选</label>
@@ -26,6 +26,7 @@
           :key="r.id"
           class="replay-item"
           :class="{ active: detail && detail.id === r.id }"
+          tabindex="0" @keydown.enter.self="openReplay(r.id)" @keydown.space.self.prevent="openReplay(r.id)"
           @click="openReplay(r.id)"
         >
           <label v-if="!readonly" class="item-check" @click.stop>
@@ -48,6 +49,7 @@
       <div class="detail-panel">
         <div v-if="!detail" class="empty-hint">选择左侧对局查看复盘</div>
         <template v-else>
+          <button class="bb-btn back-list" @click="detail = null">‹ 返回对局列表</button>
           <div class="detail-head">
             <div>
               <div class="dh-title">{{ detail.minigameName || detail.minigameId }}</div>
@@ -61,62 +63,53 @@
             <button v-if="!readonly" class="bb-btn bb-btn-danger" @click="removeReplay(detail.id)">删除</button>
           </div>
 
+          <nav class="scene-tabs" aria-label="复盘内容">
+            <button v-for="t in tabs" :key="t.id" :aria-pressed="section === t.id" @click="section = t.id">{{ t.name }}</button>
+          </nav>
+          <template v-if="section === 'result'">
           <!-- 比赛说明 -->
           <div class="dg-block">
             <div class="dg-title">比赛说明</div>
             <div class="game-rule">{{ gameRuleText }}</div>
           </div>
 
-          <!-- 最终战况板 -->
-          <div class="dg-block">
-            <div class="dg-title">最终战况</div>
-            <div class="board-grid">
-              <div v-for="(p, i) in boardPlayers" :key="p.playerId" class="board-card"
-                :class="{ winner: detail.winner && detail.winner.playerId === p.playerId }">
-                <div class="board-top">
-                  <span class="board-rank">{{ i + 1 }}</span>
-                  <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
-                  <span v-if="marbleColor(p.playerId)" class="board-color" :style="{ background: marbleColor(p.playerId) }"></span>
-                  <span class="board-name">{{ p.playerName }}</span>
-                  <span class="board-score" :style="{ color: marbleColor(p.playerId) || undefined }">{{ finalScore(p.playerId) }}</span>
-                  <span v-if="detail.winner && detail.winner.playerId === p.playerId" class="board-crown">🏆</span>
-                  <span v-else-if="isEliminated(p.playerId)" class="board-out">出局</span>
-                </div>
-                <div class="board-stats">
-                  <span v-if="fs(p.playerId) && fs(p.playerId).label" class="board-stat">{{ fs(p.playerId).label }}</span>
-                  <span v-if="fs(p.playerId)?.done" class="board-stat done">已完成</span>
-                </div>
-                <div v-if="finalMax(p.playerId)" class="board-bar">
-                  <div class="board-fill" :style="{ width: finalPct(p.playerId) + '%' }"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
+          </template>
+          <ContestStandings v-if="section !== 'events'" :key="detail.id" :players="detail.participants || []"
+            :states="replayStates" :scores="detail.scores" :game-id="detail.minigameId" :mode="meta?.mode"
+            :target="detail.targetScore ?? 0" :winners="winnerIds" :selected="focusedPlayer"
+            final :inspectable="!readonly" @inspect="inspectReplayPlayer" />
+          <template v-if="section === 'scene'">
+            <SkillContestReplay v-if="skillScene" :key="detail.id" :meta="meta" />
+            <RoundContestReplay v-if="roundScene" :key="detail.id" :meta="meta" :participants="detail.participants || []" />
+            <p v-if="!meta && (!snapshots.length || !boardGame)" class="empty-hint">此记录没有保存比赛盘面，可在「操作记录」查看已保存的动作。</p>
           <!-- 拼图最终盘面 -->
-          <div v-if="isJigsawMeta" class="dg-block">
+          <div v-if="isJigsawMeta && !snapshots.length" class="dg-block">
             <div class="dg-title">拼图最终盘面</div>
             <JigsawSpectator :board="meta.board" />
           </div>
 
+          </template>
           <!-- 明牌回放：逐步查看每位选手面临决策时的完整局面 -->
-          <div v-if="snapshots.length" class="dg-block">
+          <div v-if="snapshots.length && ((section === 'scene' && boardGame) || (section === 'events' && !boardGame))" class="dg-block">
             <div class="dg-title">明牌回放（{{ snapIndex + 1 }} / {{ snapshots.length }}）</div>
             <div class="snap-controls">
               <button class="bb-btn" :disabled="snapIndex <= 0" @click="snapIndex--">◀ 上一手</button>
-              <input class="snap-range" type="range" :min="0" :max="snapshots.length - 1" v-model.number="snapIndex" />
+              <input aria-label="选择比赛节点" class="snap-range" type="range" :min="0" :max="snapshots.length - 1" v-model.number="snapIndex" />
               <button class="bb-btn" :disabled="snapIndex >= snapshots.length - 1" @click="snapIndex++">下一手 ▶</button>
             </div>
+            <label v-if="isAbracaSnap || isJigsawSnap">视角
+              <select v-model="viewpoint" class="bb-input"><option value="">赛后全局</option><option v-for="p in detail.participants" :key="p.playerId" :value="p.playerId">{{ p.playerName }}</option></select>
+            </label>
             <div class="snap-label">
               {{ curSnap?.label }} · +{{ delta(curSnap?.t) }}s
               <span v-if="curSnap?.data?.round"> · 第{{ curSnap.data.round }}轮</span>
             </div>
 
             <!-- 毒酒：明牌转盘盘面 -->
-            <PoisonDrinkSpectator v-if="isPoisonSnap" :board="curSnap?.data?.board" />
+            <PoisonDrinkSpectator replay v-if="isPoisonSnap" :board="curSnap?.data?.board" />
 
             <!-- 拼图：明牌盘面 -->
-            <JigsawSpectator v-else-if="isJigsawSnap" :board="curSnap?.data?.board" />
+            <JigsawSpectator v-else-if="isJigsawSnap" :board="viewpoint ? { ...curSnap.data.board, players: curSnap.data.board.players.filter((p:any)=>p.playerId === viewpoint) } : curSnap.data.board" />
 
             <!-- 出包魔法师：明牌（按快照结构自动识别，无需依赖 meta） -->
             <div v-else-if="isAbracaSnap" class="ab-board">
@@ -131,7 +124,7 @@
                 </div>
                 <div class="ab-p-stats">❤ {{ p.hp }}/{{ p.maxHp }} · 🦉 {{ p.owls?.length || 0 }} · ⭐ {{ p.scoreTotal }}</div>
                 <div class="ab-p-hand">
-                  <span v-for="(c, i) in p.hand" :key="i" class="ab-card">{{ c }}</span>
+                  <span v-for="(c, i) in p.hand" :key="i" class="ab-card">{{ viewpoint === p.playerId ? '？' : c }}</span>
                   <span v-if="!p.hand || !p.hand.length" class="ab-none">无牌</span>
                 </div>
               </div>
@@ -172,9 +165,19 @@
 
             <!-- 藏否决权牌寻宝赛：与实时观战一致的全屋明牌 -->
             <div v-else-if="isHgvSnap" class="hgv-replay-snap">
-              <HideAndGoVetoSpectator :board="curSnap?.data?.board" />
+              <HideAndGoVetoSpectator replay :board="curSnap?.data?.board" />
             </div>
 
+            <div v-else-if="curSnap?.data?.type === 'poker17'" class="poker-felt">
+              <h3>{{ curSnap.data.phaseLabel }} · 底池 {{ curSnap.data.pot }}</h3>
+              <div class="math-players">
+                <article v-for="(seat, id) in curSnap.data.players" :key="id" class="math-player">
+                  <b>{{ seat.name }} {{ seat.isTurn ? '· 当前行动' : '' }}</b>
+                  <span>筹码 {{ seat.chips }} · 已下注 {{ seat.bet }}</span>
+                  <span>{{ seat.hand?.join('　') || '手牌未公开' }}</span>
+                </article>
+              </div>
+            </div>
             <!-- 通用：按快照 players 渲染 -->
             <div v-else-if="genericSnapPlayers.length" class="gen-board">
               <div v-for="p in genericSnapPlayers" :key="p.playerId" class="gen-p"
@@ -195,12 +198,12 @@
           </div>
 
           <!-- 专属复盘：真实答案 / 回合详情 -->
-          <div v-if="meta" class="dg-block">
-            <div class="dg-title">专属复盘 · 真实答案与过程</div>
+          <div v-if="meta && (section === 'result' || (section === 'scene' && !skillScene && !roundScene && !snapshots.length && !isJigsawMeta) || (section === 'scene' && interactiveMeta.includes(meta.type)))" :key="detail.id" class="dg-block">
+            <div class="dg-title">{{ section === 'scene' ? '比赛现场' : '结算明细' }}</div>
 
             <!-- 毒酒：最终转盘盘面 -->
             <template v-if="meta.type === 'poison-drink' && meta.board">
-              <PoisonDrinkSpectator :board="meta.board" />
+              <PoisonDrinkSpectator replay :board="meta.board" />
             </template>
 
             <!-- 记忆翻牌：完整牌面 + 每次翻牌过程 -->
@@ -221,7 +224,7 @@
                   <span v-if="meta.board.winnerName"> · 🏆 {{ meta.board.winnerName }}</span>
                   · 破坏度 {{ meta.board.destruction || 0 }}%
                 </div>
-                <HideAndGoVetoSpectator :board="meta.board" />
+                <HideAndGoVetoSpectator replay :board="meta.board" />
               </div>
               <SimpleGameReplay :meta="meta" />
             </template>
@@ -238,17 +241,33 @@
 
             <!-- 快速算术 -->
             <template v-else-if="meta.type === 'quick-math'">
-              <div class="golden-answers">
+              <div v-if="meta.questions?.length" class="math-arena">
+                <div class="math-caption">比赛题面 · 第 {{ mathQuestion + 1 }} / {{ meta.questions.length }} 题</div>
+                <div class="math-expression">{{ meta.questions[mathQuestion]?.expression }} = ?</div>
+                <div class="math-nav">
+                  <button class="bb-btn" :disabled="mathQuestion === 0" @click="mathQuestion--">上一题</button>
+                  <button class="bb-btn" :disabled="mathQuestion >= meta.questions.length - 1" @click="mathQuestion++">下一题</button>
+                </div>
+                <details :key="mathQuestion" class="math-answer"><summary>查看标准答案</summary>{{ meta.questions[mathQuestion]?.answer }}</details>
+                <div class="math-players">
+                  <div v-for="p in detail.participants" :key="p.playerId" class="math-player">
+                    <b>{{ p.playerName }}</b>
+                    <span>提交：{{ answerOf('quick-math', p.playerId, mathQuestion)?.userAnswer ?? '未记录' }}</span>
+                    <span v-if="answerOf('quick-math', p.playerId, mathQuestion)">{{ answerOf('quick-math', p.playerId, mathQuestion)?.correct ? '正确' : '错误' }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="section === 'result'" class="golden-answers">
                 <span v-for="(q, i) in meta.questions" :key="i" class="ga-item">
                   {{ q.expression }} = <strong>{{ q.answer }}</strong>
                 </span>
               </div>
-              <table class="meta-table">
-                <thead><tr><th>选手</th><th v-for="(q, i) in meta.questions" :key="i">#{{ i + 1 }}</th><th>用时</th></tr></thead>
+              <table v-if="section === 'result'" class="meta-table">
+                <thead><tr><th>选手</th><th v-for="(_, i) in meta.questions" :key="i">#{{ i + 1 }}</th><th>用时</th></tr></thead>
                 <tbody>
                   <tr v-for="p in detail.participants" :key="p.playerId">
                     <td class="mc-name">{{ p.playerName }}</td>
-                    <td v-for="(q, i) in meta.questions" :key="i" class="mc" :class="cellClass(answerOf('quick-math', p.playerId, i))">
+                    <td v-for="(_, i) in meta.questions" :key="i" class="mc" :class="cellClass(answerOf('quick-math', p.playerId, i))">
                       {{ answerOf('quick-math', p.playerId, i)?.userAnswer ?? '-' }}
                     </td>
                     <td>{{ dur(meta.players?.[p.playerId]?.durationMs) }}</td>
@@ -259,7 +278,14 @@
 
             <!-- 找出遗失的数字 -->
             <template v-else-if="meta.type === 'missing-number'">
-              <div class="reveal-big">缺失数字：<strong>{{ meta.missing }}</strong></div>
+              <div class="missing-arena">
+                <div class="missing-label">比赛题面 · 7 × 7 数字矩阵</div>
+                <div v-if="meta.cells?.length" class="missing-grid">
+                  <button v-for="(cell,i) in meta.cells" :key="i" :aria-pressed="markedCells.includes(i)" @click="markedCells = markedCells.includes(i) ? markedCells.filter(n=>n!==i) : [...markedCells,i]">{{ cell }}</button>
+                </div>
+                <div v-else class="empty-hint">该记录未保存题面矩阵</div>
+              </div>
+              <details><summary>揭晓缺失数字</summary><strong>{{ meta.missing }}</strong></details>
               <table class="meta-table">
                 <thead><tr><th>选手</th><th>提交</th><th>次数</th><th>判定</th></tr></thead>
                 <tbody>
@@ -430,11 +456,19 @@
 
             <!-- 少数决 -->
             <template v-else-if="meta.type === 'minority'">
-              <div class="reveal-big">
+              <div v-if="meta.rounds?.length" class="vote-arena">
+                <div class="math-caption">比赛现场 · 第 {{ voteRound + 1 }} 轮</div>
+                <div class="vote-question">{{ meta.rounds[voteRound]?.question?.text || '题目未记录' }}</div>
+                <div class="math-nav"><button class="bb-btn" :disabled="voteRound === 0" @click="voteRound--">上一轮</button><button class="bb-btn" :disabled="voteRound >= meta.rounds.length - 1" @click="voteRound++">下一轮</button></div>
+                <div class="vote-options"><div v-for="(option, oi) in meta.rounds[voteRound]?.question?.options || []" :key="oi" class="vote-option"><b>{{ option }}</b><span>{{ meta.rounds[voteRound]?.counts?.[oi] ?? 0 }} 票</span></div></div>
+                <div class="math-players"><div v-for="p in meta.rounds[voteRound]?.participants || []" :key="p.playerId" class="math-player"><b>{{ p.playerName }}</b><span>{{ p.noAnswer ? '未作答' : p.label }}</span><span>{{ p.eliminated || !p.aliveAfter ? '出局' : '存活' }}</span></div></div>
+                <p class="math-answer">{{ meta.rounds[voteRound]?.outcomeText }}</p>
+              </div>
+              <div v-if="section === 'result'" class="reveal-big">
                 共 <strong>{{ meta.totalRounds || 0 }}</strong> 轮
                 <span v-if="meta.winnerName"> · 胜者：<strong>{{ meta.winnerName }}</strong></span>
               </div>
-              <div class="race-list">
+              <div v-if="section === 'result'" class="race-list">
                 <div v-for="r in meta.rounds || []" :key="r.round" class="race-item">
                   <div class="race-head">
                     第 {{ r.round }} 轮 · {{ r.question?.text || '' }}
@@ -508,11 +542,16 @@
             <div v-else class="empty-hint">该游戏暂无专属复盘数据（可在通用“比赛过程”中查看）</div>
           </div>
 
+          <template v-if="section === 'events'">
+          <label class="event-player">选手 <select v-model="focusedPlayer" @change="expanded = {}">
+            <option value="">全部选手</option>
+            <option v-for="p in detail.participants || []" :key="p.playerId" :value="p.playerId">{{ p.playerName }}</option>
+          </select></label>
           <!-- 每位选手的比赛过程（可反映具体提交值与判定） -->
           <div class="dg-block">
             <div class="dg-title">比赛过程（按选手）</div>
             <div class="player-logs">
-              <div v-for="grp in byPlayer" :key="grp.pid" class="plog">
+              <div v-for="grp in byPlayer.filter(g => !focusedPlayer || g.pid === focusedPlayer)" :key="grp.pid" class="plog">
                 <div class="plog-head">
                   <BBAvatar :name="grp.name" size="sm" />
                   <span class="plog-name">{{ grp.name }}</span>
@@ -550,6 +589,7 @@
               <div v-if="!filteredEvents.length" class="empty-hint">暂无事件</div>
             </div>
           </div>
+          </template>
         </template>
       </div>
     </div>
@@ -559,6 +599,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { bbGetMinigameReplays, bbGetMinigameReplay, bbDeleteMinigameReplay, bbBatchDeleteMinigameReplays } from '../../../services/bbApi'
+import SkillContestReplay from '../../../components/bigbrother/minigames/SkillContestReplay.vue'
+import RoundContestReplay from '../../../components/bigbrother/minigames/RoundContestReplay.vue'
+import ContestStandings from '../../../components/bigbrother/minigames/ContestStandings.vue'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import JigsawSpectator from '../../../components/bigbrother/minigames/JigsawSpectator.vue'
 import MemoryMatchReplay from '../../../components/bigbrother/minigames/MemoryMatchReplay.vue'
@@ -576,6 +619,15 @@ const list = ref<any[]>([])
 const detail = ref<any>(null)
 const filterGameType = ref('')
 const eventFilter = ref('all')
+const markedCells = ref<number[]>([])
+const mathQuestion = ref(0)
+const voteRound = ref(0)
+const section = ref('scene')
+const tabs = [{id:'scene',name:'比赛现场'}, {id:'result',name:'赛后结算'}, {id:'events',name:'操作记录'}]
+const interactiveMeta = ['memory-match','quick-math','minority','poker17','missing-number','klotski','spot-difference','dice-duel','sequence-memory','marble-score']
+const boardGame = computed(() => ['poker17','jigsaw','abraca','hide-and-go-veto','poison-drink','marble-score'].includes(meta.value?.type || detail.value?.minigameId))
+const skillScene = computed(() => ['click-speed','balance-bar','reaction','swing-pointer'].includes(meta.value?.type))
+const roundScene = computed(() => ['german-heart','number-divination','stay-or-fold','catch-mistress','otev','describe-guess','custom','custom-mode','power-challenge'].includes(meta.value?.type))
 const expanded = ref<Record<number, boolean>>({})
 const selectedIds = ref<string[]>([])
 
@@ -610,7 +662,7 @@ const GAME_RULES: Record<string, string> = {
   'number-divination': '数字占卜：选择数字并预测结果，累计得分最高者获胜。',
   'poker17': '17 张扑克对战，按牌型与筹码结算，最终筹码最多者获胜。',
   'poison-drink': '毒酒：庄家分配酒杯，玩家轮流转动转盘；喝到毒酒扣血，最后存活者获胜。',
-  'marble-score': '弹珠得分：随机生成固定得分地图，方向箭与蓄力条以不同周期摆动；淘汰模式每轮最低分淘汰1人，单轮模式随机顺序比最高分。',
+  'marble-score': '弹珠得分：随机生成固定得分地图，方向箭与蓄力条以不同周期摆动；支持淘汰、单轮、多轮积分、轮流积分与随机PK淘汰五种模式。',
   'hide-and-go-veto': '藏否决权牌寻宝赛：每人秘密藏好写有自己名字的否决权卡，随后轮流进屋翻找；卡被翻出即淘汰，最后一张没被找到的卡获胜。',
   'otev': 'OTEV 抢座问答赛：所有玩家共享公共牌池，查看不锁定、拿走才独占；答案可能是 1 人或 2 人，必须找到精确匹配的牌；提交后按顺序揭晓，答错或最后提交者淘汰。',
   'custom': '自定义游戏，按管理员配置的题目、计分与胜负规则结算。'
@@ -631,58 +683,46 @@ function toggleAll(e: Event) {
 }
 
 const filteredEvents = computed(() => {
-  const evs = detail.value?.events || []
+  const evs = (detail.value?.events || []).filter((e: any) => !focusedPlayer.value || e.playerId === focusedPlayer.value)
   if (eventFilter.value === 'all') return evs
   if (eventFilter.value === 'finish') return evs.filter((e: any) => e.type === 'finish' || e.type === 'game_end' || e.type === 'game_stop')
   if (eventFilter.value === 'answer') return evs.filter((e: any) => e.type === 'answer' || e.type === 'choose')
   return evs.filter((e: any) => e.type === eventFilter.value)
 })
 
-const boardPlayers = computed(() => {
-  const parts = detail.value?.participants || []
-  return [...parts].sort((a: any, b: any) => {
-    const sa = detail.value?.scores?.[a.playerId]
-    const sb = detail.value?.scores?.[b.playerId]
-    if (sa == null && sb == null) return 0
-    if (sa == null) return 1
-    if (sb == null) return -1
-    return sb - sa
-  })
-})
-
-function fs(pid: string) { return detail.value?.finalStates?.[pid] || null }
+const focusedPlayer = ref('')
+const winnerIds = computed(() => [
+  detail.value?.winner?.playerId,
+  ...(detail.value?.winners || []).map((p: any) => typeof p === 'string' ? p : p.playerId)
+].filter(Boolean) as string[])
+const replayStates = computed(() => Object.fromEntries((detail.value?.participants || []).map((p: any) => {
+  const state = detail.value?.finalStates?.[p.playerId] || {}
+  const entry = Array.isArray(meta.value?.players) ? meta.value.players.find((x: any) => x.playerId === p.playerId) : null
+  const boardEntry = meta.value?.board?.players?.find((x: any) => x.playerId === p.playerId)
+  return [p.playerId, {
+    ...state,
+    alive: state.alive ?? entry?.alive,
+    eliminated: state.eliminated ?? boardEntry?.eliminated ?? entry?.eliminated,
+    color: state.color ?? entry?.color
+  }]
+})))
+function inspectReplayPlayer(id: string) {
+  focusedPlayer.value = id
+  expanded.value = {}
+  eventFilter.value = 'all'
+  section.value = 'events'
+}
 function playerName(pid: string) {
   return detail.value?.participants?.find((p: any) => p.playerId === pid)?.playerName || pid
-}
-function isEliminated(pid: string) {
-  const s = fs(pid)
-  return !!(s && s.done && detail.value?.winner && detail.value.winner.playerId !== pid)
-}
-function finalScore(pid: string) {
-  const s = fs(pid)
-  const v = s?.score ?? detail.value?.scores?.[pid]
-  return v == null ? '' : v
-}
-function finalMax(pid: string) {
-  return Number(fs(pid)?.max) || 0
-}
-function finalPct(pid: string) {
-  const max = finalMax(pid)
-  if (!max) return 0
-  const v = Number(fs(pid)?.progress) || 0
-  return Math.max(0, Math.min(100, Math.round((v / max) * 100)))
 }
 
 const meta = computed<any>(() => detail.value?.meta || null)
 const isJigsawMeta = computed(() => meta.value?.type === 'jigsaw' && !!meta.value?.board)
 const SIMPLE_META_TYPES = ['click-speed', 'balance-bar', 'dice-duel', 'reaction', 'swing-pointer', 'klotski', 'spot-difference', 'sequence-memory', 'hide-and-go-veto', 'otev']
 const isSimpleMeta = computed(() => SIMPLE_META_TYPES.includes(meta.value?.type))
-function marbleColor(pid: string) {
-  if (meta.value?.type !== 'marble-score') return ''
-  return meta.value?.players?.find((p: any) => p.playerId === pid)?.color || ''
-}
 const snapshots = computed<any[]>(() => detail.value?.snapshots || [])
 const snapIndex = ref(0)
+const viewpoint = ref('')
 const curSnap = computed<any>(() => snapshots.value[snapIndex.value] || null)
 const isJigsawSnap = computed(() => {
   const d = curSnap.value?.data
@@ -753,7 +793,17 @@ function cellClass(a: any) {
 }
 function answerOf(type: string, pid: string, i: number) {
   if (!meta.value) return null
-  if (type === 'quick-math') return meta.value.players?.[pid]?.answers?.[i] || null
+  if (type === 'quick-math') {
+    const answers = meta.value.players?.[pid]?.answers || []
+    let questionIndex = 0
+    let last = null
+    for (const answer of answers) {
+      if (questionIndex === i) last = answer
+      if (answer.correct) questionIndex++
+      if (questionIndex > i) break
+    }
+    return last
+  }
   return null
 }
 function dgRecord(pid: string, qi: number) {
@@ -864,8 +914,23 @@ async function loadList() {
     selectedIds.value = selectedIds.value.filter(id => list.value.some(r => r.id === id))
   } catch { list.value = [] }
 }
+let requestNumber = 0
 async function openReplay(id: string) {
-  try { detail.value = await bbGetMinigameReplay(id); expanded.value = {}; snapIndex.value = 0 } catch (e: any) { alert(e?.message || '加载失败') }
+  const current = ++requestNumber
+  try {
+    const replay = await bbGetMinigameReplay(id)
+    if (requestNumber !== current) return
+    detail.value = replay
+    expanded.value = {}
+    markedCells.value = []
+    snapIndex.value = mathQuestion.value = voteRound.value = 0
+    viewpoint.value = ''
+    focusedPlayer.value = ''
+    eventFilter.value = 'all'
+    section.value = 'scene'
+  } catch (e: any) {
+    if (requestNumber === current) alert(e?.message || '加载失败')
+  }
 }
 async function removeReplay(id: string) {
   if (!confirm('确定删除该复盘记录？')) return
@@ -887,6 +952,30 @@ onMounted(loadList)
 </script>
 
 <style scoped>
+.event-player {display:flex;gap:8px;align-items:center;margin-bottom:10px}.event-player select {background:#251b37;color:#e6d8fa;border:1px solid #7e6b9a;border-radius:6px;padding:6px}
+.poker-felt {padding:24px 12px;text-align:center;background:#17453a;border:2px solid #679984;border-radius:44px;color:#fff}
+.back-list {display:none}
+@media(max-width:800px){.opened>.list-panel {display:none}.back-list {display:inline-block;margin-bottom:12px}.replay-layout:not(.opened)>.detail-panel {display:none}}
+
+.scene-tabs {display:flex;gap:6px;margin:14px 0 18px;flex-wrap:wrap}
+.scene-tabs button {padding:9px 16px;background:#201a32;border:1px solid #554965;border-radius:8px;color:#d4cce4;cursor:pointer}
+.scene-tabs button[aria-pressed=true] {background:#3c3254;border-color:#c8a8f2;color:white}
+.detail-panel {min-width:0;overflow-wrap:anywhere}.dg-block {overflow-x:auto}
+.math-arena { background: linear-gradient(145deg, #17294b, #10182a); border: 1px solid #ffffff20; border-radius: 14px; padding: 20px; margin-bottom: 14px; text-align: center; }
+.math-caption { color: #a9bbdb; font-size: 13px; }
+.math-expression { color: #fff; font-size: clamp(30px, 6vw, 54px); font-weight: 800; padding: 24px 0; }
+.math-nav { display: flex; justify-content: center; gap: 10px; }
+.math-answer { color: #e6c988; margin: 16px 0; }
+.math-players { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.math-player { display: flex; flex-direction: column; gap: 5px; background: #ffffff0c; border-radius: 8px; padding: 10px 16px; color: #dce7ff; }
+.vote-arena { background: linear-gradient(145deg, #272047, #10182a); border: 1px solid #ffffff20; border-radius: 14px; padding: 20px; text-align: center; margin-bottom: 14px; }
+.vote-question { color: white; font-size: 22px; font-weight: 700; padding: 20px; }
+.vote-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 16px 0; }
+.vote-option { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid #a894ed66; border-radius: 10px; color: #eee8ff; min-width: 140px; }
+.missing-arena { background: linear-gradient(145deg, #17294b, #10182a); border: 1px solid #ffffff20; border-radius: 14px; padding: 20px; margin-bottom: 14px; }
+.missing-label { color: #b9c6e6; font-size: 13px; margin-bottom: 12px; }
+.missing-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; max-width: 420px; margin: auto; }
+.missing-grid button[aria-pressed=true] {background:#544865;color:#ffde91}.missing-grid button {cursor:pointer; display: grid; place-items: center; aspect-ratio: 1; background: #253b62; border: 1px solid #6681ab55; border-radius: 6px; font-weight: 700; color: #f3f6ff; }
 .mg-replay { max-width: 1200px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
 .page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
@@ -914,20 +1003,6 @@ onMounted(loadList)
 .dg-block { margin-bottom: 18px; }
 .dg-title { font-size: 14px; color: #b39bff; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .game-rule { font-size: 13px; color: #b9c6e6; line-height: 1.7; padding: 10px 12px; background: #b39bff0e; border-left: 3px solid #b39bff; border-radius: 6px; }
-.board-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-.board-card { background: #ffffff06; border: 1px solid #ffffff12; border-radius: 10px; padding: 10px 12px; }
-.board-card.winner { border-color: #e6c988; background: #e6c98812; }
-.board-top { display: flex; align-items: center; gap: 8px; }
-.board-rank { width: 18px; font-size: 12px; color: #7d6fa6; font-variant-numeric: tabular-nums; }
-.board-name { flex: 1; font-size: 14px; color: #ece7fb; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.board-color { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.board-score { font-size: 15px; font-weight: 800; color: #e6c988; font-variant-numeric: tabular-nums; }
-.board-crown { font-size: 14px; }
-.board-out { font-size: 11px; color: #ff6b6b; }
-.board-stats { margin-top: 6px; font-size: 12px; color: #b9c6e6; display: flex; gap: 8px; flex-wrap: wrap; }
-.board-stat.done { color: #e6c988; }
-.board-bar { height: 4px; margin-top: 7px; background: #ffffff12; border-radius: 2px; overflow: hidden; }
-.board-fill { height: 100%; background: linear-gradient(90deg, #b39bff, #e6c988); border-radius: 2px; transition: width 0.25s ease; }
 .player-logs { display: flex; flex-direction: column; gap: 12px; }
 .plog { background: #ffffff05; border: 1px solid #ffffff10; border-radius: 10px; padding: 10px 12px; }
 .plog-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }

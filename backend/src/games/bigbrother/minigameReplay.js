@@ -5,6 +5,7 @@
  * - 游戏结束时落库，供赛后复盘查看
  */
 const { generateId } = require('./helpers')
+const { getGame } = require('./minigames')
 const BBMinigameReplay = require('./models/BBMinigameReplay')
 
 const sessions = new Map() // roomId -> session
@@ -72,12 +73,13 @@ async function finalizeSession(room, { winner = null, winners = [], scores = {},
   s.winner = winner || null
   s.winners = winners || []
   s.scores = scores || {}
+  const handler = room.handler || getGame(room.minigameId)
   try {
-    s.finalStates = room.handler && room.handler.getAllStates ? room.handler.getAllStates(room.gameState) : {}
+    s.finalStates = room.gameState && handler?.getAllStates ? handler.getAllStates(room.gameState) : {}
   } catch { s.finalStates = {} }
   // 游戏专属复盘数据（真实答案/回合详情等，仅管理员复盘可见）
   try {
-    s.meta = room.handler && room.handler.getReplayMeta ? room.handler.getReplayMeta(room.gameState) : null
+    s.meta = room.gameState && handler?.getReplayMeta ? handler.getReplayMeta(room.gameState) : null
   } catch (e) { s.meta = null }
   s.endedAt = new Date().toISOString()
   s.updatedAt = s.endedAt

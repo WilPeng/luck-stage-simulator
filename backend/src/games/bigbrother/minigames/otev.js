@@ -688,6 +688,7 @@ registerGame({
       out[pid] = {
         score: state.scores[pid] || 0,
         progress: p.alive ? 1 : 0,
+        alive: p.alive,
         max: 1,
         done: !p.alive || state.finished === true,
         label,

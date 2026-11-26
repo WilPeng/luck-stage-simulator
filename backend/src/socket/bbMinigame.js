@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken')
 const { v4: uuidv4 } = require('uuid')
 const { getGame } = require('../games/bigbrother/minigames/loadAll')
 const { loadCustomGame, createCustomGameHandler, getCustomHandlerId } = require('../games/bigbrother/minigames/customGame')
-const { startSession, recordEvent, finalizeSession, listLiveSessions } = require('../games/bigbrother/minigameReplay')
+const { startSession, recordEvent, finalizeSession, getSession, listLiveSessions } = require('../games/bigbrother/minigameReplay')
 const { broadcastBBGame } = require('./bbGame')
 
 // 活跃游戏房间（内存管理）
@@ -139,14 +139,18 @@ const initBBMinigameSocket = (io) => {
 
       console.log(`[BBMinigame] ${userName} joined room ${roomId}${isAdmin ? ' (observer)' : ''}`)
 
-      // 发送当前状态
-      if (room.status === 'playing' && room.gameState) {
+      // 管理员加入时立即收到当前进度、局面和最近的操作记录。
+      if (isAdmin) {
+        socket.emit('game_progress', buildProgress(room))
+        const session = getSession(roomId)
+        if (session) socket.emit('game_event_history', {
+          roomId, events: session.events.slice(-1000), total: session.events.length
+        })
+        const view = buildObserverView(room)
+        if (view) socket.emit('game_admin_view', { roomId, minigameId: room.minigameId, view })
+      } else if (room.status === 'playing' && room.gameState) {
         resolveGameHandler(room.minigameId, room).then(handler => {
-          if (isAdmin && handler && handler.getAllStates) {
-            socket.emit('game_progress', buildProgress(room))
-          } else if (handler && handler.getState) {
-            socket.emit('game_state', handler.getState(room.gameState, userId))
-          }
+          if (handler && handler.getState) socket.emit('game_state', handler.getState(room.gameState, userId))
         }).catch(() => {})
       }
 
@@ -689,36 +693,31 @@ function publicParticipants(room) {
 function broadcastProgress(room, minigameNs) {
   if (!room || room.status === 'finished') return
   try { minigameNs.to(room.roomId).emit('game_progress', buildProgress(room)) } catch (e) { /* ignore */ }
-  // 管理员专属：完整局面（含隐藏信息，仅发给 admin，不泄露给选手）
+  const view = buildObserverView(room)
+  if (!view) return
+  minigameNs.fetchSockets().then(sockets => {
+    for (const socket of sockets) {
+      if (socket.user?.role === 'admin' && socket.rooms.has(room.roomId)) {
+        socket.emit('game_admin_view', { roomId: room.roomId, minigameId: room.minigameId, view })
+      }
+    }
+  }).catch(() => {})
+}
+
+function buildObserverView(room) {
+  if (!room.gameState) return null
   try {
     const handler = room.handler || getGame(room.minigameId)
-    let view = null
-    if (handler && handler.getReplaySnapshot) view = handler.getReplaySnapshot(room.gameState)
-    if (!view) {
-      const { buildAdminView } = require('../games/bigbrother/minigames/adminViews')
-      view = buildAdminView(room.minigameId, room.gameState)
-    }
-    if (!view && handler && handler.getReplayMeta) view = handler.getReplayMeta(room.gameState)
-    // 部分游戏提供管理员专用图形化盘面（如毒酒的转盘）
-    if (handler && typeof handler.getAdminState === 'function') {
-      try {
-        const board = handler.getAdminState(room.gameState)
-        if (board) {
-          if (view) view.board = board
-          else view = { type: room.minigameId, board }
-        }
-      } catch (e) { /* ignore */ }
-    }
-    if (view) {
-      minigameNs.fetchSockets().then(socks => {
-        for (const s of socks) {
-          if (s.user && s.user.role === 'admin' && s.rooms.has(room.roomId)) {
-            s.emit('game_admin_view', { roomId: room.roomId, minigameId: room.minigameId, view })
-          }
-        }
-      }).catch(() => {})
-    }
-  } catch (e) { /* ignore */ }
+    const { buildAdminView } = require('../games/bigbrother/minigames/adminViews')
+    let view = handler?.getReplaySnapshot?.(room.gameState)
+      || buildAdminView(room.minigameId, room.gameState)
+      || handler?.getReplayMeta?.(room.gameState)
+    const board = handler?.getAdminState?.(room.gameState)
+    if (board) view = { ...view, type: view?.type || room.minigameId, board }
+    return view
+  } catch {
+    return null
+  }
 }
 
 // ===== 对局复盘：事件记录与广播 =====

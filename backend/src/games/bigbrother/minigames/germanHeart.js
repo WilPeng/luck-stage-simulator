@@ -166,7 +166,7 @@ registerGame({
       winnerId: winnerId || null,
       wrong
     }
-    state.history.push({ ...state.roundResult, at: now })
+    state.history.push({ ...state.roundResult, cards: state.cards.slice(), at: now })
     this._pushRoundEvent(state, state.roundResult)
     state.phase = 'reveal'
     state.phaseEndsAt = now + state.opts.revealTime * 1000
