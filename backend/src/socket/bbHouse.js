@@ -230,6 +230,20 @@ function initBBHouseSocket(io) {
     // === 房间聊天 ===
     socket.on('house:send-message', async ({ roomId, content }) => {
       try {
+        if (socket.userRole !== 'admin') {
+          const season = await BBSeason.findOne({ gameId: 'bigbrother' })
+          if (season?.currentStage === 'hoh_competition') {
+            const { enabled, loadRoundTwist } = require('../games/bigbrother/roundTwists')
+            if (enabled(season, 'split_house')) {
+              const { branch } = await loadRoundTwist(season)
+              if (branch && !branch.done) {
+                socket.emit('house:error', { message: '分屋期间请在分屋面板与本组交流' })
+                return
+              }
+            }
+          }
+        }
+
         if (!content || !content.trim()) return
         if (!roomId) return socket.emit('house:error', { error: '请选择房间' })
 

@@ -11,6 +11,7 @@
     <div v-else-if="!finished" class="game-playing">
       <div class="game-header">
         <span>进度: {{ currentIndex }}/{{ totalQuestions }}</span>
+        <span v-if="gameState?.retryAvailable" class="retry-benefit">免冷却重试 · 1 次</span>
       </div>
       <div v-if="currentIndex < totalQuestions" class="question-area">
         <div class="question">{{ currentQuestion }} = ?</div>
@@ -22,7 +23,7 @@
         </div>
         <div v-if="cooling" class="result-feedback wrong">❌ 答错，{{ coolRemain }} 秒后可重试</div>
         <div v-else-if="lastResult" class="result-feedback" :class="{ correct: lastResult.correct, wrong: !lastResult.correct }">
-          {{ lastResult.correct ? '✅ 正确！' : '❌ 错误，请重试' }}
+          {{ lastResult.correct ? '✅ 正确！' : lastResult.retryUsed ? '已使用免冷却重试，可以立即作答' : '❌ 错误，请重试' }}
         </div>
       </div>
       <div v-else class="completed">
@@ -88,6 +89,7 @@ onUnmounted(() => { if (cooldownTimer) clearInterval(cooldownTimer) })
 </script>
 
 <style scoped>
+.retry-benefit { margin-left: 8px; color: #f4d79c; }
 .quick-math { text-align: center; padding: 20px; }
 .game-icon { font-size: 64px; margin-bottom: 16px; }
 .game-waiting h2 { font-size: 22px; color: #ece7fb; margin-bottom: 8px; }

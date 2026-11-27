@@ -1,3 +1,4 @@
+const { enabled, loadRoundTwist, earnedVetoSeat, vetoRetryPlayer } = require('../roundTwists')
 const express = require('express')
 const router = express.Router()
 const BBVetoRecord = require('../models/BBVetoRecord')
@@ -85,6 +86,8 @@ router.post('/draw', async (req, res) => {
     const defaultIds = new Set()
     if (hohId) defaultIds.add(hohId)
     nomineeIds.forEach(id => defaultIds.add(id))
+    const guaranteedSeat = await earnedVetoSeat(season)
+    if (guaranteedSeat && allActive.some(g => g.id === guaranteedSeat)) defaultIds.add(guaranteedSeat)
 
     // 总参与人数目标 = 6
     const TARGET_COUNT = 6
@@ -106,7 +109,7 @@ router.post('/draw', async (req, res) => {
     const needDraw = everyoneParticipates ? 0 : Math.max(0, TARGET_COUNT - defaultCount)
 
     // 从所有活跃房客中随机抽取 needDraw 人（不排除HOH/提名者）
-    const shuffled = [...allActive]
+    const shuffled = guaranteedSeat ? allActive.filter(h => !defaultIds.has(h.id)) : [...allActive]
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
@@ -291,6 +294,19 @@ router.post('/competition', async (req, res) => {
       return res.status(400).json({ success: false, error: '已经产生获胜者，无需重复竞争', code: 'ALREADY_COMPLETED' })
     }
 
+    if (await vetoRetryPlayer(season)) {
+      const { getCollection } = require('../../../config/db')
+      const replay = await getCollection('BBMinigameReplay').findOne({
+        gameId: 'bigbrother', roundIndex: season.currentRound, gameType: 'veto', minigameId: 'quick-math',
+        status: 'finished', 'winner.playerId': minigameResult?.winnerId || null
+      })
+      const room = minigameResult?.roomId ? req.app.get('io')?.of('/bigbrother-minigame').getRoom(minigameResult.roomId) : null
+      const confirmed = room?.status === 'finished' && room.roundIndex === season.currentRound
+        && room.gameType === 'veto' && room.minigameId === 'quick-math' && room.winner?.playerId === minigameResult?.winnerId
+      if (!minigameResult?.winnerId || (!replay?.winner && !confirmed)) {
+        return res.status(400).json({ success: false, error: '本轮须完成快速算术 POV 后才能确定胜者' })
+      }
+    }
     // 如果有小游戏结果，使用小游戏产生的获胜者
     let winner
     if (minigameResult && minigameResult.winnerId) {
@@ -329,7 +345,7 @@ router.post('/competition', async (req, res) => {
 })
 
 // POST /use - 使用否决权（仅在 veto_ceremony 阶段可操作）
-router.post('/use', async (req, res) => {
+router.post('/use', auth, async (req, res) => {
   try {
     const { targetPlayerId, targetPlayerName } = req.body
     const season = await getCurrentSeason()
@@ -342,8 +358,22 @@ router.post('/use', async (req, res) => {
     const vetoCol = getCollection('BBVetoRecord')
     const record = await vetoCol.findOne({ gameId: 'bigbrother', roundId })
     if (!record) return res.status(404).json({ success: false, error: '否决权记录不存在', code: 'NOT_FOUND' })
+    if (enabled(season, 'veto_trustee')) {
+      const holder = (await loadRoundTwist(season)).trusteeId || record?.winnerId
+      if (!holder || (req.user.role !== 'admin' && req.user.userId !== holder)) {
+        return res.status(403).json({ success: false, error: '只有本轮 POV 决定权持有者可以操作' })
+      }
+      if (['used', 'skipped'].includes(record?.status)) return res.status(409).json({ success: false, error: 'POV 决定已提交' })
+    }
     if (!record.ceremony?.started) {
       return res.status(400).json({ success: false, error: '请等待管理员点击「仪式开始」', code: 'CEREMONY_NOT_STARTED' })
+    }
+
+    if (enabled(season, 'veto_trustee')) {
+      const currentNominees = await getCollection('BBNomination').findOne({ gameId: 'bigbrother', roundId })
+      if (!currentNominees?.nomineeIds?.includes(targetPlayerId)) {
+        return res.status(400).json({ success: false, error: 'POV 只能救下当前提名者' })
+      }
     }
 
     // Twist #1 回旋镖护符：使用时所有被提名者全救
@@ -426,13 +456,20 @@ router.post('/use', async (req, res) => {
 })
 
 // POST /skip - 不使用否决权（仅在 veto_ceremony 阶段可操作）
-router.post('/skip', async (req, res) => {
+router.post('/skip', auth, async (req, res) => {
   try {
     const season = await getCurrentSeason()
     if (season.currentStage !== 'veto_ceremony') {
       return res.status(400).json({ success: false, error: '当前不是否决权会议阶段，无法操作', code: 'WRONG_STAGE' })
     }
     const record = await BBVetoRecord.findOne({ gameId: 'bigbrother', roundId: `round-${season.currentRound}` })
+    if (enabled(season, 'veto_trustee')) {
+      const holder = (await loadRoundTwist(season)).trusteeId || record?.winnerId
+      if (!holder || (req.user.role !== 'admin' && req.user.userId !== holder)) {
+        return res.status(403).json({ success: false, error: '只有本轮 POV 决定权持有者可以操作' })
+      }
+      if (['used', 'skipped'].includes(record?.status)) return res.status(409).json({ success: false, error: 'POV 决定已提交' })
+    }
     if (record && !record.ceremony?.started) {
       return res.status(400).json({ success: false, error: '请等待管理员点击「仪式开始」', code: 'CEREMONY_NOT_STARTED' })
     }

@@ -27,6 +27,7 @@ function publicRoomOptions(options) {
   delete safe.questions
   delete safe.questionsText
   delete safe.correctCounts
+  delete safe.vetoRetryPlayerId
   return safe
 }
 
@@ -439,6 +440,17 @@ router.post('/create-room', async (req, res) => {
       }
     } catch { /* ignore */ }
     const roomOptions = options && typeof options === 'object' ? { ...options } : {}
+    delete roomOptions.vetoRetryPlayerId
+    if (gameType === 'veto') {
+      const { vetoRetryPlayer } = require('../roundTwists')
+      const retry = season ? await vetoRetryPlayer(season) : null
+      if (retry) {
+        if (minigameId !== 'quick-math' || !participants.some(p => p.playerId === retry)) {
+          return res.status(400).json({ success: false, error: '本轮有额外重试权，须选用快速算术且保留获权选手' })
+        }
+        roomOptions.vetoRetryPlayerId = retry
+      }
+    }
     if (!roomOptions.rules) roomOptions.rules = defaultRules
     const room = minigameNs.createRoom(gameType, minigameId, participants, target, {
       roundIndex: season?.currentRound ?? null,

@@ -3,18 +3,22 @@ const ALLOWED_TAGS = ['B', 'STRONG', 'I', 'EM', 'U', 'BR', 'IMG', 'A', 'P', 'DIV
 
 export function sanitizeRichText(html?: string | null): string {
   if (!html) return ''
-  const div = document.createElement('div')
-  div.innerHTML = String(html)
+  const template = document.createElement('template')
+  template.innerHTML = String(html)
 
-  const walk = (node: Element) => {
+  const walk = (node: Element | DocumentFragment) => {
     const children = Array.from(node.children)
     for (const el of children) {
       const tag = el.tagName
+      if (el.namespaceURI !== 'http://www.w3.org/1999/xhtml' || ['SCRIPT', 'STYLE', 'TEMPLATE'].includes(tag)) {
+        el.remove()
+        continue
+      }
       if (!ALLOWED_TAGS.includes(tag)) {
+        walk(el)
         const frag = document.createDocumentFragment()
         while (el.firstChild) frag.appendChild(el.firstChild)
         el.replaceWith(frag)
-        walk(node)
         continue
       }
       for (const attr of Array.from(el.attributes)) {
@@ -30,14 +34,23 @@ export function sanitizeRichText(html?: string | null): string {
         el.setAttribute('style', 'max-width:100%;border-radius:6px;margin:6px 0;')
       }
       if (tag === 'A') {
+        const href = el.getAttribute('href')
+        if (href) {
+          try {
+            const { protocol } = new URL(href, document.baseURI)
+            if (!['http:', 'https:', 'mailto:', 'tel:'].includes(protocol)) el.removeAttribute('href')
+          } catch {
+            el.removeAttribute('href')
+          }
+        }
         el.setAttribute('target', '_blank')
         el.setAttribute('rel', 'noopener noreferrer')
       }
       walk(el)
     }
   }
-  walk(div)
-  return div.innerHTML
+  walk(template.content)
+  return template.innerHTML
 }
 
 // 判断富文本是否有实际内容（去标签后非空，或有图片）

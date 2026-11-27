@@ -47,12 +47,28 @@ app.use('/api/bigbrother', (req, res, next) => {
 // ===== Big Brother 路由（固定 gameId = bigbrother）=====
 const bbGameIdMiddleware = (req, res, next) => { req.gameId = 'bigbrother'; next() }
 app.use('/api/bigbrother/auth', bbGameIdMiddleware, require('./games/bigbrother/routes/bbAuth'))
+app.use('/api/bigbrother/round-twist', bbGameIdMiddleware, blockRestrictedPlayers, require('./games/bigbrother/routes/bbRoundTwist'))
 app.use('/api/bigbrother/season', bbGameIdMiddleware, require('./games/bigbrother/routes/bbSeason'))
 app.use('/api/bigbrother/houseguests', bbGameIdMiddleware, require('./games/bigbrother/routes/bbHouseguests'))
-app.use('/api/bigbrother/hoh', bbGameIdMiddleware, blockRestrictedPlayers, require('./games/bigbrother/routes/bbHoh'))
-app.use('/api/bigbrother/nomination', bbGameIdMiddleware, blockRestrictedPlayers, require('./games/bigbrother/routes/bbNomination'))
-app.use('/api/bigbrother/veto', bbGameIdMiddleware, blockRestrictedPlayers, require('./games/bigbrother/routes/bbVeto'))
-app.use('/api/bigbrother/eviction', bbGameIdMiddleware, blockRestrictedPlayers, require('./games/bigbrother/routes/bbEviction'))
+// 双房主和分屋阶段由独立赛制入口管理。
+const ordinaryRoundOnly = async (req, res, next) => {
+  if (req.method === 'GET') return next()
+  try {
+    const season = await require('./games/bigbrother/helpers').getCurrentSeason()
+    if (season) {
+      const { branches, branchSettled } = require('./games/bigbrother/branchTwists')
+      const branch = branches(season)
+      if (branch === 'split_house' || (branch === 'battle_of_block' && !(await branchSettled(season)))) {
+        return res.status(409).json({ success: false, error: '本轮须在专属赛制面板操作' })
+      }
+    }
+    next()
+  } catch (error) { next(error) }
+}
+app.use('/api/bigbrother/hoh', bbGameIdMiddleware, blockRestrictedPlayers, ordinaryRoundOnly, require('./games/bigbrother/routes/bbHoh'))
+app.use('/api/bigbrother/nomination', bbGameIdMiddleware, blockRestrictedPlayers, ordinaryRoundOnly, require('./games/bigbrother/routes/bbNomination'))
+app.use('/api/bigbrother/veto', bbGameIdMiddleware, blockRestrictedPlayers, ordinaryRoundOnly, require('./games/bigbrother/routes/bbVeto'))
+app.use('/api/bigbrother/eviction', bbGameIdMiddleware, blockRestrictedPlayers, ordinaryRoundOnly, require('./games/bigbrother/routes/bbEviction'))
 app.use('/api/bigbrother/jury-qa', bbGameIdMiddleware, require('./games/bigbrother/routes/bbJuryQA'))
 app.use('/api/bigbrother/logs', bbGameIdMiddleware, require('./games/bigbrother/routes/bbLogs'))
 app.use('/api/bigbrother/minigame', bbGameIdMiddleware, blockRestrictedPlayers, require('./games/bigbrother/routes/bbMinigame'))

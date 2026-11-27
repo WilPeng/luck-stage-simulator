@@ -18,7 +18,7 @@
       <div class="cmr-questions">
         <div v-for="(q, i) in meta.questions || []" :key="q.id || i" class="cmr-q">
           <span class="cmr-q-no">Q{{ i + 1 }}</span>
-          <span class="cmr-q-text">{{ q.text || '（无题目文字）' }}</span>
+          <div class="cmr-q-text" v-html="sanitizeRichText(q.text) || '（无题目文字）'"></div>
           <span v-if="q.qtype === 'match' && q.correctAnswer" class="cmr-q-ans">正确配对：{{ q.correctAnswer }}</span>
           <span v-else-if="q.correctAnswer !== '' && q.correctAnswer != null" class="cmr-q-ans">答案：{{ q.correctAnswer }}</span>
           <span v-else class="cmr-q-ans dim">无标准答案 / 管理员评判</span>
@@ -62,7 +62,7 @@
       <div v-for="(r, ri) in meta.rounds || []" :key="ri" class="cmr-round">
         <div class="cmr-round-head">
           <span class="cmr-round-no">第 {{ (r.qIndex ?? ri) + 1 }} 题{{ r.tiebreak ? '（数字加时）' : '' }}</span>
-          <span class="cmr-round-q">{{ r.question?.text || '（无题目）' }}</span>
+          <div class="cmr-round-q" v-html="sanitizeRichText(r.question?.text) || '（无题目）'"></div>
           <span v-if="r.question?.correctAnswer" class="cmr-round-ans">答案：{{ r.question.correctAnswer }}</span>
         </div>
 
@@ -103,6 +103,7 @@
 </template>
 
 <script setup lang="ts">
+import { sanitizeRichText } from '../../../utils/richText'
 import { computed } from 'vue'
 
 const props = defineProps<{ meta: any }>()
@@ -182,6 +183,7 @@ function roundOutcome(r: any): string {
 .cmr-q { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: #ddd; padding: 6px 8px; background: #ffffff05; border-radius: 6px; }
 .cmr-q-no { color: #b39bff; font-weight: 700; }
 .cmr-q-text { flex: 1; min-width: 180px; }
+.cmr-q-text, .cmr-round-q { white-space: pre-line; overflow-wrap: anywhere; }
 .cmr-q-ans { color: #e6c988; font-size: 12px; }
 .cmr-q-ans.dim { color: #6b5f92; }
 .cmr-table { width: 100%; border-collapse: collapse; font-size: 13px; }

@@ -1,3 +1,4 @@
+const { enabled, loadRoundTwist } = require('../roundTwists')
 const express = require('express')
 const router = express.Router()
 const BBHohRecord = require('../models/BBHohRecord')
@@ -117,9 +118,13 @@ async function getEligibleForHoh(season) {
   const excludedHoh = prev ? { id: prev.winnerId, name: prev.winnerName || '' } : null
 
   const actives = await col.find({ gameId: 'bigbrother', status: 'active', role: 'houseguest' }).toArray()
-  const candidates = excludedHoh
+  let candidates = excludedHoh
     ? actives.filter(h => h.id !== excludedHoh.id)
     : actives
+  if (enabled(season, 'costly_return')) {
+    const { revivedId } = await loadRoundTwist(season)
+    candidates = candidates.filter(p => p.id !== revivedId)
+  }
   candidates.excludedHoh = excludedHoh
   return candidates
 }
@@ -134,6 +139,9 @@ router.post('/competition', async (req, res) => {
     const season = await getCurrentSeason()
     const twistConfigs = season.twistConfigs || []
     const roundConfigs3 = season.roundConfigs || []
+    if (['battle_back','costly_return'].some(id => enabled(season,id)) && !(await loadRoundTwist(season)).revivedId) {
+      return res.status(409).json({ success: false, error: '请先确认复活赛结果' })
+    }
     const curRound = season.currentRound
 
     // Twist #18 因果报应：如果有上轮幸存者自动 HOH 标记，跳过竞争
@@ -250,6 +258,9 @@ router.post('/assign', async (req, res) => {
     const houseguest = await BBHouseguest.findOne({ id: playerId })
     if (!houseguest) return res.status(404).json({ success: false, error: '房客不存在', code: 'NOT_FOUND' })
     const season = await getCurrentSeason()
+    if (['battle_back','costly_return'].some(id => enabled(season,id)) && !(await loadRoundTwist(season)).revivedId) {
+      return res.status(409).json({ success: false, error: '请先确认复活赛结果' })
+    }
     const curRound = season.currentRound
     const twistConfigs = season.twistConfigs || []
     const roundConfigs4 = season.roundConfigs || []
@@ -259,6 +270,9 @@ router.post('/assign', async (req, res) => {
       return res.status(400).json({ success: false, error: '该房客不是活跃状态，无法担任 HOH', code: 'NOT_ACTIVE' })
     }
     const eligibleForHoh = await getEligibleForHoh(season)
+    if (enabled(season, 'costly_return') && (await loadRoundTwist(season)).revivedId === playerId) {
+      return res.status(400).json({ success: false, error: '代价复活选手当轮不能担任 HOH' })
+    }
     const prevHoh = eligibleForHoh.excludedHoh || null
     if (prevHoh && prevHoh.id === playerId) {
       return res.status(400).json({

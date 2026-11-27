@@ -1,3 +1,4 @@
+const { enabled, loadRoundTwist, writeRoundTwist } = require('../roundTwists')
 const express = require('express')
 const router = express.Router()
 const BBEvictionVote = require('../models/BBEvictionVote')
@@ -128,6 +129,18 @@ router.post('/start-vote', auth, requireAdmin, async (req, res) => {
     if (!nominationDoc) {
       return res.status(400).json({ success: false, error: '本轮提名不存在，无法开始投票', code: 'NO_NOMINATION' })
     }
+    if (enabled(season, 'save_vote') && nominationDoc.nomineeIds?.length !== 3) {
+      return res.status(409).json({ success: false, error: '保留票必须有三位最终提名者，请先完成补提名' })
+    }
+    if (enabled(season, 'tie_recall')) {
+      const { tieRecall } = await loadRoundTwist(season)
+      if (tieRecall?.status === 'pending' || nominationDoc.nomineeIds?.length !== (tieRecall?.status === 'revote' ? 2 : 3)) {
+        return res.status(409).json({ success: false, error: '请先完成提名或由 HOH 处理平票' })
+      }
+    }
+    if (enabled(season, 'round_rewind') && !(await loadRoundTwist(season)).rewoundAt) {
+      return res.status(409).json({ success: false, error: '本轮须先执行整轮回卷' })
+    }
     const nowIso = new Date().toISOString()
     if (!nominationDoc.voteStarted) {
       await nomCol.updateOne(
@@ -188,13 +201,16 @@ router.post('/vote', async (req, res) => {
     if (!nominationDoc?.voteStarted) {
       return res.status(400).json({ success: false, error: '投票尚未开始，请等待管理员开始投票', code: 'VOTE_NOT_STARTED' })
     }
+    if (enabled(season, 'tie_recall') && (await loadRoundTwist(season)).tieRecall?.status === 'pending') {
+      return res.status(409).json({ success: false, error: '等待 HOH 处理第一轮平票' })
+    }
     const validTargetIds = nominationDoc?.nomineeIds || []
     if (!validTargetIds.includes(targetId)) {
       return res.status(400).json({ success: false, error: '投票目标不在提名名单上', code: 'INVALID_TARGET' })
     }
     // 确定实际的投票人：管理员可指定 voterId，否则为自己投票
-    const actualVoterId = specVoterId || admin.id
-    const actualVoterName = specVoterName || admin.name
+    const actualVoterId = admin.role === 'admin' && specVoterId ? specVoterId : admin.id
+    const actualVoterName = admin.role === 'admin' && specVoterId ? specVoterName || admin.name : admin.name
     const isAdminVote = admin.role === 'admin' && !!specVoterId
 
     // 已淘汰 / 陪审团 / 退赛选手不能参与淘汰投票（管理员代投时校验被代投人）
@@ -261,6 +277,9 @@ router.get('/my-vote', async (req, res) => {
 
 // 计算淘汰结果（供 /result 与 /night/start 共用），会实际标记房客淘汰并写入 BBEviction
 async function computeEvictionResult(season) {
+  if (enabled(season, 'round_rewind') && !(await loadRoundTwist(season)).rewoundAt) {
+    return { error: '本轮须先执行整轮回卷', code: 'REWIND_REQUIRED' }
+  }
   const curRound = season.currentRound
   const twistConfigs = season.twistConfigs || []
   const roundConfigs = season.roundConfigs || []
@@ -276,8 +295,9 @@ async function computeEvictionResult(season) {
   const hohCol = getCollection('BBHohRecord')
   const currentHoh = await hohCol.findOne({ gameId: 'bigbrother', roundId })
 
-  const isTriple = hasTwist(curRound, 'triple_offering', twistConfigs, roundConfigs)
-  const evictCount = getEvictCountForRound(curRound, twistConfigs, roundConfigs)
+  const isSaveVote = enabled(season, 'save_vote')
+  const isTriple = isSaveVote || hasTwist(curRound, 'triple_offering', twistConfigs, roundConfigs)
+  const evictCount = Math.max(1, getEvictCountForRound(curRound, twistConfigs, roundConfigs))
 
   const tally = new Map()
   const nameById = new Map()
@@ -304,7 +324,28 @@ async function computeEvictionResult(season) {
   const tiedEntries = counts.filter(c => c.count === maxCount)
   const evictedTargets = []
 
-  if (tiedEntries.length >= 2 && currentHoh && evictCount === 1) {
+  if (enabled(season, 'tie_recall')) {
+    const { tieRecall } = await loadRoundTwist(season)
+    if (tieRecall?.status === 'pending') return { error: '等待 HOH 选择要保留的并列者', code: 'TIE_RECALL_PENDING' }
+    if (!tieRecall && tiedEntries.length > 1 && counts.length === 3 && votes.length) {
+      await writeRoundTwist(season, { tieRecall: { status: 'pending', tiedIds: tiedEntries.map(t => t.id), counts } })
+      season.currentStage = 'eviction_vote'
+      await season.save()
+      broadcastBBGame('bb:update', { path: '/api/bigbrother/round-twist' })
+      return { error: '最高票平票，请在本轮变数面板选择保留一人，随后开启重投', code: 'TIE_RECALL_PENDING' }
+    }
+    if (tieRecall?.status === 'revote' && tiedEntries.length > 1
+      && !votes.some(v => v.voterId === currentHoh?.winnerId && tiedEntries.some(t => t.id === v.targetId))) {
+      return { error: '重投仍平票，请先由 HOH 投票裁决', code: 'TIE_RECALL_FINAL_TIE' }
+    }
+  }
+  if (isSaveVote) {
+    if (counts.length !== 3 || !votes.length) return { error: '保留票需要三名提名者及有效票数', code: 'SAVE_VOTE_INCOMPLETE' }
+    const hohChoice = votes.find(v => v.voterId === currentHoh?.winnerId)?.targetId
+    const saved = tiedEntries.length === 1 ? tiedEntries[0] : tiedEntries.find(entry => entry.id === hohChoice)
+    if (!saved) return { error: '保留票平票，需由 HOH 投给最高票并列者裁决', code: 'SAVE_VOTE_TIE' }
+    evictedTargets.push(...counts.filter(entry => entry.id !== saved.id).reverse())
+  } else if (tiedEntries.length >= 2 && currentHoh && evictCount === 1) {
     const hohVote = votes.find(v => v.voterId === currentHoh.winnerId)
     if (hohVote) {
       evictedTargets.push({ id: hohVote.targetId, name: hohVote.targetName, count: maxCount, hohDecided: true })
@@ -322,7 +363,7 @@ async function computeEvictionResult(season) {
   const finalSize = season.finalSize || 2
   const hgColTotal = getCollection('BBHouseguest')
   const totalHouseguests = await hgColTotal.countDocuments({ gameId: 'bigbrother', role: 'houseguest' })
-  const voteEvictions = await getCollection('BBEviction').countDocuments({ gameId: 'bigbrother', roundId: { $ne: roundId } })
+  const voteEvictions = await getCollection('BBEviction').countDocuments({ gameId: 'bigbrother', roundId: { $ne: roundId }, reinstatedAt: { $exists: false } })
   // 退赛同样占用一个淘汰名次，计入 priorEvictions，保证名次与陪审团边界正确
   const priorWalks = await hgColTotal.countDocuments({
     gameId: 'bigbrother',
@@ -405,6 +446,7 @@ async function computeEvictionResult(season) {
     evicted: evictedResults,
     counts,
     isTripleEviction: isTriple,
+    ballotMode: isSaveVote ? 'save' : 'evict',
     karmicHoh: season.nextHohPlayerName || null,
     totalVotes: votes.length
   }
@@ -439,17 +481,29 @@ router.post('/night/start', auth, requireAdmin, async (req, res) => {
     season.votesLocked = true
     await season.save()
     const data = await computeEvictionResult(season)
-    if (data.error) return res.status(400).json({ success: false, error: data.error, code: data.code })
+    if (data.error) {
+      season.votesLocked = false
+      await season.save()
+      return res.status(400).json({ success: false, error: data.error, code: data.code })
+    }
 
     const counts = data.counts || []
     const big = counts.length ? counts[0].count : 0
     const small = counts.length > 1 ? counts[counts.length - 1].count : 0
     const evicted = data.evicted || []
     const first = evicted[0] || null
-    const voteLine = `by a vote of ${big}-${small},`
+    const voteLine = data.ballotMode === 'save' ? `保留票：${counts.map(c => c.count).join('–')}` : `by a vote of ${big}-${small},`
     const sentenceMode = Number(req.body?.sentenceMode) === 5 ? 5 : 3
     let segments = []
-    if (sentenceMode === 5 && first && counts.length > 1) {
+    if (evicted.length > 1) {
+      const safe = counts.find(c => !evicted.some(p => p.id === c.id))
+      segments = [
+        { type: 'vote', text: voteLine },
+        ...(sentenceMode === 5 && safe ? [{ type: 'safe', text: safe.name }, { type: 'safe_result', text: '你安全了' }] : []),
+        { type: 'evicted', text: evicted.map(p => p.name).join('、') },
+        { type: 'result', text: '你们被淘汰了' }
+      ]
+    } else if (sentenceMode === 5 && first && counts.length > 1) {
       // 5 句：先宣布安全者，再宣布淘汰者
       const safeEntry = counts.find(c => c.id !== first.id)
       segments = [

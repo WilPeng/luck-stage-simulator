@@ -35,6 +35,25 @@ const BB_ENDGAME_STAGES = ['final3', 'champion_vote']
 
 // ===== Twist（反转/变数）定义 =====
 const TWIST_DEFINITIONS = {
+  battle_of_block: {"id": "battle_of_block", "name": "双房主对抗", "icon": "🏟️", "description": "两名临时 HOH 各提名两人。胜出的提名组安全，提名他们的房主失去权力。另一组进入常规 POV。", "affectsStages": ["hoh_competition", "replacement_nom"], "group": 2},
+  split_house: {"id": "split_house", "name": "分屋并行", "icon": "🏘️", "description": "分成两个独立小组，各自进行 HOH、提名、POV 和淘汰投票。两组结算后合屋。", "affectsStages": ["hoh_competition", "eviction"], "group": 2},
+
+  voluntary_nominee: {"id": "voluntary_nominee", "name": "提前挂牌", "icon": "🏷️", "description": "房客可在提名前公开自荐。HOH 选择一名报名者占提名席，并给其一次快速算术 POV 免冷却重试机会。", "affectsStages": ["nomination", "veto_competition"], "group": 2},
+  nomination_appeal: {"id": "nomination_appeal", "name": "提名申诉", "icon": "⚖️", "description": "首位申诉的被提名者与 HOH 短赛。申诉者获胜时，快速算术 POV 首次答错可立即重试。", "affectsStages": ["nomination", "veto_competition"], "group": 2},
+
+  round_rewind: {"id": "round_rewind", "name": "整轮回卷", "icon": "⏮️", "description": "投票开启前执行一次回卷。第一轮 HOH、提名和 POV 结果归档，重新争夺房主。", "affectsStages": ["eviction_vote", "hoh_competition"], "group": 2},
+  battle_back: {"id": "battle_back", "name": "复活赛", "icon": "🎟️", "description": "本轮 HOH 竞争前确认复活赛结果。一名已淘汰房客回归并恢复参赛资格。", "affectsStages": ["hoh_competition"], "group": 2},
+  costly_return: {"id": "costly_return", "name": "代价复活", "icon": "🔓", "description": "陪审团开始前，一名淘汰者回归。回归当轮不可担任 HOH，保留提名和 POV 资格。", "affectsStages": ["hoh_competition"], "group": 2},
+
+  coup_detat: {"id": "coup_detat", "name": "政变权", "icon": "⚡", "description": "管理员公布权力归属后，持有者可在投票开始前撤换一至两名最终提名者。", "affectsStages": ["nomination", "eviction_vote"], "group": 2},
+  tie_recall: {"id": "tie_recall", "name": "并列召回", "icon": "🔁", "description": "三名最终提名者投淘汰票。最高票平票时，HOH 保下一名并列者，其余两人重投一次。", "affectsStages": ["nomination", "eviction_vote", "eviction"], "group": 2},
+
+  safety_suite: {"id": "safety_suite", "name": "安全挑战", "icon": "🛡️", "description": "HOH 产生后、正式提名前举行安全挑战。经确认的胜者本轮不能被提名。", "affectsStages": ["nomination", "replacement_nom"], "group": 2},
+  sealed_replacement: {"id": "sealed_replacement", "name": "预埋补位", "icon": "🔐", "description": "HOH 在提名前秘密锁定两位有顺序的候补。POV 救人后按顺序采用首位合资格者。", "affectsStages": ["nomination", "replacement_nom"], "group": 2},
+  veto_trustee: {"id": "veto_trustee", "name": "护符托管", "icon": "🤝", "description": "POV 胜者可在决定前，把使用或放弃的决定权公开交给一位未被提名的选手。", "affectsStages": ["veto_ceremony"], "group": 2},
+  rescue_contract: {"id": "rescue_contract", "name": "救援合约", "icon": "📜", "description": "提名前两人互相确认合约。若一人赢得 POV 并救下搭档，持有者获下轮 POV 参赛席位。", "affectsStages": ["nomination", "veto_competition", "veto_ceremony"], "group": 2},
+  save_vote: {"id": "save_vote", "name": "三人保留票", "icon": "🗳️", "description": "三名最终提名者参加投票。房客投票保留一人，其余两人淘汰。", "affectsStages": ["nomination", "eviction_vote", "eviction"], "group": 2},
+
   no_pendant_challenge: {
     id: 'no_pendant_challenge',
     name: '无护符挑战',
@@ -148,9 +167,8 @@ const getTwistDefsForRound = (round, twistConfigs, roundConfigs) => {
 // 未来复活 twist：淘汰 0 人（预留扩展点）
 // 默认：淘汰 1 人
 const getEvictCountForRound = (round, twistConfigs, roundConfigs) => {
-  if (hasTwist(round, 'triple_offering', twistConfigs, roundConfigs)) return 2
-  // 未来复活 twist 预留
-  // if (hasTwist(round, 'resurrection', twistConfigs, roundConfigs)) return 0
+  if (['triple_offering', 'save_vote', 'split_house'].some(id => hasTwist(round, id, twistConfigs, roundConfigs))) return 2
+  if (['battle_back', 'costly_return'].some(id => hasTwist(round, id, twistConfigs, roundConfigs))) return 0
   return 1
 }
 

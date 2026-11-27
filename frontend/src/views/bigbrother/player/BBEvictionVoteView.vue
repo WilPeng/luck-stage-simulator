@@ -96,7 +96,7 @@
       </div>
 
       <div v-if="nomination && !hasVoted && !isNominee && seasonStore.currentStage === 'eviction_vote' && campaignData.voteStarted" class="vote-section">
-        <h3>选择你要淘汰的对象</h3>
+        <h3>{{ nomination?.ballotMode === 'save' ? '选择你要保留的对象' : '选择你要淘汰的对象' }}</h3>
         <div class="vote-options">
           <div v-for="(name, i) in voteOptions" :key="i" class="vote-option"
             :class="{ selected: selectedVote === voteOptionIds[i] }"

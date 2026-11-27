@@ -222,7 +222,7 @@ const isDirectDemocracy = computed(() =>
 
 // 三重献祭
 const isTripleOffering = computed(() =>
-  hasTwist('triple_offering', (nomination.value as any)?.isTripleOffering || twistInfo.value?.isTripleOffering)
+  hasTwist('tie_recall', false) || hasTwist('save_vote', false) || hasTwist('triple_offering', (nomination.value as any)?.isTripleOffering || twistInfo.value?.isTripleOffering)
 )
 
 // BBBB：本轮提名 3 人
@@ -259,7 +259,7 @@ async function fetchData() {
     const tw = roundConfigs.value.find(c => c.round === roundNum.value)?.twists || []
     twistInfo.value = {
       isDirectDemocracy: tw.includes('direct_democracy'),
-      isTripleOffering: tw.includes('triple_offering'),
+      isTripleOffering: tw.includes('triple_offering') || tw.includes('save_vote') || tw.includes('tie_recall'),
       isBbbb: tw.includes('bbbb'),
       isSecretKeeper: tw.includes('secret_keeper')
     }

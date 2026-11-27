@@ -502,6 +502,7 @@ export async function bbVetoCardDraw(): Promise<any> {
 
 export async function bbRunVetoCompetition(minigameResult?: {
   winnerId: string; winnerName: string; minigameId: string; scores?: Record<string, number>
+  roomId?: string
 }): Promise<BBVetoRecord> {
   return doRequest<BBVetoRecord>('/veto/competition', {
     method: 'POST',

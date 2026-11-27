@@ -118,7 +118,7 @@ const isDirectDemocracy = computed(() => {
 // 三重献祭：检查当前轮次的 twist 配置
 const isTripleOffering = computed(() => {
   const cfg = roundConfigs.value.find(c => c.round === roundNum.value)
-  return cfg?.twists?.includes('triple_offering') || false
+  return cfg?.twists?.some(id => id === 'triple_offering' || id === 'save_vote' || id === 'tie_recall') || false
 })
 
 // BBBB：本轮提名 3 人

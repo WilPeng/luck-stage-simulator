@@ -515,7 +515,7 @@
                 </thead>
                 <tbody>
                   <tr v-for="q in meta.questions" :key="q.id">
-                    <td class="mq-text">{{ q.text }}</td>
+                    <td class="mq-text" v-html="sanitizeRichText(q.text)"></td>
                     <td class="mq-ans">{{ q.correctAnswer || '（管理员评判）' }}</td>
                     <td v-for="p in detail.participants" :key="p.playerId" class="mc" :class="customCellClass(p.playerId, q.id)">
                       {{ customAnswer(p.playerId, q.id) ?? '-' }}
@@ -531,7 +531,7 @@
                 <thead><tr><th>题目</th><th>正确答案</th><th>占领者</th></tr></thead>
                 <tbody>
                   <tr v-for="q in meta.questions" :key="q.id">
-                    <td class="mq-text">{{ q.text }}</td>
+                    <td class="mq-text" v-html="sanitizeRichText(q.text)"></td>
                     <td class="mq-ans">{{ q.correctAnswer }}</td>
                     <td>{{ meta.questionWinners?.[q.id]?.playerName || '无人' }}</td>
                   </tr>
@@ -597,6 +597,7 @@
 </template>
 
 <script setup lang="ts">
+import { sanitizeRichText } from '../../../utils/richText'
 import { ref, computed, onMounted } from 'vue'
 import { bbGetMinigameReplays, bbGetMinigameReplay, bbDeleteMinigameReplay, bbBatchDeleteMinigameReplays } from '../../../services/bbApi'
 import SkillContestReplay from '../../../components/bigbrother/minigames/SkillContestReplay.vue'

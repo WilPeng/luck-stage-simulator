@@ -38,7 +38,7 @@
         <details><summary>查看猜测与答案</summary><p>答案 · {{ node.answer }}</p><div class="seats"><article v-for="p in participants" :key="p.playerId"><small>{{ p.playerName }}</small><b>{{ record(p.playerId)?.value ?? '未作答' }}</b><span v-if="record(p.playerId)?.clueCount">第 {{ record(p.playerId).clueCount }} 条线索时提交</span></article></div></details>
       </template>
       <template v-else>
-        <h4>{{ question.text || '无文字题面' }}</h4>
+        <div class="question-text" v-html="sanitizeRichText(question.text) || '无文字题面'"></div>
         <MediaPlayer v-if="question.media?.url" :key="question.id" :media="{ ...question.media, playMode:'free' }" />
         <div class="tiles"><span v-for="option in question.options || []" :key="String(option)">{{ option }}</span></div>
         <details><summary>查看提交与判定</summary>
@@ -53,6 +53,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import MediaPlayer from './MediaPlayer.vue'
+import { sanitizeRichText } from '../../../utils/richText'
 const props = defineProps<{meta:any;participants:any[]}>()
 const titles:Record<string,string>={'german-heart':'抢铃牌桌','stay-or-fold':'估算现场','number-divination':'数字出牌台','catch-mistress':'地点搜索','otev':'抢座顺序','describe-guess':'描述线索','power-challenge':'题目争夺','custom':'比赛题面','custom-mode':'回合题面'}
 const type=computed(()=>props.meta.type)
@@ -73,7 +74,8 @@ function submitted(id:string){
 <style scoped>
 .stage {background:linear-gradient(135deg,#24213d,#14192d);border:1px solid #584d76;border-radius:14px;padding:clamp(14px,3vw,26px);color:#e5e1ef}
 header,.tiles,.seats,.trail {display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-header {justify-content:space-between}h3 {margin:0;font-size:16px;color:#e9d59e}h4 {font-size:clamp(20px,3vw,30px);line-height:1.45;margin:16px 0}
+header {justify-content:space-between}h3 {margin:0;font-size:16px;color:#e9d59e}h4,.question-text {font-size:clamp(20px,3vw,30px);line-height:1.45;margin:16px 0}
+.question-text {font-weight:700;white-space:pre-line;overflow-wrap:anywhere}
 select,button {background:#302944;color:#ede8ff;border:1px solid #716388;border-radius:6px;padding:7px;cursor:pointer}
 .trail>span {padding:7px;background:#242237;border-radius:5px}.trail>.searched {color:#b0d6d1}.trail>.focus {outline:2px solid #e6c988}
 .tiles,.seats,.trail,.emoji {margin:18px 0}.tiles>b,.tiles>span,.tiles>article {background:#f4eee1;color:#262239;border-radius:7px;padding:9px 13px;font-size:20px}

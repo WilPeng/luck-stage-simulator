@@ -4,6 +4,7 @@ const mongoose = require('mongoose')
 const COLLECTIONS = [
   'BBHouseguest',     // 房客/管理员
   'BBSeason',         // 赛季
+  'BBRoundTwist',     // 每轮追加赛制状态
   'BBRound',          // 轮次
   'BBHohRecord',      // HOH 记录
   'BBNomination',     // 提名

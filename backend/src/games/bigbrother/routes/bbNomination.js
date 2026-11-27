@@ -1,3 +1,4 @@
+const { enabled, loadRoundTwist, checkNominationChoices, replacementChoice } = require('../roundTwists')
 const express = require('express')
 const router = express.Router()
 const BBNomination = require('../models/BBNomination')
@@ -54,7 +55,8 @@ router.get('/current', async (req, res) => {
           updatedAt: doc.updatedAt || '',
           // twist 信息
           isDirectDemocracy: hasTwist(season.currentRound, 'direct_democracy', season.twistConfigs, roundConfigs),
-          isTripleOffering: hasTwist(season.currentRound, 'triple_offering', season.twistConfigs, roundConfigs),
+          ballotMode: enabled(season, 'save_vote') ? 'save' : 'evict',
+          isTripleOffering: enabled(season, 'save_vote') || enabled(season, 'tie_recall') || hasTwist(season.currentRound, 'triple_offering', season.twistConfigs, roundConfigs),
           isBbbb: hasTwist(season.currentRound, 'bbbb', season.twistConfigs, roundConfigs),
           isSecretKeeper
         }
@@ -65,7 +67,8 @@ router.get('/current', async (req, res) => {
         data: null,
         twists: {
           isDirectDemocracy: hasTwist(season.currentRound, 'direct_democracy', season.twistConfigs, roundConfigs),
-          isTripleOffering: hasTwist(season.currentRound, 'triple_offering', season.twistConfigs, roundConfigs),
+          ballotMode: enabled(season, 'save_vote') ? 'save' : 'evict',
+          isTripleOffering: enabled(season, 'save_vote') || enabled(season, 'tie_recall') || hasTwist(season.currentRound, 'triple_offering', season.twistConfigs, roundConfigs),
           isBbbb: hasTwist(season.currentRound, 'bbbb', season.twistConfigs, roundConfigs),
           isSecretKeeper
         }
@@ -78,12 +81,13 @@ router.get('/current', async (req, res) => {
 })
 
 // POST /set - 设置提名（仅在 nomination 阶段可操作）
-router.post('/set', async (req, res) => {
+router.post('/set', auth, async (req, res) => {
   try {
     const { nomineeIds, nomineeNames } = req.body
     const season = await getCurrentSeason()
     const twistConfigs = season.twistConfigs || []
     const roundConfigs = season.roundConfigs || []
+    if (req.user.role !== 'admin') return res.status(403).json({ success: false, error: '只有管理员可以手动设置提名' })
     const curRound = season.currentRound
 
     // Twist #6 直接民主：提名不由 HOH 设置，管理员不能直接设置
@@ -94,8 +98,8 @@ router.post('/set', async (req, res) => {
     // Twist #38 三重献祭 / BBBB：允许 2-3 人
     const isTriple = hasTwist(curRound, 'triple_offering', twistConfigs, roundConfigs)
     const isBbbb = hasTwist(curRound, 'bbbb', twistConfigs, roundConfigs)
-    const minNominees = 2
-    const maxNominees = (isTriple || isBbbb) ? 3 : 2
+    const minNominees = enabled(season, 'save_vote') || enabled(season, 'tie_recall') ? 3 : 2
+    const maxNominees = (isTriple || isBbbb || minNominees === 3) ? 3 : 2
 
     if (!nomineeIds || !nomineeNames || nomineeIds.length < minNominees || nomineeIds.length > maxNominees) {
       return res.status(400).json({ success: false, error: `请选择 ${minNominees}~${maxNominees} 位被提名人`, code: 'INVALID_NOMINEES' })
@@ -104,6 +108,8 @@ router.post('/set', async (req, res) => {
       return res.status(400).json({ success: false, error: '当前不是提名阶段，无法操作', code: 'WRONG_STAGE' })
     }
     const roundId = `round-${season.currentRound}`
+    const twistError = await checkNominationChoices(season, nomineeIds)
+    if (twistError) return res.status(400).json({ success: false, error: twistError })
     await BBNomination.deleteMany({ gameId: 'bigbrother', roundId })
     // 查找当前 HOH
     const { getCollection } = require('../../../config/db')
@@ -146,9 +152,9 @@ router.post('/set', async (req, res) => {
 })
 
 // POST /replace - 替换提名（否决权使用后，替换人选正式加入提名名单恢复2人，仅在 replacement_nom 阶段可操作）
-router.post('/replace', async (req, res) => {
+router.post('/replace', auth, async (req, res) => {
   try {
-    const { playerId, playerName } = req.body
+    const { playerId } = req.body
     if (!playerId) return res.status(400).json({ success: false, error: '替换房客ID不能为空', code: 'INVALID_ID' })
     const season = await getCurrentSeason()
     if (season.currentStage !== 'replacement_nom') {
@@ -158,8 +164,31 @@ router.post('/replace', async (req, res) => {
     const { getCollection } = require('../../../config/db')
     const col = getCollection('BBNomination')
     const existing = await col.findOne({ gameId: 'bigbrother', roundId })
+    if (req.user.role !== 'admin' && req.user.userId !== existing?.hohId) {
+      return res.status(403).json({ success: false, error: '只有本轮房主或管理员可以补提名' })
+    }
+    const participant = await getCollection('BBHouseguest').findOne({ gameId: 'bigbrother', id: playerId, status: 'active', role: 'houseguest' })
+    if (!participant || (existing?.nomineeIds || []).includes(playerId) && existing.replacementNomineeId !== playerId) {
+      return res.status(400).json({ success: false, error: '请选择尚未被提名的在场房客' })
+    }
     // 校验：替补提名不能是 HOH / POV 获得者 / POV 刚救过的人
     const vetoRec = await getCollection('BBVetoRecord').findOne({ gameId: 'bigbrother', roundId })
+    if (!existing) return res.status(404).json({ success: false, error: '未找到本轮提名' })
+    if (enabled(season, 'battle_of_block')) {
+      const { branch } = await loadRoundTwist(season)
+      if (branch?.nominations?.[branch.safeHoh]?.includes(playerId)) {
+        return res.status(400).json({ success: false, error: '对抗胜出的提名组本轮安全' })
+      }
+    }
+    if (enabled(season, 'safety_suite') && (await loadRoundTwist(season)).safePlayerId === playerId) {
+      return res.status(400).json({ success: false, error: '安全挑战胜者本轮免提名' })
+    }
+    if (enabled(season, 'sealed_replacement')) {
+      const candidate = await replacementChoice(season, existing, vetoRec)
+      if ((existing.replacementNomineeId && existing.replacementNomineeId !== playerId) || (candidate && candidate.id !== playerId)) {
+        return res.status(400).json({ success: false, error: '本轮须采用锁定的候补' })
+      }
+    }
     if (existing && existing.hohId && playerId === existing.hohId) {
       return res.status(400).json({ success: false, error: 'HOH 不能被提名', code: 'HOH_NOT_ALLOWED' })
     }
@@ -169,6 +198,7 @@ router.post('/replace', async (req, res) => {
     if (vetoRec && vetoRec.usedOnPlayerId && playerId === vetoRec.usedOnPlayerId) {
       return res.status(400).json({ success: false, error: 'POV 刚拯救的玩家不能作为替补提名', code: 'SAVED_NOT_ALLOWED' })
     }
+    const playerName = participant.name
     if (existing) {
       // 如果已有替换人选，先移除旧的替换人选
       if (existing.replacementNomineeId) {
@@ -185,7 +215,7 @@ router.post('/replace', async (req, res) => {
         {
           $push: {
             nomineeIds: playerId,
-            nomineeNames: playerName
+            nomineeNames: participant.name
           },
           $set: {
             replacementNomineeId: playerId,
@@ -436,6 +466,8 @@ router.post('/key-setup', auth, async (req, res) => {
     if (!Array.isArray(nominees) || nominees.length < 2 || nominees.length > 3) {
       return res.status(400).json({ success: false, error: '被提名者应为 2-3 人', code: 'INVALID_NOMINEES' })
     }
+    const twistError = await checkNominationChoices(season, nominees)
+    if (twistError) return res.status(400).json({ success: false, error: twistError })
     const eligibleIds = new Set(eligible.map(g => g.id))
     const nomineeSet = new Set(nominees)
     if (nominees.some(id => !eligibleIds.has(id))) {

@@ -1,3 +1,4 @@
+const { enabled, loadRoundTwist, incompatibleTwists, replacementChoice } = require('../roundTwists')
 const express = require('express')
 const router = express.Router()
 const { auth, requireAdmin } = require('../../../middleware/auth')
@@ -95,11 +96,13 @@ router.get('/progress', auth, async (req, res) => {
     const lastNormalRound = season.final3Round ? (season.final3Round - 1) : season.totalRounds
     for (let r = 1; r <= lastNormalRound; r++) {
       for (const st of BB_STAGE_ORDER) {
+        if (enabled(season, 'split_house', r) && !['hoh_competition','eviction'].includes(st)) continue
+        if (enabled(season, 'battle_of_block', r) && st === 'nomination') continue
         if (st === 'bbbb' && !hasTwist(r, 'bbbb', season.twistConfigs, season.roundConfigs)) continue
         matrix.push({
           round: r,
           stage: st,
-          stageName: BB_STAGE_NAME[st],
+          stageName: st === 'hoh_competition' && enabled(season, 'split_house', r) ? '分屋并行' : st === 'hoh_competition' && enabled(season, 'battle_of_block', r) ? '双房主对抗' : BB_STAGE_NAME[st],
           status: getStageStatus(r, st, season.currentRound, season.currentStage)
         })
       }
@@ -145,12 +148,14 @@ router.get('/menu', auth, async (req, res) => {
     for (let r = 1; r <= lastNormalRound; r++) {
       for (const st of BB_STAGE_ORDER) {
         // BBBB 仅在本轮启用该 twist 时出现
+        if (enabled(season, 'split_house', r) && !['hoh_competition','eviction'].includes(st)) continue
+        if (enabled(season, 'battle_of_block', r) && st === 'nomination') continue
         if (st === 'bbbb' && !hasTwist(r, 'bbbb', season.twistConfigs, season.roundConfigs)) continue
         const status = getStageStatus(r, st, season.currentRound, season.currentStage)
         menu.push({
           round: r,
           stage: st,
-          stageName: BB_STAGE_NAME[st],
+          stageName: st === 'hoh_competition' && enabled(season, 'split_house', r) ? '分屋并行' : st === 'hoh_competition' && enabled(season, 'battle_of_block', r) ? '双房主对抗' : BB_STAGE_NAME[st],
           status,
           clickable: status !== 'future',
           editable: status === 'current'
@@ -250,6 +255,17 @@ router.post('/next', auth, requireAdmin, async (req, res) => {
     const twistConfigs = season.twistConfigs || []
     const roundConfigs = season.roundConfigs || []
     const curRound = season.currentRound
+    if (season.currentStage === 'hoh_competition' && ['battle_back','costly_return'].some(id => enabled(season,id))
+      && !(await loadRoundTwist(season)).revivedId) {
+      return res.status(409).json({ success: false, error: '请先确认复活赛结果' })
+    }
+    if (season.currentStage === 'eviction_vote' && enabled(season, 'round_rewind') && !(await loadRoundTwist(season)).rewoundAt) {
+      return res.status(409).json({ success: false, error: '请先执行整轮回卷' })
+    }
+    const { branches, branchSettled } = require('../branchTwists')
+    if (branches(season) && !(await branchSettled(season))) {
+      return res.status(409).json({ success: false, error: '请先完成本轮专属赛制' })
+    }
     let targetStage = getNextStage(season.currentStage)
 
     // Twist #22 无护符挑战：跳过 veto_competition
@@ -274,6 +290,36 @@ router.post('/next', auth, requireAdmin, async (req, res) => {
         // 否决权未被使用 → 跳过替换提名；若启用 BBBB 则先进入 BBBB
         targetStage = hasBbbb ? 'bbbb' : 'eviction_vote'
       }
+    }
+
+    if (season.currentStage === 'nomination' && enabled(season, 'nomination_appeal')) {
+      const { appeal } = await loadRoundTwist(season)
+      if (appeal && appeal.status !== 'resolved') return res.status(409).json({ success: false, error: '请先结算申诉短赛' })
+    }
+    if (season.currentStage === 'nomination' && ['safety_suite', 'sealed_replacement', 'save_vote', 'tie_recall'].some(id => enabled(season, id))) {
+      const nomination = await getCollection('BBNomination').findOne({ gameId: 'bigbrother', roundId: `round-${curRound}` })
+      if (!nomination || (nomination.keyCeremony?.prepared && !nomination.keyCeremony?.ended)) {
+        return res.status(409).json({ success: false, error: '请先完成本轮提名' })
+      }
+    }
+    if (season.currentStage === 'replacement_nom' && enabled(season, 'sealed_replacement')) {
+      const filter = { gameId: 'bigbrother', roundId: `round-${curRound}` }
+      const nominations = getCollection('BBNomination')
+      const nomination = await nominations.findOne(filter)
+      if (nomination && !nomination.replacementNomineeId) {
+        const veto = await getCollection('BBVetoRecord').findOne(filter)
+        const next = await replacementChoice(season, nomination, veto)
+        if (!next) return res.status(409).json({ success: false, error: '两名候补均不可用，请先按普通规则补提名' })
+        await nominations.updateOne(filter, {
+          $push: { nomineeIds: next.id, nomineeNames: next.name },
+          $set: { replacementNomineeId: next.id, replacementNomineeName: next.name }
+        })
+      }
+    }
+
+    if (season.currentStage === 'eviction_vote' && ['tie_recall', 'save_vote'].some(id => enabled(season, id))
+      && (!season.evictionNight || season.evictionNight.round !== curRound)) {
+      return res.status(409).json({ success: false, error: '请先完成本轮投票结算' })
     }
 
     // BBBB：未启用该 twist 的轮次跳过 bbbb 阶段
@@ -369,6 +415,7 @@ router.post('/reset', auth, requireAdmin, async (req, res) => {
     }
     // 清除毒蛇标记集合
     const { getCollection } = require('../../../config/db')
+    await getCollection('BBRoundTwist').deleteMany({ gameId: 'bigbrother' })
     const serpentCol = getCollection('BBSerpentMark')
     await serpentCol.deleteMany({ gameId: 'bigbrother' })
     await getCollection('BBSleepRecord').deleteMany({ gameId: 'bigbrother' })
@@ -548,6 +595,43 @@ router.get('/twists', auth, async (req, res) => {
 })
 
 // PUT /twists - 保存 twist 配置（赛季开始前设置，兼容旧接口）
+function planRounds(configs, rosterSize, juryBoundary) {
+  const byRound = new Map(configs.map(cfg => [cfg.round, cfg]))
+  const minimum = { split_house: 10, battle_of_block: 6, save_vote: 5, tie_recall: 5, sealed_replacement: 5 }
+  let active = rosterSize
+  let round = 1
+  while (active > 3) {
+    const ids = byRound.get(round)?.twists || []
+    for (const id of ids) {
+      const needed = id === 'sealed_replacement' && ids.includes('safety_suite') ? 6 : minimum[id]
+      if (needed && active < needed) return { error: `第${round}周的「${TWIST_DEFINITIONS[id].name}」至少需要 ${needed} 名在场房客` }
+    }
+    if (ids.includes('costly_return') && active < juryBoundary) {
+      return { error: `第${round}周已到陪审团阶段，请把代价复活安排在更早的轮次` }
+    }
+    active -= getEvictCountForRound(round, [], configs)
+    round++
+  }
+  const late = configs.find(cfg => cfg.round >= round && cfg.twists?.some(id => TWIST_DEFINITIONS[id]?.group === 2))
+  if (late) return { error: `第${late.round}周已到终局，请把变数安排在普通轮次` }
+  return { final3Round: round, championRound: round + 1 }
+}
+
+async function applyTwistSchedule(season) {
+  const { getCollection } = require('../../../config/db')
+  const count = await getCollection('BBHouseguest').countDocuments({ gameId: 'bigbrother', role: 'houseguest', status: { $ne: 'walked' } })
+  if (count < 3) return null
+  const plan = planRounds(season.roundConfigs, count, season.jurySize + season.finalSize)
+  if (plan.error) return plan.error
+  if (plan.final3Round <= season.currentRound && !BB_ENDGAME_STAGES.includes(season.currentStage)) {
+    return '新排期不能跳过当前轮次'
+  }
+  season.final3Round = plan.final3Round
+  season.championRound = plan.championRound
+  season.totalRounds = plan.championRound
+  return null
+}
+
 router.put('/twists', auth, requireAdmin, async (req, res) => {
   try {
     const season = await ensureSeason()
@@ -556,7 +640,7 @@ router.put('/twists', auth, requireAdmin, async (req, res) => {
       return res.status(400).json({ success: false, error: 'twistConfigs 必须为数组', code: 'INVALID_TWIST_CONFIGS' })
     }
     for (const cfg of twistConfigs) {
-      if (typeof cfg.round !== 'number' || cfg.round < 1) {
+      if (!Number.isInteger(cfg.round) || cfg.round < 1) {
         return res.status(400).json({ success: false, error: `round 必须为 >= 1 的整数`, code: 'INVALID_ROUND' })
       }
       if (!Array.isArray(cfg.twists)) {
@@ -567,6 +651,13 @@ router.put('/twists', auth, requireAdmin, async (req, res) => {
           return res.status(400).json({ success: false, error: `未知的 twist: ${tid}`, code: 'UNKNOWN_TWIST' })
         }
       }
+    }
+    for (const cfg of twistConfigs) {
+      if (cfg.round === 1 && (cfg.twists || []).some(id => ['battle_back','costly_return'].includes(id))) {
+        return res.status(400).json({ success: false, error: '首轮没有已淘汰者，不能安排复活赛' })
+      }
+      const pair = incompatibleTwists(cfg.twists || [])
+      if (pair) return res.status(400).json({ success: false, error: `第${cfg.round}周的 ${pair.map(id => TWIST_DEFINITIONS[id].name).join(' 和 ')} 不能同时开启` })
     }
     // 同步到 roundConfigs
     if (Array.isArray(season.roundConfigs)) {
@@ -580,6 +671,8 @@ router.put('/twists', auth, requireAdmin, async (req, res) => {
       }
     }
     season.twistConfigs = twistConfigs
+    const planError = await applyTwistSchedule(season)
+    if (planError) return res.status(400).json({ success: false, error: planError })
     season.updatedAt = new Date().toISOString()
     await season.save()
     await logAction(req.user.userId, req.user.name || 'admin', 'admin',
@@ -658,8 +751,11 @@ router.put('/config', auth, requireAdmin, async (req, res) => {
       return res.status(400).json({ success: false, error: 'roundConfigs 必须为数组', code: 'INVALID_CONFIG' })
     }
     // 验证
+    if (new Set(roundConfigs.map(cfg => cfg?.round)).size !== roundConfigs.length || roundConfigs.some(cfg => !cfg || (cfg.twists != null && !Array.isArray(cfg.twists)))) {
+      return res.status(400).json({ success: false, error: '轮次不能重复，变数须为数组' })
+    }
     for (const cfg of roundConfigs) {
-      if (typeof cfg.round !== 'number' || cfg.round < 1) {
+      if (!Number.isInteger(cfg.round) || cfg.round < 1) {
         return res.status(400).json({ success: false, error: `round 必须为 >= 1 的整数`, code: 'INVALID_ROUND' })
       }
       if (cfg.twists && Array.isArray(cfg.twists)) {
@@ -671,6 +767,13 @@ router.put('/config', auth, requireAdmin, async (req, res) => {
       }
     }
 
+    for (const cfg of roundConfigs) {
+      if (cfg.round === 1 && (cfg.twists || []).some(id => ['battle_back','costly_return'].includes(id))) {
+        return res.status(400).json({ success: false, error: '首轮没有已淘汰者，不能安排复活赛' })
+      }
+      const pair = incompatibleTwists(cfg.twists || [])
+      if (pair) return res.status(400).json({ success: false, error: `第${cfg.round}周的 ${pair.map(id => TWIST_DEFINITIONS[id].name).join(' 和 ')} 不能同时开启` })
+    }
     season.roundConfigs = roundConfigs.map(cfg => ({
       round: cfg.round,
       twists: cfg.twists || [],
@@ -690,38 +793,8 @@ router.put('/config', auth, requireAdmin, async (req, res) => {
       season.finalSize = finalSize
     }
 
-    // ===== 自动计算赛季总周数（普通淘汰轮 + F3 终局轮 + 冠军投票轮） =====
-    // 普通轮 = 使存活人数降到 3 所需的淘汰轮；之后固定追加 F3(1周) 与冠军投票(1周)
-    try {
-      const { getCollection } = require('../../../config/db')
-      const hgCol = getCollection('BBHouseguest')
-      const hgTotal = await hgCol.countDocuments({ gameId: 'bigbrother', role: 'houseguest' })
-      const walkedCount = await hgCol.countDocuments({ gameId: 'bigbrother', role: 'houseguest', status: 'walked' })
-      // 退赛相当于提前少一名选手：规划时按「总人数 - 已退赛人数」计算需要的普通轮
-      const totalPlayers = Math.max(hgTotal - walkedCount, 1) || 13
-      let alive = totalPlayers
-      let lastNormalRound = 0
-      const sortedRounds = [...roundConfigs].sort((a, b) => a.round - b.round)
-      for (const cfg of sortedRounds) {
-        const ec = getEvictCountForRound(cfg.round, season.twistConfigs, season.roundConfigs)
-        alive -= ec
-        lastNormalRound = cfg.round
-        if (alive <= 3) break
-      }
-      // 若存活还>3（配置轮数不够），补足普通轮
-      while (alive > 3) {
-        lastNormalRound++
-        alive -= 1
-      }
-      const final3Round = lastNormalRound + 1
-      const championRound = lastNormalRound + 2
-      season.final3Round = final3Round
-      season.championRound = championRound
-      season.totalRounds = championRound // N + 2
-      if (season.currentRound > season.totalRounds) season.currentRound = season.totalRounds
-    } catch (e) {
-      console.error('自动计算终局轮失败:', e)
-    }
+    const planError = await applyTwistSchedule(season)
+    if (planError) return res.status(400).json({ success: false, error: planError })
 
     season.updatedAt = new Date().toISOString()
     await season.save()

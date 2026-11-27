@@ -284,9 +284,8 @@ function isRoundLocked(round: number): boolean {
 // 获取指定轮次的淘汰人数（考虑 twist 影响）
 function getEvictCount(round: number): number {
   const cfg = roundConfigs.value.find(c => c.round === round)
-  if (cfg?.twists?.includes('triple_offering')) return 2
-  // 未来复活 twist 预留：返回 0 表示该轮不产生淘汰者
-  // if (cfg?.twists?.includes('resurrection')) return 0
+  if (cfg?.twists?.some(id => id === 'triple_offering' || id === 'save_vote' || id === 'split_house')) return 2
+  if (cfg?.twists?.some(id => id === 'battle_back' || id === 'costly_return')) return 0
   return 1
 }
 

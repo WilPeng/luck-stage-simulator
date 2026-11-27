@@ -57,6 +57,8 @@ async function dealVetoCards() {
     const hohId = hoh?.winnerId || null
     const nomineeIds = nom?.nomineeIds || []
     const defaultIds = new Set([hohId, ...nomineeIds].filter(Boolean))
+    const guaranteedSeat = await require('./roundTwists').earnedVetoSeat(season)
+    if (guaranteedSeat && allActive.some(player => player.id === guaranteedSeat)) defaultIds.add(guaranteedSeat)
     const needDraw = Math.max(0, 6 - defaultIds.size)
 
     let drawerOrder = []

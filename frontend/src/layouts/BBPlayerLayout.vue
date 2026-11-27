@@ -132,7 +132,9 @@
       </aside>
 
       <main class="bb-main">
-        <router-view :key="'bb-stage-' + realtime.stageTick" />
+        <RoundTwistPanel v-if="route.params.round == null || Number(route.params.round) === seasonStore.currentRoundNumber"
+          :current-round="seasonStore.currentRoundNumber" :current-stage="seasonStore.currentStage" @exclusive="exclusiveTwist = $event" />
+        <router-view v-if="!exclusiveTwist || !route.path.endsWith('/hoh') || Number(route.params.round) !== seasonStore.currentRoundNumber" :key="'bb-stage-' + realtime.stageTick" />
       </main>
     </div>
 
@@ -144,6 +146,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useBbAuthStore } from '../stores/bbAuthStore'
+import RoundTwistPanel from '../components/bigbrother/RoundTwistPanel.vue'
 import { useBbSeasonStore } from '../stores/bbSeasonStore'
 import { useBbRealtimeStore } from '../stores/bbRealtimeStore'
 import { useHouseSocket } from '../composables/useHouseSocket'
@@ -156,6 +159,7 @@ import { bindAudioUnlock, playNotificationSound, refreshNotificationPermission, 
 
 const router = useRouter()
 const route = useRoute()
+const exclusiveTwist = ref(false)
 const authStore = useBbAuthStore()
 const seasonStore = useBbSeasonStore()
 

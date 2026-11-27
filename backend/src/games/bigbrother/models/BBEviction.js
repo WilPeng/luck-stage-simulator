@@ -5,6 +5,11 @@ class BBEviction extends BaseModel {
     super('BBEviction')
     this.id = data?.id || null
     this.roundId = data?.roundId || null
+    this.roundIndex = data?.roundIndex ?? null
+    if (data?.reinstatedAt) {
+      this.reinstatedAt = data.reinstatedAt
+      this.reinstatedRound = data.reinstatedRound
+    }
     this.evictedId = data?.evictedId || null
     this.evictedName = data?.evictedName || ''
     this.voteCount = data?.voteCount || 0

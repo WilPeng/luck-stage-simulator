@@ -33,12 +33,13 @@ registerGame({
   playerCount: { min: 2, max: 20 },
   duration: 120,
 
-  init(participants) {
+  init(participants, pool, options = {}) {
     // 所有选手使用完全相同的题目
     const sharedQuestions = generateQuestions()
     const playerStates = {}
     participants.forEach(p => {
       playerStates[p.playerId] = {
+        retryAvailable: p.playerId === options.vetoRetryPlayerId,
         questions: sharedQuestions.map(q => ({ ...q })),
         currentIndex: 0,
         answers: [],         // 用户答案记录
@@ -67,7 +68,7 @@ registerGame({
       if (isNaN(userAnswer)) return { updated: false }
 
       const correct = userAnswer === q.answer
-      ps.answers.push({ question: q.expression, userAnswer, correctAnswer: q.answer, correct })
+      ps.answers.push({ question: q.expression, userAnswer, correctAnswer: q.answer, correct, retryUsed: !correct && ps.retryAvailable })
 
       if (correct) {
         ps.cooldownUntil = 0
@@ -81,6 +82,9 @@ registerGame({
             return { updated: true, finished: true, winner: this.computeWinner(state), result: { correct } }
           }
         }
+      } else if (ps.retryAvailable) {
+        ps.retryAvailable = false
+        return { updated: true, finished: false, result: { correct, retryUsed: true, cooldownUntil: 0 } }
       } else {
         // 答错：3 秒内不可作答
         ps.cooldownUntil = now + 3000
@@ -113,6 +117,7 @@ registerGame({
     return {
       currentQuestion: ps.currentIndex < TOTAL_QUESTIONS ? ps.questions[ps.currentIndex].expression : null,
       currentIndex: ps.currentIndex,
+      retryAvailable: ps.retryAvailable,
       totalQuestions: TOTAL_QUESTIONS,
       startTime: ps.startTime,
       finishTime: ps.finishTime,

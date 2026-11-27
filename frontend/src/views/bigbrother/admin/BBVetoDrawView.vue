@@ -582,6 +582,7 @@ async function persistRoomWinner(winner: { playerId: string; playerName: string 
       winnerId: winner.playerId,
       winnerName: winner.playerName,
       minigameId: activeRoom.value.minigameId,
+      roomId: activeRoom.value.roomId,
       scores: {}
     })
     veto.value = rec as any
@@ -614,6 +615,7 @@ async function confirmManualWinner() {
         winnerId: res.winner!.playerId,
         winnerName,
         minigameId: activeRoom.value.minigameId,
+      roomId: activeRoom.value.roomId,
         scores: {}
       })
       veto.value = rec as any
