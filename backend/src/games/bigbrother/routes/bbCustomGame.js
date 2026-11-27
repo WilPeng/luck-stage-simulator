@@ -4,10 +4,13 @@
  */
 const express = require('express')
 const router = express.Router()
+const { auth, requireAdmin } = require('../../../middleware/auth')
 const BBCustomGame = require('../models/BBCustomGame')
 const BBGameLibrary = require('../models/BBGameLibrary')
 const { getCurrentSeason } = require('../helpers')
 const { clearCustomGameCache } = require('../minigames/customGame')
+
+router.use(auth, requireAdmin)
 
 const ALLOWED_TYPES = ['quiz', 'score', 'elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb', 'lives-build', 'race-score']
 const MODE_TYPES = ['elim-last', 'first-pick', 'duel', 'survive-tb', 'score-tb', 'lives-build', 'race-score']

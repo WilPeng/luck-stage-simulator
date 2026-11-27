@@ -3,14 +3,14 @@
     <div class="page-header">
       <h1>💬 房间聊天记录</h1>
       <div class="filters">
-        <input v-model="keyword" class="bb-input" placeholder="搜索内容 / 发送者…" />
-        <select v-model="roomFilter" class="bb-select" @change="onRoomFilterChange">
+        <input v-model="keyword" class="bb-input" aria-label="搜索内容或发送者" placeholder="搜索内容 / 发送者…" />
+        <select v-model="roomFilter" class="bb-select" aria-label="筛选房间" @change="onRoomFilterChange">
           <option value="">全部房间</option>
           <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
         </select>
         <button class="bb-btn" @click="loadLogs(true)">刷新</button>
         <button class="bb-btn" @click="openExport">📤 导出TXT</button>
-        <button class="bb-btn" :class="{ active: composerVisible }" @click="toggleComposer">
+        <button class="bb-btn bb-btn-primary" :aria-expanded="composerVisible" :class="{ active: composerVisible }" @click="toggleComposer">
           💬 房间发言{{ composerVisible ? ' ▲' : ' ▼' }}
         </button>
       </div>
@@ -18,22 +18,22 @@
 
     <div class="chat-layout">
       <aside class="room-list">
-        <div class="rl-item" :class="{ active: roomFilter === '' }" @click="selectRoom('')">
+        <button type="button" class="rl-item" :aria-pressed="roomFilter === ''" :class="{ active: roomFilter === '' }" @click="selectRoom('')">
           🏠 全部房间
           <span class="rl-online" title="当前在房间人数">👥 {{ totalOccupancy }}</span>
-        </div>
-        <div v-for="r in rooms" :key="r.id" class="rl-item" :class="{ active: roomFilter === r.id }" @click="selectRoom(r.id)">
+        </button>
+        <button type="button" v-for="r in rooms" :key="r.id" class="rl-item" :aria-pressed="roomFilter === r.id" :class="{ active: roomFilter === r.id }" @click="selectRoom(r.id)">
           {{ r.icon }} {{ r.name }}
           <span class="rl-online" title="当前在房间人数">👥 {{ occupancy[r.id] || 0 }}</span>
           <span class="rl-count" title="已加载消息数">💬 {{ countByRoom(r.id) }}</span>
-        </div>
+        </button>
       </aside>
 
       <section class="chat-panel">
         <div ref="scrollEl" class="chat-scroll">
-          <div v-if="hasMore" class="load-more" @click="loadMoreHistory">
+          <button type="button" v-if="hasMore" class="load-more" :disabled="loadingMore" @click="loadMoreHistory">
             {{ loadingMore ? '加载中…' : '↑ 加载更早的消息' }}
-          </div>
+          </button>
           <template v-for="(group, gi) in grouped" :key="gi">
             <div class="day-sep"><span>{{ group.day }}</span></div>
             <div v-for="m in group.items" :key="m.id" class="msg">
@@ -45,9 +45,9 @@
                   <span class="time">{{ formatTime(m.createdAt) }}</span>
                 </div>
                 <div class="bubble">{{ m.content }}</div>
-                <div class="seen" @click="toggleDetail(m.id)">
+                <button type="button" class="seen" :aria-expanded="expanded.has(m.id)" @click="toggleDetail(m.id)">
                   👁 {{ (m.seenBy || []).length }} 人看到 {{ expanded.has(m.id) ? '▲' : '▼' }}
-                </div>
+                </button>
                 <div v-if="expanded.has(m.id)" class="seen-detail">
                   <div v-if="(m.seenBy || []).length" class="seen-avatars">
                     <div v-for="v in m.seenBy" :key="v.playerId || v" class="seen-avatar" :title="v.name || v">
@@ -64,12 +64,12 @@
 
         <!-- 管理员上帝视角发言 -->
         <div v-if="composerVisible" class="composer">
-          <select v-model="composerRoom" class="bb-select composer-room">
+          <select v-model="composerRoom" class="bb-select composer-room" aria-label="发言房间">
             <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
           </select>
           <input
             v-model="composerText"
-            class="composer-input"
+            class="composer-input" aria-label="发言内容"
             placeholder="以管理员身份在所选房间发言…"
             @keyup.enter="sendMessage"
           />

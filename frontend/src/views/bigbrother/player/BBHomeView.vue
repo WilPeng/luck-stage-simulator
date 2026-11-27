@@ -45,12 +45,12 @@
     <div class="action-section">
       <h2>当前可操作</h2>
       <div class="action-grid">
-        <div v-for="action in currentActions" :key="action.path"
+        <button type="button" v-for="action in currentActions" :key="action.path"
           class="action-card" @click="goTo(action.path)">
           <span class="action-icon">{{ action.icon }}</span>
           <span class="action-title">{{ action.title }}</span>
           <span class="action-desc">{{ action.desc }}</span>
-        </div>
+        </button>
         <div v-if="currentActions.length === 0" class="no-action">
           当前阶段暂无可用操作
         </div>
@@ -64,11 +64,11 @@
         <div v-for="r in historyRounds" :key="r.round" class="round-card">
           <div class="round-header">第 {{ r.round }} 周</div>
           <div class="stage-links">
-            <div v-for="stage in r.stages" :key="stage.key"
+            <button type="button" v-for="stage in r.stages" :key="stage.key"
               class="stage-link" :class="stage.class" @click="goTo(stage.path)">
               <span class="stage-icon">{{ stage.icon }}</span>
               <span class="stage-name">{{ stage.label }}</span>
-            </div>
+            </button>
           </div>
         </div>
       </div>

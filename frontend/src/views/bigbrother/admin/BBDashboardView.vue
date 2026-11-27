@@ -7,6 +7,32 @@
       </div>
     </div>
 
+    <div class="progress-section">
+      <h2>赛程进度</h2>
+      <div class="round-overview">
+        <div class="stat-card current-round">
+          <div class="stat-icon">📅</div>
+          <div class="stat-info">
+            <div class="stat-value">{{ seasonStore.currentRoundNumber }} / {{ seasonStore.totalRounds }}</div>
+            <div class="stat-label">当前轮次</div>
+          </div>
+        </div>
+        <div class="stat-card stage-info">
+          <div class="stat-icon">🎯</div>
+          <div class="stat-info">
+            <div class="stat-value stage-name">{{ seasonStore.stageName }}</div>
+            <div class="stat-label">当前阶段</div>
+          </div>
+        </div>
+      </div>
+      <div class="progress-bar-container">
+        <div class="progress-bar">
+          <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
+        </div>
+        <div class="progress-label">{{ currentHohName }}</div>
+      </div>
+    </div>
+
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-icon">👥</div>
@@ -43,59 +69,35 @@
           <div class="stat-label">退赛</div>
         </div>
       </div>
-      <div class="stat-card current-round">
-        <div class="stat-icon">📅</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ seasonStore.currentRoundNumber }} / {{ seasonStore.totalRounds }}</div>
-          <div class="stat-label">当前轮次</div>
-        </div>
-      </div>
-      <div class="stat-card stage-info">
-        <div class="stat-icon">🎯</div>
-        <div class="stat-info">
-          <div class="stat-value stage-name">{{ seasonStore.stageName }}</div>
-          <div class="stat-label">当前阶段</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="progress-section">
-      <h2>赛程进度</h2>
-      <div class="progress-bar-container">
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
-        </div>
-        <div class="progress-label">{{ currentHohName }}</div>
-      </div>
     </div>
 
     <div class="quick-actions">
       <h2>快捷操作</h2>
       <div class="action-grid">
-        <div class="action-card" @click="goTo('/games/bigbrother/admin/houseguests')">
+        <button type="button" class="action-card" @click="goTo('/games/bigbrother/admin/houseguests')">
           <span class="action-icon">👥</span>
           <span class="action-text">房客管理</span>
-        </div>
-        <div class="action-card" @click="goTo('/games/bigbrother/admin/stage')">
+        </button>
+        <button type="button" class="action-card" @click="goTo('/games/bigbrother/admin/stage')">
           <span class="action-icon">🎯</span>
           <span class="action-text">赛程矩阵</span>
-        </div>
-        <div class="action-card" @click="runHohCompetition()">
+        </button>
+        <button type="button" class="action-card" @click="runHohCompetition()">
           <span class="action-icon">👑</span>
           <span class="action-text">模拟 HOH 竞争</span>
-        </div>
-        <div class="action-card" @click="goToStage('hoh')">
+        </button>
+        <button type="button" class="action-card" @click="goToStage('hoh')">
           <span class="action-icon">📋</span>
           <span class="action-text">管理提名</span>
-        </div>
-        <div class="action-card" @click="runVetoCompetition()">
+        </button>
+        <button type="button" class="action-card" @click="runVetoCompetition()">
           <span class="action-icon">🛡️</span>
           <span class="action-text">模拟否决权竞争</span>
-        </div>
-        <div class="action-card" @click="goToStage('eviction')">
+        </button>
+        <button type="button" class="action-card" @click="goToStage('eviction')">
           <span class="action-icon">🗳️</span>
           <span class="action-text">淘汰投票</span>
-        </div>
+        </button>
       </div>
     </div>
   </div>

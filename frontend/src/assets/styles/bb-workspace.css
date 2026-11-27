@@ -1,0 +1,435 @@
+/* Shared workspace chrome and route-level layout. Keep game boards and exported tables isolated. */
+:is(.bb-admin-layout, .bb-player-layout) {
+  --workspace-gutter: clamp(16px, 2vw, 32px);
+  --workspace-surface: #211633;
+  --workspace-line: #b39bff32;
+  --workspace-header-height: 60px;
+}
+
+:is(.bb-admin-layout, .bb-player-layout) .bb-main {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: var(--workspace-gutter);
+  container: workspace / inline-size;
+}
+
+:is(.bb-sider, .bb-sidebar) {
+  flex: 0 0 232px;
+  width: 232px;
+}
+
+:is(.bb-admin-layout, .bb-player-layout) .nav-section-header {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+}
+
+:is(.bb-admin-layout, .bb-player-layout) .nav-item {
+  min-height: 40px;
+  margin-inline: 8px;
+  border-radius: 8px;
+  line-height: 1.4;
+}
+
+:is(.bb-admin-layout, .bb-player-layout) .nav-item.active {
+  font-weight: 650;
+}
+
+:is(.app-container, .bb-modal-overlay) :focus-visible {
+  outline: 2px solid #e6d2a5;
+  outline-offset: 2px;
+}
+
+.mobile-nav-scrim { display: none; }
+
+.app-container .bb-main > * > :is(.page-header, .welcome-section) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  min-width: 0;
+  margin-block-end: clamp(16px, 2.2vw, 28px);
+  padding: clamp(14px, 2.1vw, 24px);
+  border: 1px solid var(--workspace-line);
+  border-radius: 14px;
+  background: linear-gradient(115deg, #322144, var(--workspace-surface) 64%);
+}
+
+.app-container .bb-main > * > :is(.page-header, .welcome-section) h1 {
+  margin: 0;
+  font-size: clamp(22px, 2.3vw, 32px);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.app-container .bb-main > * > .page-header :is(.header-actions, .filters),
+.app-container .bb-main > * > :is(.toolbar, .pagination) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.app-container .bb-main > * > .page-header :is(.bb-btn, .bb-input, .bb-select) {
+  min-height: 36px;
+  max-width: 100%;
+}
+
+.app-container .bb-main > * > :is(.loading-state, .empty-state, .empty-card, .pending-card) {
+  color: var(--bb-text-secondary);
+}
+
+.app-container .bb-main > * > :is(.table-container, .table-wrapper, .table-wrap, .matrix-section) {
+  max-width: 100%;
+}
+
+/* Dashboards */
+.bb-main .bb-dashboard .progress-section,
+.bb-main .bb-dashboard .quick-actions,
+.bb-main .bb-home > .action-section {
+  padding: clamp(14px, 2vw, 22px);
+  border: 1px solid var(--workspace-line);
+  border-radius: 14px;
+  background: var(--workspace-surface);
+}
+
+.bb-dashboard .round-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 10px;
+  margin-block: 8px 16px;
+}
+
+.bb-main .bb-dashboard .round-overview .stat-card { padding: 12px; }
+.bb-main .bb-dashboard .stats-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr));
+  gap: 10px;
+}
+.bb-main .bb-dashboard .stats-grid .stat-card { padding: 14px; }
+.bb-main .bb-dashboard .progress-label { white-space: normal; }
+
+.bb-main :is(.bb-dashboard, .bb-home) .action-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr));
+}
+
+.bb-main :is(.bb-dashboard, .bb-home) button.action-card {
+  font-family: inherit;
+  text-align: start;
+}
+
+.bb-main .bb-home .status-cards {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+}
+
+.bb-main .bb-home .stage-link {
+  border: 1px solid var(--workspace-line);
+  background-color: #b39bff0d;
+  font-family: inherit;
+  text-align: start;
+}
+
+/* Settings, roster, and competition workspaces */
+.bb-main .bb-stage :is(.current-status, .config-header, .stage-control > div),
+.bb-main .bb-house-admin .control-actions,
+.bb-main .bb-houseguests .actions,
+.bb-main .bb-house .notify-banner,
+.bb-main .bb-house .notify-banner-actions {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.bb-main .bb-stage :is(.config-table-wrapper, .matrix-table-wrapper),
+.bb-main .bb-houseguests .table-container,
+.bb-main .bb-guest-state .table-wrapper,
+.bb-main .bb-logs .table-container {
+  overflow-x: auto;
+  border: 1px solid var(--workspace-line);
+  border-radius: 10px;
+}
+
+.bb-main .bb-houseguests .actions { min-width: 170px; }
+
+.bb-main .bb-game-library .folder-bar {
+  padding: 12px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 12px;
+  background: var(--workspace-surface);
+}
+
+.bb-main .bb-game-library .game-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 345px), 1fr));
+}
+
+.bb-main .bb-game-library .game-card { padding-right: 42px; }
+.bb-main .bb-game-library .game-name { padding-right: 36px; overflow-wrap: anywhere; }
+
+.bb-main .bb-profile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  max-width: 900px;
+}
+.bb-main .bb-profile > * { margin-block: 0; }
+.bb-main .bb-profile .profile-card { flex-wrap: wrap; }
+
+@container workspace (min-width: 730px) {
+  .bb-main .bb-profile { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; }
+  .bb-main .bb-profile > :is(.page-header, .profile-card) { grid-column: 1 / -1; }
+}
+
+/* Chat and replay keep a compact index next to a flexible reading pane. */
+.bb-main .bb-chat-logs { padding: 0; }
+.bb-main .bb-chat-logs > .page-header { align-items: stretch; }
+.bb-main .bb-chat-logs > .page-header .filters { width: 100%; }
+.bb-main .bb-chat-logs .filters .bb-input { flex: 1 1 185px; width: auto; min-width: 0; }
+.bb-main .bb-chat-logs .chat-layout { grid-template-columns: minmax(162px, 230px) minmax(0, 1fr); }
+.bb-main .bb-chat-logs .chat-panel { display: flex; flex-direction: column; }
+.bb-main .bb-chat-logs :is(.room-list, .chat-panel) { height: clamp(340px, 67dvh, 840px); }
+.bb-main .bb-chat-logs .chat-scroll { flex: 1; height: auto; min-height: 0; }
+.bb-main .bb-chat-logs .composer { flex-wrap: wrap; }
+.bb-main .bb-chat-logs .composer-input { flex-basis: 145px; }
+.bb-main .bb-chat-logs .msg-meta { flex-wrap: wrap; }
+.bb-main .bb-chat-logs .bubble { max-width: 100%; }
+
+.bb-chat-logs button:is(.rl-item, .load-more, .seen) {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+}
+.bb-chat-logs button.rl-item { width: 100%; text-align: start; }
+.bb-chat-logs button.rl-item.active { background: #b39bff22; }
+.bb-chat-logs button.load-more { display: block; width: 100%; }
+.bb-chat-logs button.seen { display: block; color: var(--bb-text-secondary); padding-block: 4px; }
+.bb-chat-logs .seen-detail { max-width: 100%; }
+
+.bb-main .mg-replay .replay-layout { grid-template-columns: minmax(205px, 28%) minmax(0, 1fr); }
+.bb-main .mg-live .live-layout { grid-template-columns: minmax(190px, 28%) minmax(0, 1fr); }
+.bb-main .mg-replay .detail-head { flex-wrap: wrap; }
+.bb-main .mg-replay .filters { margin-left: 0; }
+.bb-main .mg-replay .ri-top { flex-wrap: wrap; gap: 4px 8px; }
+.bb-main .mg-replay .item-main { overflow-wrap: anywhere; }
+
+@container workspace (max-width: 680px) {
+  .bb-main .bb-chat-logs .chat-layout,
+  .bb-main .mg-live .live-layout,
+  .bb-main .mg-replay .replay-layout { grid-template-columns: minmax(0, 1fr); }
+  .bb-main .bb-chat-logs .room-list {
+    display: flex;
+    gap: 6px;
+    height: auto;
+    overflow: auto;
+  }
+  .bb-main .bb-chat-logs .room-list .rl-item {
+    flex: none;
+    width: auto;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .bb-main .mg-replay .list-panel { max-height: 54dvh; }
+  .bb-main .mg-replay .opened > .list-panel,
+  .bb-main .mg-replay .replay-layout:not(.opened) > .detail-panel { display: none; }
+  .bb-main .mg-replay .back-list { display: inline-block; margin-bottom: 12px; }
+}
+
+.bb-main .bb-house {
+  height: calc(100dvh - var(--workspace-header-height) - 2 * var(--workspace-gutter));
+  min-height: 490px;
+}
+.bb-main .bb-house .house-left { width: clamp(260px, 30%, 360px); }
+.bb-main .bb-house .map-wrap { flex-shrink: 0; }
+.bb-main .bb-house :is(.invite-row, .hoh-sleep-row),
+.bb-main .bb-house .comove-row { flex-wrap: wrap; }
+
+/* 登录卡保留原有主题，统一表单触控间距与聚焦状态。 */
+.app-container .login-page .field:focus-within {
+  border-color: var(--bb-gold);
+}
+.app-container .login-page .field input { min-width: 0; }
+.app-container .login-page .eye { padding: 9px; }
+
+@media (max-width: 900px) {
+  :is(.bb-admin-layout, .bb-player-layout) .header-info { gap: 6px; min-width: 0; }
+  :is(.bb-admin-layout, .bb-player-layout) .header-info .bb-btn { padding-inline: 8px; }
+}
+
+@media (max-width: 768px) {
+  :is(.bb-admin-layout, .bb-player-layout) { --workspace-header-height: 92px; }
+
+  .app-container :is(.bb-header, .bb-player-header) { height: var(--workspace-header-height); }
+
+  .app-container :is(.bb-header, .bb-player-header) .header-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 38px 40px;
+    align-items: center;
+    gap: 3px 8px;
+  }
+
+  .app-container :is(.bb-header, .bb-player-header) .logo-text { display: inline; }
+  .app-container :is(.bb-header, .bb-player-header) .header-info {
+    grid-area: 2 / 1 / 3 / -1;
+    display: flex;
+    gap: 6px;
+  }
+
+  .app-container :is(.bb-header, .bb-player-header) .header-info .bb-btn {
+    flex: 1 1 auto;
+    min-height: 35px;
+    padding: 4px;
+    white-space: normal;
+    line-height: 1.15;
+  }
+
+  :is(.mobile-menu-btn, .menu-toggle) {
+    grid-area: 1 / 2;
+    min-width: 38px;
+    min-height: 38px;
+    place-content: center;
+  }
+
+  :is(.bb-admin-layout, .bb-player-layout) .layout-body { padding-top: var(--workspace-header-height); }
+
+  :is(.bb-admin-layout, .bb-player-layout) :is(.bb-sider, .bb-sidebar) {
+    top: var(--workspace-header-height);
+    height: calc(100dvh - var(--workspace-header-height));
+    visibility: hidden;
+    background: #1d132e;
+  }
+
+  :is(.bb-sider, .bb-sidebar).open { visibility: visible; }
+  :is(.bb-admin-layout, .bb-player-layout) .nav-item { min-height: 44px; }
+  .mobile-nav-scrim {
+    display: block;
+    position: fixed;
+    inset: var(--workspace-header-height) 0 0;
+    z-index: 98;
+    border: 0;
+    background: #080411aa;
+  }
+
+  .bb-player-layout .restricted-banner {
+    position: relative;
+    top: auto;
+    margin-top: var(--workspace-header-height);
+  }
+  .bb-player-layout .layout-body.with-restricted-banner { padding-top: 0; }
+
+  .app-container .bb-main > * > .page-header :is(.bb-btn, .bb-input, .bb-select) { min-height: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.bb-sider, .bb-sidebar, .progress-fill) { transition: none; }
+}
+
+@media (max-width: 970px) {
+  .bb-main .bb-house .house-left { width: 100%; }
+  .bb-main .bb-house .mobile-tab { min-height: 42px; }
+}
+
+.bb-main > :is(.bb-guest-state, .bb-power-challenge, .bb-season-result, .bb-hoh-player, .bb-finale-player,
+  .bb-nomination-player, .bb-replacement-player, .bb-veto-player) { padding: 0; }
+
+.bb-main .bb-stage .control-form .form-group { flex: 1 1 160px; min-width: 0; }
+.bb-main .bb-stage .control-form :is(input, select) { width: 100%; }
+.bb-main .bb-stage .current-status .status-item { flex: 1 1 100px; }
+.bb-main .bb-endgame :is(.status-banner, .jury-vote-row, .jury-vote-btns, .voting-gate-row, .room-status, .champion-card) {
+  flex-wrap: wrap;
+}
+.bb-main .bb-endgame .round-step {
+  margin-block: 10px;
+  padding: 14px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 10px;
+  background: #120a224d;
+}
+.bb-main .bb-endgame .round-step .step-head { flex-wrap: wrap; }
+.bb-main .bb-eviction-admin :is(.stats-row, .vote-row, .action-buttons),
+.bb-main .bb-veto-admin :is(.action-buttons, .ceremony-actions),
+.bb-main .bb-nomination-admin :is(.action-buttons, .form-row) {
+  flex-wrap: wrap;
+}
+
+@container workspace (min-width: 800px) {
+  .bb-main .bb-home {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    align-items: start;
+    gap: 16px;
+  }
+  .bb-main .bb-home > :is(.welcome-section, .hoh-banner, .status-cards) {
+    grid-column: 1 / -1;
+    margin-block: 0;
+  }
+  .bb-main .bb-home .history-section { margin-top: 0; }
+}
+
+.bb-admin-layout button.nav-item {
+  width: calc(100% - 16px);
+  border: 1px solid transparent;
+  border-left-width: 3px;
+  background: transparent;
+  font-family: inherit;
+  text-align: start;
+}
+.bb-admin-layout button.nav-item:hover { background: #b39bff0f; }
+.bb-admin-layout button.nav-item.active {
+  border-left-color: var(--bb-gold);
+  background: var(--bb-accent-soft);
+}
+
+.bb-main .bb-houseguests .toolbar > .bb-input { flex: 1 1 220px; min-width: 0; }
+.bb-main .bb-houseguests .toolbar > .bb-btn-danger { margin-left: auto; }
+.bb-main .bb-houseguests .bb-table th { white-space: nowrap; }
+
+.bb-main .bb-eviction-admin :is(.campaign-grid, .tally-grid) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 265px), 1fr));
+}
+
+@media (max-width: 480px) {
+  .app-container .login-page .login-wrap { gap: 16px; }
+  .app-container .login-page .hero-title { font-size: clamp(29px, 9vw, 40px); }
+  .app-container .login-page .hero-emblem { margin-bottom: 4px; }
+  .app-container .login-page .emblem-svg { width: 46px; height: 46px; }
+  .app-container .login-page .hero-sigils { margin-top: 10px; }
+  .app-container .login-page .panel { padding-inline: 16px; }
+  .bb-main .bb-houseguests .toolbar > .bb-btn-danger { margin-left: 0; }
+}
+
+.bb-main .challenge-page > .page-header {
+  margin-bottom: 0;
+}
+.bb-main .challenge-page > article {
+  min-width: 0;
+  padding: clamp(14px, 2.2vw, 22px);
+  border-color: var(--workspace-line);
+  background: var(--workspace-surface);
+}
+.bb-main .challenge-page > article > form {
+  align-items: end;
+  padding-block: 10px;
+  border-block-start: 1px solid var(--workspace-line);
+}
+.bb-main .challenge-page > article > form label {
+  display: grid;
+  gap: 5px;
+}
+.bb-main .challenge-page > article > form select { margin: 0; max-width: 100%; }
+
+.bb-main .bb-eviction-admin :is(.campaign-card, .tally-card, .vote-row) { min-width: 0; }
+.bb-main .bb-eviction-admin :is(.campaign-actions, .campaign-header, .tally-header) { flex-wrap: wrap; gap: 8px; }
+.bb-main .bb-eviction-admin :is(.tally-name, .voter-name) { overflow-wrap: anywhere; }
+
+@container workspace (max-width: 540px) {
+  .bb-main .bb-eviction-admin .vote-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .bb-main .bb-eviction-admin .voter-vote { width: auto; text-align: end; }
+  .bb-main .bb-eviction-admin .voter-action { grid-column: 1 / -1; width: 100%; }
+  .bb-main .bb-eviction-admin .stat-card { padding: 8px; }
+}

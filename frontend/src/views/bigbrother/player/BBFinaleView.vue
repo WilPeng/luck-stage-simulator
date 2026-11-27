@@ -45,6 +45,9 @@
         <component :is="gameComponent" :roomId="activeRoom.roomId"
           :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
       </div>
+      <MinigameSpectatorPanel v-else-if="activeRoom?.spectatorState"
+        :title="activeRoom.minigameName" :game-id="activeRoom.minigameId"
+        :status="activeRoom.status" :players="activeRoom.spectatorState" />
       <div v-else-if="!iAmFhoh || (round3Done && finalTwo.length)" class="pending-card">
         <div class="pending-icon">🎮</div>
         <div class="pending-title">等待下一场挑战</div>
@@ -147,6 +150,7 @@ import OtevGame from '../../../components/bigbrother/minigames/OtevGame.vue'
 import HideAndGoVetoGame from '../../../components/bigbrother/minigames/HideAndGoVeto.vue'
 import CustomGamePlayer from '../../../components/bigbrother/minigames/CustomGamePlayer.vue'
 import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
+import MinigameSpectatorPanel from '../../../components/bigbrother/MinigameSpectatorPanel.vue'
 import JuryQA from '../../../components/bigbrother/JuryQA.vue'
 import type { MinigameRoom, BBEndgameStatus } from '../../../types/bigbrother'
 

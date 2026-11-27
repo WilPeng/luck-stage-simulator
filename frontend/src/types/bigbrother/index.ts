@@ -587,14 +587,28 @@ export interface MinigameParticipant {
   finished: boolean
 }
 
-export type MinigameRoomStatus = 'waiting' | 'countdown' | 'playing' | 'finished'
+export type MinigameRoomStatus = 'waiting' | 'countdown' | 'playing' | 'paused' | 'finished'
+
+export interface MinigameSpectatorPlayer {
+  playerId: string
+  playerName: string
+  avatar: string | null
+  connected: boolean
+  score: number | null
+  progress: number | null
+  max: number | null
+  done: boolean
+  eliminated: boolean
+}
 
 export interface MinigameRoom {
   roomId: string
   gameType: 'hoh' | 'veto' | 'bbbb' | 'finale'
   minigameId: MinigameId
   minigameName?: string
+  roundIndex?: number | null
   participants: MinigameParticipant[]
+  spectatorState?: MinigameSpectatorPlayer[]
   status: MinigameRoomStatus
   startTime: number | null
   winner: { playerId: string; playerName: string } | null

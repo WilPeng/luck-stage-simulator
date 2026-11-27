@@ -3,6 +3,8 @@
     <article v-for="twist in items" :key="twist.id">
       <h3>{{ twist.icon }} {{ twist.name }}</h3>
       <p>{{ twist.description }}</p>
+      <router-link v-if="gameTwists.has(twist.id) && !route.path.endsWith('/twist-challenges')"
+        :to="'/games/bigbrother/' + (state.canSetSafety ? 'admin' : 'player') + '/twist-challenges'">前往变数挑战 · 小游戏 PK</router-link>
       <BranchTwistContest v-if="twist.id === 'battle_of_block' || twist.id === 'split_house'"
         :mode="twist.id" :branch="state.branch" :players="state.players" :me="state.me"
         :admin="state.canSetSafety" :busy="busy" @action="branchAction => save(twist.id, { branchAction })" />
@@ -149,6 +151,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import BranchTwistContest from './BranchTwistContest.vue'
 import { doRequest, bbUseVeto, bbSkipVeto } from '../../services/bbApi'
 import { useBbRefresh } from '../../composables/useBbRefresh'
@@ -190,6 +193,8 @@ interface RoundTwistState {
   canTransfer: boolean
   canDecide: boolean
 }
+const route = useRoute()
+const gameTwists = new Set(['safety_suite','battle_back','costly_return','battle_of_block','split_house'])
 const props = defineProps<{ currentRound: number; currentStage: string }>()
 const state = ref<RoundTwistState>({ ids: [], round: 0, players: [], me: '', canPrepare: false, canSetSafety: false, canSetReserve: false, nomineeIds: [], canTransfer: false, canDecide: false })
 const safe = ref('')

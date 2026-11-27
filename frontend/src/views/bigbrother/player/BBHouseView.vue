@@ -67,15 +67,15 @@
     </div>
 
     <!-- 手机端：移动/操作 与 聊天 两个标签页 -->
-    <div class="mobile-tabs">
+    <div class="mobile-tabs" role="group" aria-label="房屋视图">
       <button
         class="mobile-tab"
-        :class="{ active: mobileTab === 'move' }"
+        :class="{ active: mobileTab === 'move' }" :aria-pressed="mobileTab === 'move'"
         @click="mobileTab = 'move'"
       >🗺 移动 / 操作</button>
       <button
         class="mobile-tab"
-        :class="{ active: mobileTab === 'chat' }"
+        :class="{ active: mobileTab === 'chat' }" :aria-pressed="mobileTab === 'chat'"
         @click="mobileTab = 'chat'"
       >💬 聊天</button>
     </div>
@@ -283,7 +283,7 @@ const showNotifyBanner = computed(() =>
 const currentRoomId = ref('living_room')
 const mobileTab = ref<'move' | 'chat'>('move')
 function isMobileView() {
-  return typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 970px)').matches
 }
 const locationLoaded = ref(false)
 const rooms = ref<BBHouseRoomWithCount[]>([])
@@ -1218,7 +1218,7 @@ watch(() => seasonStore.season?.backyardDoorOpen, (v) => {
 .bb-btn-outline { border-color: #ffffff22; color: #8f83b8; }
 .bb-btn-outline:hover { background: #ffffff08; color: #a99bd0; border-color: #ffffff33; }
 
-@media (max-width: 768px) {
+@media (max-width: 970px) {
   .bb-house {
     height: calc(100vh - 92px);
     height: calc(100dvh - 92px);

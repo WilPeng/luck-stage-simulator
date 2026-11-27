@@ -1,7 +1,9 @@
+const { games, challengeSlots, resultAction } = require('../twistChallenges')
+const { isSpectatable, buildSpectatorState } = require('../minigameSpectator')
 const { branches, battleResult, splitResult, visibleBranch, publishBranch } = require('../branchTwists')
 const { randomInt } = require('crypto')
 const router = require('express').Router()
-const { auth } = require('../../../middleware/auth')
+const { auth, requireAdmin } = require('../../../middleware/auth')
 const { getCollection } = require('../../../config/db')
 const { getCurrentSeason, getTwistsForRound, logAction, BB_ACTION_TYPES } = require('../helpers')
 const { loadRoundTwist, writeRoundTwist } = require('../roundTwists')
@@ -84,14 +86,126 @@ router.get('/', auth, async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
+function getChallengeRoom(req, ctx, slot) {
+  const entry = ctx.state.challenges?.[slot.key]
+  const namespace = req.app.get('io')?.of('/bigbrother-minigame')
+  const room = entry && namespace?.getRoom(entry.roomId)
+  return { namespace, room, entry }
+}
+
+router.get('/challenges', auth, async (req, res, next) => {
+  try {
+    const ctx = await context()
+    const admin = req.user.role === 'admin'
+    const slots = ctx ? challengeSlots(ctx).flatMap(slot => {
+      const { room, entry } = getChallengeRoom(req, ctx, slot)
+      const eligible = slot.roster.some(p => p.id === req.user.userId)
+      const inRoom = room?.participants.some(p => p.playerId === req.user.userId)
+      const inVisibleGroup = slot.twist !== 'split_house' || ctx.state.branch?.groups?.[slot.group]?.ids.includes(req.user.userId)
+      const watching = req.user.role === 'houseguest' && !inRoom && inVisibleGroup && isSpectatable(room)
+      if (!admin && !eligible && !watching) return []
+      return [{
+        key: slot.key, title: slot.title, roster: slot.roster,
+        room: room ? { roomId: room.roomId, status: room.status, minigameId: room.minigameId,
+          participants: room.participants, winner: room.winner,
+          validResult: !!room.winner && !room.winnerWasAssigned && room.winners.length <= 1,
+          spectatorState: watching ? buildSpectatorState(room) : undefined } : null,
+        interrupted: !!entry && !room
+      }]
+    }) : []
+    res.json({ success: true, data: {
+      round: ctx?.season.currentRound, gameChoices: games, admin, slots
+    } })
+  } catch (error) { next(error) }
+})
+
+router.post('/challenges', auth, requireAdmin, async (req, res, next) => {
+  const fail = message => res.status(409).json({ success: false, error: message })
+  try {
+    const ctx = await context()
+    const { round, key, action, minigameId } = req.body || {}
+    const slot = ctx && round === ctx.season.currentRound && challengeSlots(ctx).find(s => s.key === key)
+    if (!slot) return fail('当前挑战已变更，请刷新')
+    const { namespace, room, entry } = getChallengeRoom(req, ctx, slot)
+    if (!namespace) return fail('小游戏服务未启动')
+    if (action === 'create') {
+      if (room && room.status !== 'finished') return fail('已有正在使用的房间')
+      if (!Object.hasOwn(games, minigameId) || slot.roster.length < 2) return fail('请选择支持的小游戏，且至少需要两名参赛者')
+      const newRoom = namespace.createRoom('twist', minigameId,
+        slot.roster.map(p => ({ playerId: p.id, playerName: p.name })), null,
+        { roundIndex: round, roundId: `round-${round}`, name: games[minigameId], options: { twistChallenge: true } })
+      const path = `challenges.${slot.key}`
+      const expected = entry ? { [`${path}.roomId`]: entry.roomId } : { [path]: { $exists: false } }
+      if (!(await writeRoundTwist(ctx.season, { [path]: { roomId: newRoom.roomId } }, expected))) {
+        namespace.cleanupRoom(newRoom.roomId)
+        return fail('已有另一场挑战，请刷新')
+      }
+      if (room) namespace.cleanupRoom(room.roomId)
+      return res.json({ success: true, data: { roomId: newRoom.roomId } })
+    }
+    if (!room) return fail('请先创建小游戏房间')
+    if (action === 'start' && room.status === 'waiting' && !room.twistStarting) {
+      room.twistStarting = true
+      try {
+        const result = await new Promise(resolve => namespace.startGame(room.roomId, { countdownSeconds: 10 }, resolve))
+        return res.status(result.success ? 200 : 400).json(result)
+      } finally { room.twistStarting = false }
+    }
+    if (action === 'stop' && room.status === 'playing') {
+      const result = namespace.stopGame(room.roomId)
+      return res.status(result.success ? 200 : 400).json(result)
+    }
+    if (action === 'cancel' && room.status === 'waiting') {
+      namespace.stopGame(room.roomId)
+      return res.json({ success: true })
+    }
+    return fail('当前比赛状态不允许此操作')
+  } catch (error) { next(error) }
+})
+
 router.post('/', auth, async (req, res, next) => {
   const fail = (error, code = 400) => res.status(code).json({ success: false, error })
   try {
     const ctx = await context()
     if (!ctx) return fail('赛季不存在', 404)
     const { ids, season, state, hoh, nomination, players } = ctx
-    const { twist, target, targets, replaced, accept, round, action, answer } = req.body || {}
+    let { twist, target } = req.body || {}
+    const { targets, replaced, accept, round, action, answer, challengeKey } = req.body || {}
+    let confirmedAction = null
+    if (challengeKey) {
+      if (req.user.role !== 'admin') return fail('只有管理员可确认小游戏结果', 403)
+      const slot = challengeSlots(ctx).find(s => s.key === challengeKey)
+      if (!slot) return fail('该挑战不再接受结果', 409)
+      const { room } = getChallengeRoom(req, ctx, slot)
+      const winner = room?.winner?.playerId
+      if (room?.status !== 'finished' || !winner || room.winnerWasAssigned || room.winners.length > 1 || !slot.roster.some(p => p.id === winner)) {
+        return fail('需要小游戏产生一位合资格的胜者，平局可以重赛', 409)
+      }
+      twist = slot.twist
+      confirmedAction = resultAction(ctx, slot, winner)
+      target = confirmedAction.target
+      if (confirmedAction.firstBattleHoh && round === season.currentRound) {
+        if (!(await writeRoundTwist(season, { firstBattleHoh: winner }, { firstBattleHoh: { $exists: false } }))) {
+          return fail('第一位临时 HOH 已产生，请刷新', 409)
+        }
+        await logAction(req.user.userId, req.user.name, 'admin', BB_ACTION_TYPES.TWIST_APPLIED, 'round', String(round), '小游戏决出第一位临时 HOH')
+        return res.json({ success: true })
+      }
+    }
     if (round !== season.currentRound || !ids.includes(twist)) return fail('轮次已变更或本轮未启用此规则', 409)
+    if (!confirmedAction && req.user.role === 'admin') {
+      const move = req.body.branchAction || {}
+      const manualSlot = challengeSlots(ctx).find(slot => {
+        if (slot.twist !== twist) return false
+        if (twist === 'split_house') return slot.group === Number(move.group) && slot.phase === move.kind
+        if (twist === 'battle_of_block') return move.kind === 'setup' ? slot.key.startsWith('battle-hoh-') : move.kind === 'result' && slot.key === 'battle-nominees'
+        return slot.key === 'safety' || slot.key === 'revival'
+      })
+      if (manualSlot) {
+        const { room } = getChallengeRoom(req, ctx, manualSlot)
+        if (room && room.status !== 'finished') return fail('已有小游戏房间，请先取消或结束比赛，再手动录入', 409)
+      }
+    }
     const { role, userId } = req.user
     const admin = role === 'admin'
     const player = id => players.some(p => p.id === id)
@@ -102,7 +216,7 @@ router.post('/', auth, async (req, res, next) => {
     let detail
     if (branches(season) === twist && season.currentStage === 'hoh_competition') {
       if (!admin && !player(userId)) return fail('你不在本轮参赛名单内', 403)
-      const move = req.body.branchAction || {}
+      const move = confirmedAction?.branchAction || req.body.branchAction || {}
       let updated
       if (admin && move.kind === 'publish' && state.branch?.done) updated = state.branch
       else updated = (twist === 'split_house' ? splitResult : battleResult)(state.branch, move, req.user, players.map(p => p.id))

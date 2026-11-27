@@ -9,9 +9,6 @@
       </div>
     </div>
 
-    <!-- 陪审团问答（冠军投票前） -->
-    <JuryQA v-if="status && status.finalTwo && status.finalTwo.length === 2" :isAdmin="true" />
-
     <div class="status-banner">
       <div class="status-item">
         <span class="label">当前轮次</span>
@@ -26,6 +23,9 @@
         <span class="value">{{ status?.status === 'finished' ? '🏆 已结束' : '进行中' }}</span>
       </div>
     </div>
+
+    <!-- 陪审团问答（冠军投票前） -->
+    <JuryQA v-if="status && status.finalTwo && status.finalTwo.length === 2" :isAdmin="true" />
 
     <!-- F3 阶段 -->
     <div v-if="status && isFinal3Stage" class="section-card">

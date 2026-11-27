@@ -7,25 +7,25 @@
         <label class="bb-btn upload-btn">📥 导入表格
           <input type="file" accept=".csv,text/csv" hidden @change="onImportFile" />
         </label>
-        <button v-if="selectedIds.length" class="bb-btn bb-btn-danger" @click="confirmBatchDelete">🗑 批量删除（{{ selectedIds.length }}）</button>
         <button class="bb-btn bb-btn-primary" @click="showCreateModal = true">+ 新建房客</button>
       </div>
     </div>
 
     <div class="toolbar">
-      <input v-model="searchKeyword" class="bb-input" placeholder="搜索房客名称/账号..." @input="onSearch" />
-      <select v-model="roleFilter" class="bb-select" @change="onRoleChange">
+      <input v-model="searchKeyword" class="bb-input" aria-label="搜索房客名称或账号" placeholder="搜索房客名称/账号..." @input="onSearch" />
+      <select v-model="roleFilter" class="bb-select" aria-label="按身份筛选" @change="onRoleChange">
         <option value="">全部身份</option>
         <option value="houseguest">房客</option>
         <option value="admin">管理员</option>
       </select>
-      <select v-model="statusFilter" class="bb-select" @change="fetchData">
+      <select v-model="statusFilter" class="bb-select" aria-label="按状态筛选" @change="fetchData">
         <option value="">全部状态</option>
         <option value="active">活跃</option>
         <option value="evicted">已淘汰</option>
         <option value="jury">陪审团</option>
         <option value="walked">退赛</option>
       </select>
+      <button v-if="selectedIds.length" class="bb-btn bb-btn-danger" @click="confirmBatchDelete">🗑 批量删除（{{ selectedIds.length }}）</button>
     </div>
 
     <div class="table-container">
@@ -72,12 +72,14 @@
                 <span class="online-dot"></span>{{ h.isOnline ? '在线' : '离线' }}
               </span>
             </td>
-            <td class="actions">
-              <button v-if="h.role !== 'admin' && (h.status === 'active' || h.status === 'f2')" class="bb-btn bb-btn-xs bb-btn-walk" @click="openWalkModal(h)">退赛</button>
-              <button v-if="h.role !== 'admin' && h.status === 'walked'" class="bb-btn bb-btn-xs" @click="undoWalk(h)">撤销退赛</button>
-              <button class="bb-btn bb-btn-xs" @click="editHouseguest(h)">编辑</button>
-              <button v-if="h.role === 'admin' && !h.isSuperAdmin" class="bb-btn bb-btn-xs" @click="setSuperAdmin(h)">设为总管理员</button>
-              <button v-if="!h.isSuperAdmin" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
+            <td>
+              <div class="actions">
+                <button v-if="h.role !== 'admin' && (h.status === 'active' || h.status === 'f2')" class="bb-btn bb-btn-xs bb-btn-walk" @click="openWalkModal(h)">退赛</button>
+                <button v-if="h.role !== 'admin' && h.status === 'walked'" class="bb-btn bb-btn-xs" @click="undoWalk(h)">撤销退赛</button>
+                <button class="bb-btn bb-btn-xs" @click="editHouseguest(h)">编辑</button>
+                <button v-if="h.role === 'admin' && !h.isSuperAdmin" class="bb-btn bb-btn-xs" @click="setSuperAdmin(h)">设为总管理员</button>
+                <button v-if="!h.isSuperAdmin" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
+              </div>
             </td>
           </tr>
           <tr v-if="list.length === 0"><td colspan="9" class="empty-cell">暂无数据</td></tr>

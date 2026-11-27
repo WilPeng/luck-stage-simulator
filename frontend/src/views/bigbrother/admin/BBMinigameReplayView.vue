@@ -3,15 +3,16 @@
     <div class="page-header">
       <h1>小游戏复盘</h1>
       <div class="filters">
-        <select v-model="filterGameType" class="bb-input" @change="loadList">
+        <select v-model="filterGameType" class="bb-input" aria-label="筛选比赛场景" @change="loadList">
           <option value="">全部场景</option>
           <option value="hoh">HOH</option>
           <option value="veto">否决权</option>
           <option value="bbbb">BBBB</option>
+          <option value="twist">变数挑战</option>
           <option value="finale">终局</option>
         </select>
         <button class="bb-btn" @click="loadList">🔄 刷新</button>
-        <button v-if="!readonly && selectedIds.length" class="bb-btn bb-btn-danger" @click="batchDelete">🗑 批量删除（{{ selectedIds.length }}）</button>
+        <button v-if="!readonly && selectedIds.length" class="bb-btn bb-btn-danger" @click="batchDelete">批量删除（{{ selectedIds.length }}）</button>
       </div>
     </div>
 
@@ -30,7 +31,7 @@
           @click="openReplay(r.id)"
         >
           <label v-if="!readonly" class="item-check" @click.stop>
-            <input type="checkbox" :value="r.id" v-model="selectedIds" />
+            <input type="checkbox" :aria-label="'选择对局 ' + (r.minigameName || r.minigameId)" :value="r.id" v-model="selectedIds" />
           </label>
           <div class="item-main">
             <div class="ri-top">
@@ -895,7 +896,7 @@ const durationText = computed(() => {
 })
 
 function gameTypeLabel(t: string) {
-  return ({ hoh: 'HOH', veto: '否决权', bbbbb: 'BBBB', bbbb: 'BBBB', finale: '终局' } as Record<string, string>)[t] || t
+  return ({ hoh: 'HOH', veto: '否决权', bbbbb: 'BBBB', bbbb: 'BBBB', twist: '变数挑战', finale: '终局' } as Record<string, string>)[t] || t
 }
 function fmtDate(t: string) { return t ? new Date(t).toLocaleString('zh-CN') : '' }
 function fmtTime(t: number) {
@@ -956,7 +957,6 @@ onMounted(loadList)
 .event-player {display:flex;gap:8px;align-items:center;margin-bottom:10px}.event-player select {background:#251b37;color:#e6d8fa;border:1px solid #7e6b9a;border-radius:6px;padding:6px}
 .poker-felt {padding:24px 12px;text-align:center;background:#17453a;border:2px solid #679984;border-radius:44px;color:#fff}
 .back-list {display:none}
-@media(max-width:800px){.opened>.list-panel {display:none}.back-list {display:inline-block;margin-bottom:12px}.replay-layout:not(.opened)>.detail-panel {display:none}}
 
 .scene-tabs {display:flex;gap:6px;margin:14px 0 18px;flex-wrap:wrap}
 .scene-tabs button {padding:9px 16px;background:#201a32;border:1px solid #554965;border-radius:8px;color:#d4cce4;cursor:pointer}

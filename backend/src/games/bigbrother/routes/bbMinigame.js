@@ -9,6 +9,7 @@ const fs = require('fs')
 const multer = require('multer')
 const { auth, requireAdmin } = require('../../../middleware/auth')
 const { getAllGames, getGame } = require('../minigames/loadAll')
+const { isSpectatable, buildSpectatorState } = require('../minigameSpectator')
 const { getCurrentSeason } = require('../helpers')
 const BBCustomGame = require('../models/BBCustomGame')
 const BBGameLibrary = require('../models/BBGameLibrary')
@@ -229,12 +230,25 @@ router.post('/upload-media/complete', auth, requireAdmin, async (req, res) => {
 })
 
 
+// 变数房间仅由本轮挑战入口发布，避免分屋期间向另一组暴露名单和比赛状态。
+router.use((req, res, next) => {
+  let path
+  try { path = decodeURIComponent(req.path) } catch { return res.sendStatus(400) }
+  const match = path.match(/^\/(?:room|room-progress)\/([^/]+)\/?$/i)
+  const roomId = match?.[1] || req.body?.roomId
+  const room = roomId && req.app.get('io')?.of('/bigbrother-minigame').getRoom(roomId)
+  if (/^\/active-room\/twist\/?$/i.test(path) || room?.gameType === 'twist') {
+    return res.status(404).json({ success: false, error: '请从变数挑战页面进入' })
+  }
+  next()
+})
+
 // GET /active-rooms - 所有活跃比赛房间（管理员实时观战）
-router.get('/active-rooms', async (req, res) => {
+router.get('/active-rooms', auth, requireAdmin, async (req, res) => {
   try {
     const io = req.app.get('io')
     const ns = io.of('/bigbrother-minigame')
-    const rooms = ns.listActiveRooms ? ns.listActiveRooms() : []
+    const rooms = ns.listActiveRooms ? ns.listActiveRooms().filter(room => room.gameType !== 'twist') : []
     res.json({ success: true, data: rooms })
   } catch (e) {
     console.error(e)
@@ -384,7 +398,7 @@ router.get('/list', async (req, res) => {
 })
 
 // POST /create-room - 管理员创建比赛房间
-router.post('/create-room', async (req, res) => {
+router.post('/create-room', auth, requireAdmin, async (req, res) => {
   try {
     const { gameType, minigameId, participants, targetScore, options } = req.body
 
@@ -479,7 +493,7 @@ router.post('/create-room', async (req, res) => {
 })
 
 // POST /start - 管理员开始比赛
-router.post('/start', async (req, res) => {
+router.post('/start', auth, requireAdmin, async (req, res) => {
   try {
     const { roomId, countdownSeconds } = req.body
     if (!roomId) {
@@ -506,7 +520,7 @@ router.post('/start', async (req, res) => {
 })
 
 // GET /room/:roomId - 获取房间信息
-router.get('/room/:roomId', (req, res) => {
+router.get('/room/:roomId', auth, requireAdmin, (req, res) => {
   try {
     const minigameNs = req.app.get('io')?.of('/bigbrother-minigame')
     if (!minigameNs) {
@@ -538,9 +552,12 @@ router.get('/room/:roomId', (req, res) => {
 })
 
 // GET /active-room/:gameType - 获取指定类型的活跃房间
-router.get('/active-room/:gameType', (req, res) => {
+router.get('/active-room/:gameType', auth, (req, res) => {
   try {
     const { gameType } = req.params
+    if (gameType === 'twist') {
+      return res.status(404).json({ success: false, error: '请从变数挑战页面进入' })
+    }
     const minigameNs = req.app.get('io')?.of('/bigbrother-minigame')
     if (!minigameNs) {
       return res.status(500).json({ success: false, error: '小游戏服务未就绪' })
@@ -551,6 +568,9 @@ router.get('/active-room/:gameType', (req, res) => {
       return res.json({ success: true, data: null })
     }
 
+    const participant = room.participants.some(p => p.playerId === req.user.userId)
+    const admin = req.user.role === 'admin'
+    const watching = req.user.role === 'houseguest' && !participant && isSpectatable(room)
     res.json({
       success: true,
       data: {
@@ -561,7 +581,9 @@ router.get('/active-room/:gameType', (req, res) => {
         participants: room.participants,
         status: room.status,
         winner: room.winner,
-        options: publicRoomOptions(room.options)
+        roundIndex: room.roundIndex,
+        options: admin ? publicRoomOptions(room.options) : participant ? { rules: room.options?.rules } : undefined,
+        spectatorState: watching ? buildSpectatorState(room) : undefined
       }
     })
   } catch (e) {
@@ -571,7 +593,7 @@ router.get('/active-room/:gameType', (req, res) => {
 })
 
 // POST /set-winner - 管理员手动指定胜者并结束比赛
-router.post('/set-winner', async (req, res) => {
+router.post('/set-winner', auth, requireAdmin, async (req, res) => {
   try {
     const { roomId, playerId } = req.body
     if (!roomId || !playerId) {
@@ -593,7 +615,7 @@ router.post('/set-winner', async (req, res) => {
 })
 
 // GET /room-progress/:roomId - 获取房间实时进度（管理员轮询兜底）
-router.get('/room-progress/:roomId', async (req, res) => {
+router.get('/room-progress/:roomId', auth, requireAdmin, async (req, res) => {
   try {
     const minigameNs = req.app.get('io')?.of('/bigbrother-minigame')
     if (!minigameNs || !minigameNs.getRoomProgress) {
@@ -608,7 +630,7 @@ router.get('/room-progress/:roomId', async (req, res) => {
 })
 
 // POST /summon - 管理员召集选手进入准备环节
-router.post('/summon', async (req, res) => {
+router.post('/summon', auth, requireAdmin, async (req, res) => {
   try {
     const { roomId } = req.body
     if (!roomId) return res.status(400).json({ success: false, error: '缺少房间ID' })
@@ -626,7 +648,7 @@ router.post('/summon', async (req, res) => {
 })
 
 // POST /pause - 管理员暂停游戏
-router.post('/pause', async (req, res) => {
+router.post('/pause', auth, requireAdmin, async (req, res) => {
   try {
     const { roomId } = req.body
     if (!roomId) return res.status(400).json({ success: false, error: '缺少房间ID' })
@@ -642,7 +664,7 @@ router.post('/pause', async (req, res) => {
 })
 
 // POST /resume - 管理员恢复游戏
-router.post('/resume', async (req, res) => {
+router.post('/resume', auth, requireAdmin, async (req, res) => {
   try {
     const { roomId } = req.body
     if (!roomId) return res.status(400).json({ success: false, error: '缺少房间ID' })
@@ -658,7 +680,7 @@ router.post('/resume', async (req, res) => {
 })
 
 // POST /stop - 管理员停止游戏（无胜者）
-router.post('/stop', async (req, res) => {
+router.post('/stop', auth, requireAdmin, async (req, res) => {
   try {
     const { roomId } = req.body
     if (!roomId) return res.status(400).json({ success: false, error: '缺少房间ID' })

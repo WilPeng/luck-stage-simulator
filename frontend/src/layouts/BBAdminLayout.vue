@@ -14,60 +14,61 @@
           <button class="bb-btn bb-btn-sm" @click="openBroadcastHistory">📜 广播记录</button>
           <button class="bb-btn bb-btn-sm" @click="handleLogout">退出</button>
         </div>
-        <button class="mobile-menu-btn" @click="mobileMenuOpen = !mobileMenuOpen">
+        <button class="mobile-menu-btn" type="button" aria-controls="bb-sider" :aria-expanded="mobileMenuOpen" aria-label="切换导航菜单" @click="mobileMenuOpen = !mobileMenuOpen">
           <span></span><span></span><span></span>
         </button>
       </div>
     </header>
 
     <div class="layout-body">
-      <aside class="bb-sider" :class="{ open: mobileMenuOpen }">
+      <button v-if="mobileMenuOpen" type="button" class="mobile-nav-scrim" aria-label="关闭导航菜单" @click="mobileMenuOpen = false"></button>
+      <aside id="bb-sider" class="bb-sider" :class="{ open: mobileMenuOpen }">
         <nav class="sider-nav">
           <div class="nav-section">
-            <div v-for="item in fixedItems" :key="item.path"
+            <button type="button" v-for="item in fixedItems" :key="item.path"
               class="nav-item" :class="{ active: $route.path === item.path }"
               @click="navigateTo(item.path)">
               <span class="nav-icon">{{ item.icon }}</span>
               <span class="nav-text">{{ item.text }}</span>
-            </div>
+            </button>
           </div>
 
           <div class="nav-section">
             <div class="nav-section-title">赛季设置</div>
-            <div v-for="item in stageItems" :key="item.text"
+            <button type="button" v-for="item in stageItems" :key="item.text"
               class="nav-item" :class="{ active: item.path !== '#' && $route.path.startsWith(item.path) }"
               @click="item.click ? nextStage() : navigateTo(item.path)">
               <span class="nav-icon">{{ item.icon }}</span>
               <span class="nav-text">{{ item.text }}</span>
-            </div>
+            </button>
           </div>
 
           <div class="nav-section">
             <div class="nav-section-title">其他</div>
-            <div v-for="item in otherItems" :key="item.text"
+            <button type="button" v-for="item in otherItems" :key="item.text"
               class="nav-item" :class="{ active: item.path !== '#' && $route.path.startsWith(item.path) }"
               @click="item.click ? nextStage() : navigateTo(item.path)">
               <span class="nav-icon">{{ item.icon }}</span>
               <span class="nav-text">{{ item.text }}</span>
-            </div>
+            </button>
           </div>
 
           <div v-for="grp in roundGroups" :key="grp.round" class="nav-section">
-            <div class="nav-section-header" :class="{ current: grp.status === 'current' }"
+            <button type="button" class="nav-section-header" :aria-expanded="!isRoundCollapsed(grp.round)" :class="{ current: grp.status === 'current' }"
               @click="toggleRound(grp.round)">
               <span class="collapse-icon" :class="{ collapsed: isRoundCollapsed(grp.round) }">▾</span>
               <span class="section-title">{{ grp.title }}</span>
               <span class="section-status" :class="grp.status">{{ grp.statusText }}</span>
-            </div>
+            </button>
             <div v-show="!isRoundCollapsed(grp.round)" class="round-stages">
-              <div v-for="it in grp.items" :key="it.stage"
-                class="nav-item sub-item"
+              <button type="button" v-for="it in grp.items" :key="it.stage"
+                class="nav-item sub-item" :disabled="!it.clickable"
                 :class="{ active: isStageActive(grp.round, it.stage), disabled: !it.clickable }"
                 @click="navigateTo(it.path)">
                 <span class="nav-icon">{{ it.icon }}</span>
                 <span class="nav-text">{{ it.stageName }}</span>
                 <span class="stage-status-dot" :class="it.status"></span>
-              </div>
+              </button>
             </div>
           </div>
         </nav>
@@ -252,6 +253,7 @@ const otherItemsAll = [
   { icon: '💬', text: '房间聊天记录', path: '/games/bigbrother/admin/house-chat', perm: 'chat' },
   { icon: '😴', text: '睡眠/洗澡记录', path: '/games/bigbrother/admin/guest-states', perm: 'guest-states' },
   { icon: '🎮', text: '游戏库', path: '/games/bigbrother/admin/game-library', perm: 'game-library' },
+  { icon: '🎮', text: '变数挑战', path: '/games/bigbrother/admin/twist-challenges', perm: 'minigame' },
   { icon: '👁', text: '小游戏实时观战', path: '/games/bigbrother/admin/minigame-live', perm: 'minigame' },
   { icon: '🎬', text: '小游戏复盘', path: '/games/bigbrother/admin/minigame-replay', perm: 'minigame' },
   { icon: '📜', text: '操作日志', path: '/games/bigbrother/admin/logs', perm: 'logs' },

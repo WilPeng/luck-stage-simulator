@@ -10,7 +10,18 @@ const { getGame } = require('../src/games/bigbrother/minigames/loadAll')
 
 const gameId = 'bigbrother'
 const ids = ['a','b','c','d','e','f','g','h','i','j']
-let mongo, server, origin
+let mongo, server, origin, application, challengeIO
+const rooms = new Map()
+const challengeNamespace = {
+  createRoom(gameType, minigameId, participants) {
+    const room = { roomId: randomUUID(), gameType, minigameId, participants, status: 'waiting', winners: [] }
+    rooms.set(room.roomId, room)
+    return room
+  },
+  getRoom: id => rooms.get(id),
+  cleanupRoom: id => rooms.delete(id),
+  getActiveRoomForType: () => null
+}
 const col = getCollection
 const filter = { gameId, roundId: 'round-2' }
 
@@ -19,9 +30,10 @@ before(async () => {
   process.env.MONGODB_URI = mongo.getUri('bb_round_twists')
   process.env.JWT_SECRET = randomUUID()
   await initStore()
-  const app = express()
+  const app = application = express()
   app.use(express.json())
-  for (const [name, module] of [['twist','bbRoundTwist'],['season','bbSeason'],['nomination','bbNomination'],['veto','bbVeto'],['eviction','bbEviction'],['hoh','bbHoh']]) {
+  app.set('io', { of: () => challengeNamespace })
+  for (const [name, module] of [['twist','bbRoundTwist'],['season','bbSeason'],['nomination','bbNomination'],['veto','bbVeto'],['eviction','bbEviction'],['hoh','bbHoh'],['minigame','bbMinigame'],['custom-game','bbCustomGame']]) {
     app.use('/' + name, require('../src/games/bigbrother/routes/' + module))
   }
   server = app.listen(0, '127.0.0.1')
@@ -30,12 +42,14 @@ before(async () => {
 })
 
 after(async () => {
-  if (server) await new Promise(resolve => server.close(resolve))
+  if (challengeIO) await new Promise(resolve => challengeIO.close(resolve))
+  else if (server) await new Promise(resolve => server.close(resolve))
   await closeStore()
   await mongo?.stop()
 })
 
 async function fixture(twist, stage, nominees = null, extra = {}) {
+  rooms.clear()
   for (const collection of ['BBSeason','BBHouseguest','BBHohRecord','BBNomination','BBVetoRecord','BBEviction','BBEvictionVote','BBRoundTwist']) {
     await col(collection).deleteMany({})
   }
@@ -227,4 +241,162 @@ test('赛程配置拒绝分屋人数不足，并按复活的净淘汰数计算�
   assert.equal(planned.success,true,JSON.stringify(planned))
   assert.equal(planned.data.final3Round,9)
   assert.equal(planned.data.championRound,10)
+})
+
+async function challengeWinner(key, playerId) {
+  const created = await ok('/twist/challenges', { round: 2, key, action: 'create', minigameId: 'quick-math' })
+  const room = rooms.get(created.roomId)
+  const game = getGame('quick-math')
+  const state = game.init(room.participants)
+  for (const question of state.playerStates[playerId].questions) {
+    game.handleAction(state, playerId, { type: 'answer', answer: question.answer })
+  }
+  const winnerId = game.computeWinner(state)
+  assert.equal(winnerId, playerId)
+  room.status = 'finished'
+  room.winner = room.participants.find(p => p.playerId === winnerId)
+  room.winners = [room.winner]
+  return room
+}
+const applyChallenge = key => ok('/twist', { round: 2, challengeKey: key })
+
+test('安全比赛：无权者不能开赛，真实算术结果进入免提名名单', async () => {
+  await fixture('safety_suite', 'nomination')
+  assert.equal((await request('/twist/challenges', { round: 2, key:'safety', action:'create', minigameId:'quick-math' }, 'b')).status, 403)
+  assert.equal((await ok('/twist/challenges', undefined, 'a')).slots.length, 0)
+  const room = await challengeWinner('safety', 'b')
+  assert.equal((await request('/minigame/room/' + room.roomId, undefined, 'a')).status, 404)
+  assert.equal((await request('/minigame/set-winner', { roomId: room.roomId, playerId: 'c' })).status, 404)
+  assert.equal((await request('/twist', { round: 2, challengeKey:'safety' }, 'b')).status, 403)
+  await applyChallenge('safety')
+  assert.equal((await ok('/twist')).safePlayerId,'b')
+})
+
+test('复活比赛：只向符合资格的已淘汰房客开放，冠军回归', async () => {
+  await fixture('battle_back','hoh_competition')
+  await col('BBHouseguest').updateMany({id:{$in:['b','c']}},{$set:{status:'evicted'}})
+  await col('BBEviction').insertOne({gameId,id:'old',roundId:'round-1',evictedId:'b'})
+  await challengeWinner('revival','b')
+  assert.equal((await ok('/twist/challenges', undefined, 'a')).slots.length,0)
+  assert.equal((await ok('/twist/challenges', undefined, 'b')).slots[0].key,'revival')
+  await applyChallenge('revival')
+  assert.equal((await col('BBHouseguest').findOne({id:'b'})).status,'active')
+})
+
+test('双房主比赛：依次产生临时 HOH，提名组胜者映射到对应队伍', async () => {
+  await fixture('battle_of_block','hoh_competition')
+  await challengeWinner('battle-hoh-1','a')
+  await applyChallenge('battle-hoh-1')
+  assert.equal((await ok('/twist/challenges', undefined, 'a')).slots.length,0)
+  await challengeWinner('battle-hoh-2','b')
+  await applyChallenge('battle-hoh-2')
+  await branch('battle_of_block',{kind:'nominate',ids:['c','d']},'a')
+  await branch('battle_of_block',{kind:'nominate',ids:['e','f']},'b')
+  await challengeWinner('battle-nominees','c')
+  await applyChallenge('battle-nominees')
+  assert.equal((await col('BBHohRecord').findOne(filter)).winnerId,'b')
+})
+
+test('分屋比赛：两个房间可同时独立存在，POV 结果仅影响本组', async () => {
+  await fixture('split_house','hoh_competition')
+  await branch('split_house',{kind:'setup',ids:ids.slice(0,5)})
+  await challengeWinner('split-0-hoh','a')
+  await challengeWinner('split-1-hoh','f')
+  assert.deepEqual((await ok('/twist/challenges', undefined, 'b')).slots.map(s=>s.key), ['split-0-hoh'])
+  assert.deepEqual((await ok('/twist/challenges', undefined, 'g')).slots.map(s=>s.key), ['split-1-hoh'])
+  await applyChallenge('split-0-hoh')
+  await branch('split_house',{kind:'nominate',ids:['b','c']},'a')
+  await challengeWinner('split-0-pov','d')
+  await applyChallenge('split-0-pov')
+  await applyChallenge('split-1-hoh')
+  const { branch: { groups } } = await ok('/twist')
+  assert.deepEqual(groups.map(g=>g.phase), ['pov-decision','nominate'])
+  assert.equal(groups[0].pov,'d')
+})
+
+test('真实 Socket 挑战：站内答案产生胜者并写入安全挑战', { timeout: 20000 }, async () => {
+  await fixture('safety_suite','nomination')
+  const { Server } = require('socket.io')
+  const { initBBMinigameSocket } = require('../src/socket/bbMinigame')
+  challengeIO = new Server(server)
+  initBBMinigameSocket(challengeIO)
+  application.set('io', challengeIO)
+  const created = await ok('/twist/challenges', { round:2,key:'safety',action:'create',minigameId:'quick-math' })
+  const room = challengeIO.of('/bigbrother-minigame').getRoom(created.roomId)
+  // Shorten the representative match without bypassing its action handler.
+  room.targetScore = 1
+  room.options.timeLimit = 0
+  const token = jwt.sign({userId:'b',name:'B',role:'houseguest'},process.env.JWT_SECRET)
+  const client = new WebSocket(origin.replace('http:','ws:') + '/socket.io/?EIO=4&transport=websocket')
+  try {
+    const finished = new Promise((resolve,reject) => {
+      client.addEventListener('error',reject,{once:true})
+      client.addEventListener('message', ({data}) => {
+        if (data.startsWith('0')) client.send('40/bigbrother-minigame,'+JSON.stringify({token}))
+        if (data === '2') client.send('3')
+        if (data.startsWith('40/bigbrother-minigame,')) {
+          client.send('42/bigbrother-minigame,'+JSON.stringify(['join_room',{roomId:room.roomId}]))
+        }
+        if (!data.startsWith('42/bigbrother-minigame,')) return
+        const [event,payload] = JSON.parse(data.slice('42/bigbrother-minigame,'.length))
+        if (['game_progress', 'game_event', 'game_event_history', 'game_admin_view'].includes(event)) {
+          return reject(new Error('选手收到管理员专用事件 ' + event))
+        }
+        if (event === 'game_state' && room.status === 'playing' && payload.currentQuestion) {
+          const m = /^(\d+)\s*([+\-−])\s*(\d+)$/.exec(payload.currentQuestion)
+          if (!m) return reject(new Error('未知题面 '+payload.currentQuestion))
+          const answer = m[2] === '+' ? Number(m[1]) + Number(m[3]) : Number(m[1]) - Number(m[3])
+          client.send('42/bigbrother-minigame,'+JSON.stringify(['game_action',{roomId:room.roomId,action:{type:'answer',answer}}]))
+        }
+        if (event === 'game_finished') resolve(payload)
+      })
+    })
+    await ok('/twist/challenges', { round:2,key:'safety',action:'start' })
+    const watching = (await ok('/twist/challenges', undefined, 'a')).slots[0].room
+    assert.equal(watching.status, 'countdown')
+    assert.deepEqual(watching.spectatorState.map(p => p.playerId), ids.slice(1))
+    assert.equal((await ok('/twist/challenges', undefined, 'b')).slots[0].room.spectatorState, undefined)
+    assert.equal((await request('/minigame/active-room/twist/', undefined, 'a')).status, 404)
+    assert.equal((await finished).winner.playerId,'b')
+    await applyChallenge('safety')
+    assert.equal((await ok('/twist')).safePlayerId,'b')
+  } finally { client.close() }
+})
+
+test('选手观战只收到公开进度，答题记录仅管理员可读', async () => {
+  const { Server } = require('socket.io')
+  const { initBBMinigameSocket } = require('../src/socket/bbMinigame')
+  const io = new Server()
+  initBBMinigameSocket(io)
+  const previousIO = application.get('io')
+  application.set('io', io)
+  const namespace = io.of('/bigbrother-minigame')
+  const room = namespace.createRoom('hoh', 'missing-number', [
+    { playerId: 'b', playerName: 'B' }, { playerId: 'c', playerName: 'C' }
+  ], null, { roundIndex: 2, options: { questions: ['hidden-question'] } })
+  try {
+    assert.equal((await ok('/minigame/active-room/hoh', undefined, 'a')).spectatorState, undefined)
+    room.status = 'playing'
+    room.gameState = { playerStates: { b: { correct: true, value: 6789 }, c: {} } }
+    const watching = await ok('/minigame/active-room/hoh', undefined, 'a')
+    assert.equal(watching.roundIndex, 2)
+    assert.deepEqual(watching.spectatorState[0], {
+      playerId: 'b', playerName: 'B', avatar: null, connected: false,
+      score: 1, progress: 1, max: 1, done: true, eliminated: false
+    })
+    assert.equal(watching.options, undefined)
+    assert.equal((await ok('/minigame/active-room/hoh', undefined, 'b')).spectatorState, undefined)
+    assert.equal((await request('/minigame/active-rooms', undefined, 'a')).status, 403)
+    assert.equal((await request('/custom-game/list', undefined, 'a')).status, 403)
+    assert.equal((await request('/minigame/room-progress/' + room.roomId, undefined, 'a')).status, 403)
+    assert.equal((await request('/minigame/stop', { roomId: room.roomId }, 'a')).status, 403)
+    assert.equal((await ok('/minigame/room-progress/' + room.roomId)).states.b.label, '已答对 6789')
+    await ok('/minigame/pause', { roomId: room.roomId })
+    assert.equal((await ok('/minigame/active-room/hoh', undefined, 'a')).status, 'paused')
+    await ok('/minigame/stop', { roomId: room.roomId })
+    assert.equal(await ok('/minigame/active-room/hoh', undefined, 'a'), null)
+  } finally {
+    namespace.cleanupRoom(room.roomId)
+    application.set('io', previousIO)
+  }
 })

@@ -3,8 +3,8 @@
     <div class="page-header">
       <h1>赛季设置</h1>
       <div class="header-actions">
-        <button class="bb-btn bb-btn-danger" @click="handleResetSeason">全部重新开始</button>
         <button class="bb-btn" @click="fetchData">刷新</button>
+        <button class="bb-btn bb-btn-danger" @click="handleResetSeason">全部重新开始</button>
       </div>
     </div>
 
@@ -22,7 +22,25 @@
         <span class="value">{{ computedTotalRounds }}</span>
       </div>
       <div class="status-actions">
-        <button class="bb-btn bb-btn-sm" @click="handleNextStage">推进到下一阶段</button>
+        <button class="bb-btn bb-btn-primary" @click="handleNextStage">推进到下一阶段</button>
+      </div>
+    </div>
+
+    <!-- 手动设置进度 -->
+    <div class="stage-control">
+      <h3>手动设置进度</h3>
+      <div class="control-form">
+        <div class="form-group">
+          <label>轮次</label>
+          <input v-model.number="setRound" type="number" class="bb-input" min="1" :max="computedTotalRounds" />
+        </div>
+        <div class="form-group">
+          <label>阶段</label>
+          <select v-model="setStage" class="bb-select">
+            <option v-for="s in manualStageOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
+          </select>
+        </div>
+        <button class="bb-btn bb-btn-primary" @click="handleSetStage">设置</button>
       </div>
     </div>
 
@@ -161,24 +179,6 @@
         </div>
       </div>
     </Teleport>
-
-    <!-- 手动设置进度 -->
-    <div class="stage-control">
-      <h3>手动设置进度</h3>
-      <div class="control-form">
-        <div class="form-group">
-          <label>轮次</label>
-          <input v-model.number="setRound" type="number" class="bb-input" min="1" :max="computedTotalRounds" />
-        </div>
-        <div class="form-group">
-          <label>阶段</label>
-          <select v-model="setStage" class="bb-select">
-            <option v-for="s in manualStageOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
-          </select>
-        </div>
-        <button class="bb-btn bb-btn-primary" @click="handleSetStage">设置</button>
-      </div>
-    </div>
 
     <!-- 赛程矩阵预览 -->
     <div class="matrix-section">

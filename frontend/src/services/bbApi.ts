@@ -885,7 +885,7 @@ export async function bbGetMinigameRoom(roomId: string): Promise<MinigameRoom | 
   return doRequest<MinigameRoom | null>(`/minigame/room/${roomId}`)
 }
 
-export async function bbGetActiveMinigameRoom(gameType: 'hoh' | 'veto' | 'finale'): Promise<MinigameRoom | null> {
+export async function bbGetActiveMinigameRoom(gameType: MinigameRoom['gameType']): Promise<MinigameRoom | null> {
   return doRequest<MinigameRoom | null>(`/minigame/active-room/${gameType}`)
 }
 

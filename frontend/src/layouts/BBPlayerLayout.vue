@@ -59,7 +59,7 @@
           <button class="bb-btn bb-btn-sm" @click="toggleBroadcastHistory">🔔 广播记录</button>
           <button class="bb-btn bb-btn-sm" @click="handleLogout">退出</button>
         </div>
-        <button class="menu-toggle" @click="mobileMenuOpen = !mobileMenuOpen">
+        <button class="menu-toggle" type="button" aria-controls="bb-sidebar" :aria-expanded="mobileMenuOpen" aria-label="切换导航菜单" @click="mobileMenuOpen = !mobileMenuOpen">
           <span class="menu-icon" :class="{ open: mobileMenuOpen }">
             <span></span><span></span><span></span>
           </span>
@@ -70,9 +70,9 @@
     <div v-if="isRestrictedPlayer" class="restricted-banner">
       <span class="restricted-icon">🚫</span>
       <span v-if="isJuryPlayer">
-        你已进入陪审团，只能进入 BB House{{ canJuryEnterFinale ? (seasonStore.season?.currentStage === 'champion_vote' ? '；冠军投票阶段可前往终局投票' : '；F2 问答阶段可前往问答室') : '' }}。
+        你已进入陪审团，可进入 BB House 或参加有资格的复活赛{{ canJuryEnterFinale ? (seasonStore.season?.currentStage === 'champion_vote' ? '；冠军投票阶段可前往终局投票' : '；F2 问答阶段可前往问答室') : '' }}。
       </span>
-      <span v-else>你已被淘汰，只能进入 BB House。</span>
+      <span v-else>你已离开常规赛程，可进入 BB House。符合资格时，可从「变数挑战」参加复活赛。</span>
     </div>
 
     <!-- 管理员广播通知记录（可展开） -->
@@ -98,7 +98,8 @@
     </div>
 
     <div class="layout-body" :class="{ 'with-restricted-banner': isRestrictedPlayer }">
-      <aside class="bb-sidebar" :class="{ open: mobileMenuOpen }">
+      <button v-if="mobileMenuOpen" type="button" class="mobile-nav-scrim" aria-label="关闭导航菜单" @click="mobileMenuOpen = false"></button>
+      <aside id="bb-sidebar" class="bb-sidebar" :class="{ open: mobileMenuOpen }">
         <div class="sidebar-nav">
           <div class="nav-section">
             <router-link v-for="item in visibleFixedItems" :key="item.path"
@@ -110,12 +111,12 @@
           </div>
 
           <div v-for="grp in roundGroups" :key="grp.round" class="nav-section">
-            <div class="nav-section-header" :class="{ current: grp.status === 'current' }"
+            <button type="button" class="nav-section-header" :aria-expanded="!isRoundCollapsed(grp.round)" :class="{ current: grp.status === 'current' }"
               @click="toggleRound(grp.round)">
               <span class="collapse-icon" :class="{ collapsed: isRoundCollapsed(grp.round) }">▾</span>
               <span class="section-title">{{ grp.title }}</span>
               <span class="section-status" :class="grp.status">{{ grp.statusText }}</span>
-            </div>
+            </button>
             <div v-show="!isRoundCollapsed(grp.round)" class="round-stages">
               <router-link v-for="it in grp.items" :key="it.stage"
                 :to="it.path"
@@ -296,7 +297,7 @@ async function refreshState() {
 function enforceRestrictedRoute() {
   if (!isRestrictedPlayer.value) return
   const path = route.path
-  if (path === '/games/bigbrother/player/house') return
+  if (['/games/bigbrother/player/house', '/games/bigbrother/player/twist-challenges'].includes(path)) return
   if (seasonStore.season?.allChatsRevealed && path === '/games/bigbrother/player/replays') return
   if (canJuryEnterFinale.value && path === '/games/bigbrother/player/finale') return
   router.replace('/games/bigbrother/player/house')
@@ -318,13 +319,14 @@ const fixedItems = [
   { icon: '🏠', text: '首页', path: '/games/bigbrother/player/home' },
   { icon: '👤', text: '我的资料', path: '/games/bigbrother/player/profile' },
   { icon: '🏡', text: 'BB House', path: '/games/bigbrother/player/house' },
+  { icon: '🎮', text: '变数挑战', path: '/games/bigbrother/player/twist-challenges' },
   { icon: '📝', text: '历史记录', path: '/games/bigbrother/player/history' },
 ]
 
 // 已淘汰/陪审团：只保留 BB House（陪审团在 F2 问答/冠军投票阶段额外显示终局入口）
 const visibleFixedItems = computed(() => {
   if (!isRestrictedPlayer.value) return fixedItems
-  const items = fixedItems.filter(i => i.path === '/games/bigbrother/player/house')
+  const items = fixedItems.filter(i => ['/games/bigbrother/player/house', '/games/bigbrother/player/twist-challenges'].includes(i.path))
   if (canJuryEnterFinale.value) {
     items.push({
       icon: seasonStore.season?.currentStage === 'champion_vote' ? '🏆' : '🎤',

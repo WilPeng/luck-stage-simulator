@@ -32,6 +32,10 @@
         :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
     </div>
 
+    <MinigameSpectatorPanel v-else-if="activeRoom?.spectatorState && !veto?.winnerId"
+      :title="activeRoom.minigameName" :game-id="activeRoom.minigameId"
+      :status="activeRoom.status" :players="activeRoom.spectatorState" />
+
     <!-- 等待进入比赛：room 已创建且我是参与者，但尚未开始 -->
     <div v-else-if="activeRoom && isParticipant" class="veto-card empty">
       <p>🎮 否决权比赛房间已就绪，等待管理员开始比赛...</p>
@@ -130,6 +134,7 @@ import { bbGetVetoHistory, bbGetActiveMinigameRoom, bbRunVetoCompetition, bbGetC
 import { useBbRealtimeStore } from '../../../stores/bbRealtimeStore'
 import VetoCardDraw from '../../../components/bigbrother/VetoCardDraw.vue'
 import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
+import MinigameSpectatorPanel from '../../../components/bigbrother/MinigameSpectatorPanel.vue'
 import ClickSpeedGame from '../../../components/bigbrother/minigames/ClickSpeedGame.vue'
 import MemoryMatchGame from '../../../components/bigbrother/minigames/MemoryMatchGame.vue'
 import QuickMathGame from '../../../components/bigbrother/minigames/QuickMathGame.vue'
@@ -347,8 +352,7 @@ watch(() => realtime.lastVetoCard, async (v) => {
   await loadPickable()
 })
 
-onMounted(async () => {
-  // 加载 Veto 历史
+async function loadRoundVeto() {
   try {
     const history = await bbGetVetoHistory()
     const roundKey = `round-${roundNum.value}`
@@ -357,6 +361,20 @@ onMounted(async () => {
     // 即使没有获胜者，也加载参与者列表（如果有）
     if (rec && !rec.winnerId && rec.participants?.length) veto.value = rec
   } catch {}
+}
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+let pickPollTimer: ReturnType<typeof setInterval> | null = null
+let disposed = false
+
+onUnmounted(() => {
+  disposed = true
+  if (pollTimer) clearInterval(pollTimer)
+  if (pickPollTimer) clearInterval(pickPollTimer)
+})
+
+onMounted(async () => {
+  await loadRoundVeto()
 
   await loadHohAndNom()
   await loadPickable()
@@ -370,12 +388,10 @@ onMounted(async () => {
   } catch {}
 
   // 检查活跃的小游戏房间
-  let pollTimer: ReturnType<typeof setInterval> | null = null
-
   const checkRoom = async () => {
     try {
       const room = await bbGetActiveMinigameRoom('veto')
-      if (room) {
+      if (room && (room.roundIndex ?? seasonStore.currentRoundNumber) === roundNum.value) {
         activeRoom.value = room
         if (room.minigameId?.startsWith('custom-')) {
           gameComponent.value = markRaw(CustomGamePlayer)
@@ -383,7 +399,9 @@ onMounted(async () => {
           gameComponent.value = gameComponentMap[room.minigameId] || null
         }
       } else {
+        const hadRoom = !!activeRoom.value
         activeRoom.value = null
+        if (hadRoom) await loadRoundVeto()
       }
     } catch {}
 
@@ -394,31 +412,22 @@ onMounted(async () => {
   }
 
   await checkRoom()
+  if (disposed) return
   if (!veto.value?.winnerId) {
     pollTimer = setInterval(checkRoom, 4000)
   }
 
   // 如果需要自选，轮询 veto 记录以获取最新状态
-  let pickPollTimer: ReturnType<typeof setInterval> | null = null
-  if (!veto.value?.winnerId && !activeRoom.value) {
+  if (!veto.value?.winnerId) {
     pickPollTimer = setInterval(async () => {
-      try {
-        const history = await bbGetVetoHistory()
-        const roundKey = `round-${roundNum.value}`
-        const rec = history.find(h => h.roundId === roundKey)
-        if (rec) veto.value = rec
-      } catch {}
-      // 同时刷新 pickable 数据
-      await loadPickable()
+      if (activeRoom.value || veto.value?.winnerId) return
+      await loadRoundVeto()
+      if (!veto.value?.winnerId) await loadPickable()
     }, 3000)
   }
 
   loading.value = false
 
-  onUnmounted(() => {
-    if (pollTimer) clearInterval(pollTimer)
-    if (pickPollTimer) clearInterval(pickPollTimer)
-  })
 })
 </script>
 

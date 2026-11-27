@@ -10,16 +10,20 @@
     </div>
 
     <!-- 准备环节 -->
-    <div v-if="showLobby" class="minigame-section">
+    <div v-if="showLobby && activeRoom" class="minigame-section">
       <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
         :rules="activeRoom.options?.rules || ''"
         :participants="activeRoom.participants" :myId="myId" />
     </div>
 
     <!-- 比赛进行中：渲染小游戏 -->
-    <div v-else-if="gameComponent" class="minigame-section">
+    <div v-else-if="gameComponent && activeRoom" class="minigame-section">
       <component :is="gameComponent" :roomId="activeRoom.roomId" :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
     </div>
+
+    <MinigameSpectatorPanel v-else-if="activeRoom?.spectatorState && !bbbbWinnerId"
+      :title="activeRoom.minigameName" :game-id="activeRoom.minigameId"
+      :status="activeRoom.status" :players="activeRoom.spectatorState" />
 
     <div class="card">
       <div class="card-title">被提名人（{{ nominees.length }}）</div>
@@ -36,7 +40,7 @@
       </div>
     </div>
 
-    <div v-if="!gameComponent" class="waiting">等待管理员开启 BBBB 比赛…</div>
+    <div v-if="!gameComponent && !activeRoom?.spectatorState && !bbbbWinnerId" class="waiting">等待管理员开启 BBBB 比赛…</div>
   </div>
 </template>
 
@@ -47,6 +51,8 @@ import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { bbGetCurrentNomination, bbGetActiveMinigameRoom, bbSetBbbbWinner, bbGetActiveHouseguests } from '../../../services/bbApi'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
+import MinigameSpectatorPanel from '../../../components/bigbrother/MinigameSpectatorPanel.vue'
+import type { MinigameRoom } from '../../../types/bigbrother'
 import ClickSpeedGame from '../../../components/bigbrother/minigames/ClickSpeedGame.vue'
 import MemoryMatchGame from '../../../components/bigbrother/minigames/MemoryMatchGame.vue'
 import QuickMathGame from '../../../components/bigbrother/minigames/QuickMathGame.vue'
@@ -82,7 +88,7 @@ const myId = computed(() => authStore.currentUser?.id || '')
 const nominees = ref<any[]>([])
 const bbbbWinnerId = ref<string | null>(null)
 const bbbbWinnerName = ref('')
-const activeRoom = ref<any>(null)
+const activeRoom = ref<MinigameRoom | null>(null)
 const gameComponent = ref<Component | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -90,7 +96,7 @@ const winnerName = computed(() => bbbbWinnerName.value || nominees.value.find(n 
 
 const showLobby = computed(() => {
   if (!activeRoom.value || activeRoom.value.status !== 'waiting') return false
-  return (activeRoom.value.participants || []).some((p: any) => p.playerId === myId.value)
+  return activeRoom.value.participants.some(p => p.playerId === myId.value)
 })
 
 const gameComponentMap: Record<string, Component> = {
@@ -137,9 +143,10 @@ async function fetchData() {
   } catch {}
 
   try {
-    const room = await bbGetActiveMinigameRoom('bbbb')
+    const currentRoom = await bbGetActiveMinigameRoom('bbbb')
+    const room = currentRoom?.roundIndex === roundNum.value ? currentRoom : null
     activeRoom.value = room
-    if (room && room.status !== 'finished' && (room.participants || []).some((p: any) => p.playerId === myId.value)) {
+    if (room && room.status !== 'finished' && room.participants.some(p => p.playerId === myId.value)) {
       if (room.minigameId?.startsWith('custom-')) gameComponent.value = markRaw(CustomGamePlayer)
       else gameComponent.value = gameComponentMap[room.minigameId] || null
     } else {

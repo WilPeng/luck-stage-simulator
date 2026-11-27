@@ -26,6 +26,10 @@
         :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
     </div>
 
+    <MinigameSpectatorPanel v-else-if="activeRoom?.spectatorState && !currentHoh"
+      :title="activeRoom.minigameName" :game-id="activeRoom.minigameId"
+      :status="activeRoom.status" :players="activeRoom.spectatorState" />
+
     <!-- 已有结果 -->
     <div v-else-if="currentHoh" class="hoh-announcement">
       <div class="hoh-card" :class="{ 'is-me': isMe(currentHoh.winnerName) }">
@@ -72,6 +76,7 @@ import { bbGetHohHistory, bbGetActiveMinigameRoom, bbRunHohCompetition, bbGetHoh
 import { useBbRefresh } from '../../../composables/useBbRefresh'
 import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 import MinigameLobby from '../../../components/bigbrother/MinigameLobby.vue'
+import MinigameSpectatorPanel from '../../../components/bigbrother/MinigameSpectatorPanel.vue'
 import ClickSpeedGame from '../../../components/bigbrother/minigames/ClickSpeedGame.vue'
 import MemoryMatchGame from '../../../components/bigbrother/minigames/MemoryMatchGame.vue'
 import QuickMathGame from '../../../components/bigbrother/minigames/QuickMathGame.vue'
@@ -197,6 +202,7 @@ async function checkRoom() {
   try {
   // 优先刷新 HOH 结果：管理员指定 / 比赛结束后无需刷新页面即可跳转
   if (await loadCurrentHoh()) {
+    activeRoom.value = null
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
     return
   }
@@ -206,7 +212,7 @@ async function checkRoom() {
   }
   try {
     const room = await bbGetActiveMinigameRoom('hoh')
-    if (room) {
+    if (room && (room.roundIndex ?? seasonStore.currentRoundNumber) === roundNum.value) {
       activeRoom.value = room
       if (room.minigameId?.startsWith('custom-')) {
         gameComponent.value = markRaw(CustomGamePlayer)
@@ -217,6 +223,8 @@ async function checkRoom() {
         clearInterval(pollTimer)
         pollTimer = null
       }
+    } else {
+      activeRoom.value = null
     }
   } catch {}
   } finally { checking = false }

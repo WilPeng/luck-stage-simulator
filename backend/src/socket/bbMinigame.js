@@ -11,6 +11,7 @@ const { broadcastBBGame } = require('./bbGame')
 
 // 活跃游戏房间（内存管理）
 const activeRooms = new Map() // roomId -> GameRoom
+const adminRoom = roomId => `minigame-admin:${roomId}`
 
 class GameRoom {
   constructor(roomId, gameType, minigameId, participants, targetScore) {
@@ -24,7 +25,8 @@ class GameRoom {
     this.gameState = null         // 小游戏内部状态
     this.winner = null
     this.winners = []             // 胜者列表（支持并列）
-    this.manualWinnerId = null    // 管理员手动指定的胜者
+    this.manualWinnerId = null   // 提前结束时的胜者（达标或手动指定）
+    this.winnerWasAssigned = false
     this.tickTimer = null         // balance-bar 的定时器
     this.handler = null           // 自定义游戏 handler 缓存
     this.minigameName = ''
@@ -141,6 +143,7 @@ const initBBMinigameSocket = (io) => {
 
       // 管理员加入时立即收到当前进度、局面和最近的操作记录。
       if (isAdmin) {
+        socket.join(adminRoom(roomId))
         socket.emit('game_progress', buildProgress(room))
         const session = getSession(roomId)
         if (session) socket.emit('game_event_history', {
@@ -189,6 +192,7 @@ const initBBMinigameSocket = (io) => {
         room.setConnected(userId, false)
       }
       socket.leave(roomId)
+      socket.leave(adminRoom(roomId))
       socket.roomId = null
 
       minigameNs.to(roomId).emit('participant_left', {
@@ -205,6 +209,7 @@ const initBBMinigameSocket = (io) => {
       const room = activeRooms.get(roomId)
       if (!room) return
       if (room.status !== 'playing') return
+      if (!room.getParticipant(userId) || !socket.rooms.has(roomId)) return
 
       const handler = await resolveGameHandler(room.minigameId, room)
       if (!handler) return
@@ -387,6 +392,7 @@ const initBBMinigameSocket = (io) => {
           }
         })
         pushReplaySnapshot(room, handler, '游戏开始')
+        broadcastProgress(room, minigameNs)
 
         // 非 balance-bar 游戏：给每个已连接的选手发送各自的 game_state
         if (room.minigameId !== 'balance-bar' && handler.getState) {
@@ -486,7 +492,9 @@ const initBBMinigameSocket = (io) => {
     if (!room) return { success: false, error: '房间不存在' }
     const participant = room.getParticipant(playerId)
     if (!participant) return { success: false, error: '该选手不在房间参与者中' }
+    if (room.gameType === 'twist') return { success: false, error: '请在本轮变数面板手动录入结果' }
     room.manualWinnerId = playerId
+    room.winnerWasAssigned = true
     if (playerName) participant.playerName = playerName
     room.winner = { playerId, playerName: participant.playerName }
     finishGame(room, minigameNs)
@@ -691,17 +699,12 @@ function publicParticipants(room) {
 }
 
 function broadcastProgress(room, minigameNs) {
-  if (!room || room.status === 'finished') return
-  try { minigameNs.to(room.roomId).emit('game_progress', buildProgress(room)) } catch (e) { /* ignore */ }
+  if (!room) return
+  const observers = minigameNs.to(adminRoom(room.roomId))
+  observers.emit('game_progress', buildProgress(room))
+  if (room.status === 'finished') return
   const view = buildObserverView(room)
-  if (!view) return
-  minigameNs.fetchSockets().then(sockets => {
-    for (const socket of sockets) {
-      if (socket.user?.role === 'admin' && socket.rooms.has(room.roomId)) {
-        socket.emit('game_admin_view', { roomId: room.roomId, minigameId: room.minigameId, view })
-      }
-    }
-  }).catch(() => {})
+  if (view) observers.emit('game_admin_view', { roomId: room.roomId, minigameId: room.minigameId, view })
 }
 
 function buildObserverView(room) {
@@ -750,7 +753,7 @@ function defaultDescribe(playerName, action) {
 
 function recordAndBroadcast(minigameNs, room, ev) {
   const event = recordEvent(room, ev)
-  if (event) minigameNs.to(room.roomId).emit('game_event', event)
+  if (event) minigameNs.to(adminRoom(room.roomId)).emit('game_event', event)
   return event
 }
 
@@ -888,7 +891,7 @@ function finishGame(room, minigameNs) {
     scores
   })
 
-  minigameNs.to(room.roomId).emit('game_progress', buildProgress(room))
+  broadcastProgress(room, minigameNs)
 
   // 补推最终状态：让所有参赛者（不只是最后操作者）都能看到结算/全场公开信息
   pushPlayerStates(room, handler, minigameNs)
