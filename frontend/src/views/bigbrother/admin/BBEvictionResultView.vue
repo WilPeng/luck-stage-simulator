@@ -23,50 +23,53 @@
       <span v-if="twistInfo.isKarmicPawnship" class="twist-item karmic">⚖️ 因果报应：被提名但未被淘汰的幸存者将自动成为下轮 HOH</span>
     </div>
 
-    <div class="action-section wb-panel">
-      <h3>操作 - 淘汰夜</h3>
-      <div class="action-buttons">
-        <template v-if="!night">
-          <div class="mode-select">
-            <span class="ms-label">宣布句数：</span>
-            <label><input type="radio" :value="3" v-model.number="sentenceMode" /> 3 句（直接宣布淘汰者）</label>
-            <label><input type="radio" :value="5" v-model.number="sentenceMode" /> 5 句（先宣布安全者，再宣布淘汰者）</label>
-          </div>
-          <button class="bb-btn bb-btn-danger" @click="startNight" :disabled="(voteData.votes?.length || 0) === 0 || starting">
-            🌙 {{ starting ? '处理中...' : '开始淘汰夜（锁票）' }}
-          </button>
-        </template>
-        <template v-else-if="night.phase === 'announce'">
-          <button class="bb-btn bb-btn-primary" @click="nextSentence" :disabled="nexting || (night.released || 0) >= (night.segments || []).length">
-            📢 下一句（{{ night.released || 0 }}/{{ (night.segments || []).length }}）
-          </button>
-          <button class="bb-btn bb-btn-primary" @click="confirmNight" :disabled="confirming">
-            ✅ {{ confirming ? '处理中...' : '确定（开门）' }}
-          </button>
-        </template>
-        <button v-else class="bb-btn" disabled>🚪 已开门</button>
-        <button v-if="night" class="bb-btn" @click="resetNight">清除淘汰夜</button>
-      </div>
-
-      <div v-if="night" class="night-preview">
-        <div class="night-phase">{{ night.phase === 'announce' ? '📢 淘汰结果宣布' : '🚪 开门结果' }}</div>
-        <template v-if="night.phase === 'announce'">
-          <div v-for="(s, i) in (night.segments || [])" :key="i" class="night-line"
-            :class="{ dim: (night.released || 0) <= i, result: s.type === 'result', evicted: s.type === 'evicted' }">
-            {{ s.text }}
-          </div>
-        </template>
-        <template v-else>
-          <div v-for="e in night.evicted" :key="e.id" class="night-line door">🚪 {{ e.name }} · {{ night.big }}-{{ night.small }}</div>
-        </template>
-      </div>
-      <div v-if="night && night.phase === 'announce' && nominees.length" class="nominee-preview">
-        <div class="np-title">本轮被提名者</div>
-        <div class="np-list">
-          <span v-for="n in nominees" :key="n.id" class="np-chip">{{ n.name }}</span>
+    <div class="eviction-night-desk">
+      <section class="action-section wb-panel night-console">
+        <h2>{{ !night ? '准备淘汰夜' : night.phase === 'announce' ? '宣布淘汰结果' : '淘汰夜已开门' }}</h2>
+        <div class="action-buttons">
+          <template v-if="!night">
+            <div class="mode-select">
+              <span class="ms-label">宣布句数：</span>
+              <label><input type="radio" :value="3" v-model.number="sentenceMode" /> 3 句（直接宣布淘汰者）</label>
+              <label><input type="radio" :value="5" v-model.number="sentenceMode" /> 5 句（先宣布安全者，再宣布淘汰者）</label>
+            </div>
+            <button class="bb-btn bb-btn-danger" @click="startNight" :disabled="(voteData.votes?.length || 0) === 0 || starting">
+              🌙 {{ starting ? '处理中...' : '开始淘汰夜（锁票）' }}
+            </button>
+          </template>
+          <template v-else-if="night.phase === 'announce'">
+            <button class="bb-btn bb-btn-primary" @click="nextSentence" :disabled="nexting || (night.released || 0) >= (night.segments || []).length">
+              📢 下一句（{{ night.released || 0 }}/{{ (night.segments || []).length }}）
+            </button>
+            <button class="bb-btn bb-btn-primary" @click="confirmNight" :disabled="confirming">
+              ✅ {{ confirming ? '处理中...' : '确定（开门）' }}
+            </button>
+          </template>
+          <button v-else class="bb-btn" disabled>🚪 已开门</button>
+          <button v-if="night" class="bb-btn" @click="resetNight">清除淘汰夜</button>
         </div>
-      </div>
-      <p v-if="!night" class="hint">开始淘汰夜后将锁定投票，并向选手端展示「📢 淘汰结果宣布」框架；再点「确定」显示开门结果。</p>
+        <p v-if="!night" class="hint">开始淘汰夜后将锁定投票，并向选手端展示「📢 淘汰结果宣布」框架；再点「确定」显示开门结果。</p>
+      </section>
+      <aside v-if="night" class="wb-panel night-screen" aria-label="宣布预览">
+        <div v-if="night" class="night-preview">
+          <div class="night-phase">{{ night.phase === 'announce' ? '📢 淘汰结果宣布' : '🚪 开门结果' }}</div>
+          <template v-if="night.phase === 'announce'">
+            <div v-for="(s, i) in (night.segments || [])" :key="i" class="night-line"
+              :class="{ dim: (night.released || 0) <= i, result: s.type === 'result', evicted: s.type === 'evicted' }">
+              {{ s.text }}
+            </div>
+          </template>
+          <template v-else>
+            <div v-for="e in night.evicted" :key="e.id" class="night-line door">🚪 {{ e.name }} · {{ night.big }}-{{ night.small }}</div>
+          </template>
+        </div>
+        <div v-if="night && night.phase === 'announce' && nominees.length" class="nominee-preview">
+          <div class="np-title">本轮被提名者</div>
+          <div class="np-list">
+            <span v-for="n in nominees" :key="n.id" class="np-chip">{{ n.name }}</span>
+          </div>
+        </div>
+      </aside>
     </div>
 
     <div class="wb-lanes">

@@ -255,6 +255,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
 import { useHouseSocket, type HouseMessage, type HousePlayer } from '../../../composables/useHouseSocket'
@@ -643,6 +644,11 @@ house.onError.value = (data) => {
   console.error('[BBHouse]', data.error)
 }
 
+async function loadHoh() {
+  const hoh = await bbGetCurrentHoh()
+  currentHohId.value = hoh?.winnerId || seasonStore.season?.fhohId || null
+}
+
 async function loadData() {
   try {
     const [locRes, roomsRes, reachableRes] = await Promise.all([
@@ -684,14 +690,7 @@ async function loadData() {
     }
 
     // 解析当前 HOH（周 HOH > 终局 FHOH 回退）
-    const hohRes = await bbGetCurrentHoh()
-    if (hohRes && (hohRes as any).winnerId) {
-      currentHohId.value = (hohRes as any).winnerId
-    } else if (seasonStore.season?.fhohId) {
-      currentHohId.value = seasonStore.season.fhohId
-    } else {
-      currentHohId.value = null
-    }
+    await loadHoh()
 
     // 身处 HOH 房即可查看监控（含普通房客）
     if (currentRoomId.value === 'hoh_room') {
@@ -847,6 +846,9 @@ function dismissNotifyBanner() {
 
 let stateTicker: ReturnType<typeof setInterval> | null = null
 let washroomTicker: ReturnType<typeof setInterval> | null = null
+
+useBbRefresh(loadHoh, '/hoh', '/round-twist', '/season/set', '/season/next', '/season/reset', '/season/endgame/final3')
+useBbRefresh(loadActivePlayers, '/houseguests', '/eviction/result', '/eviction/night/start', '/eviction/restore', '/round-twist', '/season/reset')
 
 onMounted(() => {
   loadData()

@@ -258,7 +258,9 @@
 @media (max-width: 768px) {
   :is(.bb-admin-layout, .bb-player-layout) { --workspace-header-height: 92px; }
 
-  .app-container :is(.bb-header, .bb-player-header) { height: var(--workspace-header-height); }
+  .app-container :is(.bb-admin-layout, .bb-player-layout) > :is(.bb-header, .bb-player-header) {
+    height: var(--workspace-header-height);
+  }
 
   .app-container :is(.bb-header, .bb-player-header) .header-content {
     display: grid;
@@ -290,9 +292,9 @@
     place-content: center;
   }
 
-  :is(.bb-admin-layout, .bb-player-layout) .layout-body { padding-top: var(--workspace-header-height); }
+  .app-container :is(.bb-admin-layout, .bb-player-layout) > .layout-body { padding-top: var(--workspace-header-height); }
 
-  :is(.bb-admin-layout, .bb-player-layout) :is(.bb-sider, .bb-sidebar) {
+  .app-container :is(.bb-admin-layout, .bb-player-layout) :is(.bb-sider, .bb-sidebar) {
     top: var(--workspace-header-height);
     height: calc(100dvh - var(--workspace-header-height));
     visibility: hidden;
@@ -310,12 +312,12 @@
     background: #080411aa;
   }
 
-  .bb-player-layout .restricted-banner {
+  .app-container .bb-player-layout > .restricted-banner {
     position: relative;
     top: auto;
     margin-top: var(--workspace-header-height);
   }
-  .bb-player-layout .layout-body.with-restricted-banner { padding-top: 0; }
+  .app-container .bb-player-layout > .layout-body.with-restricted-banner { padding-top: 0; }
 
   .app-container .bb-main > * > .page-header :is(.bb-btn, .bb-input, .bb-select) { min-height: 40px; }
 }
@@ -472,6 +474,16 @@
   font-size: 13px;
 }
 .nomination-workflow { min-width: 0; }
+.nomination-key-workspace > summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  border: 1px solid var(--nom-line);
+  border-radius: 10px;
+  background: var(--nom-row);
+  color: var(--bb-text-primary);
+  font-weight: 650;
+}
+.nomination-key-workspace[open] > summary { margin-bottom: 10px; }
 .nomination-masthead ~ :is(.nomination-card, .nomination-ballot, .empty-card),
 .nomination-workflow .nomination-ballot,
 .nomination-tools .nomination-disclosure {

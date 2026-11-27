@@ -12,72 +12,59 @@
       </div>
     </header>
 
-    <div class="wb-data-board">
-      <div class="table-wrapper">
-        <table class="state-table">
-          <thead>
-            <tr>
-              <th>房客</th>
-              <th>状态</th>
-              <th>位置</th>
-              <th>本轮已睡</th>
-              <th>入睡时间</th>
-              <th>在睡觉</th>
-              <th>洗澡冷却</th>
-              <th>在洗澡</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="g in houseguests" :key="g.id">
-              <td class="name-cell">
-                <div class="name-cell-inner">
-                  <BBAvatar :name="g.name" :avatar="g.avatar" size="sm" />
-                  <span>{{ g.name }}</span>
-                </div>
-              </td>
-              <td>
-                <span class="status-tag" :class="g.status">{{ statusLabel(g.status) }}</span>
-              </td>
-              <td>{{ roomName(g.currentRoomId) }}</td>
-              <td>
-                <span class="badge" :class="g.sleepCompleted ? 'ok' : 'none'" :title="g.sleepCycleDate ? '睡眠周期：' + g.sleepCycleDate : ''">
-                  {{ g.sleepCompleted ? '已完成' : '未完成' }}
-                </span>
-              </td>
-              <td>{{ g.sleepStartedAt ? formatTime(g.sleepStartedAt) : '—' }}</td>
-              <td>
-                <span v-if="g.isSleeping" class="badge sleeping" :title="g.wakeAt ? '醒来：' + formatTime(g.wakeAt) : ''">睡眠中</span>
-                <span v-else class="badge none">清醒</span>
-              </td>
-              <td>
-                <span v-if="cooldownActive(g)" class="badge cooling" :title="'可再次洗澡：' + formatTime(g.showerCooldownUntil)">
-                  冷却 {{ cooldownText(g) }}
-                </span>
-                <span v-else class="badge none">可洗</span>
-              </td>
-              <td>
-                <span v-if="g.isShowering" class="badge showering" :title="g.showerStartedAt ? '开始：' + formatTime(g.showerStartedAt) : ''">洗澡中</span>
-                <span v-else class="badge none">空闲</span>
-              </td>
-              <td class="actions">
-                <div class="actions-inner">
-                  <button v-if="g.isSleeping" class="bb-btn-xs danger" @click="sleep(g, 'end')">立即结束睡觉</button>
-                  <button v-else class="bb-btn-xs" @click="sleep(g, 'start')">立即开始睡觉</button>
-                  <button v-if="g.sleepCompleted" class="bb-btn-xs" @click="sleep(g, 'clear')">清除本轮已睡</button>
-                  <button v-else class="bb-btn-xs" @click="sleep(g, 'mark')">标记本轮已睡</button>
-
-                  <button v-if="g.isShowering" class="bb-btn-xs danger" @click="shower(g, 'end')">立即结束洗澡</button>
-                  <button v-else class="bb-btn-xs" @click="shower(g, 'start')">立即开始洗澡</button>
-                  <button v-if="cooldownActive(g)" class="bb-btn-xs" @click="shower(g, 'clear')">清除洗澡冷却</button>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="!houseguests.length"><td colspan="9" class="empty">暂无房客</td></tr>
-          </tbody>
-        </table>
+    <section class="guest-observation" aria-label="房客状态">
+      <header class="wb-panel observation-summary">
+        <div><span>房客</span><strong>{{ houseguests.length }}</strong></div>
+        <div><span>睡眠中</span><strong>{{ houseguests.filter(g => g.isSleeping).length }}</strong></div>
+        <div><span>洗澡中</span><strong>{{ houseguests.filter(g => g.isShowering).length }}</strong></div>
+      </header>
+      <div v-if="!houseguests.length" class="wb-panel observation-empty">暂无房客</div>
+      <div class="observation-grid">
+        <article v-for="g in houseguests" :key="g.id" class="wb-panel observation-person">
+          <header class="observation-person-head">
+            <div class="name-cell-inner">
+              <BBAvatar :name="g.name" :avatar="g.avatar" size="sm" />
+              <span>{{ g.name }}</span>
+            </div>
+            <span class="status-tag" :class="g.status">{{ statusLabel(g.status) }}</span>
+            <span class="observation-room">{{ roomName(g.currentRoomId) }}</span>
+          </header>
+          <section class="observation-kind">
+            <h2>睡眠</h2>
+            <div class="observation-labels">
+              <span class="badge" :class="g.sleepCompleted ? 'ok' : 'none'" :title="g.sleepCycleDate ? '睡眠周期：' + g.sleepCycleDate : ''">
+                {{ g.sleepCompleted ? '已完成' : '未完成' }}
+              </span>
+              <span v-if="g.isSleeping" class="badge sleeping" :title="g.wakeAt ? '醒来：' + formatTime(g.wakeAt) : ''">睡眠中</span>
+              <span v-else class="badge none">清醒</span>
+              <span v-if="g.sleepStartedAt">入睡 {{ formatTime(g.sleepStartedAt) }}</span>
+            </div>
+            <div class="observation-actions">
+              <button v-if="g.isSleeping" class="bb-btn-xs danger" @click="sleep(g, 'end')">立即结束睡觉</button>
+              <button v-else class="bb-btn-xs" @click="sleep(g, 'start')">立即开始睡觉</button>
+              <button v-if="g.sleepCompleted" class="bb-btn-xs" @click="sleep(g, 'clear')">清除本轮已睡</button>
+              <button v-else class="bb-btn-xs" @click="sleep(g, 'mark')">标记本轮已睡</button>
+            </div>
+          </section>
+          <section class="observation-kind">
+            <h2>洗澡</h2>
+            <div class="observation-labels">
+              <span v-if="cooldownActive(g)" class="badge cooling" :title="'可再次洗澡：' + formatTime(g.showerCooldownUntil)">
+                冷却 {{ cooldownText(g) }}
+              </span>
+              <span v-else class="badge none">可洗</span>
+              <span v-if="g.isShowering" class="badge showering" :title="g.showerStartedAt ? '开始：' + formatTime(g.showerStartedAt) : ''">洗澡中</span>
+              <span v-else class="badge none">空闲</span>
+            </div>
+            <div class="observation-actions">
+              <button v-if="g.isShowering" class="bb-btn-xs danger" @click="shower(g, 'end')">立即结束洗澡</button>
+              <button v-else class="bb-btn-xs" @click="shower(g, 'start')">立即开始洗澡</button>
+              <button v-if="cooldownActive(g)" class="bb-btn-xs" @click="shower(g, 'clear')">清除洗澡冷却</button>
+            </div>
+          </section>
+        </article>
       </div>
-    </div>
+    </section>
   </div>
 </template>
 

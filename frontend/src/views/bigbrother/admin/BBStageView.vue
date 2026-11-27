@@ -51,12 +51,14 @@
     </div>
 
     <!-- 赛季配置 4 列表格 -->
-    <div class="config-card wb-panel">
+    <nav class="season-planner-tabs" aria-label="赛季规划">
+      <button type="button" :aria-pressed="plannerView === 'config'" @click="plannerView = 'config'">轮次配置</button>
+      <button type="button" :aria-pressed="plannerView === 'matrix'" @click="plannerView = 'matrix'">赛程矩阵</button>
+    </nav>
+    <div v-show="plannerView === 'config'" class="config-card wb-panel">
       <div class="config-header">
         <h3>赛季配置</h3>
-        <button class="bb-btn bb-btn-primary" @click="handleSaveConfig" :disabled="saving">
-          {{ saving ? '保存中...' : '💾 保存配置' }}
-        </button>
+
       </div>
       <p class="config-hint">
         赛季开始前可编辑全部内容；赛季开始后，已完成的轮次将被锁定，仅可编辑未来轮次的 twist。
@@ -154,6 +156,12 @@
         </div>
       </div>
       <p class="auto-lock-hint">🔒 赛季总周数（普通淘汰轮 + F3 终局 + 冠军投票）由房客人数与淘汰计划自动演算，无需手动增删轮次。</p>
+      <footer class="season-planner-save">
+        <span>轮次与终局规则</span>
+        <button class="bb-btn bb-btn-primary" @click="handleSaveConfig" :disabled="saving">
+          {{ saving ? '保存中...' : '保存赛季配置' }}
+        </button>
+      </footer>
     </div>
 
     <!-- Twist 选择弹窗 -->
@@ -187,8 +195,9 @@
     </Teleport>
 
     <!-- 赛程矩阵预览 -->
-    <div class="matrix-section wb-panel">
-      <h3>赛程矩阵预览</h3>
+    <div v-show="plannerView === 'matrix'" class="matrix-section wb-panel">
+      <h3>赛程矩阵</h3>
+      <p class="season-matrix-hint">点击阶段格进入对应轮次的操作页。</p>
       <div class="matrix-table-wrapper">
         <table class="matrix-table">
           <thead>
@@ -225,7 +234,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useRouter } from 'vue-router'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
@@ -240,10 +249,10 @@ import {
 const router = useRouter()
 const seasonStore = useBbSeasonStore()
 
+const plannerView = ref<'config' | 'matrix'>('config')
 const setRound = ref(1)
 const setStage = ref<BBStageType | 'final3' | 'champion_vote'>('hoh_competition')
 const saving = ref(false)
-const isSeasonStarted = ref(false)
 const jurySize = ref(7)
 const finalSize = ref(2) // 最终不淘汰进入决赛的人数
 const totalHouseguests = ref(0) // 参与赛程规划的房客数（总人数 - 退赛人数）
@@ -276,7 +285,6 @@ const matrixRounds = computed(() => {
 
 // 判断赛季是否已开始
 const isSeasonActive = computed(() => {
-  if (isSeasonStarted.value) return true
   if (seasonStore.currentRoundNumber > 1) return true
   if (seasonStore.currentStage !== 'hoh_competition') return true
   return false
@@ -420,7 +428,6 @@ async function loadConfig() {
     const config = await bbGetSeasonConfig()
     roundConfigs.value = config.roundConfigs || []
     allTwistDefs.value = config.allTwists || getAllTwistDefs()
-    isSeasonStarted.value = config.isSeasonStarted
     jurySize.value = config.jurySize ?? 7
     finalSize.value = config.finalSize ?? 2
   } catch {
@@ -594,14 +601,12 @@ function navigateToStage(round: number, stage: string) {
 async function handleSetStage() {
   try {
     await seasonStore.setStage(setRound.value, setStage.value as BBStageType)
-    await fetchData()
   } catch (e: any) { alert(e.message) }
 }
 
 async function handleNextStage() {
   try {
     await seasonStore.nextStage()
-    await fetchData()
   } catch (e: any) { alert(e.message) }
 }
 
@@ -614,6 +619,12 @@ async function handleResetSeason() {
   } catch (e: any) { alert(e.message) }
 }
 
+watch(() => seasonStore.currentRoundNumber, (round, previousRound) => {
+  if (setRound.value === previousRound) setRound.value = round
+})
+watch(() => seasonStore.currentStage, (stage, previousStage) => {
+  if (setStage.value === previousStage) setStage.value = stage
+})
 useBbRefresh(loadConfig, '/season/config', '/season/twists', '/season/round', '/season/reset')
 useBbRefresh(loadRoster, '/houseguests', '/season/reset')
 onMounted(fetchData)

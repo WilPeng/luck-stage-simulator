@@ -1,16 +1,15 @@
 <template>
   <div class="room-chat">
-    <div class="chat-header">
+    <header class="chat-header">
       <div class="chat-room-info">
         <span class="chat-room-icon">{{ roomIcon }}</span>
-        <span class="chat-room-name">{{ roomName }}</span>
+        <div>
+          <h2 class="chat-room-name">{{ roomName }}</h2>
+          <p class="chat-connection" :class="{ online: connected }">{{ connected ? '已连接' : '连接中断' }}</p>
+        </div>
       </div>
       <div class="chat-header-right">
-        <button class="jump-toggle" title="跳转聊天记录" @click="toggleJumpPicker">📅</button>
-        <div class="chat-presence">
-          <span class="presence-dot" :class="{ online: connected }"></span>
-          <span class="presence-text">{{ presenceCount }}人在房间</span>
-        </div>
+        <button type="button" class="jump-toggle" title="跳转聊天记录" :aria-expanded="showJumpPicker" @click="toggleJumpPicker">历史</button>
       </div>
       <div v-if="showJumpPicker" class="jump-popover" @click.stop>
         <div class="jp-title">跳转聊天记录</div>
@@ -20,23 +19,26 @@
           <button class="jp-btn primary" :disabled="!jumpTime" @click="confirmJump">跳转</button>
         </div>
       </div>
-    </div>
+    </header>
 
     <!-- 玩家列表 -->
-    <div class="presence-bar">
+    <details class="presence-details" open>
+      <summary>房间成员 · {{ presenceCount }} 人</summary>
+      <div class="presence-bar">
       <div v-for="p in presencePlayers" :key="p.playerId" class="presence-player">
         <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
         <span class="presence-player-name">{{ p.playerName }}</span>
       </div>
       <div v-if="presencePlayers.length === 0" class="presence-empty">暂无其他人</div>
-    </div>
+      </div>
+    </details>
 
     <!-- 消息列表 -->
     <div class="messages-container" ref="messagesContainer">
       <div v-if="loading" class="loading-more">加载中...</div>
-      <div v-if="hasMore && !loading" class="load-more" @click="$emit('load-more')">
-        ↑ 加载更多
-      </div>
+      <button type="button" v-if="hasMore && !loading" class="load-more" @click="$emit('load-more')">
+        加载更早的消息
+      </button>
 
       <div v-for="msg in messages" :key="msg.id" class="message"
         :class="{ 'system-msg': msg.senderId === 'system', 'self-msg': msg.senderId === currentUserId }">
@@ -93,6 +95,7 @@
     <!-- 输入框 -->
     <div class="chat-input">
       <input
+        aria-label="房间消息"
         v-model="inputText"
         type="text"
         :placeholder="`在${roomName}中发言...`"
@@ -534,4 +537,14 @@ import { computed } from 'vue'
 }
 .send-btn:hover:not(:disabled) { background: #b39bff33; border-color: #b39bff; }
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.chat-connection { font-size: 12px; color: #cdbbcf; margin-top: 4px; }
+.chat-connection.online { color: #acd9c2; }
+.chat-room-info { min-width: 0; }
+.chat-room-name { line-height: 1.25; overflow-wrap: anywhere; }
+.jump-toggle { width: auto; min-height: 36px; padding-inline: 9px; }
+.presence-details { flex-shrink: 0; border-bottom: 1px solid #b39bff22; }
+.presence-details summary { cursor: pointer; color: #d4c6e2; padding: 8px 14px; font-size: 12px; }
+.presence-details .presence-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; border: 0; padding-block: 0 8px; }
+.presence-details .presence-player { flex: none; }
+.load-more { align-self: center; background: transparent; border: 0; padding: 8px; }
 </style>

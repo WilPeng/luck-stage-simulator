@@ -244,7 +244,7 @@ async function fetchData() {
   }
   if (isCurrentRound.value) {
     try { currentHoh.value = await bbGetCurrentHoh() } catch {}
-    try { myVote.value = await bbGetMyVote() } catch {}
+    await loadMyVote()
     try {
       const campaign = await bbGetEvictionCampaign()
       campaignData.value = {
@@ -253,7 +253,7 @@ async function fetchData() {
       }
       // 首次加载时回填自己已提交的内容；正在编辑时不要覆盖
       const mine = campaignData.value.campaigns.find(c => c.playerId === authStore.currentUser?.id)
-      if (mine && !campaignInput.value) campaignInput.value = mine.content
+      if (mine && loading.value && !campaignInput.value) campaignInput.value = mine.content
     } catch {}
   }
   try {
@@ -265,9 +265,17 @@ async function fetchData() {
   loading.value = false
 }
 
+async function loadMyVote() {
+  if (!isCurrentRound.value) return
+  try { myVote.value = await bbGetMyVote() } catch {}
+}
+
 useBbRefresh(fetchData,
-  '/eviction/campaign', '/eviction/start-vote', '/eviction/vote', '/eviction/night/start', '/eviction/night/reset', '/nomination', '/veto/use', '/round-twist', '/season/set', '/season/next', '/season/reset'
+  '/eviction/campaign', '/eviction/start-vote', '/eviction/night/start', '/eviction/night/reset',
+  '/nomination/set', '/nomination/replace', '/nomination/undo', '/nomination/bbbb-winner', '/veto/use',
+  '/round-twist', '/season/set', '/season/next', '/season/reset'
 )
+useBbRefresh(loadMyVote, '/eviction/vote')
 onMounted(fetchData)
 </script>
 

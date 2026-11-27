@@ -5,20 +5,21 @@
         <h1>💬 房间聊天记录</h1>
       </div>
       <div class="wb-page-tools">
-        <div class="filters">
-          <input v-model="keyword" class="bb-input" aria-label="搜索内容或发送者" placeholder="搜索内容 / 发送者…" />
-          <select v-model="roomFilter" class="bb-select" aria-label="筛选房间" @change="onRoomFilterChange">
-            <option value="">全部房间</option>
-            <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
-          </select>
-          <button class="bb-btn" @click="loadLogs(true)">刷新</button>
-          <button class="bb-btn" @click="openExport">📤 导出TXT</button>
-          <button class="bb-btn bb-btn-primary" :aria-expanded="composerVisible" :class="{ active: composerVisible }" @click="toggleComposer">
-            💬 房间发言{{ composerVisible ? ' ▲' : ' ▼' }}
-          </button>
-        </div>
+        <button class="bb-btn" @click="openExport">📤 导出TXT</button>
+        <button class="bb-btn bb-btn-primary" :aria-expanded="composerVisible" :class="{ active: composerVisible }" @click="toggleComposer">
+          💬 房间发言{{ composerVisible ? ' ▲' : ' ▼' }}
+        </button>
       </div>
     </header>
+
+    <div class="filters chat-log-filters wb-panel" role="group" aria-label="聊天记录筛选">
+      <input v-model="keyword" class="bb-input" aria-label="搜索内容或发送者" placeholder="搜索内容 / 发送者…" />
+      <select v-model="roomFilter" class="bb-select" aria-label="筛选房间" @change="onRoomFilterChange">
+        <option value="">全部房间</option>
+        <option v-for="r in rooms" :key="r.id" :value="r.id">{{ r.icon }} {{ r.name }}</option>
+      </select>
+      <button class="bb-btn" @click="loadLogs(true)">刷新</button>
+    </div>
 
     <div class="chat-layout">
       <aside class="room-list wb-index wb-panel" aria-label="房间列表">

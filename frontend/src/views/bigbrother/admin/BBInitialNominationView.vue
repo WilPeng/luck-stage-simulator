@@ -28,25 +28,30 @@
     </section>
 
     <section class="nomination-workflow" aria-label="本轮提名操作">
-      <!-- 钥匙仪式 -->
-      <KeyCeremony
+      <component
         v-if="!isDirectDemocracy"
-        :keyCeremony="keyCeremony"
-        :myId="''"
-        :isAdmin="true"
-        :eligible="keyEligible"
-        :nomineeCount="needThree ? 3 : 2"
-        :submitting="submittingKey"
-        :drawing="drawingKey"
-        :announcing="announcingKey"
-        :canStartCeremony="true"
-        :starting="startingKey"
-        @setup="onKeySetup"
-        @start="onKeyStart"
-        @draw="onKeyDraw"
-        @announce="onKeyAnnounce"
-        @speech="onKeySpeech"
-      />
+        :is="nomination && !keyCeremony ? 'details' : 'div'"
+        class="nomination-key-workspace"
+      >
+        <summary v-if="nomination && !keyCeremony">准备钥匙仪式</summary>
+        <KeyCeremony
+          :keyCeremony="keyCeremony"
+          :myId="''"
+          :isAdmin="true"
+          :eligible="keyEligible"
+          :nomineeCount="needThree ? 3 : 2"
+          :submitting="submittingKey"
+          :drawing="drawingKey"
+          :announcing="announcingKey"
+          :canStartCeremony="true"
+          :starting="startingKey"
+          @setup="onKeySetup"
+          @start="onKeyStart"
+          @draw="onKeyDraw"
+          @announce="onKeyAnnounce"
+          @speech="onKeySpeech"
+        />
+      </component>
 
       <section v-if="isDirectDemocracy" class="nomination-ballot">
         <header class="nomination-card-head">

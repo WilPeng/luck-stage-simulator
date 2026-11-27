@@ -12,10 +12,14 @@
     </header>
 
     <!-- 淘汰夜宣布（管理员逐句手动揭晓） -->
-    <div class="wb-results-board">
+    <div class="wb-results-board eviction-night-player">
       <div v-if="night" class="announce-stage">
         <template v-if="night.phase === 'announce'">
-          <div class="announce-title">📢 淘汰结果宣布</div>
+          <header class="eviction-night-heading">
+            <h2>淘汰结果宣布</h2>
+            <span role="status">已宣布 {{ announceLines.length }} 句</span>
+          </header>
+          <p v-if="!announceLines.length" class="eviction-night-wait">主持人即将开始宣布。</p>
           <TransitionGroup name="announce" tag="div" class="announce-lines">
             <div v-for="line in announceLines" :key="line.key" class="ann-line shown">
               {{ line.text }}
@@ -24,6 +28,7 @@
         </template>
         <template v-else>
           <div class="door-stage">
+            <h2>淘汰结果已公布</h2>
             <div class="door-icon">🚪</div>
             <div v-for="e in night.evicted" :key="e.id" class="door-name">{{ e.name }}</div>
             <div class="door-votes">{{ nightVotePattern }}</div>
@@ -42,7 +47,8 @@
         </div>
       </div>
       <div v-else class="empty-card">
-        <p>管理员未开始淘汰结果环节</p>
+        <h2>等待结果公布</h2>
+        <p>淘汰夜开始后，主持人的宣布会逐句显示在这里。</p>
       </div>
 
       <div v-if="nomination && isHistory" class="nomination-summary wb-panel">

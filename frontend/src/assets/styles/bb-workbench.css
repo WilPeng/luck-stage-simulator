@@ -244,3 +244,325 @@
     grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
   }
 }
+
+/* The veto ceremony keeps live controls and room context visible together. */
+.veto-workspace, .veto-workspace-main, .veto-workspace-aside,
+.eviction-vote-workspace, .eviction-vote-main, .eviction-vote-aside {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 12px;
+}
+.veto-workspace :is(.veto-card, .status-panel, .nomination-panel, .draft-panel, .result-banner),
+.eviction-vote-workspace :is(.stats-row, .campaign-section, .tally-section, .vote-manage-section) {
+  margin-block: 0;
+}
+.veto-workspace-main .veto-task { border-color: #f3d49b68; }
+.veto-task-head, .eviction-vote-phase, .eviction-ballot-phase {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.veto-task-head { margin-bottom: 10px; }
+.wb-page .veto-task-head h2, .eviction-vote-phase h2, .eviction-ballot-phase h2 { margin: 0; font-size: 18px; }
+.veto-phase, .eviction-ballot-role {
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: var(--wb-gold);
+  background: #f3d49b16;
+  font-size: 13px;
+}
+.veto-task-note, .eviction-vote-phase p { color: var(--wb-label); font-size: 14px; line-height: 1.6; }
+.veto-speech .cer-actions { margin-block: 6px; }
+.veto-task .action-section {
+  margin: 12px 0 0;
+  padding: 12px 0 0;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--wb-border);
+  border-radius: 0;
+}
+.veto-task .action-section h3 { font-size: 16px; }
+.veto-archive summary { cursor: pointer; color: var(--wb-gold); font-weight: 650; }
+.veto-archive[open] summary { margin-bottom: 10px; }
+.veto-workspace .veto-undo { margin-inline-start: auto; }
+.veto-workspace .veto-card { border-color: var(--wb-border); background: var(--wb-inset); }
+
+.wb-page .eviction-vote-phase {
+  margin-bottom: 12px;
+  border-color: #f3d49b58;
+  background: linear-gradient(125deg, #322830, var(--wb-panel) 80%);
+}
+.eviction-vote-phase p { margin-top: 5px; }
+.eviction-vote-launch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--wb-label); font-size: 13px; }
+.wb-page .eviction-vote-launch .bb-btn-gold {
+  min-height: 42px;
+  color: #271d18;
+  background: var(--wb-gold);
+  border-color: var(--wb-gold);
+  font-weight: 700;
+}
+.eviction-vote-workspace { margin-bottom: 16px; }
+.wb-page .eviction-vote-aside .stats-row {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 6px;
+}
+.wb-page .eviction-vote-aside .stat-card { padding: 8px; min-width: 0; background: var(--wb-inset); }
+.wb-page .eviction-vote-aside .stat-value { font-size: clamp(18px, 3vw, 24px); }
+.wb-page .eviction-vote-aside .tally-grid { grid-template-columns: minmax(0, 1fr); }
+.wb-page .eviction-vote-aside .tally-card { gap: 8px; padding: 10px; }
+.wb-page .eviction-vote-aside .tally-info { min-width: 45px; }
+.eviction-ballot-phase { padding: 8px 0; }
+.wb-page .eviction-ballot-workspace .vote-options { display: grid; grid-template-columns: minmax(0,1fr); gap: 7px; }
+.wb-page .eviction-ballot-workspace button.vote-option {
+  display: flex;
+  flex-direction: row;
+  text-align: start;
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  padding: 8px 12px;
+}
+.eviction-option-check { margin-inline-start: auto; color: var(--wb-gold); font-weight: 700; }
+.eviction-ballot-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.eviction-ballot-footer > span { color: var(--wb-label); font-size: 13px; }
+
+@container workspace (min-width: 760px) {
+  .veto-workspace, .eviction-vote-workspace {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.finale-split, .finale-champion-main, .finale-player-floor {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  align-content: start;
+}
+.finale-split > :is(.finale-rounds, .finale-room, .finale-jury) {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--wb-border);
+  border-radius: 11px;
+  background: var(--wb-inset);
+}
+.finale-split h4, .finale-round-overview h2 { margin: 0 0 10px; color: var(--wb-gold); font-size: 16px; }
+.finale-note { color: var(--wb-label); font-size: 13px; line-height: 1.55; }
+.wb-page .finale-rounds .round-step { margin: 8px 0 0; background: #15111f; }
+.wb-page .finale-rounds .round-step:not(.f3-round-complete) { border-color: #f3d49b5c; }
+.finale-room .room-status { align-items: flex-start; }
+.wb-page .finale-champion-main > :is(.action-row, .reveal-admin, .jury-vote-admin) { margin: 0; }
+.wb-page .finale-champion-main > .voting-gate-row { padding: 10px 12px; background: #f3d49b0d; border: 1px solid #f3d49b55; border-radius: 10px; }
+.wb-page .finale-champion-main .jury-vote-btns { flex-wrap: wrap; }
+.finale-reveal .action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.finale-reveal .reveal-order summary { cursor: pointer; color: var(--wb-gold); }
+.finale-reveal .reveal-order .finale-note { margin-block: 6px; }
+.finale-reveal .order-name { min-width: 0; overflow-wrap: anywhere; }
+.wb-page .finale-jury .finalists-vote { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.wb-page .finale-jury .finalist-vote-card { min-width: 0; overflow-wrap: anywhere; padding: 9px; }
+.wb-page .finale-player-floor > * { margin-block: 0; min-width: 0; }
+.wb-page .finale-round-overview .f3-progress { margin: 0; padding: 0; list-style: none; }
+.wb-page .finale-round-overview .f3-round { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.wb-page .finale-player-floor .finalist-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); }
+.wb-page .finale-player-floor button.finalist-card { font: inherit; color: inherit; min-width: 0; }
+.wb-page .finale-player-floor .finalist-name { overflow-wrap: anywhere; }
+
+@container workspace (min-width: 760px) {
+  .finale-split { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); align-items: start; }
+}
+
+.season-planner-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 5px; margin-bottom: 10px; border: 1px solid var(--wb-border); border-radius: 11px; background: #171121; }
+.season-planner-tabs button { min-height: 38px; padding: 6px 14px; font: inherit; color: var(--wb-label); border: 1px solid transparent; border-radius: 7px; background: transparent; cursor: pointer; }
+.season-planner-tabs button[aria-pressed="true"] { color: var(--wb-gold); border-color: #f3d49b52; background: #f3d49b15; }
+.season-planner-save { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 0 0; border-top: 1px solid var(--wb-border); color: var(--wb-label); font-size: 13px; }
+.season-matrix-hint { margin-bottom: 10px; color: var(--wb-label); font-size: 13px; }
+.wb-page.bb-stage :is(.config-table-wrapper, .matrix-table-wrapper) { overflow: auto; max-height: min(60dvh, 620px); }
+.wb-page.bb-stage :is(.config-table, .matrix-table) thead th { position: sticky; top: 0; z-index: 1; background: #2b2038; }
+
+.roster-toolbar-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 7px; align-items: center; }
+.roster-toolbar-head h2 { margin: 0; font-size: 17px; }
+.roster-toolbar-head span { color: var(--wb-label); font-size: 13px; }
+.roster-person { display: flex; align-items: center; gap: 8px; min-width: 125px; }
+.roster-person > div:last-child { display: grid; justify-items: start; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.roster-person .code-tag { white-space: normal; }
+.wb-page .roster-board .actions { min-width: 110px; align-items: start; }
+.roster-secondary summary { cursor: pointer; color: var(--wb-label); font-size: 13px; padding: 4px 0; }
+.roster-secondary-actions { display: flex; flex-wrap: wrap; gap: 5px; padding: 3px 0; }
+.wb-page .roster-board td { vertical-align: middle; }
+
+.replay-session-head { margin-bottom: 12px; }
+.replay-session-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.replay-session-title p { color: var(--wb-label); font-size: 13px; }
+.replay-session-title h2 { font-size: clamp(20px, 2.6vw, 27px); overflow-wrap: anywhere; }
+.replay-metrics { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%, 100px),1fr)); gap: 6px; }
+.replay-metrics > div { min-width: 0; padding: 8px; border-radius: 8px; background: var(--wb-inset); }
+.replay-metrics dt { color: var(--wb-label); font-size: 12px; }
+.replay-metrics dd { margin: 4px 0 0; font-size: 13px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.replay-transport { padding: 10px 12px; margin-bottom: 12px; border: 1px solid var(--wb-border); border-radius: 9px; background: #15101f; }
+.wb-page .replay-transport .snap-controls { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 6px; }
+.replay-transport .snap-range { width: 100%; min-width: 0; }
+@container workspace (max-width: 480px) {
+  .wb-page .replay-transport .snap-controls { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .replay-transport .snap-controls button:first-child { grid-area: 2 / 1; }
+  .replay-transport .snap-controls button:last-child { grid-area: 2 / 2; }
+  .replay-transport .snap-range { grid-area: 1 / 1 / 2 / -1; }
+}
+.eviction-vote-main:not(.is-voting) > .vote-manage-section { order: 1; }
+
+.house-admin-live { display: grid; gap: 10px; }
+.wb-page .house-admin-live > .control-card { margin: 0; }
+.wb-page .house-admin-live .locations-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 275px),1fr)); }
+.wb-page .house-admin-live .location-card { background: var(--wb-inset); }
+.wb-page .house-admin-live .location-player { flex-wrap: wrap; gap: 5px 8px; }
+.wb-page .house-admin-live .player-name { flex: 1 1 60px; min-width: 0; overflow-wrap: anywhere; }
+.wb-page .house-admin-live .move-select { max-width: 100%; min-height: 32px; }
+.house-rules-toggle { width: 100%; color: var(--wb-label); background: transparent; border: 0; text-align: start; font: inherit; }
+.house-rules-toggle strong, .house-room-editor-title { color: var(--wb-gold); }
+.house-room-editor-title { margin-top: 12px; font-size: 15px; }
+.wb-page .house-room-editor-title + .room-editor .room-edit-row { flex-wrap: wrap; }
+@container workspace (min-width: 760px) {
+  .wb-page .eviction-vote-main.is-voting .vote-grid { max-height: min(60dvh, 590px); overflow-y: auto; padding-right: 4px; scrollbar-width: thin; }
+}
+
+.hoh-host-workspace, .eviction-night-desk { display: grid; gap: 12px; align-items: start; margin-bottom: 14px; }
+.hoh-room-heading, .eviction-night-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.wb-page .hoh-room-heading h2, .hoh-extra-controls h2, .hoh-observer-board h2,
+.wb-page .night-console h2, .eviction-night-heading h2, .eviction-night-player h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.hoh-room-heading { margin-bottom: 10px; }
+.hoh-room-controls .target-setup-row, .hoh-room-controls .room-actions, .night-console .mode-select { flex-wrap: wrap; }
+.hoh-room-controls .target-input { min-width: 0; max-width: 100%; }
+.wb-page .hoh-observer-board { margin-bottom: 14px; }
+.wb-page .hoh-observer-board .observer-wrap { margin-block: 0; }
+.wb-page .eviction-night-desk .night-console { margin: 0; border-color: #f3d49b66; }
+.wb-page .night-console .action-buttons { flex-wrap: wrap; align-items: center; }
+.wb-page .night-screen :is(.night-preview, .nominee-preview) { margin: 0; }
+.wb-page .night-screen .nominee-preview { margin-top: 10px; }
+.eviction-night-heading { padding-bottom: 10px; border-bottom: 1px solid var(--wb-border); color: var(--wb-gold); }
+.eviction-night-heading span, .eviction-night-wait, .eviction-night-player > .empty-card p { color: var(--wb-label); font-size: 14px; }
+.eviction-night-wait { margin-block: 12px; }
+@container workspace (min-width: 760px) {
+  .hoh-host-workspace, .eviction-night-desk:has(> .night-screen) { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+}
+
+.challenge-page.wb-page { gap: 10px; }
+.app-container .bb-main > .challenge-page > .wb-header { margin-bottom: 0; }
+.twist-week-meta, .twist-related, .twist-match-head { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.twist-week-meta > span, .twist-match-phase { padding: 3px 8px; border-radius: 99px; background:#b39bff16; color: var(--wb-label); font-size: 13px; }
+.twist-week-meta > .twist-status-current, .twist-match-phase { background:#f3d49b17; color:var(--wb-gold); }
+.twist-rule-summary, .twist-placeholder { padding: 11px 14px; border:1px solid var(--wb-border); border-radius:10px; background:var(--wb-panel); }
+.twist-related a { padding:7px 10px; border:1px solid #f3d49b50; border-radius:7px; color:var(--wb-gold); }
+.twist-instructions { font-size:13px; color:var(--wb-label); }
+.twist-match-head { justify-content:space-between; padding-bottom:10px; border-bottom:1px solid var(--wb-border); }
+.twist-match-grid, .twist-match-action { display:grid; align-content:start; gap:10px; min-width:0; }
+.twist-match-grid, .twist-match-action { grid-template-columns: minmax(0, 1fr); }
+.twist-match-action label { display:grid; gap:5px; max-width:100%; }
+.twist-match-action label select { min-width:0; max-width:100%; margin:0; }
+.twist-match-roster { padding:10px; border-radius:9px; background:var(--wb-inset); min-width:0; }
+.twist-match-roster h3 { font-size:14px; margin-bottom:6px; }
+.twist-match-roster ul { display:flex; gap:6px; flex-wrap:wrap; list-style:none; }
+.twist-match-roster li { padding:3px 8px; border-radius:99px; background:#b39bff15; color:var(--wb-label); overflow-wrap:anywhere; }
+@container workspace (min-width:690px) {
+  .twist-match-grid { grid-template-columns:minmax(0,1.65fr) minmax(140px,1fr); align-items:start; }
+}
+
+.observation-summary, .observation-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%, 285px),1fr));
+  gap:9px;
+}
+.wb-page .observation-summary { grid-template-columns:repeat(3,minmax(0,1fr)); margin-bottom:12px; }
+.observation-summary > div { display:grid; gap:4px; min-width:0; }
+.observation-summary span, .observation-room, .observation-labels { color:var(--wb-label); font-size:13px; }
+.observation-summary strong { font-size:21px; color:#f4edf9; font-variant-numeric:tabular-nums; }
+.observation-person-head, .observation-labels, .observation-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; }
+.observation-person-head { margin-bottom:10px; }
+.observation-person-head .name-cell-inner { min-width:0; }
+.observation-person-head .name-cell-inner > span { overflow-wrap:anywhere; }
+.observation-room { margin-inline-start:auto; }
+.observation-kind { border-top:1px solid var(--wb-border); padding-block:8px; }
+.observation-kind:last-child { padding-bottom:0; }
+.observation-kind h2 { font-size:14px; margin:0 0 5px; }
+.observation-labels { margin-bottom:7px; }
+.observation-actions .bb-btn-xs { min-height:34px; }
+
+.game-catalogue { display:grid; min-width:0; gap:10px; align-items:start; }
+.wb-page .game-catalogue .folder-bar { margin:0; }
+.game-catalogue .folder-bar h2 { flex-basis:100%; font-size:15px; }
+.wb-page .game-catalogue .folder-chip-wrap { max-width:100%; min-width:0; }
+.wb-page .game-catalogue .folder-chip { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.catalogue-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+.catalogue-head h2 { font-size:17px; overflow-wrap:anywhere; }
+.catalogue-head > span { color:var(--wb-label); font-size:13px; }
+.power-pool-board .pool-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr)); gap:9px; }
+.wb-page .power-pool-board .pool-card { display:grid; gap:8px; align-items:start; min-width:0; }
+.wb-page .power-pool-board .pool-actions { flex-wrap:wrap; border-top:1px solid var(--wb-border); padding-top:8px; }
+@container workspace (min-width:790px) {
+  .game-catalogue { grid-template-columns:minmax(160px, .9fr) minmax(0,3.1fr); }
+  .wb-page .game-catalogue .folder-bar { flex-direction:column; align-items:stretch; }
+  .game-catalogue .folder-chip-wrap > .folder-chip { flex:1; text-align:start; }
+}
+
+.replacement-desk, .replacement-current, .replacement-context {
+  display:grid;
+  gap:10px;
+  min-width:0;
+  align-content:start;
+}
+.replacement-heading { display:flex; justify-content:space-between; flex-wrap:wrap; align-items:center; gap:6px; }
+.replacement-heading h2, .veto-draw-overview h2 { font-size:18px; }
+.replacement-role { padding:3px 8px; border-radius:99px; background:#f3d49b15; color:var(--wb-gold); font-size:13px; }
+.wb-page .replacement-desk :is(.action-card,.info-card,.status-panel,.twist-action-hint,.done-hint,.action-section,.veto-card,.empty-card) { margin-block:0; }
+.replacement-current .action-form { flex-wrap:wrap; }
+.replacement-current .action-form > select { min-width:0; max-width:100%; }
+.veto-draw-workspace { display:grid; gap:12px; }
+.wb-page .veto-draw-workspace > * { min-width:0; margin-block:0; }
+.veto-draw-overview p { margin-top:5px; color:var(--wb-label); }
+.veto-draw-rules summary { cursor:pointer; color:var(--wb-gold); font-weight:650; }
+.veto-draw-rules[open] summary { margin-bottom:8px; }
+.wb-page .veto-draw-workspace .pick-row-actions { flex-wrap:wrap; }
+@container workspace (min-width:720px) {
+  .replacement-desk { grid-template-columns:minmax(0,1.42fr) minmax(0,1fr); align-items:start; }
+}
+@container workspace (max-width:680px) {
+  .wb-page.mg-live .rooms-panel { max-height:min(45dvh,340px); overflow:auto; overscroll-behavior:contain; }
+}
+
+.bbbb-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+.wb-page .bbbb-workspace > .wb-panel { margin: 0; }
+.bbbb-room-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+.bbbb-room-head h2 { font-size: 16px; }
+.bbbb-room-head span { color: var(--wb-gold); font-size: 13px; }
+.wb-page .bbbb-workspace .waiting { padding: 12px; color: var(--wb-label); text-align: start; }
+.wb-page .bbbb-workspace .result-note { margin-block: 0 10px; color: var(--wb-gold); }
+.wb-page .bbbb-workspace .minigame-section { margin: 0; }
+.wb-page .bbbb-workspace :is(.room-status, .progress-row, .nominee) { flex-wrap: wrap; }
+.wb-page .bbbb-workspace .nominee-name { min-width: 60px; overflow-wrap: anywhere; }
+@container workspace (min-width: 750px) {
+  .bbbb-workspace:not(:has(.minigame-section)) {
+    grid-template-columns: minmax(0, 1.55fr) minmax(240px, 1fr);
+  }
+}
+
+.wb-page .chat-log-filters { flex-wrap: wrap; margin-bottom: 12px; padding-block: 10px; }
+.chat-log-filters input { flex: 1 1 220px; min-width: 0; }
+.chat-log-filters select { flex: 1 1 130px; min-width: 0; }
+.chat-log-filters button { flex: 0 0 auto; }

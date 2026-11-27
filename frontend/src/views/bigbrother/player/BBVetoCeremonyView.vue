@@ -27,7 +27,7 @@
             <span class="veto-phase" role="status">{{ isFuture ? '未开始' : isHistory ? '历史记录' : veto?.ceremony?.closingSpoken ? '仪式结束' : veto?.status === 'used' ? '已使用' : veto?.status === 'skipped' ? '未使用 · 等待结束发言' : !veto?.ceremony?.started ? '等待开始' : !veto.ceremony.openingSpoken ? '开场发言' : '等待决定' }}</span>
           </header>
           <p v-if="!veto" class="veto-task-note">暂无否决权记录。</p>
-          <p v-else-if="!isVetoHolder && !isHistory && !isFuture && veto.status === 'pending'" class="veto-task-note">由否决权持有者决定是否使用。当前名单可在旁边查看。</p>
+          <p v-else-if="!isVetoHolder && !isHistory && !isFuture && veto.status === 'pending'" class="veto-task-note">由否决权持有者决定是否使用。可查看本轮提名名单。</p>
           <div v-if="veto && isVetoHolder && !isFuture" class="veto-speech">
           <div v-if="!veto.ceremony?.started" class="cer-waiting">
             等待管理员在管理员端点击「仪式开始」…
@@ -179,6 +179,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
@@ -339,20 +340,17 @@ async function fetchData() {
   } catch {}
 }
 
-onMounted(async () => {
-  await fetchData()
+useBbRefresh(fetchData, '/veto', '/nomination/set', '/nomination/replace', '/round-twist', '/season/set', '/season/next', '/season/reset')
 
-  // 轮询更新（等待其他操作者操作）
-  let pollTimer: ReturnType<typeof setInterval> | null = null
-  if (!isFuture.value) {
-    pollTimer = setInterval(async () => {
-      await fetchData()
-    }, 3000)
-  }
-
-  onUnmounted(() => {
-    if (pollTimer) clearInterval(pollTimer)
-  })
+let pollTimer: ReturnType<typeof setInterval> | null = null
+onMounted(() => {
+  fetchData()
+  pollTimer = setInterval(() => {
+    if (!isFuture.value) fetchData()
+  }, 3000)
+})
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
 })
 </script>
 

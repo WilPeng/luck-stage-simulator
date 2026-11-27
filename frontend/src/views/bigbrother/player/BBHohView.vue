@@ -249,7 +249,7 @@ async function initEligibility() {
 
 // 任意实时广播（含管理员指定 HOH）→ 立即刷新
 useBbRefresh(checkRoom,
-  '/hoh', '/minigame/room', '/round-twist', '/season/set', '/season/next', '/season/reset'
+  '/hoh', '/minigame/create-room', '/minigame/stop', '/minigame/set-winner', '/round-twist', '/season/set', '/season/next', '/season/reset'
 )
 
 onMounted(async () => {

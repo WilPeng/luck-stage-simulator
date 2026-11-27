@@ -12,7 +12,7 @@
     <header class="eviction-vote-phase wb-panel">
       <div>
         <h2>{{ campaignData.voteStarted ? '投票进行中' : '拉票准备' }}</h2>
-        <p>{{ campaignData.voteStarted ? '在代投名单查看每位房客的状态，右侧显示已统计票数。' : '核对拉票内容后开启投票。开启后，选手可查看拉票与提交选票。' }}</p>
+        <p>{{ campaignData.voteStarted ? '在代投名单查看每位房客的状态，票数随选票更新。' : '核对拉票内容后开启投票。开启后，选手可查看拉票与提交选票。' }}</p>
       </div>
       <div v-if="nomination && !campaignData.voteStarted" class="eviction-vote-launch">
         <span>拉票已提交 {{ submittedCampaignCount }} / {{ campaignNominees.length }}</span>
@@ -22,7 +22,7 @@
 
     <!-- 拉票环节 -->
     <div class="eviction-vote-workspace">
-      <div class="eviction-vote-main">
+      <div class="eviction-vote-main" :class="{ 'is-voting': campaignData.voteStarted }">
         <div v-if="activeHouseguests.length > 0 && nomination" class="vote-manage-section wb-panel">
           <h3>代投名单</h3>
           <div v-if="!campaignData.voteStarted" class="vote-locked-hint">
@@ -265,8 +265,12 @@ async function startVoting() {
   }
 }
 
-async function fetchData() {
+async function loadVotes() {
   try { voteData.value = await bbGetVotes() } catch {}
+}
+
+async function fetchData() {
+  await loadVotes()
   try { const stats = await bbGetHouseguestStats(); activeCount.value = stats.active } catch {}
   try { activeHouseguests.value = await bbGetActiveHouseguests() } catch {}
   try { nomination.value = await bbGetCurrentNomination() } catch {}
@@ -279,15 +283,18 @@ async function fetchData() {
     }
   } catch {}
   for (const h of activeHouseguests.value) {
-    voteSelections.value[h.id] = ''
+    voteSelections.value[h.id] ??= ''
   }
 }
 
 function formatTime(t: string) { return t ? new Date(t).toLocaleString('zh-CN') : '' }
 
 useBbRefresh(fetchData,
-  '/eviction', '/nomination', '/veto', '/round-twist', '/houseguests', '/season/set', '/season/next', '/season/reset'
+  '/eviction/campaign', '/eviction/start-vote', '/eviction/night/start', '/eviction/night/reset',
+  '/eviction/result', '/eviction/restore', '/hoh', '/nomination/set', '/nomination/replace', '/nomination/undo',
+  '/nomination/bbbb-winner', '/veto/use', '/round-twist', '/houseguests', '/season/set', '/season/next', '/season/reset'
 )
+useBbRefresh(loadVotes, '/eviction/vote')
 onMounted(fetchData)
 </script>
 

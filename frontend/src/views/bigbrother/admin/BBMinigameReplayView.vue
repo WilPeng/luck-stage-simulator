@@ -56,18 +56,21 @@
         <div v-if="!detail" class="empty-hint">选择左侧对局查看复盘</div>
         <template v-else>
           <button class="bb-btn back-list" @click="detail = null">‹ 返回对局列表</button>
-          <div class="detail-head">
-            <div>
-              <div class="dh-title">{{ detail.minigameName || detail.minigameId }}</div>
-              <div class="dh-sub">
-                {{ gameTypeLabel(detail.gameType) }} · {{ fmtDate(detail.startedAt) }}
-                <span v-if="detail.roundIndex"> · 第{{ detail.roundIndex }}周</span>
-                <span v-if="detail.targetScore"> · 目标 {{ detail.targetScore }}</span>
-                <span> · 共 {{ (detail.events || []).length }} 条操作 · 时长 {{ durationText }}</span>
+          <header class="replay-session-head">
+            <div class="replay-session-title">
+              <div>
+                <p>{{ gameTypeLabel(detail.gameType) }}<span v-if="detail.roundIndex"> · 第 {{ detail.roundIndex }} 周</span></p>
+                <h2>{{ detail.minigameName || detail.minigameId }}</h2>
               </div>
+              <button v-if="!readonly" class="bb-btn bb-btn-danger" @click="removeReplay(detail.id)">删除</button>
             </div>
-            <button v-if="!readonly" class="bb-btn bb-btn-danger" @click="removeReplay(detail.id)">删除</button>
-          </div>
+            <dl class="replay-metrics">
+              <div><dt>开始时间</dt><dd>{{ fmtDate(detail.startedAt) }}</dd></div>
+              <div><dt>时长</dt><dd>{{ durationText }}</dd></div>
+              <div><dt>操作</dt><dd>{{ (detail.events || []).length }} 条</dd></div>
+              <div v-if="detail.targetScore"><dt>目标分数</dt><dd>{{ detail.targetScore }}</dd></div>
+            </dl>
+          </header>
 
           <nav class="scene-tabs" aria-label="复盘内容">
             <button v-for="t in tabs" :key="t.id" :aria-pressed="section === t.id" @click="section = t.id">{{ t.name }}</button>
@@ -97,18 +100,20 @@
           </template>
           <!-- 明牌回放：逐步查看每位选手面临决策时的完整局面 -->
           <div v-if="snapshots.length && ((section === 'scene' && boardGame) || (section === 'events' && !boardGame))" class="dg-block">
-            <div class="dg-title">明牌回放（{{ snapIndex + 1 }} / {{ snapshots.length }}）</div>
-            <div class="snap-controls">
-              <button class="bb-btn" :disabled="snapIndex <= 0" @click="snapIndex--">◀ 上一手</button>
-              <input aria-label="选择比赛节点" class="snap-range" type="range" :min="0" :max="snapshots.length - 1" v-model.number="snapIndex" />
-              <button class="bb-btn" :disabled="snapIndex >= snapshots.length - 1" @click="snapIndex++">下一手 ▶</button>
-            </div>
-            <label v-if="isAbracaSnap || isJigsawSnap">视角
-              <select v-model="viewpoint" class="bb-input"><option value="">赛后全局</option><option v-for="p in detail.participants" :key="p.playerId" :value="p.playerId">{{ p.playerName }}</option></select>
-            </label>
-            <div class="snap-label">
-              {{ curSnap?.label }} · +{{ delta(curSnap?.t) }}s
-              <span v-if="curSnap?.data?.round"> · 第{{ curSnap.data.round }}轮</span>
+            <div class="replay-transport" aria-label="回放控制">
+              <div class="dg-title">明牌回放（{{ snapIndex + 1 }} / {{ snapshots.length }}）</div>
+              <div class="snap-controls">
+                <button class="bb-btn" :disabled="snapIndex <= 0" @click="snapIndex--">◀ 上一手</button>
+                <input aria-label="选择比赛节点" class="snap-range" type="range" :min="0" :max="snapshots.length - 1" v-model.number="snapIndex" />
+                <button class="bb-btn" :disabled="snapIndex >= snapshots.length - 1" @click="snapIndex++">下一手 ▶</button>
+              </div>
+              <label v-if="isAbracaSnap || isJigsawSnap">视角
+                <select v-model="viewpoint" class="bb-input"><option value="">赛后全局</option><option v-for="p in detail.participants" :key="p.playerId" :value="p.playerId">{{ p.playerName }}</option></select>
+              </label>
+              <div class="snap-label">
+                {{ curSnap?.label }} · +{{ delta(curSnap?.t) }}s
+                <span v-if="curSnap?.data?.round"> · 第{{ curSnap.data.round }}轮</span>
+              </div>
             </div>
 
             <!-- 毒酒：明牌转盘盘面 -->

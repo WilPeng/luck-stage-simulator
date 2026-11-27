@@ -305,6 +305,8 @@ async function scrollToBottom() {
 async function load() {
   try {
     const res: any = await bbGetJuryQA()
+    const el = messagesEl.value
+    const nearBottom = !el || el.scrollHeight - el.clientHeight - el.scrollTop <= 32
     room.value = {
       roundId: res?.roundId || '',
       phase: res?.phase || 'opening',
@@ -315,10 +317,8 @@ async function load() {
       messages: res?.messages || []
     }
     if (!orderDirty.value) orderDraft.value = [...(res?.juryOrder || [])]
-  } catch {
-    room.value.messages = []
-  }
-  await scrollToBottom()
+    if (nearBottom) await scrollToBottom()
+  } catch {}
 }
 
 function startReply(m: any) {

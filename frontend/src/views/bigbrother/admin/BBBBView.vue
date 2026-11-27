@@ -13,25 +13,9 @@
       本轮提名 3 人。淘汰投票前进行 BBBB 比赛：胜者安全，其余 2 人进入淘汰投票。
     </div>
 
-    <!-- 提名名单 -->
-    <div class="wb-lanes wb-competition-lanes">
-      <div class="card">
-        <div class="card-title">被提名人（{{ nominees.length }}）</div>
-        <div class="nominee-list">
-          <div v-for="n in nominees" :key="n.id" class="nominee" :class="{ safe: bbbbWinnerId === n.id }">
-            <BBAvatar :name="n.name" :avatar="n.avatar" size="sm" />
-            <span class="nominee-name">{{ n.name }}</span>
-            <span v-if="bbbbWinnerId === n.id" class="safe-badge">安全</span>
-            <button v-else class="bb-btn bb-btn-xs" @click="setSafe(n)">设为安全（胜者）</button>
-          </div>
-          <div v-if="!nominees.length" class="muted">暂无提名（需先完成提名）</div>
-        </div>
-        <div v-if="bbbbWinnerId" class="safe-result">✅ 安全者（不再是终极提名，不可被投票，可参与投票）：{{ bbbbWinnerName }}</div>
-      </div>
-
-      <!-- 小游戏房间 -->
-      <div class="card">
-        <div class="card-title">BBBB 比赛房间</div>
+    <div class="bbbb-workspace">
+      <section class="card wb-panel bbbb-room">
+        <h2 class="card-title">BBBB 比赛房间</h2>
         <div v-if="!activeRoom" class="room-actions">
           <button class="bb-btn bb-btn-primary" @click="showPicker = true">🎮 选择小游戏并创建房间</button>
         </div>
@@ -50,7 +34,20 @@
         </div>
         <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
           :gameTitle="activeRoom.minigameName" :rules="activeRoom.options?.rules || ''" :summoning="summoning" @summon="summonPlayers" />
-      </div>
+      </section>
+      <section class="card wb-panel bbbb-roster">
+        <h2 class="card-title">参赛名单与安全者</h2>
+        <div class="nominee-list">
+          <div v-for="n in nominees" :key="n.id" class="nominee" :class="{ safe: bbbbWinnerId === n.id }">
+            <BBAvatar :name="n.name" :avatar="n.avatar" size="sm" />
+            <span class="nominee-name">{{ n.name }}</span>
+            <span v-if="bbbbWinnerId === n.id" class="safe-badge">安全</span>
+            <button v-else class="bb-btn bb-btn-xs" @click="setSafe(n)">设为安全（胜者）</button>
+          </div>
+          <div v-if="!nominees.length" class="muted">暂无提名（需先完成提名）</div>
+        </div>
+        <div v-if="bbbbWinnerId" class="safe-result">✅ 安全者（不再是终极提名，不可被投票，可参与投票）：{{ bbbbWinnerName }}</div>
+      </section>
     </div>
 
     <MinigameSelectModal v-model:open="showPicker" title="选择 BBBB 小游戏" @select="onSelectMinigame" />

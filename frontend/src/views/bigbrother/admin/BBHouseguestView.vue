@@ -15,7 +15,11 @@
       </div>
     </header>
 
-    <div class="wb-data-board">
+    <div class="wb-data-board roster-board">
+      <div class="roster-toolbar-head">
+        <h2>房客名单</h2>
+        <span>{{ selectedIds.length ? '已选 ' + selectedIds.length + ' 人' : '本页 ' + list.length + ' 人' }}</span>
+      </div>
       <div class="toolbar">
         <input v-model="searchKeyword" class="bb-input" aria-label="搜索房客名称或账号" placeholder="搜索房客名称/账号..." @input="onSearch" />
         <select v-model="roleFilter" class="bb-select" aria-label="按身份筛选" @change="onRoleChange">
@@ -37,10 +41,8 @@
         <table class="bb-table">
           <thead>
             <tr>
-              <th class="check-col"><input type="checkbox" :checked="allSelected" @change="toggleAll" /></th>
-              <th>头像</th>
-              <th>名称</th>
-              <th>账号</th>
+              <th class="check-col"><input type="checkbox" aria-label="全选本页房客" :checked="allSelected" @change="toggleAll" /></th>
+              <th scope="col">房客 / 账号</th>
               <th>密码</th>
               <th>状态</th>
               <th>Have-Not</th>
@@ -51,11 +53,14 @@
           <tbody>
             <tr v-for="h in list" :key="h.id">
               <td class="check-col">
-                <input type="checkbox" :value="h.id" v-model="selectedIds" :disabled="h.isSuperAdmin" />
+                <input type="checkbox" :aria-label="'选择 ' + h.name" :value="h.id" v-model="selectedIds" :disabled="h.isSuperAdmin" />
               </td>
-              <td><BBAvatar :name="h.name" :avatar="h.avatar" size="sm" /></td>
-              <td class="name-cell">{{ h.name }}</td>
-              <td><code class="code-tag">{{ h.username }}</code></td>
+              <td class="roster-identity">
+                <div class="roster-person">
+                  <BBAvatar :name="h.name" :avatar="h.avatar" size="md" />
+                  <div><strong class="name-cell">{{ h.name }}</strong><code class="code-tag">{{ h.username }}</code></div>
+                </div>
+              </td>
               <td>
                 <code v-if="h.password" class="code-tag">{{ h.password }}</code>
                 <span v-else class="pwd-hidden">不可查看（请重置）</span>
@@ -79,15 +84,20 @@
               </td>
               <td>
                 <div class="actions">
-                  <button v-if="h.role !== 'admin' && (h.status === 'active' || h.status === 'f2')" class="bb-btn bb-btn-xs bb-btn-walk" @click="openWalkModal(h)">退赛</button>
-                  <button v-if="h.role !== 'admin' && h.status === 'walked'" class="bb-btn bb-btn-xs" @click="undoWalk(h)">撤销退赛</button>
                   <button class="bb-btn bb-btn-xs" @click="editHouseguest(h)">编辑</button>
-                  <button v-if="h.role === 'admin' && !h.isSuperAdmin" class="bb-btn bb-btn-xs" @click="setSuperAdmin(h)">设为总管理员</button>
-                  <button v-if="!h.isSuperAdmin" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
+                  <details v-if="!h.isSuperAdmin || (h.role !== 'admin' && ['active','f2','walked'].includes(h.status))" class="roster-secondary">
+                    <summary>更多</summary>
+                    <div class="roster-secondary-actions">
+                      <button v-if="h.role !== 'admin' && (h.status === 'active' || h.status === 'f2')" class="bb-btn bb-btn-xs bb-btn-walk" @click="openWalkModal(h)">退赛</button>
+                      <button v-if="h.role !== 'admin' && h.status === 'walked'" class="bb-btn bb-btn-xs" @click="undoWalk(h)">撤销退赛</button>
+                      <button v-if="h.role === 'admin' && !h.isSuperAdmin" class="bb-btn bb-btn-xs" @click="setSuperAdmin(h)">设为总管理员</button>
+                      <button v-if="!h.isSuperAdmin" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
+                    </div>
+                  </details>
                 </div>
               </td>
             </tr>
-            <tr v-if="list.length === 0"><td colspan="9" class="empty-cell">暂无数据</td></tr>
+            <tr v-if="list.length === 0"><td colspan="7" class="empty-cell">暂无数据</td></tr>
           </tbody>
         </table>
       </div>

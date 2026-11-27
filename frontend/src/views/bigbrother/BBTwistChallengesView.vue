@@ -1,62 +1,85 @@
 <template>
   <div class="challenge-page wb-page">
-    <header class="page-header wb-header"><div><h1>{{ title }}</h1><p>第 {{ week }} 周<span v-if="data"> · {{ phaseLabels[data.status] }}</span></p></div>
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>{{ title }}</h1>
+        <div class="twist-week-meta">
+          <span>第 {{ week }} 周</span>
+          <span v-if="data" :class="'twist-status-' + data.status">{{ phaseLabels[data.status] }}</span>
+        </div>
+      </div>
       <button type="button" @click="load">刷新</button>
     </header>
-    <p v-if="data">{{ data.twist.description }}</p>
+    <section v-if="data" class="twist-rule-summary" aria-label="赛制规则">
+      <p>{{ data.twist.description }}</p>
+    </section>
     <template v-if="data?.live">
       <RoundTwistPanel v-if="data.status === 'current'" :key="`${week}/${twistId}/${panelVersion}`"
         :current-round="week" :current-stage="data.currentStage" :twist-id="twistId" />
-      <nav v-if="stageLinks.length" aria-label="关联赛程">
+      <nav v-if="stageLinks.length" class="twist-related" aria-label="关联赛程">
         <router-link v-for="link in stageLinks" :key="link.path" :to="link.path">{{ link.name }}</router-link>
       </nav>
     </template>
-    <p v-if="data?.admin && data.slots.length">小游戏结束后，可点击「采用比赛结果」，也可以在赛制操作中手动录入。</p>
+    <p v-if="data?.admin && data.slots.length" class="twist-instructions">小游戏结束后，可点击「采用比赛结果」，也可以在赛制操作中手动录入。</p>
     <p v-if="error" role="alert" class="error">{{ error }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
-    <p v-if="data?.status === 'future'">本周赛制尚未进入操作阶段。</p>
-    <p v-else-if="data?.status === 'completed'">该赛制的操作阶段已结束。</p>
-    <p v-else-if="data && gameTwists.has(twistId) && !data.slots.length">当前没有可进入的比赛。下一场开放后会显示在这里。</p>
+    <p v-if="data?.status === 'future'" class="twist-placeholder">本周赛制尚未进入操作阶段。</p>
+    <p v-else-if="data?.status === 'completed'" class="twist-placeholder">该赛制的操作阶段已结束。</p>
+    <p v-else-if="data && gameTwists.has(twistId) && !data.slots.length" class="twist-placeholder">当前没有可进入的比赛。下一场开放后会显示在这里。</p>
     <article class="wb-panel wb-challenge-slot" v-for="slot in data?.slots" :key="slot.key">
-      <h2>{{ slot.title }}</h2>
-      <p>参赛名单：{{ slot.roster.map(p => p.name).join('、') || '暂无' }}</p>
-      <p v-if="slot.room && !slot.room.spectatorState">{{ data?.gameChoices[slot.room.minigameId] }} · {{ statusLabels[slot.room.status] || slot.room.status }}</p>
-      <template v-if="data?.admin">
-        <form v-if="!slot.room || slot.room.status === 'finished'" @submit.prevent="operate(slot, 'create')">
-          <label>小游戏
-            <select v-model="choices[slot.key]">
-              <option value="">选择小游戏</option>
-              <option v-for="(name,id) in data.gameChoices" :key="id" :value="id">{{ name }}</option>
-            </select>
-          </label>
-          <button :disabled="busy || !choices[slot.key] || slot.roster.length < 2">{{ slot.room ? '重新开赛' : '创建比赛房间' }}</button>
-        </form>
-        <div v-if="slot.room?.status === 'waiting'" class="actions">
-          <button :disabled="busy" @click="operate(slot, 'start')">开始 · 倒计时 10 秒</button>
-          <button :disabled="busy" @click="operate(slot, 'cancel')">取消房间</button>
+      <header class="twist-match-head">
+        <h2>{{ slot.title }}</h2>
+        <p v-if="slot.room && !slot.room.spectatorState" class="twist-match-phase">
+          {{ data?.gameChoices[slot.room.minigameId] }} · {{ statusLabels[slot.room.status] || slot.room.status }}
+        </p>
+      </header>
+      <div class="twist-match-grid">
+        <div class="twist-match-action">
+          <template v-if="data?.admin">
+            <form v-if="!slot.room || slot.room.status === 'finished'" @submit.prevent="operate(slot, 'create')">
+              <label>小游戏
+                <select v-model="choices[slot.key]">
+                  <option value="">选择小游戏</option>
+                  <option v-for="(name,id) in data.gameChoices" :key="id" :value="id">{{ name }}</option>
+                </select>
+              </label>
+              <button :disabled="busy || !choices[slot.key] || slot.roster.length < 2">{{ slot.room ? '重新开赛' : '创建比赛房间' }}</button>
+            </form>
+            <div v-if="slot.room?.status === 'waiting'" class="actions">
+              <button :disabled="busy" @click="operate(slot, 'start')">开始 · 倒计时 10 秒</button>
+              <button :disabled="busy" @click="operate(slot, 'cancel')">取消房间</button>
+            </div>
+            <button v-if="slot.room?.status === 'playing'" :disabled="busy" @click="operate(slot,'stop')">停止比赛</button>
+            <template v-if="slot.room && !['waiting','finished'].includes(slot.room.status)">
+              <button @click="observing = observing === slot.key ? '' : slot.key">{{ observing === slot.key ? '收起观战' : '实时观战' }}</button>
+              <MinigameObserver v-if="observing === slot.key" :key="slot.room.roomId" :room-id="slot.room.roomId" :room="slot.room" />
+            </template>
+            <button v-if="slot.room?.validResult && slot.room.status === 'finished'" :disabled="busy" @click="applyResult(slot)">采用比赛结果</button>
+            <p v-if="slot.interrupted">房间已断开，可以重新开赛。</p>
+          </template>
+          <MinigameSpectatorPanel v-else-if="slot.room?.spectatorState"
+            :title="data?.gameChoices[slot.room.minigameId]" :game-id="slot.room.minigameId"
+            :status="slot.room.status" :players="slot.room.spectatorState" />
+          <template v-else-if="slot.room">
+            <MinigameLobby v-if="slot.room.status === 'waiting'" :key="slot.room.roomId" :room-id="slot.room.roomId"
+              :game-title="data?.gameChoices[slot.room.minigameId]" :participants="slot.room.participants" :my-id="myId" />
+            <component v-else-if="['countdown','playing','paused'].includes(slot.room.status)"
+              :is="components[slot.room.minigameId]" :key="slot.room.roomId" :room-id="slot.room.roomId"
+              :participants="slot.room.participants" @finished="load" />
+          </template>
+          <p v-else>等待管理员开启小游戏。</p>
+          <p v-if="slot.room?.status === 'finished'" class="result">
+            {{ slot.room.validResult ? '小游戏胜者：' + slot.room.winner?.playerName + '。等待管理员确认。' : '本场没有可采用的单一胜者，可以重赛或手动录入。' }}
+          </p>
         </div>
-        <button v-if="slot.room?.status === 'playing'" :disabled="busy" @click="operate(slot,'stop')">停止比赛</button>
-        <template v-if="slot.room && !['waiting','finished'].includes(slot.room.status)">
-          <button @click="observing = observing === slot.key ? '' : slot.key">{{ observing === slot.key ? '收起观战' : '实时观战' }}</button>
-          <MinigameObserver v-if="observing === slot.key" :key="slot.room.roomId" :room-id="slot.room.roomId" :room="slot.room" />
-        </template>
-        <button v-if="slot.room?.validResult && slot.room.status === 'finished'" :disabled="busy" @click="applyResult(slot)">采用比赛结果</button>
-        <p v-if="slot.interrupted">房间已断开，可以重新开赛。</p>
-      </template>
-      <MinigameSpectatorPanel v-else-if="slot.room?.spectatorState"
-        :title="data?.gameChoices[slot.room.minigameId]" :game-id="slot.room.minigameId"
-        :status="slot.room.status" :players="slot.room.spectatorState" />
-      <template v-else-if="slot.room">
-        <MinigameLobby v-if="slot.room.status === 'waiting'" :key="slot.room.roomId" :room-id="slot.room.roomId"
-          :game-title="data?.gameChoices[slot.room.minigameId]" :participants="slot.room.participants" :my-id="myId" />
-        <component v-else-if="['countdown','playing','paused'].includes(slot.room.status)"
-          :is="components[slot.room.minigameId]" :key="slot.room.roomId" :room-id="slot.room.roomId"
-          :participants="slot.room.participants" @finished="load" />
-      </template>
-      <p v-else>等待管理员开启小游戏。</p>
-      <p v-if="slot.room?.status === 'finished'" class="result">
-        {{ slot.room.validResult ? '小游戏胜者：' + slot.room.winner?.playerName + '。等待管理员确认。' : '本场没有可采用的单一胜者，可以重赛或手动录入。' }}
-      </p>
+        <aside class="twist-match-roster" aria-label="参赛名单">
+          <h3>参赛名单</h3>
+          <ul v-if="slot.roster.length">
+            <li v-for="p in slot.roster" :key="p.id">{{ p.name }}</li>
+          </ul>
+          <p v-else>暂无参赛者</p>
+        </aside>
+      </div>
     </article>
   </div>
 </template>

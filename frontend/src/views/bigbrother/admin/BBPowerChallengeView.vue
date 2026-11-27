@@ -9,7 +9,7 @@
       </div>
     </header>
 
-    <div class="wb-library">
+    <div class="wb-library power-pool-board">
       <div v-if="loading" class="loading-state">
         <div class="loading-spinner"></div>
         <span>加载题目池...</span>
@@ -20,28 +20,31 @@
         <span>暂无题目池，点击上方按钮创建</span>
       </div>
 
-      <div v-else class="pool-list">
-        <div v-for="pool in pools" :key="pool.id" class="pool-card">
-          <div class="pool-info">
-            <div class="pool-name">{{ pool.name }}</div>
-            <div class="pool-theme">主题：{{ pool.theme }}</div>
-            <div class="pool-meta">
-              <span class="tag">{{ pool.questions.length }} 题</span>
-              <span class="tag" :class="pool.enabled ? 'tag-ok' : 'tag-off'">
-                {{ pool.enabled ? '启用' : '禁用' }}
-              </span>
-              <span class="meta-text">更新：{{ formatDate(pool.updatedAt) }}</span>
+      <section v-else aria-label="题目池列表">
+        <header class="catalogue-head"><h2>题目池</h2><span>{{ pools.length }} 个 · {{ pools.filter(pool => pool.enabled).length }} 个已启用</span></header>
+        <div class="pool-list">
+          <div v-for="pool in pools" :key="pool.id" class="pool-card">
+            <div class="pool-info">
+              <div class="pool-name">{{ pool.name }}</div>
+              <div class="pool-theme">主题：{{ pool.theme }}</div>
+              <div class="pool-meta">
+                <span class="tag">{{ pool.questions.length }} 题</span>
+                <span class="tag" :class="pool.enabled ? 'tag-ok' : 'tag-off'">
+                  {{ pool.enabled ? '启用' : '禁用' }}
+                </span>
+                <span class="meta-text">更新：{{ formatDate(pool.updatedAt) }}</span>
+              </div>
+            </div>
+            <div class="pool-actions">
+              <button class="bb-btn-xs" :class="pool.enabled ? 'btn-warn' : 'btn-success'" @click="toggle(pool)">
+                {{ pool.enabled ? '禁用' : '启用' }}
+              </button>
+              <button class="bb-btn-xs btn-edit" @click="openEdit(pool)">编辑</button>
+              <button class="bb-btn-xs btn-danger" @click="remove(pool)">删除</button>
             </div>
           </div>
-          <div class="pool-actions">
-            <button class="bb-btn-xs" :class="pool.enabled ? 'btn-warn' : 'btn-success'" @click="toggle(pool)">
-              {{ pool.enabled ? '禁用' : '启用' }}
-            </button>
-            <button class="bb-btn-xs btn-edit" @click="openEdit(pool)">编辑</button>
-            <button class="bb-btn-xs btn-danger" @click="remove(pool)">删除</button>
-          </div>
         </div>
-      </div>
+      </section>
     </div>
 
     <!-- 编辑器弹窗 -->

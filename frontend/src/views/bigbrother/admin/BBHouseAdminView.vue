@@ -6,13 +6,18 @@
       </div>
     </header>
 
-    <!-- 后院门控制 -->
-    <div class="wb-lanes wb-house-controls">
+    <nav class="season-planner-tabs house-admin-tabs" aria-label="房屋管理">
+      <button type="button" :aria-pressed="houseAdminView === 'rooms'" @click="houseAdminView = 'rooms'">房间与位置</button>
+      <button type="button" :aria-pressed="houseAdminView === 'rules'" @click="houseAdminView = 'rules'; roomsConfigOpen = true">房间规则</button>
+      <button type="button" :aria-pressed="houseAdminView === 'photos'" @click="houseAdminView = 'photos'">照片墙</button>
+    </nav>
+
+    <section v-show="houseAdminView === 'rooms'" class="house-admin-live" aria-label="房间与位置">
       <div class="control-card wb-panel">
         <div class="control-header">
           <h3>🚪 后院门</h3>
           <div class="door-status" :class="{ open: backyardDoorOpen }">
-            {{ backyardDoorOpen ? '🟢 OPEN' : '🔴 CLOSED' }}
+            {{ backyardDoorOpen ? '已打开' : '已关闭' }}
           </div>
         </div>
         <div class="control-actions">
@@ -27,16 +32,45 @@
           </button>
         </div>
       </div>
-
-      <!-- 房间人数/床位/睡觉 & 作息规则 -->
-      <div class="control-card wb-panel">
-        <div class="control-header control-toggle" @click="roomsConfigOpen = !roomsConfigOpen">
-          <h3>🛏️ 房间人数 / 床位 / 睡觉</h3>
-          <span class="collapse-arrow">{{ roomsConfigOpen ? '▲' : '▼' }}</span>
+      <div class="locations-section wb-panel">
+        <h3>房间内的玩家</h3>
+        <div class="locations-grid">
+          <div v-for="(data, roomId) in locations" :key="roomId" class="location-card">
+            <div class="location-header">
+              <span class="location-icon">{{ getRoomIcon(roomId as string) }}</span>
+              <span class="location-name">{{ getRoomName(roomId as string) }}</span>
+              <span class="location-count">{{ data.players?.length || 0 }} 人</span>
+              <button class="bb-btn bb-btn-xs room-chat-btn" @click="goRoomChat(roomId as string)">💬 聊天</button>
+            </div>
+            <div class="location-players">
+              <div v-for="p in (data.players || [])" :key="p.playerId" class="location-player">
+                <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
+                <span class="player-name">{{ p.playerName }}</span>
+                <span class="player-time">{{ formatTime(p.enteredAt) }}</span>
+                <select :aria-label="'移动 ' + p.playerName" class="move-select" @change="handleForceMove(p.playerId, ($event.target as any).value); ($event.target as any).value = ''">
+                  <option value="">移至...</option>
+                  <option v-for="r in allRooms" :key="r.id" :value="r.id" :disabled="r.id === roomId">
+                    {{ r.icon }} {{ r.name }}
+                  </option>
+                </select>
+              </div>
+              <div v-if="!data.players?.length" class="no-players">空</div>
+            </div>
+          </div>
         </div>
+      </div>
+    </section>
+
+    <section v-show="houseAdminView === 'rules'" aria-label="房间规则">
+      <div class="control-card wb-panel">
+        <button type="button" class="control-header control-toggle house-rules-toggle" :aria-expanded="roomsConfigOpen" @click="roomsConfigOpen = !roomsConfigOpen">
+          <strong>房间容量、床位与作息</strong>
+          <span class="collapse-arrow">{{ roomsConfigOpen ? '▲' : '▼' }}</span>
+        </button>
 
         <div v-show="roomsConfigOpen">
         <div class="house-rules">
+          <h3>睡觉与洗澡</h3>
           <div class="rule-row">
             <label>单次睡觉时长</label>
             <input type="number" min="1" max="1440" v-model.number="sleepDurationMinutes" class="bb-input rule-input" />
@@ -67,6 +101,7 @@
           <span class="rule-hint">进入目标房间所需时间；0 秒表示立即到达（管理员强制移动不受此限制）</span>
         </div>
 
+        <h3 class="house-room-editor-title">逐个设置房间</h3>
         <div class="room-editor">
           <div v-for="r in allRooms" :key="r.id" class="room-edit-row">
             <span class="re-name">{{ r.icon }} {{ r.name }}</span>
@@ -87,10 +122,9 @@
         </div>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- 餐厅照片墙（可调整顺序） -->
-    <div class="wb-lanes wb-house-monitor">
+    <section v-show="houseAdminView === 'photos'" aria-label="餐厅照片墙">
       <div class="photo-wall-section wb-panel">
         <h3>🖼️ 餐厅照片墙（可调整展示顺序）</h3>
         <p class="pw-hint">已淘汰 / 陪审团成员显示为黑白，其余为彩色。</p>
@@ -99,36 +133,7 @@
           <button class="bb-btn bb-btn-primary" @click="savePhotoWallOrder">保存顺序</button>
         </div>
       </div>
-
-      <!-- 玩家位置总览 -->
-      <div class="locations-section wb-panel">
-        <h3>📍 玩家位置总览</h3>
-        <div class="locations-grid">
-          <div v-for="(data, roomId) in locations" :key="roomId" class="location-card">
-            <div class="location-header">
-              <span class="location-icon">{{ getRoomIcon(roomId as string) }}</span>
-              <span class="location-name">{{ getRoomName(roomId as string) }}</span>
-              <span class="location-count">{{ data.players?.length || 0 }} 人</span>
-              <button class="bb-btn bb-btn-xs room-chat-btn" @click="goRoomChat(roomId as string)">💬 聊天</button>
-            </div>
-            <div class="location-players">
-              <div v-for="p in (data.players || [])" :key="p.playerId" class="location-player">
-                <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
-                <span class="player-name">{{ p.playerName }}</span>
-                <span class="player-time">{{ formatTime(p.enteredAt) }}</span>
-                <select class="move-select" @change="handleForceMove(p.playerId, ($event.target as any).value); ($event.target as any).value = ''">
-                  <option value="">移至...</option>
-                  <option v-for="r in allRooms" :key="r.id" :value="r.id" :disabled="r.id === roomId">
-                    {{ r.icon }} {{ r.name }}
-                  </option>
-                </select>
-              </div>
-              <div v-if="!data.players?.length" class="no-players">空</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    </section>
   </div>
 </template>
 
@@ -156,6 +161,7 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const rooms = ref<BBHouseRoomWithCount[]>([])
+const houseAdminView = ref<'rooms' | 'rules' | 'photos'>('rooms')
 const roomsConfigOpen = ref(false)
 const locations = ref<Record<string, { room: any; players: any[] }>>({})
 const backyardDoorOpen = ref(true)

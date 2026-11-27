@@ -2,7 +2,17 @@
   <div class="mg-lobby">
     <div class="lobby-icon">📣</div>
     <h2 class="lobby-title">{{ gameTitle || '小游戏' }}</h2>
-    <p class="lobby-sub">管理员已召集本场比赛，请点击「准备」。全员准备后即可开始。</p>
+    <p class="lobby-sub">全员准备后，管理员即可开始比赛。</p>
+
+    <div class="lobby-actions">
+      <button class="lobby-btn" type="button" aria-label="比赛准备" :aria-pressed="myReady" :class="{ ready: myReady }" @click="toggleReady">
+        {{ myReady ? '✅ 已准备（点击取消）' : '准备' }}
+      </button>
+      <div class="lobby-hint">
+        {{ readyCount }} / {{ players.length }} 已准备{{ allReady ? ' · 等待管理员开始比赛…' : '' }}
+      </div>
+      <div v-if="!connected" class="lobby-conn">连接中…</div>
+    </div>
 
     <div v-if="rules" class="lobby-rules">
       <div class="lobby-rules-title">📜 比赛规则</div>
@@ -22,14 +32,6 @@
       </div>
       <div v-if="!players.length" class="lp-empty">等待选手加入…</div>
     </div>
-
-    <button class="lobby-btn" :class="{ ready: myReady }" @click="toggleReady">
-      {{ myReady ? '✅ 已准备（点击取消）' : '准备' }}
-    </button>
-    <div class="lobby-hint">
-      {{ readyCount }} / {{ players.length }} 已准备{{ allReady ? ' · 等待管理员开始比赛…' : '' }}
-    </div>
-    <div v-if="!connected" class="lobby-conn">连接中…</div>
   </div>
 </template>
 
@@ -67,26 +69,27 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.mg-lobby { text-align: center; padding: 36px 24px; }
-.lobby-icon { font-size: 56px; margin-bottom: 10px; animation: lobbyPulse 1.2s ease-in-out infinite; }
+.mg-lobby { min-width: 0; text-align: center; padding: clamp(12px, 3vw, 28px); }
+.lobby-icon { width: fit-content; margin: 0 auto 6px; font-size: 34px; animation: lobbyPulse 1.2s ease-in-out infinite; }
 @keyframes lobbyPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
-.lobby-title { font-size: 24px; color: #ece7fb; margin: 0 0 8px; }
-.lobby-sub { color: #b3a6d6; font-size: 14px; margin: 0 0 22px; }
-.lobby-rules { display: inline-block; text-align: left; max-width: 640px; margin: 0 auto 22px; padding: 12px 18px; background: #e6c9880d; border: 1px solid #e6c98844; border-radius: 10px; }
+.lobby-title { font-size: 21px; color: #ece7fb; margin: 0 0 6px; overflow-wrap: anywhere; }
+.lobby-sub { color: #b3a6d6; font-size: 14px; margin: 0 0 10px; }
+.lobby-actions { margin: 0 auto 14px; }
+.lobby-rules { text-align: left; max-width: 640px; margin: 0 auto 12px; padding: 10px 12px; background: #e6c9880d; border: 1px solid #e6c98844; border-radius: 10px; }
 .lobby-rules-title { font-size: 13px; font-weight: 700; color: #e6c988; margin-bottom: 6px; }
 .lobby-rules-text { font-size: 13px; color: #cfc4ea; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
-.lobby-players { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; max-width: 640px; margin: 0 auto 22px; }
+.lobby-players { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 8px; max-width: 640px; margin: 0 auto; }
 .lp { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #ffffff14; border-radius: 8px; background: #ffffff06; font-size: 13px; color: #ddd; }
 .lp.me { border-color: #b39bff66; }
 .lp.ready { border-color: #b39bff; background: #b39bff12; }
-.lp-name { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-name { flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lp-me { color: #b39bff; font-size: 11px; margin-left: 4px; }
 .lp-status { font-size: 12px; color: #8f83b8; }
 .lp-status.ready { color: #b39bff; }
 .lp-empty { grid-column: 1 / -1; color: #6b5f92; font-size: 13px; padding: 16px; }
-.lobby-btn { padding: 14px 48px; font-size: 18px; font-weight: 700; border: 1px solid #b39bff; border-radius: 10px; background: #b39bff22; color: #b39bff; cursor: pointer; transition: all 0.15s; }
+.lobby-btn { min-height: 44px; max-width: 100%; padding: 8px clamp(12px, 4vw, 32px); font-size: 16px; font-weight: 700; border: 1px solid #b39bff; border-radius: 10px; background: #b39bff22; color: #b39bff; cursor: pointer; transition: all 0.15s; }
 .lobby-btn:hover { background: #b39bff33; }
 .lobby-btn.ready { background: #b39bff44; }
-.lobby-hint { margin-top: 14px; color: #b3a6d6; font-size: 13px; }
+.lobby-hint { margin-top: 6px; color: #b3a6d6; font-size: 13px; }
 .lobby-conn { margin-top: 6px; color: #6b5f92; font-size: 12px; }
 </style>

@@ -16,19 +16,11 @@
       <span class="twist-item no-pendant">🚫 无护符挑战：本轮跳过否决权，无人持有否决权</span>
     </div>
 
-    <div v-else>
-      <!-- 步骤说明 -->
-      <div class="step-card wb-panel">
-        <div class="step-title">📋 抽取规则</div>
-        <ul class="step-list">
-          <li><strong>HOH</strong> 和 <strong>被提名者</strong> 必定参加 POV</li>
-          <li>从<strong>所有活跃房客</strong>中随机抽取，补足至 <strong>共 6 人</strong>参与</li>
-          <li>若抽中 <strong>HOH</strong> 或 <strong>被提名者</strong>，他们可从其他未被选择的房客中<strong>自选 1 人</strong>加入 POV</li>
-          <li>自选完成后即可进行否决权竞争</li>
-        </ul>
-      </div>
-
-      <!-- 获胜者横幅 -->
+    <div v-else class="veto-draw-workspace">
+      <section class="veto-draw-overview wb-panel">
+        <h2>{{ veto?.winnerId ? '胜者已确定' : !veto?.participants?.length ? '抽取参赛者' : !allPicksDone ? '等待房客自选' : '可以开始竞争' }}</h2>
+        <p v-if="!veto?.participants?.length">先凑齐参赛名单，再开始比赛。</p>
+      </section>
       <div class="wb-lanes wb-draw-state">
         <div v-if="veto?.winnerId" class="veto-winner-banner">
           <span class="banner-icon">🛡️</span>
@@ -75,8 +67,6 @@
           </div>
         </div>
       </div>
-
-      <!-- 自选区域 -->
       <div v-if="canPick.length > 0" class="pick-section wb-panel">
         <h3>🎯 房客自选</h3>
         <p class="pick-hint">以下被抽中的HOH/提名者可从其他房客中各选1人加入POV：</p>
@@ -107,8 +97,6 @@
           </div>
         </div>
       </div>
-
-      <!-- 操作按钮 -->
       <div class="action-section wb-panel">
         <h3>操作</h3>
         <div class="action-buttons">
@@ -214,6 +202,15 @@
           请先完成所有自选，再进行否决权竞争
         </p>
       </div>
+      <details class="step-card wb-panel veto-draw-rules">
+        <summary>抽选规则</summary>
+        <ul class="step-list">
+          <li><strong>HOH</strong> 和 <strong>被提名者</strong> 必定参加 POV</li>
+          <li>从<strong>所有活跃房客</strong>中随机抽取，补足至 <strong>共 6 人</strong>参与</li>
+          <li>若抽中 <strong>HOH</strong> 或 <strong>被提名者</strong>，他们可从其他未被选择的房客中<strong>自选 1 人</strong>加入 POV</li>
+          <li>自选完成后即可进行否决权竞争</li>
+        </ul>
+      </details>
     </div>
 
     <!-- 小游戏选择弹窗 -->
@@ -695,7 +692,7 @@ async function stopMinigame() {
 }
 
 useBbRefresh(fetchData,
-  '/veto', '/hoh', '/nomination', '/minigame/room', '/round-twist', '/season/set', '/season/next', '/season/reset'
+  '/veto', '/hoh', '/nomination', '/minigame/create-room', '/minigame/stop', '/minigame/set-winner', '/round-twist', '/season/set', '/season/next', '/season/reset'
 )
 onMounted(fetchData)
 onUnmounted(stopProgressPolling)

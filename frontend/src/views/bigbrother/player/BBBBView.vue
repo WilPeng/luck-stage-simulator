@@ -13,39 +13,43 @@
       <div class="rule-bar">
         3 名被提名人进行比赛：胜者安全，其余 2 人进入淘汰投票。
       </div>
-
-      <!-- 准备环节 -->
-      <div v-if="showLobby && activeRoom" class="minigame-section">
-        <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
-          :rules="activeRoom.options?.rules || ''"
-          :participants="activeRoom.participants" :myId="myId" />
-      </div>
-
-      <!-- 比赛进行中：渲染小游戏 -->
-      <div v-else-if="gameComponent && activeRoom" class="minigame-section">
-        <component :is="gameComponent" :roomId="activeRoom.roomId" :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
-      </div>
-
-      <MinigameSpectatorPanel v-else-if="activeRoom?.spectatorState && !bbbbWinnerId"
-        :title="activeRoom.minigameName" :game-id="activeRoom.minigameId"
-        :status="activeRoom.status" :players="activeRoom.spectatorState" />
-
-      <div class="card">
-        <div class="card-title">被提名人（{{ nominees.length }}）</div>
-        <div class="nominee-list">
-          <div v-for="n in nominees" :key="n.id" class="nominee" :class="{ safe: bbbbWinnerId === n.id, me: n.id === myId }">
-            <BBAvatar :name="n.name" :avatar="n.avatar" size="sm" />
-            <span class="nominee-name">{{ n.name }}<span v-if="n.id === myId" class="me-badge">我</span></span>
-            <span v-if="bbbbWinnerId === n.id" class="safe-badge">安全</span>
+      <div class="bbbb-workspace">
+        <section class="bbbb-room wb-panel" aria-label="BBBB 当前比赛">
+          <header class="bbbb-room-head">
+            <h2>本轮安全挑战</h2>
+            <span v-if="bbbbWinnerId">已结束</span>
+            <span v-else-if="activeRoom?.status === 'waiting'">等待准备</span>
+            <span v-else-if="activeRoom?.status === 'finished'">等待公布安全者</span>
+            <span v-else-if="activeRoom">比赛房间已开放</span>
+          </header>
+          <div v-if="!showLobby && !gameComponent && !activeRoom?.spectatorState && !bbbbWinnerId" class="waiting">等待管理员开启 BBBB 比赛…</div>
+          <p v-if="bbbbWinnerId" class="result-note">
+            本轮 BBBB 已结束，安全者：{{ winnerName }}
+          </p>
+          <div v-if="showLobby && activeRoom" class="minigame-section">
+            <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
+              :rules="activeRoom.options?.rules || ''"
+              :participants="activeRoom.participants" :myId="myId" />
           </div>
-          <div v-if="!nominees.length" class="muted">暂无提名</div>
-        </div>
-        <div v-if="bbbbWinnerId" class="result-note">
-          本轮 BBBB 已结束，安全者：{{ winnerName }}
-        </div>
+          <div v-else-if="gameComponent && activeRoom" class="minigame-section">
+            <component :is="gameComponent" :roomId="activeRoom.roomId" :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
+          </div>
+          <MinigameSpectatorPanel v-else-if="activeRoom?.spectatorState && !bbbbWinnerId"
+            :title="activeRoom.minigameName" :game-id="activeRoom.minigameId"
+            :status="activeRoom.status" :players="activeRoom.spectatorState" />
+        </section>
+        <section class="card wb-panel bbbb-roster">
+          <h2 class="card-title">被提名人（{{ nominees.length }}）</h2>
+          <div class="nominee-list">
+            <div v-for="n in nominees" :key="n.id" class="nominee" :class="{ safe: bbbbWinnerId === n.id, me: n.id === myId }">
+              <BBAvatar :name="n.name" :avatar="n.avatar" size="sm" />
+              <span class="nominee-name">{{ n.name }}<span v-if="n.id === myId" class="me-badge">我</span></span>
+              <span v-if="bbbbWinnerId === n.id" class="safe-badge">安全</span>
+            </div>
+            <div v-if="!nominees.length" class="muted">暂无提名</div>
+          </div>
+        </section>
       </div>
-
-      <div v-if="!gameComponent && !activeRoom?.spectatorState && !bbbbWinnerId" class="waiting">等待管理员开启 BBBB 比赛…</div>
     </div>
   </div>
 </template>

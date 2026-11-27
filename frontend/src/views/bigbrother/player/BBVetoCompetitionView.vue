@@ -133,6 +133,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, markRaw, watch, type Component } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
@@ -362,12 +363,15 @@ async function loadRoundVeto() {
   try {
     const history = await bbGetVetoHistory()
     const roundKey = `round-${roundNum.value}`
-    const rec = history.find(h => h.roundId === roundKey)
-    if (rec && rec.winnerId) veto.value = rec
-    // 即使没有获胜者，也加载参与者列表（如果有）
-    if (rec && !rec.winnerId && rec.participants?.length) veto.value = rec
+    veto.value = history.find(h => h.roundId === roundKey) || null
   } catch {}
 }
+
+useBbRefresh(async () => {
+  await loadRoundVeto()
+  if (roundNum.value !== seasonStore.currentRoundNumber) return
+  await Promise.all([loadHohAndNom(), loadPickable(), loadVeto()])
+}, '/veto', '/nomination/set', '/round-twist', '/season/set', '/season/next', '/season/reset')
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pickPollTimer: ReturnType<typeof setInterval> | null = null

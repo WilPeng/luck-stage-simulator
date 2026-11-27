@@ -68,23 +68,28 @@
       <div v-else class="empty-hint">暂无活跃房客可供投票</div>
     </section>
 
-    <!-- 钥匙仪式：所有选手可见；HOH 可设置（先选被提名者，再排安全顺序） -->
-    <KeyCeremony
+    <component
       v-else-if="isCurrentRound && isNominationStage"
-      :keyCeremony="keyCeremony"
-      :myId="authStore.currentUser?.id || ''"
-      :isHoh="isCurrentHoh"
-      :eligible="keyEligible"
-      :avatars="activeList"
-      :nomineeCount="nomineeCount"
-      :submitting="submittingKey"
-      :drawing="drawingKey"
-      :announcing="announcingKey"
-      @setup="onKeySetup"
-      @draw="onKeyDraw"
-      @announce="onKeyAnnounce"
-      @speech="onKeySpeech"
-    />
+      :is="nomination && !keyCeremony ? 'details' : 'div'"
+      class="nomination-key-workspace"
+    >
+      <summary v-if="nomination && !keyCeremony">钥匙仪式</summary>
+      <KeyCeremony
+        :keyCeremony="keyCeremony"
+        :myId="authStore.currentUser?.id || ''"
+        :isHoh="isCurrentHoh"
+        :eligible="keyEligible"
+        :avatars="activeList"
+        :nomineeCount="nomineeCount"
+        :submitting="submittingKey"
+        :drawing="drawingKey"
+        :announcing="announcingKey"
+        @setup="onKeySetup"
+        @draw="onKeyDraw"
+        @announce="onKeyAnnounce"
+        @speech="onKeySpeech"
+      />
+    </component>
 
     <div v-if="!(nomination && ceremonyDone) && !(isCurrentRound && isNominationStage)" class="empty-card">
       <p>{{ isFuture ? '本周提名阶段尚未开始。' : '本周暂无已公布的提名结果。' }}</p>

@@ -15,92 +15,92 @@
 
       <!-- F3：参与小游戏 -->
       <template v-if="isFinal3">
-        <!-- F3 三轮胜者进度 -->
-        <div class="f3-progress">
-          <div v-for="r in [1, 2, 3]" :key="r" class="f3-round" :class="{ done: !!final3Winners[String(r)] }">
-            <div class="f3-round-label">第 {{ r }} 场</div>
-            <div class="f3-round-winner">{{ final3Winners[String(r)]?.name || '待决出' }}</div>
+        <section class="finale-round-overview wb-panel">
+          <h2>三场终局</h2>
+          <ol class="f3-progress" aria-label="三场终局进度">
+            <li v-for="r in [1, 2, 3]" :key="r" class="f3-round" :class="{ done: !!final3Winners[String(r)] }">
+              <div class="f3-round-label">第 {{ r }} 场</div>
+              <div class="f3-round-winner">{{ final3Winners[String(r)]?.name || '待决出' }}</div>
+            </li>
+          </ol>
+        </section>
+        <section class="finale-player-floor" aria-label="当前终局操作">
+          <div v-if="iAmFhoh && round3Done && !finalTwo.length" class="fhoh-pick wb-panel">
+            <div class="fhoh-title">你是最终 HOH（FHOH）</div>
+            <p class="fhoh-desc">请选择一位选手与你一同进入决赛（另一位将成为最后一位陪审员）。</p>
+            <div class="fhoh-candidates">
+              <button v-for="p in pickCandidates" :key="p.playerId" class="fhoh-candidate" @click="pickPartner(p)">
+                <span class="fhoh-avatar">{{ p.name.charAt(0) }}</span>
+                <span class="fhoh-name">{{ p.name }}</span>
+              </button>
+            </div>
           </div>
-        </div>
-
-        <!-- FHOH 选择带入决赛的选手 -->
-        <div v-if="iAmFhoh && round3Done && !finalTwo.length" class="fhoh-pick wb-panel">
-          <div class="fhoh-title">你是最终 HOH（FHOH）</div>
-          <p class="fhoh-desc">请选择一位选手与你一同进入决赛（另一位将成为最后一位陪审员）。</p>
-          <div class="fhoh-candidates">
-            <button v-for="p in pickCandidates" :key="p.playerId" class="fhoh-candidate" @click="pickPartner(p)">
-              <span class="fhoh-avatar">{{ p.name.charAt(0) }}</span>
-              <span class="fhoh-name">{{ p.name }}</span>
-            </button>
+          <div v-else-if="iAmFhoh && finalTwo.length === 2" class="fhoh-pick done wb-panel">
+            <div class="fhoh-title">你已选择进入决赛</div>
+            <p class="fhoh-desc">决赛二人：{{ finalTwo.map(f => f.playerName).join(' vs ') }}</p>
           </div>
-        </div>
-        <div v-else-if="iAmFhoh && finalTwo.length === 2" class="fhoh-pick done wb-panel">
-          <div class="fhoh-title">你已选择进入决赛</div>
-          <p class="fhoh-desc">决赛二人：{{ finalTwo.map(f => f.playerName).join(' vs ') }}</p>
-        </div>
-
-        <div v-if="showLobby" class="minigame-section">
-          <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
-            :rules="activeRoom.options?.rules || ''"
-            :participants="activeRoom.participants" :myId="myId" />
-        </div>
-        <div v-else-if="activeRoom && inMe(activeRoom)" class="minigame-section">
-          <div class="game-stage-tip">第 {{ currentGameStageText }} 场挑战</div>
-          <component :is="gameComponent" :roomId="activeRoom.roomId"
-            :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
-        </div>
-        <MinigameSpectatorPanel v-else-if="activeRoom?.spectatorState"
-          :title="activeRoom.minigameName" :game-id="activeRoom.minigameId"
-          :status="activeRoom.status" :players="activeRoom.spectatorState" />
-        <div v-else-if="!iAmFhoh || (round3Done && finalTwo.length)" class="pending-card">
-          <div class="pending-icon">🎮</div>
-          <div class="pending-title">等待下一场挑战</div>
-          <div class="pending-desc">管理员正在安排 F3 小游戏，请耐心等待</div>
-        </div>
+          <div v-if="showLobby" class="minigame-section">
+            <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
+              :rules="activeRoom.options?.rules || ''"
+              :participants="activeRoom.participants" :myId="myId" />
+          </div>
+          <div v-else-if="activeRoom && inMe(activeRoom)" class="minigame-section">
+            <div class="game-stage-tip">第 {{ currentGameStageText }} 场挑战</div>
+            <component :is="gameComponent" :roomId="activeRoom.roomId"
+              :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
+          </div>
+          <MinigameSpectatorPanel v-else-if="activeRoom?.spectatorState"
+            :title="activeRoom.minigameName" :game-id="activeRoom.minigameId"
+            :status="activeRoom.status" :players="activeRoom.spectatorState" />
+          <div v-else-if="!iAmFhoh || (round3Done && finalTwo.length)" class="pending-card">
+            <div class="pending-icon">🎮</div>
+            <div class="pending-title">等待下一场挑战</div>
+            <div class="pending-desc">管理员正在安排 F3 小游戏，请耐心等待</div>
+          </div>
+        </section>
       </template>
 
       <!-- 冠军投票 / 冠军揭晓 -->
       <template v-else-if="isChampionVote">
-        <!-- 逐句揭晓（仅新句播放动画） -->
-        <div v-if="revealSegments.length" class="reveal-panel wb-panel">
-          <div class="reveal-title">🏆 冠军揭晓</div>
-          <TransitionGroup name="reveal" tag="div" class="reveal-lines">
-            <div v-for="(seg, i) in revealSegments" :key="seg.juryId || `champ-${i}`"
-              class="reveal-line" :class="{ champion: seg.kind === 'champion' }">
-              {{ seg.text }}
-            </div>
-          </TransitionGroup>
-        </div>
+        <section class="finale-player-floor" aria-label="冠军投票和结果">
+          <div v-if="championWinner" class="champion-result">
+            🏆 冠军：{{ championWinner.name }}
+          </div>
+          <div v-else-if="finalTwo.length === 2" class="vote-section wb-panel">
+            <h2 class="vote-title">陪审团冠军投票</h2>
+            <template v-if="!eg?.championVotingOpen">
+              <p class="note">投票尚未开启。符合条件的选手可以先参与陪审团问答。</p>
+            </template>
+            <template v-else>
+              <p v-if="isFinalist" class="note">你是决赛选手，无需投票。</p>
+              <p v-else-if="!isJury" class="note">只有陪审团成员可以投冠军票。</p>
 
-        <div v-if="championWinner" class="champion-result">
-          🏆 冠军：{{ championWinner.name }}
-        </div>
-
-        <div v-else-if="finalTwo.length === 2" class="vote-section wb-panel">
-          <div class="vote-title">🏆 陪审团冠军投票</div>
-          <template v-if="!eg?.championVotingOpen">
-            <p class="note">等待管理员开启冠军投票…（可先在下方陪审团问答中交流）</p>
-          </template>
-          <template v-else>
-            <p v-if="isFinalist" class="note">你是决赛选手，无需投票。</p>
-            <p v-else-if="!isJury" class="note">只有陪审团成员可以投冠军票。</p>
-
-            <div class="finalist-cards">
-              <div v-for="p in finalTwo" :key="p.playerId"
-                class="finalist-card" :class="{ chosen: myVote?.targetId === p.playerId }"
-                @click="askVote(p)">
-                <div class="finalist-avatar">{{ p.playerName.charAt(0) }}</div>
-                <div class="finalist-name">{{ p.playerName }}</div>
-                <div class="finalist-action">
-                  {{ myVote?.targetId === p.playerId ? '✅ 已投票' : '点此投票' }}
-                </div>
+              <div class="finalist-cards">
+                <button type="button" v-for="p in finalTwo" :key="p.playerId"
+                  class="finalist-card" :aria-pressed="myVote?.targetId === p.playerId" :class="{ chosen: myVote?.targetId === p.playerId }"
+                  @click="askVote(p)">
+                  <div class="finalist-avatar">{{ p.playerName.charAt(0) }}</div>
+                  <div class="finalist-name">{{ p.playerName }}</div>
+                  <div class="finalist-action">
+                    {{ myVote?.targetId === p.playerId ? '已投给该选手' : myVote ? '投票已提交' : isJury ? '投给这位选手' : '决赛选手' }}
+                  </div>
+                </button>
               </div>
-            </div>
-          </template>
-        </div>
-        <div v-else class="pending-card">
-          <div class="pending-title">决赛二人尚未确定</div>
-        </div>
+            </template>
+          </div>
+          <div v-else class="pending-card">
+            <div class="pending-title">决赛二人尚未确定</div>
+          </div>
+          <div v-if="revealSegments.length" class="reveal-panel wb-panel">
+            <div class="reveal-title">🏆 冠军揭晓</div>
+            <TransitionGroup name="reveal" tag="div" class="reveal-lines">
+              <div v-for="(seg, i) in revealSegments" :key="seg.juryId || `champ-${i}`"
+                class="reveal-line" :class="{ champion: seg.kind === 'champion' }">
+                {{ seg.text }}
+              </div>
+            </TransitionGroup>
+          </div>
+        </section>
       </template>
 
       <div v-else class="pending-card">

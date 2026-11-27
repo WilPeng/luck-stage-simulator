@@ -538,7 +538,7 @@ async function fetchData() {
 }
 
 useBbRefresh(fetchData,
-  '/season/endgame', '/season/set', '/season/next', '/season/reset', '/season/config',
+  '/season/endgame', '/season/set', '/season/next', '/season/reset', '/season/config', '/season/reveal-chats',
   '/hoh', '/nomination', '/veto', '/eviction/result', '/eviction/night/start', '/eviction/restore',
   '/houseguests', '/round-twist'
 )
