@@ -433,3 +433,68 @@
   .bb-main .bb-eviction-admin .voter-action { grid-column: 1 / -1; width: 100%; }
   .bb-main .bb-eviction-admin .stat-card { padding: 8px; }
 }
+
+/* Nomination pages share the same result and voting layouts. */
+.bb-main :is(.bb-nomination-admin, .bb-nomination-player) > .nomination-card {
+  margin-block: 0 16px;
+  padding: clamp(14px, 2.5vw, 22px);
+  border-color: #e6c98866;
+}
+.bb-main :is(.bb-nomination-admin, .bb-nomination-player) .nomination-card h2,
+.bb-main .nomination-ballot h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: #f3e8ff;
+}
+.bb-main :is(.bb-nomination-admin, .bb-nomination-player) .hoh-info {
+  margin: 0 0 12px;
+  color: var(--bb-text-secondary);
+}
+.bb-main :is(.bb-nomination-admin, .bb-nomination-player) .nominees,
+.bb-main .nomination-ballot .democracy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 10px;
+}
+.bb-main .nominee-item .nominee-name { overflow-wrap: anywhere; }
+.bb-main .nomination-workflow { display: grid; gap: 12px; margin-bottom: 12px; }
+.bb-main :is(.nomination-ballot, .nomination-disclosure) {
+  min-width: 0;
+  padding: clamp(14px, 2vw, 20px);
+  background: var(--workspace-surface);
+  border: 1px solid var(--workspace-line);
+  border-radius: 12px;
+}
+.bb-main .nomination-disclosure summary { cursor: pointer; color: var(--bb-text-primary); font-weight: 600; }
+.bb-main .nomination-disclosure[open] > summary { margin-bottom: 12px; }
+.bb-main .nomination-disclosure .table-container { overflow-x: auto; }
+.bb-main .nomination-ballot :is(.democracy-banner, .twist-action-hint) {
+  padding: 0;
+  margin: 0 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--bb-text-secondary);
+  text-align: start;
+  line-height: 1.55;
+}
+.bb-main .nomination-ballot .democracy-vote-section {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.bb-main .nomination-ballot .democracy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(92px, 1fr);
+  padding: 8px 10px;
+}
+.bb-main .nomination-ballot .democracy-voter {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-wrap: anywhere;
+}
+.bb-main .nomination-ballot :is(.bb-select-sm, .bb-btn) { min-height: 40px; }
+.bb-main .nomination-ballot .bb-select-sm { width: 100%; min-width: 0; }
+.bb-main .nomination-ballot .bb-btn { width: auto; justify-self: end; }

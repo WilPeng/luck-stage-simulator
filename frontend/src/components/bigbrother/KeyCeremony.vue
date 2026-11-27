@@ -1,75 +1,71 @@
 <template>
-  <div class="key-ceremony">
-    <!-- 准备阶段：HOH 预先决定提名、排序、编辑文案并保存；等待管理员开始仪式 -->
+  <section class="key-ceremony" aria-label="钥匙仪式">
+    <header class="kc-header">
+      <h2>钥匙仪式</h2>
+      <span class="kc-status" role="status">{{ phaseLabel }}</span>
+    </header>
+
     <template v-if="!isStarted">
-      <div v-if="canSetup" class="kc-setup">
-        <div class="kc-title">🔑 提名仪式 · 准备</div>
-        <div v-if="prepared" class="kc-saved">✅ 准备内容已保存，等待管理员点击「仪式开始」</div>
-        <div class="kc-step">① 选择 {{ nomineeCount }} 名被提名者（点击选择）</div>
-        <div class="kc-eligible">
-          <button v-for="h in eligible" :key="h.id" class="kc-pick"
-            :class="{ chosen: selectedNominees.includes(h.id) }"
-            @click="toggleNominee(h.id)">{{ h.name }}</button>
+      <template v-if="canSetup">
+        <p v-if="prepared" class="kc-saved">准备内容已保存，可以继续修改，仪式由管理员开始。</p>
+        <div class="kc-prep-grid">
+          <section class="kc-fieldset">
+            <h3>1. 选择被提名者</h3>
+            <p class="kc-hint">已选 {{ selectedNominees.length }} / {{ nomineeCount }} 人</p>
+            <div class="kc-eligible">
+              <button v-for="h in eligible" :key="h.id" class="kc-pick"
+                :aria-pressed="selectedNominees.includes(h.id)"
+                :class="{ chosen: selectedNominees.includes(h.id) }"
+                @click="toggleNominee(h.id)">{{ h.name }}</button>
+            </div>
+          </section>
+          <section class="kc-fieldset">
+            <h3>2. 排列安全顺序</h3>
+            <p class="kc-hint">用上下箭头调整其余房客被宣布安全的顺序。</p>
+            <div class="kc-order">
+              <div v-for="(id, i) in safeOrder" :key="id" class="kc-order-item">
+                <span class="kc-idx">{{ i + 1 }}</span>
+                <span class="kc-oname">{{ nameOf(id) }}</span>
+                <button class="kc-arrow" :aria-label="'上移 ' + nameOf(id)" :disabled="i === 0" @click="moveSafe(i, -1)">↑</button>
+                <button class="kc-arrow" :aria-label="'下移 ' + nameOf(id)" :disabled="i === safeOrder.length - 1" @click="moveSafe(i, 1)">↓</button>
+              </div>
+            </div>
+          </section>
         </div>
-        <div class="kc-step">② 拖动/调整其余选手的揭晓顺序（即安全顺序）</div>
-        <div class="kc-order">
-          <div v-for="(id, i) in safeOrder" :key="id" class="kc-order-item">
-            <span class="kc-idx">{{ i + 1 }}</span>
-            <span class="kc-oname">{{ nameOf(id) }}</span>
-            <button class="kc-arrow" :disabled="i === 0" @click="moveSafe(i, -1)">↑</button>
-            <button class="kc-arrow" :disabled="i === safeOrder.length - 1" @click="moveSafe(i, 1)">↓</button>
-          </div>
-        </div>
-        <button class="kc-submit" :disabled="selectedNominees.length !== nomineeCount || submitting" @click="submit">
-          {{ submitting ? '保存中…' : prepared ? '重新保存准备' : '确定保存' }}
-        </button>
-      </div>
-      <div v-else class="kc-waiting">
-        {{ prepared ? 'HOH 已完成提名准备，等待管理员开始仪式…' : '等待 HOH 准备提名仪式…' }}
-      </div>
+      </template>
+      <p v-else class="kc-waiting">
+        {{ prepared ? '房主已保存提名准备，等待管理员开始仪式。' : '等待房主准备提名仪式。' }}
+      </p>
     </template>
 
-    <!-- 仪式阶段 -->
-    <template v-else>
-      <div class="kc-title">🔑 提名仪式 · 钥匙揭晓</div>
+    <div v-if="canSetup && !isStarted" class="kc-draft-heading">
+      <h3>3. 编辑发言稿</h3>
+      <p class="kc-hint">开场与结束发言随提名准备一起保存。</p>
+    </div>
 
-      <div class="kc-box">
-        <div class="box-icon">📦</div>
-        <div class="box-keys">
-          <div v-for="(k, i) in keyCeremony.order" :key="k.playerId" class="kc-key"
-            :class="{ drawn: i < keyCeremony.drawnCount, pop: i === keyCeremony.drawnCount - 1 }">
-            <template v-if="i < (keyCeremony.announcedCount || 0)">
-              <BBAvatar :name="k.playerName" :avatar="avatarOf(k.playerId)" size="sm" />
-              <span class="kc-key-name">{{ k.playerName }}</span>
-            </template>
-            <span v-else-if="i < keyCeremony.drawnCount" class="kc-key-name">🔑</span>
-            <span v-else class="kc-key-lock">🔒</span>
-          </div>
-        </div>
+    <details v-if="canSetup" class="kc-fieldset kc-draft" :open="!isStarted || !keyCeremony.openingSpoken">
+      <summary>开场发言</summary>
+      <div class="kc-speech-sub">
+        <button class="kc-mini-btn" @click="genOpeningTemplate">生成模板</button>
       </div>
+      <textarea aria-label="开场发言稿" v-model="openingText" class="kc-textarea" rows="2"></textarea>
+      <button v-if="isStarted" class="kc-btn"
+        :disabled="!isFirstMoment || keyCeremony.openingSpoken"
+        @click="emitSpeech('opening')">
+        {{ keyCeremony.openingSpoken ? '开场发言已发表' : '发表开场发言' }}
+      </button>
+    </details>
 
-      <div class="kc-turn">
-        {{ pendingAnnounce ? '等待宣布' : '当前抽钥匙' }}：<strong>{{ actorName }}</strong>
-        （已抽 {{ keyCeremony.drawnCount }}/{{ keyCeremony.order.length }}）
-      </div>
-
-      <!-- 暂时危险名单 -->
-      <div class="kc-risk">
-        <div class="kc-risk-title">⚠️ 暂时危险（未被抽出钥匙，共 {{ atRisk.length }} 人）</div>
-        <div class="kc-risk-list">
-          <span v-for="p in atRisk" :key="p.playerId" class="kc-risk-chip">
-            <BBAvatar :name="p.playerName" :avatar="avatarOf(p.playerId)" size="sm" />{{ p.playerName }}
-          </span>
-          <span v-if="!atRisk.length" class="kc-risk-empty">无</span>
-        </div>
-      </div>
-
-      <!-- 待宣布：由抽出该钥匙的人宣布 -->
+    <template v-if="isStarted">
+      <section v-if="!keyCeremony.ended && keyCeremony.openingSpoken && !allKeysDone" class="kc-current">
+        <h3>{{ pendingAnnounce ? '宣布本把钥匙' : '抽取下一把钥匙' }}</h3>
+        <p class="kc-hint">当前操作人：{{ actorName }}</p>
+      </section>
       <div v-if="pendingAnnounce" class="kc-announce">
         <template v-if="iAmActor">
           <div class="kc-revealed">🔑 你抽到的钥匙上写着：<strong>{{ pendingRevealed?.playerName }}</strong></div>
           <div class="kc-announce-form">
-            <input v-model="announceText" class="kc-input" @keyup.enter="doAnnounce" />
+            <input aria-label="宣布安全的发言" v-model="announceText" class="kc-input" @keyup.enter="doAnnounce" />
             <button class="kc-btn" :disabled="announcing" @click="doAnnounce">{{ announcing ? '发送中…' : '宣布安全' }}</button>
           </div>
         </template>
@@ -77,68 +73,92 @@
       </div>
 
       <!-- 抽钥匙 -->
-      <div v-else-if="!keyCeremony.openingSpoken" class="kc-waiting">请等待房主发表开场发言后再抽取钥匙…</div>
-      <div v-else-if="keyCeremony.drawnCount < keyCeremony.order.length" class="kc-draw">
+      <div v-else-if="!keyCeremony.openingSpoken && !canSetup" class="kc-waiting">等待房主发表开场发言。</div>
+      <div v-else-if="keyCeremony.openingSpoken && keyCeremony.drawnCount < keyCeremony.order.length" class="kc-draw">
         <button v-if="iAmActor" class="kc-btn kc-btn-draw" :disabled="drawing" @click="doDraw">
           {{ drawing ? '抽钥匙中…' : '🔑 从箱子中抽出一把钥匙' }}
         </button>
         <div v-else class="kc-waiting">等待 {{ actorName }} 抽钥匙…</div>
       </div>
 
-      <div v-else class="kc-done">🔑 所有钥匙已抽完</div>
-
-      <!-- 宣布记录：直接加载餐厅聊天（仅本人可见范围内的消息） -->
-      <CeremonyChat room-id="dining_room" title="💬 宣布记录（餐厅）" empty-text="暂无宣布" />
-
-      <div v-if="(keyCeremony.announcedCount || 0) >= keyCeremony.order.length" class="kc-nominees">
-        🎯 被提名者：<strong>{{ (keyCeremony.nominees || []).map(n => n.playerName).join('、') }}</strong>
-      </div>
+      <div v-else-if="allKeysDone && !canSetup && !keyCeremony.ended" class="kc-waiting">等待房主发表结束发言并公布结果。</div>
     </template>
 
-    <!-- 发言稿：始终展示给 HOH/管理员，准备阶段随「确定保存」一并保存 -->
-    <div v-if="canSetup" class="kc-speech-panel">
-      <div class="kc-speech-title">🎤 发言稿{{ isStarted ? '' : '（准备好后点击上方「确定保存」）' }}</div>
-
-      <div class="kc-speech-sub">开场发言
-        <button class="kc-mini-btn" @click="genOpeningTemplate">生成模板</button>
-      </div>
-      <textarea v-model="openingText" class="kc-textarea" rows="2"></textarea>
-      <button v-if="isStarted" class="kc-btn"
-        :disabled="!isFirstMoment || keyCeremony.openingSpoken"
-        @click="emitSpeech('opening')">
-        {{ keyCeremony.openingSpoken ? '开场发言已发表' : '发表开场发言' }}
-      </button>
-
-      <div class="kc-speech-sub">结束发言（仅可修改提名顺序与原因）</div>
+    <details v-if="canSetup" class="kc-fieldset kc-draft" :open="!isStarted || (allKeysDone && !keyCeremony.ended)">
+      <summary>结束发言</summary>
+      <p class="kc-hint">可调整提名顺序并填写提名原因。</p>
       <div class="kc-order">
         <div v-for="(n, i) in speechNominees" :key="n.playerId" class="kc-order-item">
           <span class="kc-idx">{{ i + 1 }}</span>
           <span class="kc-oname">{{ n.playerName }}</span>
-          <button class="kc-arrow" :disabled="i === 0" @click="moveSpeechNominee(i, -1)">↑</button>
-          <button class="kc-arrow" :disabled="i === speechNominees.length - 1" @click="moveSpeechNominee(i, 1)">↓</button>
+          <button class="kc-arrow" :aria-label="'上移 ' + n.playerName" :disabled="i === 0" @click="moveSpeechNominee(i, -1)">↑</button>
+          <button class="kc-arrow" :aria-label="'下移 ' + n.playerName" :disabled="i === speechNominees.length - 1" @click="moveSpeechNominee(i, 1)">↓</button>
         </div>
         <div v-if="!speechNominees.length" class="kc-risk-empty">请先选择被提名者</div>
       </div>
       <div class="kc-closing-line">
         我选择提名的房客分别是 <strong>{{ speechNomineeNames }}</strong>，原因是
       </div>
-      <textarea v-model="closingReason" class="kc-textarea kc-reason-textarea" rows="4" placeholder="填写提名原因…"></textarea>
+      <textarea aria-label="提名原因" v-model="closingReason" class="kc-textarea kc-reason-textarea" rows="4" placeholder="填写提名原因…"></textarea>
       <div class="kc-closing-line">提名仪式到此结束。</div>
       <button v-if="isStarted" class="kc-btn"
         :disabled="!allKeysDone || keyCeremony.closingSpoken"
         @click="emitSpeech('closing')">
         {{ keyCeremony.closingSpoken ? '结束发言已发表' : '发表结束发言并结束仪式' }}
       </button>
-    </div>
+    </details>
 
-    <!-- 管理员开始仪式（HOH 保存准备后可用） -->
+    <div v-if="canSetup && !isStarted" class="kc-save-panel">
+      <button class="kc-submit" :disabled="selectedNominees.length !== nomineeCount || submitting" @click="submit">
+        {{ submitting ? '保存中…' : prepared ? '保存修改' : '保存提名准备' }}
+      </button>
+    </div>
     <div v-if="canStartCeremony && !isStarted" class="kc-start-panel">
       <button class="kc-submit" :disabled="!prepared || starting" @click="emit('start')">
-        {{ starting ? '开始中…' : prepared ? '▶ 仪式开始' : '等待 HOH 完成准备' }}
+        {{ starting ? '开始中…' : '开始仪式' }}
       </button>
-      <div v-if="!prepared" class="kc-start-hint">HOH 尚未保存提名准备</div>
+      <p v-if="!prepared" class="kc-hint">保存提名准备后可以开始仪式。</p>
     </div>
-  </div>
+
+    <template v-if="isStarted">
+      <section class="kc-progress">
+        <div class="kc-progress-head">
+          <h3>钥匙进度</h3>
+          <span>已宣布 {{ keyCeremony.announcedCount || 0 }} / {{ keyCeremony.order.length }}</span>
+        </div>
+        <div class="kc-box">
+          <div class="box-keys">
+            <div v-for="(k, i) in keyCeremony.order" :key="k.playerId" class="kc-key"
+              :class="{ drawn: i < keyCeremony.drawnCount, pop: i === keyCeremony.drawnCount - 1 }">
+              <template v-if="i < (keyCeremony.announcedCount || 0)">
+                <BBAvatar :name="k.playerName" :avatar="avatarOf(k.playerId)" size="sm" />
+                <span class="kc-key-name">{{ k.playerName }}</span>
+              </template>
+              <span v-else-if="i < keyCeremony.drawnCount" class="kc-key-name">🔑</span>
+              <span v-else class="kc-key-lock">🔒</span>
+            </div>
+          </div>
+        </div>
+        <div class="kc-risk">
+          <div class="kc-risk-title">尚未宣布安全 · {{ atRisk.length }} 人</div>
+          <div class="kc-risk-list">
+            <span v-for="p in atRisk" :key="p.playerId" class="kc-risk-chip">
+              <BBAvatar :name="p.playerName" :avatar="avatarOf(p.playerId)" size="sm" />{{ p.playerName }}
+            </span>
+            <span v-if="!atRisk.length" class="kc-risk-empty">无</span>
+          </div>
+        </div>
+      </section>
+
+      <div v-if="allKeysDone && !keyCeremony.ended && (keyCeremony.nominees || []).length" class="kc-nominees">
+        被提名者：<strong>{{ keyCeremony.nominees.map(n => n.playerName).join('、') }}</strong>
+      </div>
+      <details class="kc-fieldset kc-record" :open="!keyCeremony.ended">
+        <summary>宣布记录</summary>
+        <CeremonyChat room-id="dining_room" title="餐厅" empty-text="暂无宣布" />
+      </details>
+    </template>
+  </section>
 </template>
 
 <script setup lang="ts">
@@ -292,6 +312,14 @@ function doAnnounce() {
 
 // 发言模板
 const allKeysDone = computed(() => !!props.keyCeremony && (props.keyCeremony.announcedCount || 0) >= (props.keyCeremony.order || []).length)
+const phaseLabel = computed(() => {
+  if (!isStarted.value) return prepared.value ? '等待开始' : '准备提名'
+  if (props.keyCeremony.ended) return '仪式已结束'
+  if (!props.keyCeremony.openingSpoken) return '开场发言'
+  if (pendingAnnounce.value) return '宣布安全'
+  if (allKeysDone.value) return '结束发言'
+  return '抽取钥匙'
+})
 const isFirstMoment = computed(() => !!props.keyCeremony && (props.keyCeremony.drawnCount || 0) === 0 && (props.keyCeremony.announcedCount || 0) === 0)
 
 watch(() => props.keyCeremony, (kc) => {
@@ -362,8 +390,6 @@ onMounted(() => {
 
 <style scoped>
 .key-ceremony { background: #1b1130; border: 1px solid #e6c98844; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-.kc-title { font-size: 15px; font-weight: 700; color: #e6c988; margin-bottom: 12px; }
-.kc-step { font-size: 13px; color: #b3a6d6; margin: 10px 0 8px; }
 .kc-eligible { display: flex; flex-wrap: wrap; gap: 8px; }
 .kc-pick { padding: 8px 14px; border: 1px solid #ffffff22; background: #ffffff08; color: #cfc4ea; border-radius: 8px; cursor: pointer; font-size: 13px; }
 .kc-pick.chosen { background: #ff444422; border-color: #ff4444; color: #ff6b6b; }
@@ -377,17 +403,13 @@ onMounted(() => {
 .kc-submit:disabled { opacity: 0.4; cursor: not-allowed; }
 .kc-saved { margin-bottom: 10px; padding: 8px 12px; border: 1px solid #44cc8844; background: #44cc8812; color: #6ee7a8; border-radius: 8px; font-size: 13px; }
 .kc-start-panel { margin-top: 14px; padding-top: 14px; border-top: 1px solid #ffffff12; }
-.kc-start-hint { margin-top: 8px; text-align: center; font-size: 12px; color: #6b5f92; }
 .kc-waiting { text-align: center; color: #b3a6d6; font-size: 14px; padding: 20px 0; }
 .kc-box { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
-.box-icon { font-size: 44px; }
 .box-keys { display: flex; flex-wrap: wrap; gap: 8px; }
 .kc-key { min-width: 64px; padding: 8px 12px; border-radius: 8px; background: #ffffff08; border: 1px solid #ffffff18; color: #6b5f92; font-size: 13px; text-align: center; display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
 .kc-key.drawn { background: #e6c98818; border-color: #e6c988; color: #e6c988; font-weight: 600; }
 .kc-key.pop { animation: keyPop 0.6s ease; }
 @keyframes keyPop { 0% { transform: scale(0.3) rotate(-20deg); opacity: 0; } 60% { transform: scale(1.15) rotate(6deg); } 100% { transform: scale(1) rotate(0); opacity: 1; } }
-.kc-turn { font-size: 14px; color: #cfc4ea; margin-bottom: 12px; }
-.kc-turn strong { color: #b39bff; }
 .kc-risk { background: #ff444410; border: 1px solid #ff444433; border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
 .kc-risk-title { font-size: 13px; color: #ff6b6b; margin-bottom: 8px; }
 .kc-risk-list { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -402,26 +424,43 @@ onMounted(() => {
 .kc-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .kc-btn-draw { width: 100%; font-size: 16px; padding: 14px; }
 .kc-draw { margin-bottom: 14px; }
-.kc-done { text-align: center; color: #b39bff; font-size: 14px; margin-bottom: 14px; }
-.kc-chat { border-top: 1px solid #ffffff12; padding-top: 12px; }
-.kc-chat-title { font-size: 13px; color: #b3a6d6; margin-bottom: 8px; }
-.kc-chat-body { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
-.kc-msg { display: flex; gap: 8px; align-items: flex-start; }
-.kc-msg-body { flex: 1; min-width: 0; }
-.kc-sender { font-size: 12px; color: #b39bff; font-weight: 600; margin-bottom: 3px; }
-.kc-bubble { display: inline-block; max-width: 92%; background: #211640; border: 1px solid #ffffff12; border-radius: 4px 12px 12px 12px; padding: 8px 12px; font-size: 14px; color: #f0ebff; line-height: 1.5; word-break: break-word; }
-.kc-empty { color: #6b5f92; font-size: 13px; text-align: center; padding: 12px; }
 .kc-nominees { margin-top: 12px; text-align: center; font-size: 15px; color: #ff6666; }
-.kc-speech { background: #4488ff10; border: 1px solid #4488ff33; border-radius: 10px; padding: 12px; margin-bottom: 14px; }
-.kc-speech-title { font-size: 13px; color: #7fb0ff; margin-bottom: 8px; }
 .kc-textarea { width: 100%; padding: 10px 12px; background: #120a22; border: 1px solid #4488ff44; border-radius: 8px; color: #ece7fb; font-size: 14px; outline: none; resize: vertical; box-sizing: border-box; margin-bottom: 8px; font-family: inherit; }
-.kc-speech-preview { margin: 8px 0; padding: 8px 12px; background: #ffffff06; border-radius: 8px; color: #a99bd0; font-size: 13px; line-height: 1.5; }
-.kc-speech-panel { background: #4488ff10; border: 1px solid #4488ff33; border-radius: 10px; padding: 12px; margin-top: 14px; }
 .kc-speech-sub { font-size: 13px; color: #7fb0ff; margin: 10px 0 6px; }
 .kc-mini-btn { margin-left: 8px; padding: 2px 10px; border: 1px solid #4488ff66; background: #4488ff22; color: #7fb0ff; border-radius: 6px; cursor: pointer; font-size: 12px; }
 .kc-mini-btn:hover { background: #4488ff33; }
 .kc-closing-line { font-size: 14px; color: #ece7fb; line-height: 2; margin: 8px 0; }
 .kc-closing-line strong { color: #ff6666; }
-.kc-inline-input { padding: 6px 10px; background: #120a22; border: 1px solid #4488ff44; border-radius: 6px; color: #ece7fb; font-size: 14px; outline: none; min-width: 220px; }
 .kc-reason-textarea { min-height: 96px; font-size: 15px; line-height: 1.6; }
+
+.key-ceremony { display: grid; gap: 12px; padding: clamp(14px, 2.5vw, 24px); margin: 0; }
+.kc-header, .kc-progress-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.kc-header h2, .key-ceremony h3 { margin: 0; color: #f3e8ff; font-size: 17px; }
+.kc-status { color: #f1d69a; background: #e6c98818; border: 1px solid #e6c98835; border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+.kc-prep-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 255px), 1fr)); gap: 12px; align-items: start; }
+.kc-fieldset, .kc-progress { min-width: 0; padding: 14px; background: #231835; border: 1px solid #b39bff2c; border-radius: 10px; }
+.kc-hint, .kc-progress-head span { color: #c3b4dd; font-size: 13px; line-height: 1.5; }
+.kc-hint { margin: 5px 0 10px; }
+.kc-saved, .kc-order, .kc-box, .kc-risk, .kc-announce, .kc-draw, .kc-nominees { margin: 0; }
+.kc-draft summary, .kc-record summary { cursor: pointer; color: #e6d8fa; font-weight: 650; }
+.kc-draft[open] summary, .kc-record[open] summary { margin-bottom: 10px; }
+.kc-start-panel { margin: 0; }
+.kc-waiting { padding: 12px; border-radius: 8px; background: #b39bff0d; text-align: start; }
+.kc-pick, .kc-arrow { min-height: 36px; }
+.kc-arrow { flex: 0 0 36px; }
+.kc-idx { flex-shrink: 0; }
+.kc-oname, .kc-key-name { min-width: 0; overflow-wrap: anywhere; }
+.kc-progress { display: grid; gap: 12px; }
+.kc-key { max-width: 100%; }
+.kc-current { padding: 12px 14px; border-inline-start: 3px solid #e6c988; background: #e6c9880c; border-radius: 8px; }
+.kc-current .kc-hint { margin-bottom: 0; }
+.kc-input { min-width: 0; }
+.kc-announce-form { flex-wrap: wrap; }
+.kc-announce-form .kc-input { flex-basis: 190px; }
+.kc-draft .kc-mini-btn { margin: 0; }
+.kc-draft .kc-btn, .kc-announce .kc-btn { min-height: 40px; }
+.kc-nominees { padding: 10px; color: #f2b7bf; text-align: start; }
+@media (prefers-reduced-motion: reduce) {
+  .kc-key.pop { animation: none; }
+}
 </style>

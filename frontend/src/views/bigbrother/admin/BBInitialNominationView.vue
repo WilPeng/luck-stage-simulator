@@ -2,36 +2,23 @@
   <div class="bb-nomination-admin">
     <div class="page-header">
       <h1>提名仪式</h1>
-      <span class="round-tag">第{{ $route.params.round }}周</span>
+      <span class="round-tag">第 {{ $route.params.round }} 周</span>
+      <span v-if="isDirectDemocracy" class="twist-badge democracy">直接民主</span>
+      <span v-if="nomination?.isSecretKeeper || twistInfo?.isSecretKeeper" class="twist-badge secret">匿名房主</span>
     </div>
 
-    <div v-if="nomination && ceremonyDone" class="nomination-card">
-      <div class="nomination-header">
-        <span class="hoh-info">HOH: {{ nomination.hohName }}</span>
-        <div class="header-badges">
-          <span v-if="nomination.isSecretKeeper" class="twist-badge secret">🎭 匿名房主</span>
-          <span v-if="nomination.isDirectDemocracy" class="twist-badge democracy">🗳️ 直接民主</span>
-        </div>
-      </div>
+    <section v-if="nomination && ceremonyDone" class="nomination-card" aria-label="本轮提名结果">
+      <h2>本轮提名结果</h2>
+      <p class="hoh-info">房主：{{ nomination.hohName }}</p>
       <div class="nominees">
         <div class="nominee-item" v-for="(name, i) in (nomination.nomineeNames || [])" :key="i">
-          <span class="nominee-icon">📋</span>
           <span class="nominee-name">{{ name }}</span>
           <span class="nominee-order">被提名人 {{ i + 1 }}</span>
         </div>
       </div>
-    </div>
-    <div v-else class="nomination-card empty">
-      <p>暂无提名记录</p>
-      <div v-if="twistInfo" class="twist-info-bar">
-        <span v-if="twistInfo.isDirectDemocracy" class="twist-info-item">🗳️ 本轮为"直接民主"模式，提名由全员投票决定</span>
-        <span v-if="twistInfo.isSecretKeeper" class="twist-info-item">🎭 本轮为"匿名房主"模式</span>
-      </div>
-    </div>
+    </section>
 
-    <div class="action-section">
-      <h3>操作 - 初始提名</h3>
-
+    <section class="nomination-workflow" aria-label="本轮提名操作">
       <!-- 钥匙仪式 -->
       <KeyCeremony
         v-if="!isDirectDemocracy"
@@ -52,33 +39,36 @@
         @speech="onKeySpeech"
       />
 
-      <template v-if="isDirectDemocracy">
+      <section v-if="isDirectDemocracy" class="nomination-ballot">
+        <h2>全员投票</h2>
         <div class="twist-action-hint">
-          🗳️ 当前为"直接民主"模式，提名由全员投票决定。请在下方为每位房客选择投票对象，系统自动统计票数（HOH票数双倍）。
+          为每位房客选择投票对象，提交后由系统统计。房主（HOH）的票计两票。
         </div>
         <div v-if="activeList.length > 0" class="democracy-vote-section">
-          <h4>全员投票（直接民主）</h4>
           <div class="democracy-grid">
             <div v-for="h in activeList" :key="h.id" class="democracy-row">
               <span class="democracy-voter">{{ h.name }}</span>
-              <select v-model="democracyVotes[h.id]" class="bb-select-sm">
+              <select v-model="democracyVotes[h.id]" class="bb-select-sm" :aria-label="'为 ' + h.name + ' 选择投票对象'">
                 <option value="">选择投票对象</option>
                 <option v-for="n in democracyCandidates" :key="n.id" :value="n.id" :disabled="n.id === h.id">{{ n.name }}</option>
               </select>
             </div>
           </div>
-          <button class="bb-btn bb-btn-primary" @click="submitDemocracyVotes" style="margin-top: 12px;">提交全员投票</button>
+          <button class="bb-btn bb-btn-primary" @click="submitDemocracyVotes">提交全员投票</button>
         </div>
         <div v-else class="empty-hint">暂无活跃房客可供投票</div>
-      </template>
-      <div v-else class="action-buttons">
-        <button class="bb-btn" @click="showSetModal = true">✏️ 设置提名</button>
-        <button v-if="nomination" class="bb-btn bb-btn-danger" @click="undoNomination">↩ 撤销提名</button>
-      </div>
-    </div>
+      </section>
+      <details v-else class="nomination-disclosure">
+        <summary>手动管理提名</summary>
+        <div class="action-buttons">
+          <button class="bb-btn" @click="showSetModal = true">✏️ 设置提名</button>
+          <button v-if="nomination" class="bb-btn bb-btn-danger" @click="undoNomination">↩ 撤销提名</button>
+        </div>
+      </details>
+    </section>
 
-    <div class="history-section">
-      <h3>提名历史</h3>
+    <details class="history-section nomination-disclosure">
+      <summary>提名历史</summary>
       <div class="table-container">
         <table class="bb-table">
           <thead><tr><th>轮次</th><th>被提名人</th><th>HOH</th></tr></thead>
@@ -92,30 +82,30 @@
           </tbody>
         </table>
       </div>
-    </div>
+    </details>
 
     <Teleport to="body">
       <div v-if="showSetModal" class="bb-modal-overlay" @click.self="showSetModal = false">
         <div class="bb-modal">
-          <div class="bb-modal-header"><h3>设置提名</h3><button class="close-btn" @click="showSetModal = false">✕</button></div>
+          <div class="bb-modal-header"><h3>设置提名</h3><button class="close-btn" aria-label="关闭设置提名" @click="showSetModal = false">✕</button></div>
           <div class="bb-modal-body">
             <div class="form-group">
-              <label>被提名人 1</label>
-              <select v-model="nominee1" class="bb-select">
+              <label for="manual-nominee-1">被提名人 1</label>
+              <select id="manual-nominee-1" v-model="nominee1" class="bb-select">
                 <option value="" disabled>请选择</option>
                 <option v-for="h in listForNominee1" :key="h.id" :value="h.id">{{ h.name }}</option>
               </select>
             </div>
             <div class="form-group">
-              <label>被提名人 2</label>
-              <select v-model="nominee2" class="bb-select">
+              <label for="manual-nominee-2">被提名人 2</label>
+              <select id="manual-nominee-2" v-model="nominee2" class="bb-select">
                 <option value="" disabled>请选择</option>
                 <option v-for="h in listForNominee2" :key="h.id" :value="h.id">{{ h.name }}</option>
               </select>
             </div>
             <div v-if="needThree" class="form-group">
-              <label>被提名人 3</label>
-              <select v-model="nominee3" class="bb-select">
+              <label for="manual-nominee-3">被提名人 3</label>
+              <select id="manual-nominee-3" v-model="nominee3" class="bb-select">
                 <option value="" disabled>请选择</option>
                 <option v-for="h in listForNominee3" :key="h.id" :value="h.id">{{ h.name }}</option>
               </select>
@@ -317,19 +307,12 @@ onMounted(fetchData)
 .page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
 .round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
 .nomination-card { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #b39bff; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
-.nomination-card.empty { border-color: #4a3d6e; }
 .nomination-card.empty p { text-align: center; color: #6b5f92; }
-.nomination-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .hoh-info { color: #a99bd0; font-size: 14px; }
-.header-badges { display: flex; gap: 6px; flex-wrap: wrap; }
 .twist-badge { padding: 2px 8px; border-radius: 8px; font-size: 11px; }
 .twist-badge.secret { background: #9b59b622; color: #9b59b6; border: 1px solid #9b59b644; }
 .twist-badge.democracy { background: #3498db22; color: #3498db; border: 1px solid #3498db44; }
-.twist-badge.triple { background: #e74c3c22; color: #e74c3c; border: 1px solid #e74c3c44; }
-.twist-info-bar { margin-top: 12px; padding: 10px; background: #2a1a4a; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
-.twist-info-item { font-size: 13px; color: #a99bd0; }
 .democracy-vote-section { margin-top: 12px; }
-.democracy-vote-section h4 { font-size: 14px; color: #3498db; margin: 0 0 12px; }
 .democracy-grid { display: flex; flex-direction: column; gap: 8px; }
 .democracy-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #2a1a4a; border-radius: 6px; }
 .democracy-voter { flex: 1; font-size: 14px; color: #cfc4ea; }
@@ -340,17 +323,8 @@ onMounted(fetchData)
 .empty-hint { text-align: center; color: #6b5f92; font-size: 14px; padding: 20px; }
 .nominees { display: flex; gap: 16px; }
 .nominee-item { flex: 1; background: #b39bff08; border: 1px solid #b39bff22; border-radius: 8px; padding: 16px; text-align: center; }
-.nominee-icon { display: block; font-size: 24px; margin-bottom: 8px; }
 .nominee-name { display: block; font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 4px; }
 .nominee-order { font-size: 12px; color: #8f83b8; }
-.action-section { background: #1b1130; border: 1px solid #b39bff22; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-.action-section h3 { margin: 0 0 12px; font-size: 16px; color: #ece7fb; }
-.key-ceremony-admin { background: #1b1130; border: 1px solid #e6c98844; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
-.kc-title { font-size: 14px; color: #e6c988; margin-bottom: 10px; }
-.kc-keys { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.kc-key { padding: 8px 14px; border-radius: 8px; background: #ffffff08; border: 1px solid #ffffff18; color: #6b5f92; font-size: 13px; }
-.kc-key.drawn { background: #b39bff22; border-color: #b39bff; color: #b39bff; font-weight: 600; }
-.kc-nominees { margin-top: 10px; font-size: 14px; color: #ff6666; }
 .action-buttons { display: flex; gap: 12px; }
 .bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
 .bb-btn:hover { background: #b39bff22; }
@@ -358,7 +332,6 @@ onMounted(fetchData)
 .bb-btn-primary { background: #b39bff22; border-color: #b39bff; }
 .bb-btn-danger { border-color: #ff444466; color: #ff4444; }
 .bb-btn-danger:hover { background: #ff444422; }
-.history-section h3 { font-size: 16px; color: #ece7fb; margin: 0 0 12px; }
 .bb-table { width: 100%; border-collapse: collapse; }
 .bb-table th, .bb-table td { padding: 10px 16px; text-align: left; border-bottom: 1px solid #b39bff11; font-size: 14px; color: #cfc4ea; }
 .bb-table th { color: #8f83b8; font-size: 12px; text-transform: uppercase; }

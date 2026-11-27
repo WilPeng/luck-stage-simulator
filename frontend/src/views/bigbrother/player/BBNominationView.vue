@@ -2,14 +2,34 @@
   <div class="bb-nomination-player">
     <div class="page-header">
       <h1>提名</h1>
-      <span class="round-tag">第{{ roundNum }}周</span>
+      <span class="round-tag">第 {{ roundNum }} 周</span>
       <span v-if="isHistory" class="history-tag">历史记录</span>
       <span v-else-if="isFuture" class="future-tag">未开始</span>
     </div>
 
+    <!-- 已有提名结果（钥匙仪式全部揭晓后才显示） -->
+    <section v-if="nomination && ceremonyDone" class="nomination-card" aria-label="本轮提名结果">
+      <h2>本轮提名结果</h2>
+      <div class="hoh-info">房主：{{ nomination.hohName }}</div>
+      <div class="nominees">
+        <div v-for="(id, i) in (nomination.nomineeIds || [])" :key="id" class="nominee-item"
+          :class="{ warned: id === authStore.currentUser?.id }">
+          <BBAvatar :name="nomination.nomineeNames?.[i] || id" :avatar="avatarById(id)" size="sm" />
+          <span class="nominee-name">{{ nomination.nomineeNames?.[i] }}</span>
+          <span v-if="id === authStore.currentUser?.id" class="me-badge">我</span>
+          <span class="nominee-order">被提名人 {{ i + 1 }}</span>
+        </div>
+      </div>
+      <div v-if="nomination.replacementNomineeName" class="replacement">
+        替换提名: <strong>{{ nomination.replacementNomineeName }}</strong>
+      </div>
+      <div v-if="nomination.vetoUsed" class="veto-note">否决权已被使用</div>
+    </section>
+
     <!-- 直接民主模式：所有玩家参与全员投票 -->
-    <div v-if="isCurrentRound && isNominationStage && isDirectDemocracy" class="nomination-action democracy-action">
-      <div class="democracy-banner">🗳️ 本周为"直接民主"模式，提名由全员投票决定！请在下方为每位房客选择投票对象（HOH票数双倍）。</div>
+    <section v-if="isCurrentRound && isNominationStage && isDirectDemocracy" class="nomination-ballot">
+      <h2>全员投票</h2>
+      <div class="democracy-banner">本轮由投票决定提名。请为每位房客选择投票对象，房主（HOH）的票计两票。</div>
       <div v-if="activeList.length > 0" class="democracy-vote-section">
         <div class="democracy-grid">
           <div v-for="h in activeList" :key="h.id" class="democracy-row">
@@ -17,18 +37,18 @@
               <BBAvatar :name="h.name" :avatar="h.avatar" size="sm" />
               {{ h.name }}
             </span>
-            <select v-model="democracyVotes[h.id]" class="bb-select-sm">
+            <select v-model="democracyVotes[h.id]" class="bb-select-sm" :aria-label="'为 ' + h.name + ' 选择投票对象'">
               <option value="">选择投票对象</option>
               <option v-for="n in democracyCandidates" :key="n.id" :value="n.id" :disabled="n.id === h.id">{{ n.name }}</option>
             </select>
           </div>
         </div>
-        <button class="bb-btn" @click="submitDemocracyVotes" :disabled="submitting" style="margin-top: 12px;">
+        <button class="bb-btn" @click="submitDemocracyVotes" :disabled="submitting">
           {{ submitting ? '提交中...' : '提交我的投票' }}
         </button>
       </div>
       <div v-else class="empty-hint">暂无活跃房客可供投票</div>
-    </div>
+    </section>
 
     <!-- 钥匙仪式：所有选手可见；HOH 可设置（先选被提名者，再排安全顺序） -->
     <KeyCeremony
@@ -48,25 +68,8 @@
       @speech="onKeySpeech"
     />
 
-    <!-- 已有提名结果（钥匙仪式全部揭晓后才显示） -->
-    <div v-if="nomination && ceremonyDone" class="nomination-card">
-      <div class="hoh-info">HOH: {{ nomination.hohName }}</div>
-      <div class="nominees">
-        <div v-for="(id, i) in (nomination.nomineeIds || [])" :key="id" class="nominee-item"
-          :class="{ warned: id === authStore.currentUser?.id }">
-          <BBAvatar :name="nomination.nomineeNames?.[i] || id" :avatar="avatarById(id)" size="sm" />
-          <span class="nominee-name">{{ nomination.nomineeNames?.[i] }}</span>
-          <span v-if="id === authStore.currentUser?.id" class="me-badge">我</span>
-          <span class="nominee-order">被提名人 {{ i + 1 }}</span>
-        </div>
-      </div>
-      <div v-if="nomination.replacementNomineeName" class="replacement">
-        替换提名: <strong>{{ nomination.replacementNomineeName }}</strong>
-      </div>
-      <div v-if="nomination.vetoUsed" class="veto-note">否决权已被使用</div>
-    </div>
-    <div v-else class="empty-card">
-      <p>本周暂无提名信息</p>
+    <div v-if="!(nomination && ceremonyDone) && !(isCurrentRound && isNominationStage)" class="empty-card">
+      <p>{{ isFuture ? '本周提名阶段尚未开始。' : '本周暂无已公布的提名结果。' }}</p>
     </div>
 
     <!-- 提交成功提示 -->
@@ -283,21 +286,14 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.bb-nomination-player { max-width: 600px; margin: 0 auto; padding: 16px; }
+.bb-nomination-player { max-width: 1000px; margin: 0 auto; }
 .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
 .round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
 .history-tag { background: #88888822; color: #a99bd0; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
 .future-tag { background: #44444422; color: #6b5f92; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
 
-.hoh-banner { background: linear-gradient(135deg, #e6c98822, #ff880022); border: 1px solid #e6c988; border-radius: 8px; padding: 12px; text-align: center; font-size: 15px; color: #e6c988; margin-bottom: 20px; }
 
-.nomination-form { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #4a3d6e; border-radius: 12px; padding: 20px; }
-.form-group { margin-bottom: 16px; }
-.form-group label { display: block; font-size: 14px; color: #a99bd0; margin-bottom: 6px; }
-.bb-select { width: 100%; padding: 10px; background: #2a1a4a; border: 1px solid #4a3d6e; border-radius: 8px; color: #fff; font-size: 14px; }
-.bb-select:focus { border-color: #e6c988; outline: none; }
-.bb-select option { background: #2a1a4a; color: #fff; }
 .bb-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #e6c988, #ff8800); border: none; border-radius: 8px; color: #000; font-size: 16px; font-weight: 600; cursor: pointer; }
 .bb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -306,7 +302,6 @@ onMounted(async () => {
 .nominees { display: flex; gap: 16px; }
 .nominee-item { flex: 1; background: #e6c98808; border: 1px solid #e6c98822; border-radius: 8px; padding: 16px; text-align: center; position: relative; }
 .nominee-item.warned { border-color: #ff4444; background: #ff444408; }
-.nominee-icon { display: block; font-size: 24px; margin-bottom: 8px; }
 .nominee-name { display: block; font-size: 18px; font-weight: 600; color: #fff; }
 .me-badge { position: absolute; top: 8px; right: 8px; background: #ff4444; color: #fff; padding: 1px 8px; border-radius: 8px; font-size: 10px; }
 .nominee-order { display: block; font-size: 12px; color: #8f83b8; margin-top: 4px; }
@@ -318,7 +313,6 @@ onMounted(async () => {
 .success-toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #b39bff; color: #000; padding: 12px 24px; border-radius: 8px; font-weight: 600; }
 
 /* 直接民主样式 */
-.democracy-action { margin-bottom: 20px; }
 .democracy-banner { background: linear-gradient(135deg, #3498db22, #2980b922); border: 1px solid #3498db; border-radius: 8px; padding: 12px; text-align: center; font-size: 14px; color: #3498db; margin-bottom: 16px; line-height: 1.6; }
 .democracy-vote-section { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #3498db44; border-radius: 12px; padding: 20px; }
 .democracy-grid { display: flex; flex-direction: column; gap: 8px; }
@@ -328,14 +322,4 @@ onMounted(async () => {
 .bb-select-sm:focus { border-color: #3498db; outline: none; }
 .bb-select-sm option { background: #1b1130; color: #fff; }
 .empty-hint { text-align: center; color: #6b5f92; font-size: 14px; padding: 20px; }
-.key-ceremony-panel, .key-setup-panel { background: #1b1130; border: 1px solid #e6c98844; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
-.kc-title { font-size: 14px; color: #e6c988; margin-bottom: 10px; }
-.kc-keys { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-.kc-key { padding: 8px 14px; border-radius: 8px; background: #ffffff08; border: 1px solid #ffffff18; color: #6b5f92; font-size: 13px; }
-.kc-key.drawn { background: #b39bff22; border-color: #b39bff; color: #b39bff; font-weight: 600; }
-.kc-nominees { font-size: 14px; color: #ff6666; }
-.kc-eligible { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-.kc-pick { padding: 8px 14px; border: 1px solid #ffffff22; background: #ffffff08; color: #cfc4ea; border-radius: 8px; cursor: pointer; font-size: 13px; }
-.kc-pick.chosen { background: #e6c98822; border-color: #e6c988; color: #e6c988; }
-.kc-order-line { font-size: 13px; color: #b3a6d6; margin-bottom: 12px; }
 </style>
