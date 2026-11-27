@@ -315,6 +315,8 @@ export interface BBChampionReveal {
 }
 
 export interface BBMenuItem {
+  twistId?: BBTwistId
+  icon?: string
   round: number
   stage: BBStageType | BBEndgameStageType
   stageName: string

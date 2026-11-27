@@ -1,51 +1,57 @@
 <template>
-  <div class="bb-stage">
-    <div class="page-header">
-      <h1>赛季设置</h1>
-      <div class="header-actions">
-        <button class="bb-btn" @click="fetchData">刷新</button>
-        <button class="bb-btn bb-btn-danger" @click="handleResetSeason">全部重新开始</button>
+  <div class="bb-stage wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>赛季设置</h1>
       </div>
-    </div>
-
-    <div class="current-status">
-      <div class="status-item">
-        <span class="label">当前轮次</span>
-        <span class="value">{{ seasonStore.currentRoundNumber }}</span>
-      </div>
-      <div class="status-item">
-        <span class="label">当前阶段</span>
-        <span class="value stage">{{ seasonStore.stageName }}</span>
-      </div>
-      <div class="status-item">
-        <span class="label">总轮次</span>
-        <span class="value">{{ computedTotalRounds }}</span>
-      </div>
-      <div class="status-actions">
-        <button class="bb-btn bb-btn-primary" @click="handleNextStage">推进到下一阶段</button>
-      </div>
-    </div>
-
-    <!-- 手动设置进度 -->
-    <div class="stage-control">
-      <h3>手动设置进度</h3>
-      <div class="control-form">
-        <div class="form-group">
-          <label>轮次</label>
-          <input v-model.number="setRound" type="number" class="bb-input" min="1" :max="computedTotalRounds" />
+      <div class="wb-page-tools">
+        <div class="header-actions">
+          <button class="bb-btn" @click="fetchData">刷新</button>
+          <button class="bb-btn bb-btn-danger" @click="handleResetSeason">全部重新开始</button>
         </div>
-        <div class="form-group">
-          <label>阶段</label>
-          <select v-model="setStage" class="bb-select">
-            <option v-for="s in manualStageOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
-          </select>
+      </div>
+    </header>
+
+    <div class="wb-lanes wb-stage-controls">
+      <div class="current-status">
+        <div class="status-item">
+          <span class="label">当前轮次</span>
+          <span class="value">{{ seasonStore.currentRoundNumber }}</span>
         </div>
-        <button class="bb-btn bb-btn-primary" @click="handleSetStage">设置</button>
+        <div class="status-item">
+          <span class="label">当前阶段</span>
+          <span class="value stage">{{ seasonStore.stageName }}</span>
+        </div>
+        <div class="status-item">
+          <span class="label">总轮次</span>
+          <span class="value">{{ computedTotalRounds }}</span>
+        </div>
+        <div class="status-actions">
+          <button class="bb-btn bb-btn-primary" @click="handleNextStage">推进到下一阶段</button>
+        </div>
+      </div>
+
+      <!-- 手动设置进度 -->
+      <div class="stage-control wb-panel">
+        <h3>手动设置进度</h3>
+        <div class="control-form">
+          <div class="form-group">
+            <label>轮次</label>
+            <input v-model.number="setRound" type="number" class="bb-input" min="1" :max="computedTotalRounds" />
+          </div>
+          <div class="form-group">
+            <label>阶段</label>
+            <select v-model="setStage" class="bb-select">
+              <option v-for="s in manualStageOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
+            </select>
+          </div>
+          <button class="bb-btn bb-btn-primary" @click="handleSetStage">设置</button>
+        </div>
       </div>
     </div>
 
     <!-- 赛季配置 4 列表格 -->
-    <div class="config-card">
+    <div class="config-card wb-panel">
       <div class="config-header">
         <h3>赛季配置</h3>
         <button class="bb-btn bb-btn-primary" @click="handleSaveConfig" :disabled="saving">
@@ -181,7 +187,7 @@
     </Teleport>
 
     <!-- 赛程矩阵预览 -->
-    <div class="matrix-section">
+    <div class="matrix-section wb-panel">
       <h3>赛程矩阵预览</h3>
       <div class="matrix-table-wrapper">
         <table class="matrix-table">
@@ -405,7 +411,11 @@ async function fetchData() {
   await seasonStore.fetchProgress()
   setRound.value = seasonStore.currentRoundNumber
   setStage.value = seasonStore.currentStage
+  await loadConfig()
+  await loadRoster()
+}
 
+async function loadConfig() {
   try {
     const config = await bbGetSeasonConfig()
     roundConfigs.value = config.roundConfigs || []
@@ -423,7 +433,10 @@ async function fetchData() {
       isJury: false
     }))
   }
+  resizeRoundsToNeeded()
+}
 
+async function loadRoster() {
   // 获取参与赛程规划的房客数（退赛相当于提前少一名选手）
   try {
     const stats = await bbGetHouseguestStats()
@@ -601,7 +614,8 @@ async function handleResetSeason() {
   } catch (e: any) { alert(e.message) }
 }
 
-useBbRefresh(fetchData)
+useBbRefresh(loadConfig, '/season/config', '/season/twists', '/season/round', '/season/reset')
+useBbRefresh(loadRoster, '/houseguests', '/season/reset')
 onMounted(fetchData)
 </script>
 

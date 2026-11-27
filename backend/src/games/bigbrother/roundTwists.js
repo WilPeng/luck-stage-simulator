@@ -1,5 +1,5 @@
 const { getCollection } = require('../../config/db')
-const { hasTwist } = require('./helpers')
+const { hasTwist, BB_STAGE_ORDER } = require('./helpers')
 
 const gameId = 'bigbrother'
 
@@ -105,6 +105,22 @@ function incompatibleTwists(ids) {
   return conflictPairs.find(pair => pair.every(id => ids.includes(id))) || null
 }
 
+function twistStageStatus(season, round, definition) {
+  if (round < season.currentRound) return 'completed'
+  if (round > season.currentRound) return 'future'
+  const current = BB_STAGE_ORDER.indexOf(season.currentStage)
+  if (current < 0) return 'completed'
+  const stages = definition.affectsStages.map(stage => BB_STAGE_ORDER.indexOf(stage)).filter(index => index >= 0)
+  if (current < Math.min(...stages)) return 'future'
+  if (current > Math.max(...stages)) return 'completed'
+  return 'current'
+}
+
+function isRevivalEligible(id, status) {
+  return status === 'evicted' && ['battle_back','costly_return'].includes(id)
+    || status === 'jury' && id === 'battle_back'
+}
+
 module.exports = {
-  enabled, loadRoundTwist, writeRoundTwist, checkNominationChoices, replacementChoice, earnedVetoSeat, vetoRetryPlayer, incompatibleTwists
+  enabled, loadRoundTwist, writeRoundTwist, checkNominationChoices, replacementChoice, earnedVetoSeat, vetoRetryPlayer, incompatibleTwists, twistStageStatus, isRevivalEligible
 }

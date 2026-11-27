@@ -220,7 +220,9 @@ function formatTime(t: string) {
   return t ? new Date(t).toLocaleString('zh-CN') : ''
 }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/hoh', '/houseguests', '/round-twist', '/eviction/result', '/eviction/restore', '/season/set', '/season/next', '/season/reset'
+)
 onMounted(fetchData)
 </script>
 

@@ -1,50 +1,56 @@
 <template>
-  <div class="bbbb-admin">
-    <div class="page-header">
-      <h1>🎯 BBBB 环节</h1>
-      <span class="round-tag">第{{ roundNum }}周</span>
-    </div>
+  <div class="bbbb-admin wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>🎯 BBBB 环节</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ roundNum }}周</span>
+        </div>
+      </div>
+    </header>
 
     <div class="rule-bar">
       本轮提名 3 人。淘汰投票前进行 BBBB 比赛：胜者安全，其余 2 人进入淘汰投票。
     </div>
 
     <!-- 提名名单 -->
-    <div class="card">
-      <div class="card-title">被提名人（{{ nominees.length }}）</div>
-      <div class="nominee-list">
-        <div v-for="n in nominees" :key="n.id" class="nominee" :class="{ safe: bbbbWinnerId === n.id }">
-          <BBAvatar :name="n.name" :avatar="n.avatar" size="sm" />
-          <span class="nominee-name">{{ n.name }}</span>
-          <span v-if="bbbbWinnerId === n.id" class="safe-badge">安全</span>
-          <button v-else class="bb-btn bb-btn-xs" @click="setSafe(n)">设为安全（胜者）</button>
+    <div class="wb-lanes wb-competition-lanes">
+      <div class="card">
+        <div class="card-title">被提名人（{{ nominees.length }}）</div>
+        <div class="nominee-list">
+          <div v-for="n in nominees" :key="n.id" class="nominee" :class="{ safe: bbbbWinnerId === n.id }">
+            <BBAvatar :name="n.name" :avatar="n.avatar" size="sm" />
+            <span class="nominee-name">{{ n.name }}</span>
+            <span v-if="bbbbWinnerId === n.id" class="safe-badge">安全</span>
+            <button v-else class="bb-btn bb-btn-xs" @click="setSafe(n)">设为安全（胜者）</button>
+          </div>
+          <div v-if="!nominees.length" class="muted">暂无提名（需先完成提名）</div>
         </div>
-        <div v-if="!nominees.length" class="muted">暂无提名（需先完成提名）</div>
+        <div v-if="bbbbWinnerId" class="safe-result">✅ 安全者（不再是终极提名，不可被投票，可参与投票）：{{ bbbbWinnerName }}</div>
       </div>
-      <div v-if="bbbbWinnerId" class="safe-result">✅ 安全者（不再是终极提名，不可被投票，可参与投票）：{{ bbbbWinnerName }}</div>
-    </div>
 
-    <!-- 小游戏房间 -->
-    <div class="card">
-      <div class="card-title">BBBB 比赛房间</div>
-      <div v-if="!activeRoom" class="room-actions">
-        <button class="bb-btn bb-btn-primary" @click="showPicker = true">🎮 选择小游戏并创建房间</button>
-      </div>
-      <div v-else class="room-status">
-        <span class="status-badge">{{ statusText }}</span>
-        <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants?.length || 0 }}人</span>
-        <MinigameStartButton v-if="activeRoom.status === 'waiting'" label="▶ 开始" @start="startRoom" />
-        <button v-if="activeRoom.status === 'playing' || activeRoom.status === 'paused'" class="bb-btn bb-btn-danger" @click="stopRoom">⏹ 停止</button>
-      </div>
-      <div v-if="activeRoom && progress" class="progress">
-        <div v-for="row in progressRows" :key="row.playerId" class="progress-row">
-          <span>{{ row.playerName }}</span>
-          <span class="p-label">{{ row.label || row.score }}</span>
-          <button class="bb-btn bb-btn-xs" @click="setSafeById(row.playerId, row.playerName)">设为安全</button>
+      <!-- 小游戏房间 -->
+      <div class="card">
+        <div class="card-title">BBBB 比赛房间</div>
+        <div v-if="!activeRoom" class="room-actions">
+          <button class="bb-btn bb-btn-primary" @click="showPicker = true">🎮 选择小游戏并创建房间</button>
         </div>
+        <div v-else class="room-status">
+          <span class="status-badge">{{ statusText }}</span>
+          <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants?.length || 0 }}人</span>
+          <MinigameStartButton v-if="activeRoom.status === 'waiting'" label="▶ 开始" @start="startRoom" />
+          <button v-if="activeRoom.status === 'playing' || activeRoom.status === 'paused'" class="bb-btn bb-btn-danger" @click="stopRoom">⏹ 停止</button>
+        </div>
+        <div v-if="activeRoom && progress" class="progress">
+          <div v-for="row in progressRows" :key="row.playerId" class="progress-row">
+            <span>{{ row.playerName }}</span>
+            <span class="p-label">{{ row.label || row.score }}</span>
+            <button class="bb-btn bb-btn-xs" @click="setSafeById(row.playerId, row.playerName)">设为安全</button>
+          </div>
+        </div>
+        <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
+          :gameTitle="activeRoom.minigameName" :rules="activeRoom.options?.rules || ''" :summoning="summoning" @summon="summonPlayers" />
       </div>
-      <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
-        :gameTitle="activeRoom.minigameName" :rules="activeRoom.options?.rules || ''" :summoning="summoning" @summon="summonPlayers" />
     </div>
 
     <MinigameSelectModal v-model:open="showPicker" title="选择 BBBB 小游戏" @select="onSelectMinigame" />

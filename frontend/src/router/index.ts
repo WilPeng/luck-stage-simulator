@@ -4,6 +4,18 @@ import { useBbAuthStore } from '../stores/bbAuthStore'
 import { useBbSeasonStore } from '../stores/bbSeasonStore'
 import { bbGetEndgameStatus } from '../services/bbApi'
 
+import { getAllTwistDefs } from '../types/bigbrother'
+
+function weeklyTwistRoutes(role: 'Admin' | 'Player'): RouteRecordRaw[] {
+  return getAllTwistDefs().filter(twist => twist.id !== 'bbbb').map(twist => ({
+    path: `round/:round/${twist.id.replace(/_/g, '-')}`,
+    name: `BB${role}Twist_${twist.id}`,
+    component: () => import('../views/bigbrother/BBTwistChallengesView.vue'),
+    props: { twistId: twist.id },
+    meta: { revivalTwist: twist.id === 'battle_back' || twist.id === 'costly_return' }
+  }))
+}
+
 const routes: RouteRecordRaw[] = [
   // ===== 登录入口（选手 / 管理员分离）=====
   {
@@ -28,7 +40,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'profile', name: 'BBPlayerProfile', component: () => import('../views/bigbrother/player/BBProfileView.vue') },
       { path: 'house', name: 'BBPlayerHouse', component: () => import('../views/bigbrother/player/BBHouseView.vue') },
       { path: 'history', name: 'BBPlayerHistory', component: () => import('../views/bigbrother/player/BBHistoryView.vue') },
-      { path: 'twist-challenges', name: 'BBPlayerTwistChallenges', component: () => import('../views/bigbrother/BBTwistChallengesView.vue') },
+      ...weeklyTwistRoutes('Player'),
       { path: 'replays', name: 'BBPlayerReplays', component: () => import('../views/bigbrother/admin/BBMinigameReplayView.vue'), props: { readonly: true } },
       { path: 'finale', name: 'BBPlayerFinale', component: () => import('../views/bigbrother/player/BBFinaleView.vue') },
       { path: 'round/:round/hoh', name: 'BBPlayerHoh', component: () => import('../views/bigbrother/player/BBHohView.vue') },
@@ -59,7 +71,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'stage', name: 'BBAdminStage', component: () => import('../views/bigbrother/admin/BBStageView.vue') },
       { path: 'endgame', name: 'BBAdminEndgame', component: () => import('../views/bigbrother/admin/BBEndgameView.vue') },
       { path: 'season-result', name: 'BBAdminSeasonResult', component: () => import('../views/bigbrother/admin/BBSeasonResultView.vue') },
-      { path: 'twist-challenges', name: 'BBAdminTwistChallenges', component: () => import('../views/bigbrother/BBTwistChallengesView.vue') },
+      ...weeklyTwistRoutes('Admin'),
       { path: 'minigame-live', name: 'BBAdminMinigameLive', component: () => import('../views/bigbrother/admin/BBMinigameLiveView.vue') },
       { path: 'minigame-replay', name: 'BBAdminMinigameReplay', component: () => import('../views/bigbrother/admin/BBMinigameReplayView.vue') },
       { path: 'logs', name: 'BBAdminLogs', component: () => import('../views/bigbrother/admin/BBLogView.vue') },
@@ -117,7 +129,7 @@ router.beforeEach(async (to) => {
   if (to.meta.requiresPlayer && authStore.isHouseguest) {
     await authStore.refreshCurrentUser()
     if (authStore.isRestrictedPlayer) {
-      if (['/games/bigbrother/player/house', '/games/bigbrother/player/twist-challenges'].includes(to.path)) return true
+      if (to.path === '/games/bigbrother/player/house' || to.meta.revivalTwist) return true
       if (to.path === '/games/bigbrother/player/replays') {
         const seasonStore = useBbSeasonStore()
         await seasonStore.fetchProgress()

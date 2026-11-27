@@ -1,21 +1,30 @@
 <template>
   <div class="bb-nomination-admin">
-    <div class="page-header">
-      <h1>提名仪式</h1>
-      <span class="round-tag">第 {{ $route.params.round }} 周</span>
-      <span v-if="isDirectDemocracy" class="twist-badge democracy">直接民主</span>
-      <span v-if="nomination?.isSecretKeeper || twistInfo?.isSecretKeeper" class="twist-badge secret">匿名房主</span>
-    </div>
+    <header class="nomination-masthead">
+      <div>
+        <span class="nomination-round">第 {{ $route.params.round }} 周</span>
+        <h1>提名仪式</h1>
+      </div>
+      <div class="nomination-badges">
+        <span>{{ isDirectDemocracy ? '直接民主' : '钥匙仪式' }}</span>
+        <span v-if="nomination?.isSecretKeeper || twistInfo?.isSecretKeeper">匿名房主</span>
+      </div>
+    </header>
 
     <section v-if="nomination && ceremonyDone" class="nomination-card" aria-label="本轮提名结果">
-      <h2>本轮提名结果</h2>
-      <p class="hoh-info">房主：{{ nomination.hohName }}</p>
-      <div class="nominees">
-        <div class="nominee-item" v-for="(name, i) in (nomination.nomineeNames || [])" :key="i">
-          <span class="nominee-name">{{ name }}</span>
-          <span class="nominee-order">被提名人 {{ i + 1 }}</span>
-        </div>
+      <div class="nomination-card-head">
+        <h2>本轮提名结果</h2>
+        <p class="hoh-info">房主：{{ nomination.hohName }}</p>
       </div>
+      <ol class="nominees">
+        <li class="nominee-item" v-for="(name, i) in (nomination.nomineeNames || [])" :key="i">
+          <BBAvatar :name="name" size="md" />
+          <div class="nominee-label">
+            <span class="nominee-name">{{ name }}</span>
+            <span class="nominee-order">被提名人 {{ i + 1 }}</span>
+          </div>
+        </li>
+      </ol>
     </section>
 
     <section class="nomination-workflow" aria-label="本轮提名操作">
@@ -40,10 +49,15 @@
       />
 
       <section v-if="isDirectDemocracy" class="nomination-ballot">
-        <h2>全员投票</h2>
-        <div class="twist-action-hint">
-          为每位房客选择投票对象，提交后由系统统计。房主（HOH）的票计两票。
-        </div>
+        <header class="nomination-card-head">
+          <div>
+            <h2>全员投票</h2>
+            <p class="nomination-ballot-copy">为每位房客选择投票对象，提交后由系统统计。房主（HOH）的票计两票。</p>
+          </div>
+          <span v-if="activeList.length" class="nomination-vote-progress" role="status">
+            已填写 {{ activeList.filter(h => democracyVotes[h.id]).length }} / {{ activeList.length }} 票
+          </span>
+        </header>
         <div v-if="activeList.length > 0" class="democracy-vote-section">
           <div class="democracy-grid">
             <div v-for="h in activeList" :key="h.id" class="democracy-row">
@@ -54,35 +68,39 @@
               </select>
             </div>
           </div>
-          <button class="bb-btn bb-btn-primary" @click="submitDemocracyVotes">提交全员投票</button>
+          <div class="nomination-ballot-footer">
+            <button class="bb-btn bb-btn-primary" @click="submitDemocracyVotes">提交全员投票</button>
+          </div>
         </div>
         <div v-else class="empty-hint">暂无活跃房客可供投票</div>
       </section>
-      <details v-else class="nomination-disclosure">
+    </section>
+
+    <div class="nomination-tools">
+      <details v-if="!isDirectDemocracy" class="nomination-disclosure">
         <summary>手动管理提名</summary>
         <div class="action-buttons">
           <button class="bb-btn" @click="showSetModal = true">✏️ 设置提名</button>
           <button v-if="nomination" class="bb-btn bb-btn-danger" @click="undoNomination">↩ 撤销提名</button>
         </div>
       </details>
-    </section>
-
-    <details class="history-section nomination-disclosure">
-      <summary>提名历史</summary>
-      <div class="table-container">
-        <table class="bb-table">
-          <thead><tr><th>轮次</th><th>被提名人</th><th>HOH</th></tr></thead>
-          <tbody>
-            <tr v-for="n in history" :key="n.id">
-              <td>{{ getRoundLabel(n.createdAt) }}</td>
-              <td>{{ n.nomineeNames?.join(', ') }}</td>
-              <td>{{ n.hohName }}</td>
-            </tr>
-            <tr v-if="history.length === 0"><td colspan="3" class="empty-cell">暂无记录</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </details>
+      <details class="history-section nomination-disclosure">
+        <summary>提名历史</summary>
+        <div class="table-container">
+          <table class="bb-table">
+            <thead><tr><th>轮次</th><th>被提名人</th><th>HOH</th></tr></thead>
+            <tbody>
+              <tr v-for="n in history" :key="n.id">
+                <td>{{ getRoundLabel(n.createdAt) }}</td>
+                <td>{{ n.nomineeNames?.join(', ') }}</td>
+                <td>{{ n.hohName }}</td>
+              </tr>
+              <tr v-if="history.length === 0"><td colspan="3" class="empty-cell">暂无记录</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
 
     <Teleport to="body">
       <div v-if="showSetModal" class="bb-modal-overlay" @click.self="showSetModal = false">
@@ -128,6 +146,7 @@ import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { bbGetCurrentNomination, bbSetNomination, bbGetNominationHistory, bbGetActiveHouseguests, bbVoteNominees, bbGetCurrentHoh, bbGetCurrentVeto, bbKeySetup, bbKeyStart, bbKeyDraw, bbKeyAnnounce, bbKeySpeech, bbGetSeasonConfig, bbUndoNomination } from '../../../services/bbApi'
 import type { BBNomination, BBRoundConfig } from '../../../types/bigbrother'
 import KeyCeremony from '../../../components/bigbrother/KeyCeremony.vue'
+import BBAvatar from '../../../components/bigbrother/BBAvatar.vue'
 
 const route = useRoute()
 const roundNum = computed(() => Number(route.params.round) || 1)
@@ -297,34 +316,18 @@ async function submitDemocracyVotes() {
 
 function getRoundLabel(t: string) { return t ? new Date(t).toLocaleDateString('zh-CN') : '?' }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/nomination', '/hoh', '/veto', '/houseguests', '/round-twist', '/season/set', '/season/next', '/season/reset', '/season/config', '/season/twists'
+)
 onMounted(fetchData)
 </script>
 
 <style scoped>
 .bb-nomination-admin { max-width: 1000px; margin: 0 auto; }
-.page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
-.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
-.nomination-card { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #b39bff; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
 .nomination-card.empty p { text-align: center; color: #6b5f92; }
-.hoh-info { color: #a99bd0; font-size: 14px; }
-.twist-badge { padding: 2px 8px; border-radius: 8px; font-size: 11px; }
-.twist-badge.secret { background: #9b59b622; color: #9b59b6; border: 1px solid #9b59b644; }
-.twist-badge.democracy { background: #3498db22; color: #3498db; border: 1px solid #3498db44; }
-.democracy-vote-section { margin-top: 12px; }
-.democracy-grid { display: flex; flex-direction: column; gap: 8px; }
-.democracy-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #2a1a4a; border-radius: 6px; }
-.democracy-voter { flex: 1; font-size: 14px; color: #cfc4ea; }
 .bb-select-sm { padding: 6px 10px; background: #1b1130; border: 1px solid #4a3d6e; border-radius: 6px; color: #fff; font-size: 12px; width: 180px; }
 .bb-select-sm:focus { border-color: #3498db; outline: none; }
 .bb-select-sm option { background: #1b1130; color: #fff; }
-.twist-action-hint { padding: 12px; background: #3498db11; border: 1px solid #3498db33; border-radius: 8px; font-size: 13px; color: #3498db; margin-bottom: 12px; }
-.empty-hint { text-align: center; color: #6b5f92; font-size: 14px; padding: 20px; }
-.nominees { display: flex; gap: 16px; }
-.nominee-item { flex: 1; background: #b39bff08; border: 1px solid #b39bff22; border-radius: 8px; padding: 16px; text-align: center; }
-.nominee-name { display: block; font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 4px; }
-.nominee-order { font-size: 12px; color: #8f83b8; }
 .action-buttons { display: flex; gap: 12px; }
 .bb-btn { background: transparent; border: 1px solid #b39bff44; color: #b39bff; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
 .bb-btn:hover { background: #b39bff22; }

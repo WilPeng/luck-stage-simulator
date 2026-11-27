@@ -1,11 +1,15 @@
 <template>
-  <div class="bb-eviction-player">
-    <div class="page-header">
-      <h1>淘汰投票</h1>
-      <span class="round-tag">第{{ roundNum }}周</span>
-      <span v-if="isHistory" class="history-tag">历史记录</span>
-      <span v-else-if="isFuture" class="future-tag">未开始</span>
-    </div>
+  <div class="bb-eviction-player wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>淘汰投票</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ roundNum }}周</span>
+          <span v-if="isHistory" class="history-tag">历史记录</span>
+          <span v-else-if="isFuture" class="future-tag">未开始</span>
+        </div>
+      </div>
+    </header>
 
     <!-- 加载中 -->
     <div v-if="loading" class="loading-state">
@@ -15,106 +19,114 @@
 
     <template v-else-if="isCurrentRound">
       <!-- 投票开始后：向所有选手展示被提名人的拉票内容 -->
-      <div v-if="campaignData.voteStarted && campaignData.campaigns.length > 0" class="campaign-display">
-        <h3>📣 被提名人拉票</h3>
-        <div class="campaign-display-list">
-          <div v-for="c in campaignData.campaigns" :key="c.playerId" class="campaign-display-item">
-            <div class="campaign-display-head">
-              <BBAvatar :name="c.playerName" :avatar="avatarMap[c.playerId] || null" size="sm" />
-              <span class="campaign-display-name">{{ c.playerName }}</span>
+      <div class="wb-vote-board eviction-ballot-workspace">
+        <header v-if="seasonStore.currentStage === 'eviction_vote' || seasonStore.currentStage === 'eviction'" class="eviction-ballot-phase">
+          <h2>{{ seasonStore.currentStage === 'eviction' ? '等待公布' : campaignData.voteStarted ? '淘汰投票进行中' : '拉票阶段' }}</h2>
+          <span v-if="seasonStore.currentStage === 'eviction_vote' && isNominee" class="eviction-ballot-role">被提名人</span>
+          <span v-else-if="seasonStore.currentStage === 'eviction_vote' && isHoh" class="eviction-ballot-role">房主</span>
+        </header>
+
+        <div v-if="hasVoted" class="voted-card">
+          <div class="voted-icon">🗳️</div>
+          <div class="voted-info">
+            <div class="voted-label">投票已提交</div>
+            <div class="voted-target">你的选票投给 {{ myVote?.targetName }}</div>
+          </div>
+        </div>
+
+        <div v-if="isHoh && !hasVoted && campaignData.voteStarted" class="hoh-vote-note">
+          👑 你是本周的 HOH，请正常投票。你的投票仅在出现平票时作为最终裁决使用，不影响常规计票。
+        </div>
+
+        <!-- 投票开始前：被提名人撰写拉票内容 -->
+        <div v-if="isNominee && seasonStore.currentStage === 'eviction_vote' && !campaignData.voteStarted" class="campaign-form-card wb-panel">
+          <div class="campaign-form-title">📣 拉票时间</div>
+          <div class="campaign-form-desc">
+投票开启前可以提交和修改拉票内容。投票开启后，所有选手都能看到你的发言。
+          </div>
+          <textarea
+            v-model="campaignInput" aria-label="拉票内容"
+            class="campaign-textarea"
+            rows="5"
+            maxlength="1000"
+            placeholder="写下你的拉票内容，向其他选手争取支持..."
+          ></textarea>
+          <div class="campaign-form-footer">
+            <span class="campaign-char-count">{{ campaignInput.length }} / 1000</span>
+            <button
+              class="bb-btn bb-btn-primary"
+              :disabled="!campaignInput.trim() || campaignSubmitting"
+              @click="submitCampaign"
+            >{{ campaignSubmitting ? '提交中...' : (myCampaign ? '更新拉票内容' : '确认提交') }}</button>
+          </div>
+          <div v-if="myCampaign" class="campaign-submitted-note">
+            ✅ 已提交（{{ formatTime(myCampaign.submittedAt) }}），管理员开始投票前可以修改
+          </div>
+        </div>
+
+        <!-- 投票开始前：非被提名人等待拉票环节结束 -->
+        <div v-if="!isNominee && seasonStore.currentStage === 'eviction_vote' && !campaignData.voteStarted" class="campaign-waiting-card">
+          <div class="nominee-waiting-icon">📣</div>
+          <div class="nominee-waiting-title">拉票环节进行中</div>
+          <div class="nominee-waiting-desc">被提名人正在撰写拉票内容，管理员开始投票后即可查看拉票内容并投票。</div>
+        </div>
+
+        <div v-if="isNominee && seasonStore.currentStage === 'eviction_vote' && campaignData.voteStarted" class="nominee-waiting-card">
+          <div class="nominee-waiting-icon">⏳</div>
+          <div class="nominee-waiting-title">你本轮是被提名者，等待其他玩家投票</div>
+          <div class="nominee-waiting-desc">作为被提名人，你无法参与本轮淘汰投票。结果将在投票结束后公布。</div>
+          <div class="nominee-list-preview">
+            <div class="nominee-list-label">本轮被提名人：</div>
+            <div class="nominee-chips">
+              <span v-for="(name, i) in voteOptions" :key="i" class="nominee-chip"
+                :class="{ 'is-self': voteOptionIds[i] === authStore.currentUser?.id }">
+                <BBAvatar :name="name" :avatar="avatarMap[voteOptionIds[i]] || null" size="sm" />
+                {{ name }}{{ voteOptionIds[i] === authStore.currentUser?.id ? '（你）' : '' }}
+              </span>
             </div>
-            <div class="campaign-display-text">{{ c.content }}</div>
           </div>
         </div>
-      </div>
 
-      <div v-if="hasVoted" class="voted-card">
-        <div class="voted-icon">🗳️</div>
-        <div class="voted-info">
-          <div class="voted-label">你已投票</div>
-          <div class="voted-target">投票对象: {{ myVote?.targetName }}</div>
+        <div v-if="isNominee && seasonStore.currentStage === 'eviction'" class="nominee-waiting-card result-waiting">
+          <div class="nominee-waiting-icon">🔔</div>
+          <div class="nominee-waiting-title">投票已结束，等待公布结果</div>
+          <div class="nominee-waiting-desc">管理员即将宣布本轮淘汰结果。</div>
         </div>
-      </div>
 
-      <div v-if="isHoh && !hasVoted && campaignData.voteStarted" class="hoh-vote-note">
-        👑 你是本周的 HOH，请正常投票。你的投票仅在出现平票时作为最终裁决使用，不影响常规计票。
-      </div>
-
-      <!-- 投票开始前：被提名人撰写拉票内容 -->
-      <div v-if="isNominee && seasonStore.currentStage === 'eviction_vote' && !campaignData.voteStarted" class="campaign-form-card">
-        <div class="campaign-form-title">📣 拉票时间</div>
-        <div class="campaign-form-desc">
-          你本轮被提名。在管理员开始投票前，你可以填写拉票内容并提交，管理员会看到两位被提名人的内容。管理员开始投票后，所有选手都能看到你的拉票内容，并开始投票。
-        </div>
-        <textarea
-          v-model="campaignInput"
-          class="campaign-textarea"
-          rows="5"
-          maxlength="1000"
-          placeholder="写下你的拉票内容，向其他选手争取支持..."
-        ></textarea>
-        <div class="campaign-form-footer">
-          <span class="campaign-char-count">{{ campaignInput.length }} / 1000</span>
-          <button
-            class="bb-btn bb-btn-primary"
-            :disabled="!campaignInput.trim() || campaignSubmitting"
-            @click="submitCampaign"
-          >{{ campaignSubmitting ? '提交中...' : (myCampaign ? '更新拉票内容' : '确认提交') }}</button>
-        </div>
-        <div v-if="myCampaign" class="campaign-submitted-note">
-          ✅ 已提交（{{ formatTime(myCampaign.submittedAt) }}），管理员开始投票前可以修改
-        </div>
-      </div>
-
-      <!-- 投票开始前：非被提名人等待拉票环节结束 -->
-      <div v-if="!isNominee && seasonStore.currentStage === 'eviction_vote' && !campaignData.voteStarted" class="campaign-waiting-card">
-        <div class="nominee-waiting-icon">📣</div>
-        <div class="nominee-waiting-title">拉票环节进行中</div>
-        <div class="nominee-waiting-desc">被提名人正在撰写拉票内容，管理员开始投票后即可查看拉票内容并投票。</div>
-      </div>
-
-      <div v-if="isNominee && seasonStore.currentStage === 'eviction_vote' && campaignData.voteStarted" class="nominee-waiting-card">
-        <div class="nominee-waiting-icon">⏳</div>
-        <div class="nominee-waiting-title">你本轮是被提名者，等待其他玩家投票</div>
-        <div class="nominee-waiting-desc">作为被提名人，你无法参与本轮淘汰投票。结果将在投票结束后公布。</div>
-        <div class="nominee-list-preview">
-          <div class="nominee-list-label">本轮被提名人：</div>
-          <div class="nominee-chips">
-            <span v-for="(name, i) in voteOptions" :key="i" class="nominee-chip"
-              :class="{ 'is-self': voteOptionIds[i] === authStore.currentUser?.id }">
-              <BBAvatar :name="name" :avatar="avatarMap[voteOptionIds[i]] || null" size="sm" />
-              {{ name }}{{ voteOptionIds[i] === authStore.currentUser?.id ? '（你）' : '' }}
-            </span>
+        <div v-if="nomination && !hasVoted && !isNominee && seasonStore.currentStage === 'eviction_vote' && campaignData.voteStarted" class="vote-section wb-panel">
+          <h3>{{ nomination?.ballotMode === 'save' ? '选择你要保留的对象' : '选择你要淘汰的对象' }}</h3>
+          <div class="vote-options">
+            <button type="button" v-for="(name, i) in voteOptions" :key="i" class="vote-option" :aria-pressed="selectedVote === voteOptionIds[i]"
+              :class="{ selected: selectedVote === voteOptionIds[i] }"
+              @click="selectedVote = voteOptionIds[i]">
+              <BBAvatar :name="name" :avatar="avatarMap[voteOptionIds[i]] || null" size="md" />
+              <span class="vote-name">{{ name }}</span>
+              <span class="eviction-option-check" aria-hidden="true">{{ selectedVote === voteOptionIds[i] ? '✓' : '○' }}</span>
+            </button>
+          </div>
+          <div class="vote-action eviction-ballot-footer">
+            <span role="status">{{ selectedVote ? '已选择 ' + (voteOptions[voteOptionIds.indexOf(selectedVote)] || '') : '请先选择一位房客' }}</span>
+            <button class="bb-btn bb-btn-primary" :disabled="!selectedVote" @click="castVote">确认投票</button>
           </div>
         </div>
-      </div>
 
-      <div v-if="isNominee && seasonStore.currentStage === 'eviction'" class="nominee-waiting-card result-waiting">
-        <div class="nominee-waiting-icon">🔔</div>
-        <div class="nominee-waiting-title">投票已结束，等待公布结果</div>
-        <div class="nominee-waiting-desc">管理员即将宣布本轮淘汰结果。</div>
-      </div>
-
-      <div v-if="nomination && !hasVoted && !isNominee && seasonStore.currentStage === 'eviction_vote' && campaignData.voteStarted" class="vote-section">
-        <h3>{{ nomination?.ballotMode === 'save' ? '选择你要保留的对象' : '选择你要淘汰的对象' }}</h3>
-        <div class="vote-options">
-          <div v-for="(name, i) in voteOptions" :key="i" class="vote-option"
-            :class="{ selected: selectedVote === voteOptionIds[i] }"
-            @click="selectedVote = voteOptionIds[i]">
-            <span class="vote-icon">🗳️</span>
-            <BBAvatar :name="name" :avatar="avatarMap[voteOptionIds[i]] || null" size="md" />
-            <span class="vote-name">{{ name }}</span>
-            <span v-if="selectedVote === voteOptionIds[i]" class="check-mark">✓</span>
+        <div v-if="campaignData.voteStarted && campaignData.campaigns.length > 0" class="campaign-display wb-panel">
+          <h3>📣 被提名人拉票</h3>
+          <div class="campaign-display-list">
+            <div v-for="c in campaignData.campaigns" :key="c.playerId" class="campaign-display-item">
+              <div class="campaign-display-head">
+                <BBAvatar :name="c.playerName" :avatar="avatarMap[c.playerId] || null" size="sm" />
+                <span class="campaign-display-name">{{ c.playerName }}</span>
+              </div>
+              <div class="campaign-display-text">{{ c.content }}</div>
+            </div>
           </div>
-        </div>
-        <div class="vote-action">
-          <button class="bb-btn bb-btn-primary" :disabled="!selectedVote" @click="castVote">确认投票</button>
         </div>
       </div>
     </template>
 
     <!-- 历史轮次展示提名 -->
-    <div v-if="nomination && isHistory" class="nomination-summary">
+    <div v-if="nomination && isHistory" class="nomination-summary wb-panel">
       <h3>被提名人</h3>
       <div class="nominees-list">
         <div v-for="(name, i) in (nomination.nomineeNames || [])" :key="i" class="nominee-chip">{{ name }}</div>
@@ -253,7 +265,9 @@ async function fetchData() {
   loading.value = false
 }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/eviction/campaign', '/eviction/start-vote', '/eviction/vote', '/eviction/night/start', '/eviction/night/reset', '/nomination', '/veto/use', '/round-twist', '/season/set', '/season/next', '/season/reset'
+)
 onMounted(fetchData)
 </script>
 

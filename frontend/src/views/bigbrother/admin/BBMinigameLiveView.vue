@@ -1,12 +1,16 @@
 <template>
-  <div class="mg-live">
-    <div class="page-header">
-      <h1>小游戏实时观战</h1>
-      <button class="bb-btn" @click="refresh">🔄 刷新</button>
-    </div>
+  <div class="mg-live wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>小游戏实时观战</h1>
+      </div>
+      <div class="wb-page-tools">
+        <button class="bb-btn" @click="refresh">🔄 刷新</button>
+      </div>
+    </header>
 
     <div class="live-layout">
-      <div class="rooms-panel">
+      <div class="rooms-panel wb-index wb-panel">
         <div class="panel-title">进行中的比赛（{{ rooms.length }}）</div>
         <div v-if="!rooms.length" class="empty-hint">当前没有活跃比赛房间</div>
         <div
@@ -28,12 +32,15 @@
         </div>
       </div>
 
-      <div class="observer-panel">
-        <div v-if="selectedRoomId" class="controls">
+      <div class="observer-panel wb-panel">
+        <div v-if="selectedRoomId" class="wb-watch-toolbar">
+          <h2 class="wb-index-title">{{ selectedRoom?.minigameName || selectedRoom?.minigameId || '比赛现场' }}</h2>
+          <div class="controls">
           <MinigameStartButton v-if="selectedRoom?.status === 'waiting'" label="▶ 开始比赛" @start="start" />
           <button v-if="selectedRoom?.status === 'playing'" class="bb-btn bb-btn-warn" @click="pause">⏸ 暂停</button>
           <button v-if="selectedRoom?.status === 'paused'" class="bb-btn bb-btn-primary" @click="resume">▶ 恢复</button>
           <button v-if="selectedRoom && ['waiting','playing','paused'].includes(selectedRoom.status)" class="bb-btn bb-btn-danger" @click="stop">⏹ 停止</button>
+          </div>
         </div>
         <MinigameObserver v-if="selectedRoomId" :roomId="selectedRoomId" :room="selectedRoom" />
         <div v-else class="empty-hint">选择左侧房间开始观战</div>

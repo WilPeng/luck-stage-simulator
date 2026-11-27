@@ -1,49 +1,55 @@
 <template>
-  <div class="bb-eviction-player">
-    <div class="page-header">
-      <h1>淘汰结果</h1>
-      <span class="round-tag">第{{ roundNum }}周</span>
-      <span v-if="isHistory" class="history-tag">历史记录</span>
-      <span v-else-if="isFuture" class="future-tag">未开始</span>
-    </div>
-
-    <!-- 淘汰夜宣布（管理员逐句手动揭晓） -->
-    <div v-if="night" class="announce-stage">
-      <template v-if="night.phase === 'announce'">
-        <div class="announce-title">📢 淘汰结果宣布</div>
-        <TransitionGroup name="announce" tag="div" class="announce-lines">
-          <div v-for="line in announceLines" :key="line.key" class="ann-line shown">
-            {{ line.text }}
-          </div>
-        </TransitionGroup>
-      </template>
-      <template v-else>
-        <div class="door-stage">
-          <div class="door-icon">🚪</div>
-          <div v-for="e in night.evicted" :key="e.id" class="door-name">{{ e.name }}</div>
-          <div class="door-votes">{{ nightVotePattern }}</div>
-        </div>
-      </template>
-    </div>
-
-    <div v-else-if="isHistory && evictionResult" class="result-section">
-      <div class="result-card">
-        <div class="result-icon">🚪</div>
-        <div class="result-info">
-          <div class="result-name">{{ evictionResult.evictedName }}</div>
-          <div class="result-votes">{{ votePattern(evictionResult) }}</div>
-          <div v-if="isMe(evictionResult.evictedName)" class="me-evicted">你被淘汰了！</div>
+  <div class="bb-eviction-player wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>淘汰结果</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ roundNum }}周</span>
+          <span v-if="isHistory" class="history-tag">历史记录</span>
+          <span v-else-if="isFuture" class="future-tag">未开始</span>
         </div>
       </div>
-    </div>
-    <div v-else class="empty-card">
-      <p>管理员未开始淘汰结果环节</p>
-    </div>
+    </header>
 
-    <div v-if="nomination && isHistory" class="nomination-summary">
-      <h3>被提名人</h3>
-      <div class="nominees-list">
-        <div v-for="(name, i) in (nomination.nomineeNames || [])" :key="i" class="nominee-chip">{{ name }}</div>
+    <!-- 淘汰夜宣布（管理员逐句手动揭晓） -->
+    <div class="wb-results-board">
+      <div v-if="night" class="announce-stage">
+        <template v-if="night.phase === 'announce'">
+          <div class="announce-title">📢 淘汰结果宣布</div>
+          <TransitionGroup name="announce" tag="div" class="announce-lines">
+            <div v-for="line in announceLines" :key="line.key" class="ann-line shown">
+              {{ line.text }}
+            </div>
+          </TransitionGroup>
+        </template>
+        <template v-else>
+          <div class="door-stage">
+            <div class="door-icon">🚪</div>
+            <div v-for="e in night.evicted" :key="e.id" class="door-name">{{ e.name }}</div>
+            <div class="door-votes">{{ nightVotePattern }}</div>
+          </div>
+        </template>
+      </div>
+
+      <div v-else-if="isHistory && evictionResult" class="result-section">
+        <div class="result-card">
+          <div class="result-icon">🚪</div>
+          <div class="result-info">
+            <div class="result-name">{{ evictionResult.evictedName }}</div>
+            <div class="result-votes">{{ votePattern(evictionResult) }}</div>
+            <div v-if="isMe(evictionResult.evictedName)" class="me-evicted">你被淘汰了！</div>
+          </div>
+        </div>
+      </div>
+      <div v-else class="empty-card">
+        <p>管理员未开始淘汰结果环节</p>
+      </div>
+
+      <div v-if="nomination && isHistory" class="nomination-summary wb-panel">
+        <h3>被提名人</h3>
+        <div class="nominees-list">
+          <div v-for="(name, i) in (nomination.nomineeNames || [])" :key="i" class="nominee-chip">{{ name }}</div>
+        </div>
       </div>
     </div>
   </div>
@@ -51,6 +57,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
@@ -121,9 +128,8 @@ watch(() => realtime.lastEvictionNight, (v) => {
   night.value = (v && v.round === roundNum.value) ? v : null
 })
 
-onMounted(() => {
-  loadData()
-})
+useBbRefresh(loadData, '/eviction/result', '/eviction/night/start', '/eviction/restore', '/nomination', '/round-twist', '/season/reset')
+onMounted(loadData)
 </script>
 
 <style scoped>

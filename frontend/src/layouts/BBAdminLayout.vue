@@ -61,9 +61,9 @@
               <span class="section-status" :class="grp.status">{{ grp.statusText }}</span>
             </button>
             <div v-show="!isRoundCollapsed(grp.round)" class="round-stages">
-              <button type="button" v-for="it in grp.items" :key="it.stage"
+              <button type="button" v-for="it in grp.items" :key="it.path"
                 class="nav-item sub-item" :disabled="!it.clickable"
-                :class="{ active: isStageActive(grp.round, it.stage), disabled: !it.clickable }"
+                :class="{ active: it.twistId ? route.path === it.path : isStageActive(grp.round, it.stage), disabled: !it.clickable }"
                 @click="navigateTo(it.path)">
                 <span class="nav-icon">{{ it.icon }}</span>
                 <span class="nav-text">{{ it.stageName }}</span>
@@ -75,9 +75,8 @@
       </aside>
 
       <main class="bb-main">
-        <RoundTwistPanel v-if="route.params.round == null || Number(route.params.round) === seasonStore.currentRoundNumber"
-          :current-round="seasonStore.currentRoundNumber" :current-stage="seasonStore.currentStage" @exclusive="exclusiveTwist = $event" />
-        <router-view v-if="!exclusiveTwist || !route.path.endsWith('/hoh') || Number(route.params.round) !== seasonStore.currentRoundNumber" />
+        <router-link v-if="branchRedirect" :to="branchRedirect">前往本周专属赛制</router-link>
+        <router-view v-else />
       </main>
     </div>
 
@@ -184,7 +183,6 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useBbAuthStore } from '../stores/bbAuthStore'
-import RoundTwistPanel from '../components/bigbrother/RoundTwistPanel.vue'
 import { useBbSeasonStore } from '../stores/bbSeasonStore'
 import { useBbRealtimeStore } from '../stores/bbRealtimeStore'
 import { BB_STAGE_NAME, type BBStageType } from '../types/bigbrother'
@@ -194,7 +192,6 @@ import { bbGetHouseRooms, bbAdminBroadcast, bbGetBroadcastHistory, bbDeleteBroad
 
 const router = useRouter()
 const route = useRoute()
-const exclusiveTwist = ref(false)
 const authStore = useBbAuthStore()
 const seasonStore = useBbSeasonStore()
 const realtime = useBbRealtimeStore()
@@ -253,7 +250,6 @@ const otherItemsAll = [
   { icon: '💬', text: '房间聊天记录', path: '/games/bigbrother/admin/house-chat', perm: 'chat' },
   { icon: '😴', text: '睡眠/洗澡记录', path: '/games/bigbrother/admin/guest-states', perm: 'guest-states' },
   { icon: '🎮', text: '游戏库', path: '/games/bigbrother/admin/game-library', perm: 'game-library' },
-  { icon: '🎮', text: '变数挑战', path: '/games/bigbrother/admin/twist-challenges', perm: 'minigame' },
   { icon: '👁', text: '小游戏实时观战', path: '/games/bigbrother/admin/minigame-live', perm: 'minigame' },
   { icon: '🎬', text: '小游戏复盘', path: '/games/bigbrother/admin/minigame-replay', perm: 'minigame' },
   { icon: '📜', text: '操作日志', path: '/games/bigbrother/admin/logs', perm: 'logs' },
@@ -284,6 +280,13 @@ const adminStageMeta: Record<string, { icon: string; route: string }> = {
 const ENDGAME_STAGES = ['final3', 'champion_vote']
 
 // 依据赛季配置（菜单）生成左侧树
+const branchRedirect = computed(() => {
+  const week = Number(route.params.round)
+  if (week !== seasonStore.currentRoundNumber || seasonStore.currentStage !== 'hoh_competition' || !route.path.endsWith('/hoh')) return ''
+  const branch = seasonStore.menuItems.find(item => item.round === week && (item.twistId === 'split_house' || item.twistId === 'battle_of_block'))
+  return branch?.twistId ? `/games/bigbrother/admin/round/${week}/${branch.twistId.replace(/_/g, '-')}` : ''
+})
+
 const roundGroups = computed(() => {
   const items = seasonStore.menuItems || []
   const byRound = new Map<number, any[]>()
@@ -311,15 +314,17 @@ const roundGroups = computed(() => {
       items: list.map(i => {
         const meta = adminStageMeta[i.stage] || { icon: '•', route: i.stage }
         const isEnd = ENDGAME_STAGES.includes(i.stage)
+        const slug = i.twistId?.replace(/_/g, '-') || meta.route
         return {
           stage: i.stage,
           stageName: i.stageName,
           status: i.status,
           clickable: i.clickable,
-          icon: meta.icon,
+          icon: i.icon || meta.icon,
+          twistId: i.twistId,
           path: isEnd
             ? `/games/bigbrother/admin/${meta.route}`
-            : `/games/bigbrother/admin/round/${r}/${meta.route}`
+            : `/games/bigbrother/admin/round/${r}/${slug}`
         }
       })
     }

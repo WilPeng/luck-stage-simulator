@@ -1,9 +1,13 @@
 <template>
-  <div class="bb-eviction-admin">
-    <div class="page-header">
-      <h1>淘汰结果</h1>
-      <span class="round-tag">第{{ $route.params.round }}周</span>
-    </div>
+  <div class="bb-eviction-admin wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>淘汰结果</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ $route.params.round }}周</span>
+        </div>
+      </div>
+    </header>
 
     <div v-if="lastEviction" class="eviction-result-card">
       <div class="result-icon">🚪</div>
@@ -19,7 +23,7 @@
       <span v-if="twistInfo.isKarmicPawnship" class="twist-item karmic">⚖️ 因果报应：被提名但未被淘汰的幸存者将自动成为下轮 HOH</span>
     </div>
 
-    <div class="action-section">
+    <div class="action-section wb-panel">
       <h3>操作 - 淘汰夜</h3>
       <div class="action-buttons">
         <template v-if="!night">
@@ -65,37 +69,39 @@
       <p v-if="!night" class="hint">开始淘汰夜后将锁定投票，并向选手端展示「📢 淘汰结果宣布」框架；再点「确定」显示开门结果。</p>
     </div>
 
-    <div v-if="voteData.votes?.length > 0" class="votes-section">
-      <h3>投票明细</h3>
-      <div class="table-container">
-        <table class="bb-table">
-          <thead><tr><th>投票者</th><th>投票对象</th><th>时间</th></tr></thead>
-          <tbody>
-            <tr v-for="v in voteData.votes" :key="v.id">
-              <td>{{ v.voterName }}</td>
-              <td class="highlight">{{ v.targetName }}</td>
-              <td class="time">{{ formatTime(v.createdAt) }}</td>
-            </tr>
-          </tbody>
-        </table>
+    <div class="wb-lanes">
+      <div v-if="voteData.votes?.length > 0" class="votes-section wb-panel">
+        <h3>投票明细</h3>
+        <div class="table-container">
+          <table class="bb-table">
+            <thead><tr><th>投票者</th><th>投票对象</th><th>时间</th></tr></thead>
+            <tbody>
+              <tr v-for="v in voteData.votes" :key="v.id">
+                <td>{{ v.voterName }}</td>
+                <td class="highlight">{{ v.targetName }}</td>
+                <td class="time">{{ formatTime(v.createdAt) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
 
-    <div class="history-section">
-      <h3>淘汰历史</h3>
-      <div class="table-container">
-        <table class="bb-table">
-          <thead><tr><th>轮次</th><th>被淘汰者</th><th>得票</th><th>时间</th></tr></thead>
-          <tbody>
-            <tr v-for="e in evictionHistory" :key="e.id">
-              <td>{{ formatTime(e.createdAt) }}</td>
-              <td class="highlight">{{ e.evictedName }}</td>
-              <td>{{ votePattern(e) }}</td>
-              <td class="time">{{ formatTime(e.updatedAt) }}</td>
-            </tr>
-            <tr v-if="evictionHistory.length === 0"><td colspan="4" class="empty-cell">暂无淘汰记录</td></tr>
-          </tbody>
-        </table>
+      <div class="history-section wb-panel">
+        <h3>淘汰历史</h3>
+        <div class="table-container">
+          <table class="bb-table">
+            <thead><tr><th>轮次</th><th>被淘汰者</th><th>得票</th><th>时间</th></tr></thead>
+            <tbody>
+              <tr v-for="e in evictionHistory" :key="e.id">
+                <td>{{ formatTime(e.createdAt) }}</td>
+                <td class="highlight">{{ e.evictedName }}</td>
+                <td>{{ votePattern(e) }}</td>
+                <td class="time">{{ formatTime(e.updatedAt) }}</td>
+              </tr>
+              <tr v-if="evictionHistory.length === 0"><td colspan="4" class="empty-cell">暂无淘汰记录</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -173,7 +179,9 @@ function votePattern(e: any): string {
   return ''
 }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/eviction/vote', '/eviction/result', '/eviction/night/start', '/eviction/restore', '/nomination', '/round-twist', '/season/set', '/season/next', '/season/reset'
+)
 onMounted(fetchData)
 </script>
 

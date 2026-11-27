@@ -1,92 +1,98 @@
 <template>
-  <div class="bb-game-library">
-    <div class="page-header">
-      <h1>游戏库</h1>
-      <button class="bb-btn bb-btn-primary" @click="openCreate">新建自定义游戏</button>
-    </div>
+  <div class="bb-game-library wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>游戏库</h1>
+      </div>
+      <div class="wb-page-tools">
+        <button class="bb-btn bb-btn-primary" @click="openCreate">新建自定义游戏</button>
+      </div>
+    </header>
 
     <!-- 文件夹筛选 -->
-    <div class="folder-bar">
-      <button class="folder-chip" :class="{ active: selectedFolderId === null }" @click="selectedFolderId = null">
-        全部 <span class="chip-count">{{ allGames.length }}</span>
-      </button>
-      <div v-for="f in folders" :key="f.id" class="folder-chip-wrap">
-        <button class="folder-chip" :class="{ active: selectedFolderId === f.id }" @click="selectedFolderId = f.id">
-          📁 {{ f.name }} <span class="chip-count">{{ folderGameCount(f) }}</span>
+    <div class="wb-library">
+      <div class="folder-bar">
+        <button class="folder-chip" :class="{ active: selectedFolderId === null }" @click="selectedFolderId = null">
+          全部 <span class="chip-count">{{ allGames.length }}</span>
         </button>
-        <button class="chip-op" title="重命名文件夹" @click="renameFolder(f)">✏️</button>
-        <button class="chip-op" title="删除文件夹" @click="deleteFolder(f)">🗑️</button>
+        <div v-for="f in folders" :key="f.id" class="folder-chip-wrap">
+          <button class="folder-chip" :class="{ active: selectedFolderId === f.id }" @click="selectedFolderId = f.id">
+            📁 {{ f.name }} <span class="chip-count">{{ folderGameCount(f) }}</span>
+          </button>
+          <button class="chip-op" title="重命名文件夹" @click="renameFolder(f)">✏️</button>
+          <button class="chip-op" title="删除文件夹" @click="deleteFolder(f)">🗑️</button>
+        </div>
+        <button class="folder-chip add-folder" @click="createFolder">+ 新建文件夹</button>
       </div>
-      <button class="folder-chip add-folder" @click="createFolder">+ 新建文件夹</button>
-    </div>
 
-    <div v-if="visibleGames.length === 0" class="empty-state">
-      {{ selectedFolderId ? '该文件夹中暂无游戏，使用游戏卡片上的「文件夹」按钮添加' : '暂无游戏，点击上方按钮创建自定义游戏' }}
-    </div>
+      <div v-if="visibleGames.length === 0" class="empty-state">
+        {{ selectedFolderId ? '该文件夹中暂无游戏，使用游戏卡片上的「文件夹」按钮添加' : '暂无游戏，点击上方按钮创建自定义游戏' }}
+      </div>
 
-    <div class="game-grid">
-      <div
-        v-for="(g, idx) in visibleGames"
-        :key="g.key"
-        class="game-card"
-        :class="{ disabled: g.isCustom && !g.custom?.enabled, builtin: !g.isCustom, 'menu-open': openMenuKey === g.key }"
-      >
-        <div v-if="selectedFolderId === null" class="reorder">
-          <button class="reorder-btn" :disabled="idx === 0" title="上移" @click="moveGame(g.key, -1)">↑</button>
-          <button class="reorder-btn" :disabled="idx === visibleGames.length - 1" title="下移" @click="moveGame(g.key, 1)">↓</button>
-        </div>
-
-        <div class="game-icon">{{ g.icon }}</div>
-        <div class="game-info">
-          <div class="game-name">{{ g.name }}</div>
-          <div class="game-desc">{{ g.description || '暂无描述' }}</div>
-          <div class="game-meta">
-            <template v-if="g.isCustom && g.custom">
-              <span class="tag" :class="g.custom.type === 'quiz' ? 'tag-quiz' : 'tag-score'">
-                {{ g.custom.type === 'quiz' ? '答题' : '积分' }}
-              </span>
-              <span class="tag">{{ winConditionLabel(g.custom) }}</span>
-              <span class="meta-text">{{ g.custom.questions.length }}题</span>
-              <span class="meta-text">{{ g.custom.playerCount.min }}-{{ g.custom.playerCount.max }}人</span>
-            </template>
-            <template v-else-if="g.builtin">
-              <span class="tag">{{ g.builtin.category }}</span>
-              <span class="meta-text">{{ g.builtin.playerCount.min }}-{{ g.builtin.playerCount.max }}人</span>
-              <span class="meta-text">{{ g.builtin.duration }}s</span>
-            </template>
-          </div>
-          <div v-if="foldersOf(g.key).length" class="game-folders">
-            <span v-for="f in foldersOf(g.key)" :key="f.id" class="folder-tag">📁 {{ f.name }}</span>
+      <div class="game-grid">
+        <div
+          v-for="(g, idx) in visibleGames"
+          :key="g.key"
+          class="game-card"
+          :class="{ disabled: g.isCustom && !g.custom?.enabled, builtin: !g.isCustom, 'menu-open': openMenuKey === g.key }"
+        >
+          <div v-if="selectedFolderId === null" class="reorder">
+            <button class="reorder-btn" :disabled="idx === 0" title="上移" @click="moveGame(g.key, -1)">↑</button>
+            <button class="reorder-btn" :disabled="idx === visibleGames.length - 1" title="下移" @click="moveGame(g.key, 1)">↓</button>
           </div>
 
-          <div class="card-footer">
-            <details class="folder-menu" @toggle="onMenuToggle(g.key, $event)">
-              <summary class="folder-menu-btn">文件夹</summary>
-              <div class="folder-menu-list">
-                <p v-if="folders.length === 0" class="folder-menu-empty">暂无文件夹</p>
-                <label v-for="f in folders" :key="f.id" class="folder-menu-item">
-                  <input
-                    type="checkbox"
-                    :checked="f.games.includes(g.key)"
-                    @change="toggleGameInFolder(f, g.key)"
-                  />
-                  {{ f.name }}
-                </label>
-              </div>
-            </details>
-            <button v-if="!g.isCustom && g.key === 'power-challenge'" class="bb-btn-xs btn-edit" @click="goManage">管理题目</button>
-            <template v-if="g.isCustom && g.custom">
-              <button class="bb-btn-xs" :class="g.custom.enabled ? 'btn-warn' : 'btn-success'" @click="toggleGame(g.custom)">
-                {{ g.custom.enabled ? '禁用' : '启用' }}
-              </button>
-              <button class="bb-btn-xs btn-edit" @click="openEdit(g.custom)">编辑</button>
-              <button class="bb-btn-xs btn-danger" @click="deleteGame(g.custom)">删除</button>
-            </template>
-          </div>
-        </div>
+          <div class="game-icon">{{ g.icon }}</div>
+          <div class="game-info">
+            <div class="game-name">{{ g.name }}</div>
+            <div class="game-desc">{{ g.description || '暂无描述' }}</div>
+            <div class="game-meta">
+              <template v-if="g.isCustom && g.custom">
+                <span class="tag" :class="g.custom.type === 'quiz' ? 'tag-quiz' : 'tag-score'">
+                  {{ g.custom.type === 'quiz' ? '答题' : '积分' }}
+                </span>
+                <span class="tag">{{ winConditionLabel(g.custom) }}</span>
+                <span class="meta-text">{{ g.custom.questions.length }}题</span>
+                <span class="meta-text">{{ g.custom.playerCount.min }}-{{ g.custom.playerCount.max }}人</span>
+              </template>
+              <template v-else-if="g.builtin">
+                <span class="tag">{{ g.builtin.category }}</span>
+                <span class="meta-text">{{ g.builtin.playerCount.min }}-{{ g.builtin.playerCount.max }}人</span>
+                <span class="meta-text">{{ g.builtin.duration }}s</span>
+              </template>
+            </div>
+            <div v-if="foldersOf(g.key).length" class="game-folders">
+              <span v-for="f in foldersOf(g.key)" :key="f.id" class="folder-tag">📁 {{ f.name }}</span>
+            </div>
 
-        <div class="game-badge" :class="g.isCustom ? 'custom-badge' : 'builtin-badge'">
-          {{ g.isCustom ? '自定义' : '内置' }}
+            <div class="card-footer">
+              <details class="folder-menu" @toggle="onMenuToggle(g.key, $event)">
+                <summary class="folder-menu-btn">文件夹</summary>
+                <div class="folder-menu-list">
+                  <p v-if="folders.length === 0" class="folder-menu-empty">暂无文件夹</p>
+                  <label v-for="f in folders" :key="f.id" class="folder-menu-item">
+                    <input
+                      type="checkbox"
+                      :checked="f.games.includes(g.key)"
+                      @change="toggleGameInFolder(f, g.key)"
+                    />
+                    {{ f.name }}
+                  </label>
+                </div>
+              </details>
+              <button v-if="!g.isCustom && g.key === 'power-challenge'" class="bb-btn-xs btn-edit" @click="goManage">管理题目</button>
+              <template v-if="g.isCustom && g.custom">
+                <button class="bb-btn-xs" :class="g.custom.enabled ? 'btn-warn' : 'btn-success'" @click="toggleGame(g.custom)">
+                  {{ g.custom.enabled ? '禁用' : '启用' }}
+                </button>
+                <button class="bb-btn-xs btn-edit" @click="openEdit(g.custom)">编辑</button>
+                <button class="bb-btn-xs btn-danger" @click="deleteGame(g.custom)">删除</button>
+              </template>
+            </div>
+          </div>
+
+          <div class="game-badge" :class="g.isCustom ? 'custom-badge' : 'builtin-badge'">
+            {{ g.isCustom ? '自定义' : '内置' }}
+          </div>
         </div>
       </div>
     </div>
@@ -302,7 +308,9 @@ function goManage() {
   router.push('/games/bigbrother/admin/power-challenge')
 }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/game-library', '/custom-game'
+)
 onMounted(fetchData)
 </script>
 

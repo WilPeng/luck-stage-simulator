@@ -400,3 +400,32 @@ test('选手观战只收到公开进度，答题记录仅管理员可读', async
     application.set('io', previousIO)
   }
 })
+
+test('周内赛制路由只列出已启用的规则，并隔离不同周的操作', async () => {
+  await fixture('safety_suite', 'nomination', null, {
+    roundConfigs: [{round:2,twists:['safety_suite','sealed_replacement']},{round:3,twists:['battle_back','bbbb']}]
+  })
+  const menu = (await ok('/season/menu')).menu
+  assert.deepEqual(menu.filter(i => i.round === 2 && i.twistId).map(i => i.twistId), ['safety_suite','sealed_replacement'])
+  assert.equal(menu.filter(i=>i.round===3 && i.stage==='bbbb').length,1)
+  assert.equal(menu.find(i=>i.round===3 && i.twistId==='battle_back').status,'future')
+  const path = (round,twist) => `/twist/challenges?round=${round}&twist=${twist}`
+  assert.equal((await request(path(2,'battle_back'))).status,404)
+  assert.equal((await ok(path(3,'battle_back'))).slots.length,0)
+  assert.deepEqual((await ok(path(2,'sealed_replacement'))).slots,[])
+  assert.deepEqual((await ok(path(2,'safety_suite'))).slots.map(s=>s.key),['safety'])
+  assert.equal((await request('/twist/challenges',{round:2,twist:'sealed_replacement',key:'safety',action:'create',minigameId:'quick-math'})).status,409)
+})
+
+test('淘汰选手只可进入本周符合资格的复活路由', async () => {
+  await fixture('battle_back','hoh_competition',null,{
+    roundConfigs:[{round:2,twists:['battle_back']},{round:3,twists:['costly_return']}]
+  })
+  await col('BBHouseguest').updateOne({id:'b'},{$set:{status:'evicted'}})
+  await col('BBHouseguest').updateOne({id:'c'},{$set:{status:'walked'}})
+  const menu = (await ok('/season/menu',undefined,'b')).menu
+  assert.deepEqual(menu.filter(i=>i.twistId).map(i=>i.twistId),['battle_back'])
+  assert.equal((await ok('/twist/challenges?round=2&twist=battle_back',undefined,'b')).slots[0].key,'revival')
+  assert.equal((await request('/twist/challenges?round=2&twist=battle_back',undefined,'c')).status,403)
+  assert.equal((await request('/twist/challenges?round=3&twist=costly_return',undefined,'b')).status,403)
+})

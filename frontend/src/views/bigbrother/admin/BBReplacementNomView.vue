@@ -1,9 +1,13 @@
 <template>
-  <div class="bb-replacement-admin">
-    <div class="page-header">
-      <h1>替换提名</h1>
-      <span class="round-tag">第{{ $route.params.round }}周</span>
-    </div>
+  <div class="bb-replacement-admin wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>替换提名</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ $route.params.round }}周</span>
+        </div>
+      </div>
+    </header>
 
     <!-- 否决权信息 -->
     <div v-if="veto" class="veto-card">
@@ -18,7 +22,6 @@
     </div>
 
     <!-- 否决权被使用：展示 POV 仪式发言（客厅） -->
-    <CeremonyChat v-if="veto && veto.used" room-id="living_room" title="🎤 POV 仪式发言（客厅）" empty-text="暂无发言" />
 
     <!-- 回旋镖护符提示 -->
     <div v-if="twistInfo?.isBoomerangPendant && nomination" class="twist-action-hint">
@@ -26,46 +29,50 @@
     </div>
 
     <!-- 当前 HOH 和提名信息 -->
-    <div class="status-panel">
-      <div class="status-row hoh-row">
-        <span class="status-label">👑 当前 HOH</span>
-        <span class="status-value" :class="{ 'no-data': !nomination?.hohName }">
-          {{ nomination?.hohName || '暂无' }}
-        </span>
-      </div>
-      <div class="status-row nom-row">
-        <span class="status-label">📋 当前提名</span>
-        <div class="nominee-list">
-          <span v-for="(name, i) in (nomination?.nomineeNames || [])" :key="i" class="nominee-tag"
-            :class="{ replacement: nomination?.replacementNomineeName === name }">
-            {{ name }}
-            <span v-if="nomination?.replacementNomineeName === name" class="replacement-badge">替补</span>
+    <div class="wb-replacement-controls">
+      <div class="status-panel wb-panel">
+        <div class="status-row hoh-row">
+          <span class="status-label">👑 当前 HOH</span>
+          <span class="status-value" :class="{ 'no-data': !nomination?.hohName }">
+            {{ nomination?.hohName || '暂无' }}
           </span>
-          <span v-if="!nomination?.nomineeNames?.length" class="no-data">暂无</span>
+        </div>
+        <div class="status-row nom-row">
+          <span class="status-label">📋 当前提名</span>
+          <div class="nominee-list">
+            <span v-for="(name, i) in (nomination?.nomineeNames || [])" :key="i" class="nominee-tag"
+              :class="{ replacement: nomination?.replacementNomineeName === name }">
+              {{ name }}
+              <span v-if="nomination?.replacementNomineeName === name" class="replacement-badge">替补</span>
+            </span>
+            <span v-if="!nomination?.nomineeNames?.length" class="no-data">暂无</span>
+          </div>
+        </div>
+        <div v-if="savedPlayerName" class="status-row saved-row">
+          <span class="status-label">🛡️ 被拯救者</span>
+          <span class="status-value saved-name">{{ savedPlayerName }}</span>
         </div>
       </div>
-      <div v-if="savedPlayerName" class="status-row saved-row">
-        <span class="status-label">🛡️ 被拯救者</span>
-        <span class="status-value saved-name">{{ savedPlayerName }}</span>
+
+      <!-- 替换完成提示 -->
+      <div v-if="nomination?.replacementNomineeId" class="done-hint">
+        <span>✅ 替补提名已完成：<strong>{{ nomination.replacementNomineeName }}</strong> 已加入最终提名名单，将进入驱逐投票阶段。</span>
+        <button class="bb-btn bb-btn-danger" @click="undoReplacement">↩ 撤销替补决策</button>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div v-if="!nomination?.replacementNomineeId" class="action-section wb-panel">
+        <h3>操作 - 选择替补提名</h3>
+        <p class="action-hint">否决权使用后，HOH 需要选择一名新的房客替换被拯救的提名者</p>
+        <div class="action-buttons">
+          <button class="bb-btn" @click="showReplaceModal = true" :disabled="!nomination || !nomination.vetoUsed">
+            🔄 选择替补提名
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- 替换完成提示 -->
-    <div v-if="nomination?.replacementNomineeId" class="done-hint">
-      <span>✅ 替补提名已完成：<strong>{{ nomination.replacementNomineeName }}</strong> 已加入最终提名名单，将进入驱逐投票阶段。</span>
-      <button class="bb-btn bb-btn-danger" @click="undoReplacement">↩ 撤销替补决策</button>
-    </div>
-
-    <!-- 操作按钮 -->
-    <div v-if="!nomination?.replacementNomineeId" class="action-section">
-      <h3>操作 - 选择替补提名</h3>
-      <p class="action-hint">否决权使用后，HOH 需要选择一名新的房客替换被拯救的提名者</p>
-      <div class="action-buttons">
-        <button class="bb-btn" @click="showReplaceModal = true" :disabled="!nomination || !nomination.vetoUsed">
-          🔄 选择替补提名
-        </button>
-      </div>
-    </div>
+    <CeremonyChat v-if="veto && veto.used" room-id="living_room" title="🎤 POV 仪式发言（客厅）" empty-text="暂无发言" />
 
     <Teleport to="body">
       <div v-if="showReplaceModal" class="bb-modal-overlay" @click.self="showReplaceModal = false">
@@ -155,7 +162,9 @@ async function replaceNomination() {
   } catch (e: any) { alert(e.message) }
 }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/nomination', '/veto', '/houseguests', '/round-twist', '/season/set', '/season/next', '/season/reset'
+)
 onMounted(fetchData)
 </script>
 

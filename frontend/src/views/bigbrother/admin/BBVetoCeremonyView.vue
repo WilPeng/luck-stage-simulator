@@ -1,93 +1,103 @@
 <template>
-  <div class="bb-veto-admin">
-    <div class="page-header">
-      <h1>否决权会议</h1>
-      <span class="round-tag">第{{ $route.params.round }}周</span>
-    </div>
+  <div class="bb-veto-admin wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>否决权会议</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ $route.params.round }}周</span>
+        </div>
+      </div>
+    </header>
 
     <div v-if="twistInfo?.isBoomerangPendant" class="twist-info-bar">
       <span class="twist-item boomerang">🪃 回旋镖护符：使用否决权时将拯救所有被提名者，HOH 需重新提名全部人</span>
     </div>
 
-    <div v-if="veto" class="veto-card">
-      <div class="veto-icon">🛡️</div>
-      <div class="veto-info">
-        <div class="veto-label">否决权持有者</div>
-        <div class="veto-winner-row">
-          <BBAvatar :name="veto.winnerName" :avatar="vetoWinnerAvatar" size="md" />
-          <span class="veto-winner">{{ veto.winnerName }}</span>
+    <div class="veto-workspace">
+      <div class="veto-workspace-main">
+        <div v-if="veto?.status === 'used' && nomination && nomination.nomineeIds.length < 2" class="replacement-hint">
+          <span v-if="twistInfo?.isBoomerangPendant">🪃 回旋镖护符已触发！提名名单已清空，请前往<a href="javascript:void(0)" @click="$router.push('/games/bigbrother/admin/round/' + $route.params.round + '/replacement-nom')" class="link">替换提名</a>重新提名全部人</span>
+          <span v-else>⚠️ 否决权已使用，请等待房主选择替补提名</span>
         </div>
-        <div class="veto-status">
-          <template v-if="veto.status === 'pending'">⏳ 待决定</template>
-          <template v-else-if="veto.status === 'used'">✅ 已使用</template>
-          <template v-else-if="veto.status === 'skipped'">⏭️ 已跳过</template>
-          <template v-else>{{ veto.used ? '✅ 已使用' : '⏳ 未使用' }}</template>
+        <div v-if="veto?.status === 'skipped'" class="final-nomination-confirmed">
+          <span>✅ 否决权<strong>未被使用</strong>，最终提名名单已确认：<strong class="final-names">{{ finalNomineeNames.join('、') }}</strong>，将进入驱逐投票阶段。</span>
         </div>
-        <div v-if="veto.status === 'used' && veto.usedOnPlayerName" class="veto-saved">
-          拯救: <strong class="highlight">{{ veto.usedOnPlayerName }}</strong>
-          <span v-if="twistInfo?.isBoomerangPendant" class="veto-boomerang">（回旋镖护符：全部被提名者已获救）</span>
+        <section class="veto-task wb-panel" aria-label="当前仪式环节">
+          <header class="veto-task-head">
+            <h2>仪式现场</h2>
+            <span class="veto-phase" role="status">{{ veto?.ceremony?.closingSpoken ? '仪式结束' : veto?.status === 'used' ? '已使用 · 查看后续提名' : veto?.status === 'skipped' ? '未使用 · 等待结束发言' : !veto?.ceremony?.started ? '等待开始' : !veto.ceremony.openingSpoken ? '开场发言' : '等待决定' }}</span>
+          </header>
+          <p v-if="!veto" class="veto-task-note">暂无否决权记录。比赛产生持有者后可开始仪式。</p>
+          <div v-if="veto" class="veto-speech">
+          <div class="cer-actions">
+            <button v-if="!veto.ceremony?.started" class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="startCeremony">▶ 仪式开始（移动到客厅）</button>
+            <template v-else-if="!veto.ceremony?.openingSpoken">
+              <input v-model="ceremonyText" class="cer-input" placeholder="POV 开场发言（留空默认）" />
+              <button class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="speak('opening')">发表开场发言</button>
+            </template>
+            <template v-else-if="veto.status === 'skipped' && !veto.ceremony?.closingSpoken">
+              <input v-model="ceremonyText" class="cer-input" placeholder="结束发言（留空默认：POV仪式结束。）" />
+              <button class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="speak('closing')">发表结束发言</button>
+            </template>
+            <span v-else-if="veto.ceremony?.closingSpoken" class="cer-done">POV 仪式已结束</span>
+            <button v-if="veto.status && veto.status !== 'pending'" class="bb-btn bb-btn-danger veto-undo" :disabled="ceremonyBusy" @click="undoDecision">↩ 撤销 POV 决策</button>
+          </div>
+          </div>
+        <div class="action-section wb-panel">
+          <h3>是否使用否决权</h3>
+          <div class="action-buttons">
+            <button class="bb-btn" :disabled="!veto || veto.status !== 'pending' || !veto.ceremony?.started" @click="showUseModal = true">✅ 使用否决权</button>
+            <button class="bb-btn" :disabled="!veto || veto.status !== 'pending' || !veto.ceremony?.started" @click="showSkipModal = true">⏭️ 不使用否决权</button>
+          </div>
         </div>
+        </section>
+
       </div>
-    </div>
-    <div v-else class="veto-card empty">
-      <p>暂无否决权记录</p>
-    </div>
-
-    <!-- POV 仪式控制 -->
-    <div v-if="veto" class="ceremony-panel">
-      <div class="cer-title">🎤 POV 仪式（将全员移动到客厅）</div>
-      <CeremonyChat room-id="living_room" title="💬 POV 仪式记录（客厅）" empty-text="暂无发言" />
-      <div class="cer-actions">
-        <button v-if="!veto.ceremony?.started" class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="startCeremony">▶ 仪式开始（移动到客厅）</button>
-        <template v-else-if="!veto.ceremony?.openingSpoken">
-          <input v-model="ceremonyText" class="cer-input" placeholder="POV 开场发言（留空默认）" />
-          <button class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="speak('opening')">发表开场发言</button>
-        </template>
-        <template v-else-if="veto.status === 'skipped' && !veto.ceremony?.closingSpoken">
-          <input v-model="ceremonyText" class="cer-input" placeholder="结束发言（留空默认：POV仪式结束。）" />
-          <button class="bb-btn bb-btn-primary" :disabled="ceremonyBusy" @click="speak('closing')">发表结束发言</button>
-        </template>
-        <span v-else-if="veto.ceremony?.closingSpoken" class="cer-done">POV 仪式已结束</span>
-        <button v-if="veto.status && veto.status !== 'pending'" class="bb-btn bb-btn-danger" :disabled="ceremonyBusy" @click="undoDecision">↩ 撤销 POV 决策</button>
-      </div>
-    </div>
-
-    <!-- 当前 HOH 和提名信息 -->
-    <div class="status-panel">
-      <div class="status-row hoh-row">
-        <span class="status-label">👑 当前 HOH</span>
-        <span class="status-value" :class="{ 'no-data': !hoh?.winnerName }">
-          {{ hoh?.winnerName || '暂无' }}
-        </span>
-      </div>
-      <div class="status-row nom-row">
-        <span class="status-label">🎯 被提名人</span>
-        <span class="status-value" :class="{ 'no-data': !nomination?.nomineeNames?.length }">
-          {{ nomination?.nomineeNames?.join('、') || '暂无' }}
-        </span>
-      </div>
-    </div>
-
-    <!-- 否决权已使用：需替换提名 -->
-    <div v-if="veto?.status === 'used' && nomination && nomination.nomineeIds.length < 2" class="replacement-hint">
-      <span v-if="twistInfo?.isBoomerangPendant">🪃 回旋镖护符已触发！提名名单已清空，请前往<a href="javascript:void(0)" @click="$router.push('/games/bigbrother/admin/round/' + $route.params.round + '/replacement-nom')" class="link">替换提名</a>重新提名全部人</span>
-      <span v-else>⚠️ 否决权已使用，请等待房主选择替补提名</span>
-    </div>
-
-    <!-- 否决权已跳过：最终提名已确认 -->
-    <div v-if="veto?.status === 'skipped'" class="final-nomination-confirmed">
-      <span>✅ 否决权<strong>未被使用</strong>，最终提名名单已确认：<strong class="final-names">{{ finalNomineeNames.join('、') }}</strong>，将进入驱逐投票阶段。</span>
+      <aside class="veto-workspace-aside" aria-label="房客名单与仪式记录">
+        <div v-if="veto" class="veto-card">
+          <div class="veto-icon">🛡️</div>
+          <div class="veto-info">
+            <div class="veto-label">否决权持有者</div>
+            <div class="veto-winner-row">
+              <BBAvatar :name="veto.winnerName" :avatar="vetoWinnerAvatar" size="md" />
+              <span class="veto-winner">{{ veto.winnerName }}</span>
+            </div>
+            <div class="veto-status">
+              <template v-if="veto.status === 'pending'">⏳ 待决定</template>
+              <template v-else-if="veto.status === 'used'">✅ 已使用</template>
+              <template v-else-if="veto.status === 'skipped'">⏭️ 已跳过</template>
+              <template v-else>{{ veto.used ? '✅ 已使用' : '⏳ 未使用' }}</template>
+            </div>
+            <div v-if="veto.status === 'used' && veto.usedOnPlayerName" class="veto-saved">
+              拯救: <strong class="highlight">{{ veto.usedOnPlayerName }}</strong>
+              <span v-if="twistInfo?.isBoomerangPendant" class="veto-boomerang">（回旋镖护符：全部被提名者已获救）</span>
+            </div>
+          </div>
+        </div>
+        <div v-else class="veto-card empty">
+          <p>暂无否决权记录</p>
+        </div>
+        <div class="status-panel wb-panel">
+          <div class="status-row hoh-row">
+            <span class="status-label">👑 当前 HOH</span>
+            <span class="status-value" :class="{ 'no-data': !hoh?.winnerName }">
+              {{ hoh?.winnerName || '暂无' }}
+            </span>
+          </div>
+          <div class="status-row nom-row">
+            <span class="status-label">🎯 被提名人</span>
+            <span class="status-value" :class="{ 'no-data': !nomination?.nomineeNames?.length }">
+              {{ nomination?.nomineeNames?.join('、') || '暂无' }}
+            </span>
+          </div>
+        </div>
+        <details v-if="veto" class="veto-archive wb-panel" :open="!veto.ceremony?.closingSpoken">
+          <summary>客厅发言记录</summary>
+          <CeremonyChat room-id="living_room" title="💬 POV 仪式记录（客厅）" empty-text="暂无发言" />
+        </details>
+      </aside>
     </div>
 
-    <div class="action-section">
-      <h3>操作 - 否决权使用</h3>
-      <div class="action-buttons">
-        <button class="bb-btn" :disabled="!veto || veto.status !== 'pending' || !veto.ceremony?.started" @click="showUseModal = true">✅ 使用否决权</button>
-        <button class="bb-btn" :disabled="!veto || veto.status !== 'pending' || !veto.ceremony?.started" @click="showSkipModal = true">⏭️ 不使用否决权</button>
-      </div>
-    </div>
-
-    <!-- 不使用否决权确认弹窗 -->
     <Teleport to="body">
       <div v-if="showSkipModal" class="bb-modal-overlay" @click.self="closeSkipModal">
         <div class="bb-modal skip-modal">
@@ -287,7 +297,9 @@ function closeSkipModal() {
   skipConfirmed.value = false
 }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/veto', '/hoh', '/nomination', '/round-twist', '/season/set', '/season/next', '/season/reset'
+)
 onMounted(fetchData)
 </script>
 

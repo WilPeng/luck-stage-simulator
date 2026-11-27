@@ -1,10 +1,7 @@
 <template>
   <aside v-if="items.length" class="round-twists" aria-label="本轮变数">
     <article v-for="twist in items" :key="twist.id">
-      <h3>{{ twist.icon }} {{ twist.name }}</h3>
-      <p>{{ twist.description }}</p>
-      <router-link v-if="gameTwists.has(twist.id) && !route.path.endsWith('/twist-challenges')"
-        :to="'/games/bigbrother/' + (state.canSetSafety ? 'admin' : 'player') + '/twist-challenges'">前往变数挑战 · 小游戏 PK</router-link>
+      <h3>赛制操作</h3>
       <BranchTwistContest v-if="twist.id === 'battle_of_block' || twist.id === 'split_house'"
         :mode="twist.id" :branch="state.branch" :players="state.players" :me="state.me"
         :admin="state.canSetSafety" :busy="busy" @action="branchAction => save(twist.id, { branchAction })" />
@@ -151,7 +148,6 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
 import BranchTwistContest from './BranchTwistContest.vue'
 import { doRequest, bbUseVeto, bbSkipVeto } from '../../services/bbApi'
 import { useBbRefresh } from '../../composables/useBbRefresh'
@@ -193,9 +189,7 @@ interface RoundTwistState {
   canTransfer: boolean
   canDecide: boolean
 }
-const route = useRoute()
-const gameTwists = new Set(['safety_suite','battle_back','costly_return','battle_of_block','split_house'])
-const props = defineProps<{ currentRound: number; currentStage: string }>()
+const props = defineProps<{ currentRound: number; currentStage: string; twistId: string }>()
 const state = ref<RoundTwistState>({ ids: [], round: 0, players: [], me: '', canPrepare: false, canSetSafety: false, canSetReserve: false, nomineeIds: [], canTransfer: false, canDecide: false })
 const safe = ref('')
 const first = ref('')
@@ -215,11 +209,8 @@ function applyCoup() {
 }
 const busy = ref(false)
 const error = ref('')
-const emit = defineEmits<{ exclusive: [active: boolean] }>()
-const items = computed(() => getAllTwistDefs().filter(t => t.group === 2 && state.value.ids.includes(t.id)
-  && (t.affectsStages.some(stage => stage === props.currentStage) || (t.id === 'save_vote' && props.currentStage === 'nomination'))))
-watch(() => items.value.some(item => (item.id === 'split_house' || item.id === 'battle_of_block')
-  && props.currentStage === 'hoh_competition'), active => emit('exclusive', active), { immediate: true })
+const items = computed(() => getAllTwistDefs().filter(t => t.group === 2 && t.id === props.twistId
+  && state.value.round === props.currentRound && state.value.ids.includes(t.id)))
 let request = 0
 async function reload() {
   const ticket = ++request
@@ -255,14 +246,16 @@ function rewind() {
 function decide(use: boolean) {
   return perform(() => use ? bbUseVeto(nominee.value, name(nominee.value)) : bbSkipVeto())
 }
-watch(() => [props.currentRound, props.currentStage], () => {
+watch(() => [props.currentRound, props.currentStage, props.twistId], () => {
   safe.value = first.value = second.value = partner.value = trustee.value = nominee.value = error.value = ''
   volunteer.value = appealAnswer.value = ''
   revive.value = tieSafe.value = coupHolder.value = ''
   coupPairs.value = [{ out: '', in: '' }, { out: '', in: '' }]
   reload()
 }, { immediate: true })
-useBbRefresh(reload)
+useBbRefresh(reload,
+  '/round-twist', '/hoh', '/nomination', '/veto', '/eviction/start-vote', '/eviction/result', '/eviction/night/start', '/houseguests', '/season/config', '/season/twists', '/season/reset'
+)
 </script>
 
 <style scoped>

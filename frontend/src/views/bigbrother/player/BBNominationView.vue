@@ -1,35 +1,51 @@
 <template>
   <div class="bb-nomination-player">
-    <div class="page-header">
-      <h1>提名</h1>
-      <span class="round-tag">第 {{ roundNum }} 周</span>
-      <span v-if="isHistory" class="history-tag">历史记录</span>
-      <span v-else-if="isFuture" class="future-tag">未开始</span>
-    </div>
+    <header class="nomination-masthead">
+      <div>
+        <span class="nomination-round">第 {{ roundNum }} 周</span>
+        <h1>提名仪式</h1>
+      </div>
+      <div class="nomination-badges">
+        <span v-if="isHistory">历史记录</span>
+        <span v-else-if="isFuture">未开始</span>
+        <span v-else>{{ isDirectDemocracy ? '直接民主' : '钥匙仪式' }}</span>
+      </div>
+    </header>
 
     <!-- 已有提名结果（钥匙仪式全部揭晓后才显示） -->
     <section v-if="nomination && ceremonyDone" class="nomination-card" aria-label="本轮提名结果">
-      <h2>本轮提名结果</h2>
-      <div class="hoh-info">房主：{{ nomination.hohName }}</div>
-      <div class="nominees">
-        <div v-for="(id, i) in (nomination.nomineeIds || [])" :key="id" class="nominee-item"
-          :class="{ warned: id === authStore.currentUser?.id }">
-          <BBAvatar :name="nomination.nomineeNames?.[i] || id" :avatar="avatarById(id)" size="sm" />
-          <span class="nominee-name">{{ nomination.nomineeNames?.[i] }}</span>
-          <span v-if="id === authStore.currentUser?.id" class="me-badge">我</span>
-          <span class="nominee-order">被提名人 {{ i + 1 }}</span>
-        </div>
+      <div class="nomination-card-head">
+        <h2>本轮提名结果</h2>
+        <p class="hoh-info">房主：{{ nomination.hohName }}</p>
       </div>
+      <ol class="nominees">
+        <li v-for="(id, i) in (nomination.nomineeIds || [])" :key="id" class="nominee-item"
+          :class="{ warned: id === authStore.currentUser?.id }">
+          <BBAvatar :name="nomination.nomineeNames?.[i] || id" :avatar="avatarById(id)" size="md" />
+          <div class="nominee-label">
+            <span class="nominee-name">{{ nomination.nomineeNames?.[i] }}</span>
+            <span class="nominee-order">被提名人 {{ i + 1 }}</span>
+          </div>
+          <span v-if="id === authStore.currentUser?.id" class="me-badge">我</span>
+        </li>
+      </ol>
       <div v-if="nomination.replacementNomineeName" class="replacement">
-        替换提名: <strong>{{ nomination.replacementNomineeName }}</strong>
+        替换提名：<strong>{{ nomination.replacementNomineeName }}</strong>
       </div>
       <div v-if="nomination.vetoUsed" class="veto-note">否决权已被使用</div>
     </section>
 
     <!-- 直接民主模式：所有玩家参与全员投票 -->
     <section v-if="isCurrentRound && isNominationStage && isDirectDemocracy" class="nomination-ballot">
-      <h2>全员投票</h2>
-      <div class="democracy-banner">本轮由投票决定提名。请为每位房客选择投票对象，房主（HOH）的票计两票。</div>
+      <header class="nomination-card-head">
+        <div>
+          <h2>全员投票</h2>
+          <p class="nomination-ballot-copy">为每位房客选择投票对象。房主（HOH）的票计两票。</p>
+        </div>
+        <span v-if="activeList.length" class="nomination-vote-progress" role="status">
+          已填写 {{ activeList.filter(h => democracyVotes[h.id]).length }} / {{ activeList.length }} 票
+        </span>
+      </header>
       <div v-if="activeList.length > 0" class="democracy-vote-section">
         <div class="democracy-grid">
           <div v-for="h in activeList" :key="h.id" class="democracy-row">
@@ -43,9 +59,11 @@
             </select>
           </div>
         </div>
-        <button class="bb-btn" @click="submitDemocracyVotes" :disabled="submitting">
-          {{ submitting ? '提交中...' : '提交我的投票' }}
-        </button>
+        <div class="nomination-ballot-footer">
+          <button class="bb-btn" @click="submitDemocracyVotes" :disabled="submitting">
+            {{ submitting ? '提交中...' : '提交我的投票' }}
+          </button>
+        </div>
       </div>
       <div v-else class="empty-hint">暂无活跃房客可供投票</div>
     </section>
@@ -79,6 +97,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
@@ -194,10 +213,8 @@ async function onKeySpeech(payload: { phase: 'opening' | 'closing'; text?: strin
 async function refreshNomination() {
   try {
     const nom: any = await bbGetCurrentNomination()
-    if (nom) {
-      nomination.value = nom
-      keyCeremony.value = nom.keyCeremony || null
-    }
+    nomination.value = nom
+    keyCeremony.value = nom?.keyCeremony || null
   } catch {}
   // 状态确认完成（含失败也标记，避免一直空白）；仅在成功后才允许展示
   nominationLoaded.value = true
@@ -257,69 +274,54 @@ async function submitDemocracyVotes() {
   }
 }
 
-onMounted(async () => {
+async function loadData() {
+  const roundKey = `round-${roundNum.value}`
   try {
     const hohHistory = await bbGetHohHistory()
-    const roundKey = `round-${roundNum.value}`
     currentHoh.value = hohHistory.find(h => h.roundId === roundKey) || null
   } catch {}
   try {
     const config = await bbGetSeasonConfig()
     roundConfigs.value = config.roundConfigs || []
   } catch {}
-  try {
-    const history = await bbGetNominationHistory()
-    const roundKey = `round-${roundNum.value}`
-    nomination.value = history.find(h => h.roundId === roundKey || h.roundId === `round-${roundNum.value}`) || null
-  } catch {}
   if (isCurrentRound.value) {
     try {
       const list = await bbGetActiveHouseguests()
       activeList.value = list
       const map: Record<string, string> = {}
-      list.forEach(h => { map[h.id] = h.name; democracyVotes.value[h.id] = '' })
+      list.forEach(h => { map[h.id] = h.name; democracyVotes.value[h.id] ??= '' })
       activeMap.value = map
     } catch {}
     await refreshNomination()
+  } else {
+    try {
+      const history = await bbGetNominationHistory()
+      nomination.value = history.find(h => h.roundId === roundKey) || null
+      keyCeremony.value = nomination.value?.keyCeremony || null
+    } catch {}
   }
-})
+}
+
+useBbRefresh(loadData,
+  '/hoh', '/nomination/set', '/nomination/undo', '/nomination/replace', '/nomination/vote-nominees',
+  '/nomination/bbbb-winner', '/veto/use', '/round-twist', '/houseguests',
+  '/season/set', '/season/next', '/season/reset', '/season/config', '/season/twists'
+)
+onMounted(loadData)
 </script>
 
 <style scoped>
 .bb-nomination-player { max-width: 1000px; margin: 0 auto; }
-.page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.page-header h1 { font-size: 24px; font-weight: 600; color: #ece7fb; margin: 0; }
-.round-tag { background: #b39bff22; color: #b39bff; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #b39bff44; }
-.history-tag { background: #88888822; color: #a99bd0; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #88888844; }
-.future-tag { background: #44444422; color: #6b5f92; padding: 2px 12px; border-radius: 10px; font-size: 12px; border: 1px solid #44444444; }
 
 
 .bb-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #e6c988, #ff8800); border: none; border-radius: 8px; color: #000; font-size: 16px; font-weight: 600; cursor: pointer; }
 .bb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.nomination-card { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #e6c988; border-radius: 12px; padding: 24px; margin-top: 20px; }
-.hoh-info { font-size: 14px; color: #a99bd0; margin-bottom: 16px; }
-.nominees { display: flex; gap: 16px; }
-.nominee-item { flex: 1; background: #e6c98808; border: 1px solid #e6c98822; border-radius: 8px; padding: 16px; text-align: center; position: relative; }
-.nominee-item.warned { border-color: #ff4444; background: #ff444408; }
-.nominee-name { display: block; font-size: 18px; font-weight: 600; color: #fff; }
-.me-badge { position: absolute; top: 8px; right: 8px; background: #ff4444; color: #fff; padding: 1px 8px; border-radius: 8px; font-size: 10px; }
-.nominee-order { display: block; font-size: 12px; color: #8f83b8; margin-top: 4px; }
-.replacement { margin-top: 16px; padding: 12px; background: #e6c98808; border-radius: 8px; font-size: 14px; color: #e6c988; }
-.veto-note { margin-top: 12px; color: #b39bff; font-size: 13px; }
-.empty-card { background: #1b1130; border: 1px solid #4a3d6e; border-radius: 12px; padding: 40px; text-align: center; margin-top: 20px; }
-.empty-card p { color: #6b5f92; }
 
 .success-toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #b39bff; color: #000; padding: 12px 24px; border-radius: 8px; font-weight: 600; }
 
 /* 直接民主样式 */
-.democracy-banner { background: linear-gradient(135deg, #3498db22, #2980b922); border: 1px solid #3498db; border-radius: 8px; padding: 12px; text-align: center; font-size: 14px; color: #3498db; margin-bottom: 16px; line-height: 1.6; }
-.democracy-vote-section { background: linear-gradient(135deg, #1b1130, #2a1a4a); border: 1px solid #3498db44; border-radius: 12px; padding: 20px; }
-.democracy-grid { display: flex; flex-direction: column; gap: 8px; }
-.democracy-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #2a1a4a; border-radius: 6px; }
-.democracy-voter { flex: 1; font-size: 14px; color: #cfc4ea; }
 .bb-select-sm { padding: 6px 10px; background: #1b1130; border: 1px solid #4a3d6e; border-radius: 6px; color: #fff; font-size: 12px; width: 180px; }
 .bb-select-sm:focus { border-color: #3498db; outline: none; }
 .bb-select-sm option { background: #1b1130; color: #fff; }
-.empty-hint { text-align: center; color: #6b5f92; font-size: 14px; padding: 20px; }
 </style>

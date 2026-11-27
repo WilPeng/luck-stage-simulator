@@ -5,8 +5,8 @@ const { randomInt } = require('crypto')
 const router = require('express').Router()
 const { auth, requireAdmin } = require('../../../middleware/auth')
 const { getCollection } = require('../../../config/db')
-const { getCurrentSeason, getTwistsForRound, logAction, BB_ACTION_TYPES } = require('../helpers')
-const { loadRoundTwist, writeRoundTwist } = require('../roundTwists')
+const { getCurrentSeason, getTwistsForRound, getTwistDef, logAction, BB_ACTION_TYPES } = require('../helpers')
+const { loadRoundTwist, writeRoundTwist, enabled, twistStageStatus, isRevivalEligible } = require('../roundTwists')
 
 const gameId = 'bigbrother'
 
@@ -97,7 +97,23 @@ router.get('/challenges', auth, async (req, res, next) => {
   try {
     const ctx = await context()
     const admin = req.user.role === 'admin'
-    const slots = ctx ? challengeSlots(ctx).flatMap(slot => {
+    const scoped = req.query.round !== undefined || req.query.twist !== undefined
+    const week = scoped ? Number(req.query.round) : ctx?.season.currentRound
+    const twist = scoped && typeof req.query.twist === 'string' ? getTwistDef(req.query.twist) : null
+    if (scoped && (!ctx || !Number.isSafeInteger(week) || week < 1 || !twist || twist.id === 'bbbb'
+      || week >= (ctx.season.final3Round || ctx.season.totalRounds + 1) || !enabled(ctx.season, twist.id, week))) {
+      return res.status(404).json({ success: false, error: '该周没有启用此赛制' })
+    }
+    const status = scoped ? twistStageStatus(ctx.season, week, twist) : null
+    if (scoped && !admin) {
+      const guest = await getCollection('BBHouseguest').findOne({ gameId, id: req.user.userId, role: 'houseguest' })
+      if (!guest || (['evicted', 'jury', 'walked'].includes(guest.status) &&
+        (week !== ctx.season.currentRound || status !== 'current' || !isRevivalEligible(twist.id, guest.status)))) {
+        return res.status(403).json({ success: false, error: '你没有本周赛制的查看资格' })
+      }
+    }
+    const live = ctx && week === ctx.season.currentRound
+    const slots = live ? challengeSlots(ctx).filter(slot => !scoped || slot.twist === twist.id).flatMap(slot => {
       const { room, entry } = getChallengeRoom(req, ctx, slot)
       const eligible = slot.roster.some(p => p.id === req.user.userId)
       const inRoom = room?.participants.some(p => p.playerId === req.user.userId)
@@ -114,7 +130,7 @@ router.get('/challenges', auth, async (req, res, next) => {
       }]
     }) : []
     res.json({ success: true, data: {
-      round: ctx?.season.currentRound, gameChoices: games, admin, slots
+      round: week, twist, status, live: Boolean(live), currentStage: ctx?.season.currentStage, gameChoices: games, admin, slots
     } })
   } catch (error) { next(error) }
 })
@@ -123,8 +139,8 @@ router.post('/challenges', auth, requireAdmin, async (req, res, next) => {
   const fail = message => res.status(409).json({ success: false, error: message })
   try {
     const ctx = await context()
-    const { round, key, action, minigameId } = req.body || {}
-    const slot = ctx && round === ctx.season.currentRound && challengeSlots(ctx).find(s => s.key === key)
+    const { round, key, action, minigameId, twist } = req.body || {}
+    const slot = ctx && round === ctx.season.currentRound && challengeSlots(ctx).find(s => s.key === key && (!twist || s.twist === twist))
     if (!slot) return fail('当前挑战已变更，请刷新')
     const { namespace, room, entry } = getChallengeRoom(req, ctx, slot)
     if (!namespace) return fail('小游戏服务未启动')
@@ -174,7 +190,7 @@ router.post('/', auth, async (req, res, next) => {
     let confirmedAction = null
     if (challengeKey) {
       if (req.user.role !== 'admin') return fail('只有管理员可确认小游戏结果', 403)
-      const slot = challengeSlots(ctx).find(s => s.key === challengeKey)
+      const slot = challengeSlots(ctx).find(s => s.key === challengeKey && (!twist || s.twist === twist))
       if (!slot) return fail('该挑战不再接受结果', 409)
       const { room } = getChallengeRoom(req, ctx, slot)
       const winner = room?.winner?.playerId

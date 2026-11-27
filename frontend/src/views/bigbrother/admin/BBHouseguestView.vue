@@ -1,96 +1,102 @@
 <template>
-  <div class="bb-houseguests">
-    <div class="page-header">
-      <h1>房客管理</h1>
-      <div class="header-actions">
-        <button class="bb-btn" @click="exportCsv">📤 导出表格</button>
-        <label class="bb-btn upload-btn">📥 导入表格
-          <input type="file" accept=".csv,text/csv" hidden @change="onImportFile" />
-        </label>
-        <button class="bb-btn bb-btn-primary" @click="showCreateModal = true">+ 新建房客</button>
+  <div class="bb-houseguests wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>房客管理</h1>
       </div>
-    </div>
+      <div class="wb-page-tools">
+        <div class="header-actions">
+          <button class="bb-btn" @click="exportCsv">📤 导出表格</button>
+          <label class="bb-btn upload-btn">📥 导入表格
+            <input type="file" accept=".csv,text/csv" hidden @change="onImportFile" />
+          </label>
+          <button class="bb-btn bb-btn-primary" @click="showCreateModal = true">+ 新建房客</button>
+        </div>
+      </div>
+    </header>
 
-    <div class="toolbar">
-      <input v-model="searchKeyword" class="bb-input" aria-label="搜索房客名称或账号" placeholder="搜索房客名称/账号..." @input="onSearch" />
-      <select v-model="roleFilter" class="bb-select" aria-label="按身份筛选" @change="onRoleChange">
-        <option value="">全部身份</option>
-        <option value="houseguest">房客</option>
-        <option value="admin">管理员</option>
-      </select>
-      <select v-model="statusFilter" class="bb-select" aria-label="按状态筛选" @change="fetchData">
-        <option value="">全部状态</option>
-        <option value="active">活跃</option>
-        <option value="evicted">已淘汰</option>
-        <option value="jury">陪审团</option>
-        <option value="walked">退赛</option>
-      </select>
-      <button v-if="selectedIds.length" class="bb-btn bb-btn-danger" @click="confirmBatchDelete">🗑 批量删除（{{ selectedIds.length }}）</button>
-    </div>
+    <div class="wb-data-board">
+      <div class="toolbar">
+        <input v-model="searchKeyword" class="bb-input" aria-label="搜索房客名称或账号" placeholder="搜索房客名称/账号..." @input="onSearch" />
+        <select v-model="roleFilter" class="bb-select" aria-label="按身份筛选" @change="onRoleChange">
+          <option value="">全部身份</option>
+          <option value="houseguest">房客</option>
+          <option value="admin">管理员</option>
+        </select>
+        <select v-model="statusFilter" class="bb-select" aria-label="按状态筛选" @change="fetchData">
+          <option value="">全部状态</option>
+          <option value="active">活跃</option>
+          <option value="evicted">已淘汰</option>
+          <option value="jury">陪审团</option>
+          <option value="walked">退赛</option>
+        </select>
+        <button v-if="selectedIds.length" class="bb-btn bb-btn-danger" @click="confirmBatchDelete">🗑 批量删除（{{ selectedIds.length }}）</button>
+      </div>
 
-    <div class="table-container">
-      <table class="bb-table">
-        <thead>
-          <tr>
-            <th class="check-col"><input type="checkbox" :checked="allSelected" @change="toggleAll" /></th>
-            <th>头像</th>
-            <th>名称</th>
-            <th>账号</th>
-            <th>密码</th>
-            <th>状态</th>
-            <th>Have-Not</th>
-            <th>在线</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="h in list" :key="h.id">
-            <td class="check-col">
-              <input type="checkbox" :value="h.id" v-model="selectedIds" :disabled="h.isSuperAdmin" />
-            </td>
-            <td><BBAvatar :name="h.name" :avatar="h.avatar" size="sm" /></td>
-            <td class="name-cell">{{ h.name }}</td>
-            <td><code class="code-tag">{{ h.username }}</code></td>
-            <td>
-              <code v-if="h.password" class="code-tag">{{ h.password }}</code>
-              <span v-else class="pwd-hidden">不可查看（请重置）</span>
-            </td>
-            <td>
-              <span v-if="h.isSuperAdmin" class="status-tag super">总管理员</span>
-              <span v-else class="status-tag" :class="h.role === 'admin' ? 'admin' : h.status">
-                {{ h.role === 'admin' ? '管理员' : statusText(h.status) }}
-              </span>
-            </td>
-            <td>
-              <span v-if="h.isHaveNot" class="havenot-tag">🥶 是</span>
-              <button v-if="h.role !== 'admin' && h.status === 'active'" class="bb-btn bb-btn-xs" @click="toggleHaveNot(h)">
-                {{ h.isHaveNot ? '取消' : '设为贫民' }}
-              </button>
-            </td>
-            <td>
-              <span class="online-status" :class="{ online: h.isOnline }">
-                <span class="online-dot"></span>{{ h.isOnline ? '在线' : '离线' }}
-              </span>
-            </td>
-            <td>
-              <div class="actions">
-                <button v-if="h.role !== 'admin' && (h.status === 'active' || h.status === 'f2')" class="bb-btn bb-btn-xs bb-btn-walk" @click="openWalkModal(h)">退赛</button>
-                <button v-if="h.role !== 'admin' && h.status === 'walked'" class="bb-btn bb-btn-xs" @click="undoWalk(h)">撤销退赛</button>
-                <button class="bb-btn bb-btn-xs" @click="editHouseguest(h)">编辑</button>
-                <button v-if="h.role === 'admin' && !h.isSuperAdmin" class="bb-btn bb-btn-xs" @click="setSuperAdmin(h)">设为总管理员</button>
-                <button v-if="!h.isSuperAdmin" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="list.length === 0"><td colspan="9" class="empty-cell">暂无数据</td></tr>
-        </tbody>
-      </table>
-    </div>
+      <div class="table-container">
+        <table class="bb-table">
+          <thead>
+            <tr>
+              <th class="check-col"><input type="checkbox" :checked="allSelected" @change="toggleAll" /></th>
+              <th>头像</th>
+              <th>名称</th>
+              <th>账号</th>
+              <th>密码</th>
+              <th>状态</th>
+              <th>Have-Not</th>
+              <th>在线</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="h in list" :key="h.id">
+              <td class="check-col">
+                <input type="checkbox" :value="h.id" v-model="selectedIds" :disabled="h.isSuperAdmin" />
+              </td>
+              <td><BBAvatar :name="h.name" :avatar="h.avatar" size="sm" /></td>
+              <td class="name-cell">{{ h.name }}</td>
+              <td><code class="code-tag">{{ h.username }}</code></td>
+              <td>
+                <code v-if="h.password" class="code-tag">{{ h.password }}</code>
+                <span v-else class="pwd-hidden">不可查看（请重置）</span>
+              </td>
+              <td>
+                <span v-if="h.isSuperAdmin" class="status-tag super">总管理员</span>
+                <span v-else class="status-tag" :class="h.role === 'admin' ? 'admin' : h.status">
+                  {{ h.role === 'admin' ? '管理员' : statusText(h.status) }}
+                </span>
+              </td>
+              <td>
+                <span v-if="h.isHaveNot" class="havenot-tag">🥶 是</span>
+                <button v-if="h.role !== 'admin' && h.status === 'active'" class="bb-btn bb-btn-xs" @click="toggleHaveNot(h)">
+                  {{ h.isHaveNot ? '取消' : '设为贫民' }}
+                </button>
+              </td>
+              <td>
+                <span class="online-status" :class="{ online: h.isOnline }">
+                  <span class="online-dot"></span>{{ h.isOnline ? '在线' : '离线' }}
+                </span>
+              </td>
+              <td>
+                <div class="actions">
+                  <button v-if="h.role !== 'admin' && (h.status === 'active' || h.status === 'f2')" class="bb-btn bb-btn-xs bb-btn-walk" @click="openWalkModal(h)">退赛</button>
+                  <button v-if="h.role !== 'admin' && h.status === 'walked'" class="bb-btn bb-btn-xs" @click="undoWalk(h)">撤销退赛</button>
+                  <button class="bb-btn bb-btn-xs" @click="editHouseguest(h)">编辑</button>
+                  <button v-if="h.role === 'admin' && !h.isSuperAdmin" class="bb-btn bb-btn-xs" @click="setSuperAdmin(h)">设为总管理员</button>
+                  <button v-if="!h.isSuperAdmin" class="bb-btn bb-btn-xs bb-btn-danger" @click="confirmDelete(h)">删除</button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="list.length === 0"><td colspan="9" class="empty-cell">暂无数据</td></tr>
+          </tbody>
+        </table>
+      </div>
 
-    <div v-if="totalPages > 1" class="pagination">
-      <button class="bb-btn bb-btn-xs" :disabled="page <= 1" @click="changePage(page - 1)">上一页</button>
-      <span class="page-info">{{ page }} / {{ totalPages }}</span>
-      <button class="bb-btn bb-btn-xs" :disabled="page >= totalPages" @click="changePage(page + 1)">下一页</button>
+      <div v-if="totalPages > 1" class="pagination">
+        <button class="bb-btn bb-btn-xs" :disabled="page <= 1" @click="changePage(page - 1)">上一页</button>
+        <span class="page-info">{{ page }} / {{ totalPages }}</span>
+        <button class="bb-btn bb-btn-xs" :disabled="page >= totalPages" @click="changePage(page + 1)">下一页</button>
+      </div>
     </div>
 
     <!-- 新建弹窗 -->
@@ -719,7 +725,9 @@ async function onImportFile(e: Event) {
   }
 }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/houseguests', '/hoh/assign', '/eviction/result', '/eviction/night/start', '/eviction/restore', '/round-twist', '/season/reset', '/season/endgame/fhoh-pick', '/season/endgame/champion-result', '/season/endgame/champion-reveal/next'
+)
 let onlineTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   fetchData()

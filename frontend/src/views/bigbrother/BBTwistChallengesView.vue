@@ -1,13 +1,23 @@
 <template>
-  <div class="challenge-page">
-    <header class="page-header"><div><h1>变数挑战</h1><p v-if="data">第 {{ data.round }} 周</p></div>
+  <div class="challenge-page wb-page">
+    <header class="page-header wb-header"><div><h1>{{ title }}</h1><p>第 {{ week }} 周<span v-if="data"> · {{ phaseLabels[data.status] }}</span></p></div>
       <button type="button" @click="load">刷新</button>
     </header>
-    <p v-if="data?.admin">上方的本轮变数面板可以手动录入。站内比赛结束后，点击「采用比赛结果」即可推进对应规则。</p>
+    <p v-if="data">{{ data.twist.description }}</p>
+    <template v-if="data?.live">
+      <RoundTwistPanel v-if="data.status === 'current'" :key="`${week}/${twistId}/${panelVersion}`"
+        :current-round="week" :current-stage="data.currentStage" :twist-id="twistId" />
+      <nav v-if="stageLinks.length" aria-label="关联赛程">
+        <router-link v-for="link in stageLinks" :key="link.path" :to="link.path">{{ link.name }}</router-link>
+      </nav>
+    </template>
+    <p v-if="data?.admin && data.slots.length">小游戏结束后，可点击「采用比赛结果」，也可以在赛制操作中手动录入。</p>
     <p v-if="error" role="alert" class="error">{{ error }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
-    <p v-if="data && !data.slots.length">当前没有可查看的变数比赛。</p>
-    <article v-for="slot in data?.slots" :key="slot.key">
+    <p v-if="data?.status === 'future'">本周赛制尚未进入操作阶段。</p>
+    <p v-else-if="data?.status === 'completed'">该赛制的操作阶段已结束。</p>
+    <p v-else-if="data && gameTwists.has(twistId) && !data.slots.length">当前没有可进入的比赛。下一场开放后会显示在这里。</p>
+    <article class="wb-panel wb-challenge-slot" v-for="slot in data?.slots" :key="slot.key">
       <h2>{{ slot.title }}</h2>
       <p>参赛名单：{{ slot.roster.map(p => p.name).join('、') || '暂无' }}</p>
       <p v-if="slot.room && !slot.room.spectatorState">{{ data?.gameChoices[slot.room.minigameId] }} · {{ statusLabels[slot.room.status] || slot.room.status }}</p>
@@ -52,7 +62,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, type Component } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, type Component } from 'vue'
+import { useRoute } from 'vue-router'
+import { getAllTwistDefs, BB_STAGE_NAME, type BBTwistDef } from '../../types/bigbrother'
+import RoundTwistPanel from '../../components/bigbrother/RoundTwistPanel.vue'
 import { doRequest } from '../../services/bbApi'
 import { useBbAuthStore } from '../../stores/bbAuthStore'
 import MinigameLobby from '../../components/bigbrother/MinigameLobby.vue'
@@ -72,12 +85,39 @@ interface Room {
   spectatorState?: MinigameSpectatorPlayer[]
 }
 interface Slot { key:string; title:string; roster:Player[]; room:Room|null; interrupted:boolean }
-interface ChallengePage { round:number; admin:boolean; gameChoices:Record<string,string>; slots:Slot[] }
+interface ChallengePage {
+  round: number; admin: boolean; gameChoices: Record<string,string>; slots: Slot[]
+  twist: BBTwistDef; live: boolean; status: 'future'|'current'|'completed'; currentStage: string
+}
+const props = defineProps<{ twistId: string }>()
+const route = useRoute()
+const week = computed(() => Number(route.params.round))
+const title = computed(() => getAllTwistDefs().find(t => t.id === props.twistId)?.name || '赛制')
+const phaseLabels = { future:'未开始', current:'进行中', completed:'已结束' }
+const gameTwists = new Set(['safety_suite','battle_back','costly_return','battle_of_block','split_house'])
+const stageSlugs: Record<string,string> = {
+  hoh_competition:'hoh', nomination:'nomination', veto_competition:'veto-competition', veto_ceremony:'veto-ceremony',
+  replacement_nom:'replacement-nom', eviction_vote:'eviction-vote', eviction:'eviction'
+}
 const components:Record<string,Component> = { 'quick-math':QuickMathGame,'dice-duel':DiceDuelGame,'reaction':ReactionGame,'swing-pointer':SwingPointerGame }
 const statusLabels:Record<string,string> = { waiting:'等待选手',countdown:'倒计时',playing:'进行中',paused:'已暂停',finished:'已结束' }
 const auth = useBbAuthStore()
 const myId = computed(() => auth.currentUser?.id || '')
 const data = ref<ChallengePage|null>(null)
+const panelVersion = ref(0)
+const stageLinks = computed(() => {
+  const current = data.value
+  if (!current) return []
+  const id = current.twist.id
+  if (gameTwists.has(id) && current.slots.length) return []
+  if (['battle_of_block','split_house'].includes(id) && current.currentStage === 'hoh_competition') return []
+  const slug = stageSlugs[current.currentStage]
+  if (!slug || (!gameTwists.has(id) && !current.twist.affectsStages.some(stage => stage === current.currentStage))) return []
+  return [{
+    name: `前往${BB_STAGE_NAME[current.currentStage as keyof typeof BB_STAGE_NAME] || current.currentStage}`,
+    path: `/games/bigbrother/${current.admin ? 'admin' : 'player'}/round/${current.round}/${slug}`
+  }]
+})
 const choices = ref<Record<string,string>>({})
 const observing = ref('')
 const error = ref('')
@@ -88,10 +128,13 @@ let request = 0
 async function load() {
   const version = ++request
   try {
-    const result = await doRequest<ChallengePage>('/round-twist/challenges')
-    if(version === request) data.value = result
+    const result = await doRequest<ChallengePage>(`/round-twist/challenges?round=${week.value}&twist=${encodeURIComponent(props.twistId)}`)
+    if (version === request) { data.value = result; if (error.value === '该周没有启用此赛制') error.value = '' }
   } catch(e) {
-    if(version === request && !data.value) error.value = e instanceof Error ? e.message : '加载失败'
+    if (version === request && (!data.value || [403, 404].includes((e as {status?: number})?.status || 0))) {
+      data.value = null
+      error.value = e instanceof Error ? e.message : '加载失败'
+    }
   }
 }
 async function send(path:string, payload:Record<string,unknown>) {
@@ -99,8 +142,11 @@ async function send(path:string, payload:Record<string,unknown>) {
   busy.value = true
   error.value = notice.value = ''
   try {
-    await doRequest(path, {method:'POST',body:JSON.stringify({round:data.value?.round,...payload})})
-    if(payload.challengeKey) notice.value = '已采用小游戏结果，本轮赛制已更新。'
+    await doRequest(path, {method:'POST',body:JSON.stringify({round:week.value,twist:props.twistId,...payload})})
+    if (payload.challengeKey) {
+      panelVersion.value++
+      notice.value = '已采用小游戏结果，本轮赛制已更新。'
+    }
     await load()
   } catch(e) {
     error.value = e instanceof Error ? e.message : '操作失败'
@@ -112,7 +158,13 @@ function operate(slot:Slot, action:string) {
 function applyResult(slot:Slot) {
   return send('/round-twist', {challengeKey:slot.key})
 }
-onMounted(() => { load(); timer = setInterval(load, 1800) })
+watch(() => [week.value, props.twistId], () => {
+  data.value = null
+  choices.value = {}
+  observing.value = error.value = notice.value = ''
+  load()
+}, { immediate: true })
+onMounted(() => { timer = setInterval(() => { if (!data.value || data.value.live) load() }, 1800) })
 onUnmounted(() => { clearInterval(timer); request++ })
 </script>
 

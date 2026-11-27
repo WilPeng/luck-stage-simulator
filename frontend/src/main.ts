@@ -8,6 +8,7 @@ import './assets/styles/global.scss'
 import 'tdesign-vue-next/es/style/index.css'
 import './assets/styles/bb-theme.css'
 import './assets/styles/bb-workspace.css'
+import './assets/styles/bb-workbench.css'
 
 // 性能优化：页面切到后台时跳过 setInterval 回调，减少无谓的轮询请求与计算。
 // 各页面自行清理定时器不受影响（返回的 id 仍可被 clearInterval 清除）。

@@ -25,7 +25,7 @@
       <div class="fog"></div>
     </div>
 
-    <div class="login-wrap">
+    <div class="login-wrap wb-auth">
       <section class="hero">
         <div class="hero-emblem">
           <svg viewBox="0 0 80 80" class="emblem-svg">
@@ -56,42 +56,38 @@
 
       <section class="panel-wrap">
         <div class="panel">
-          <span class="corner tl"></span><span class="corner tr"></span>
-          <span class="corner bl"></span><span class="corner br"></span>
+          <header class="login-panel-head">
+            <h2 class="panel-title">管理员登录</h2>
+            <p class="login-access">仅限授权管理人员</p>
+          </header>
 
-          <div class="panel-crest">
-            <svg viewBox="0 0 64 64" class="crest-svg">
-              <path d="M32 4 L56 14 V34 C56 48 44 56 32 60 C20 56 8 48 8 34 V14 Z"
-                fill="none" stroke="#e3b46a" stroke-width="1.8" />
-              <path d="M20 26 h24 v3 H20 Z M22 31 h20 v3 H22 Z M24 36 h16 v3 H24 Z" fill="#e3b46a" />
-              <path d="M20 22 l3-4 3 4 4-5 4 5 4-5 4 5 3-4 3 4" fill="none" stroke="#e3b46a" stroke-width="1.6" />
-            </svg>
-          </div>
-
-          <h2 class="panel-title">Big Brother 管理后台</h2>
-          <div class="panel-sub"><span class="ln"></span>仅限授权管理人员<span class="ln"></span></div>
-
-          <div v-if="error" class="alert err">{{ error }}</div>
-          <div v-if="success" class="alert ok">{{ success }}</div>
+          <div v-if="error" class="alert err" role="alert">{{ error }}</div>
+          <div v-if="success" class="alert ok" role="status">{{ success }}</div>
 
           <form class="form" @submit.prevent="handleLogin">
-            <div class="field">
-              <span class="field-icon">
-                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-7 2.2-7 5v1h14v-1c0-2.8-3-5-7-5Z"/></svg>
-              </span>
-              <input v-model="username" placeholder="管理员账号" autocomplete="username" :disabled="isLoading" />
+            <div class="login-input">
+              <label for="login-username">管理员账号</label>
+              <div class="field">
+                <span class="field-icon">
+                  <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-7 2.2-7 5v1h14v-1c0-2.8-3-5-7-5Z"/></svg>
+                </span>
+                <input id="login-username" v-model="username" placeholder="管理员账号" autocomplete="username" :disabled="isLoading" />
+              </div>
             </div>
 
-            <div class="field">
-              <span class="field-icon">
-                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2a4 4 0 0 0-4 4v3H6v13h12V9h-2V6a4 4 0 0 0-4-4Zm-2 7V6a2 2 0 1 1 4 0v3h-4Z"/></svg>
-              </span>
-              <input :type="showPwd ? 'text' : 'password'" v-model="password" placeholder="登录密码"
-                autocomplete="current-password" :disabled="isLoading" />
-              <button type="button" class="eye" @click="showPwd = !showPwd" :aria-label="showPwd ? '隐藏密码' : '显示密码'">
-                <svg v-if="!showPwd" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg>
-                <svg v-else viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3 3 21 21l-1.4 1.4L2 4.4 3.3 3ZM12 5c5 0 9 4.5 10 7a13 13 0 0 1-2.6 3.5l-2.2-2.2A5 5 0 0 0 9.8 7.9L7.5 5.6C8.8 5.2 10.3 5 12 5ZM4.6 8.5 6.8 10.7A5 5 0 0 0 13.3 17l1.9 1.9c-1 .3-2.1.4-3.2.4-5 0-9-4.5-10-7 .5-1.3 1.4-2.6 2.6-3.8Z"/></svg>
-              </button>
+            <div class="login-input">
+              <label for="login-password">密码</label>
+              <div class="field">
+                <span class="field-icon">
+                  <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2a4 4 0 0 0-4 4v3H6v13h12V9h-2V6a4 4 0 0 0-4-4Zm-2 7V6a2 2 0 1 1 4 0v3h-4Z"/></svg>
+                </span>
+                <input id="login-password" :type="showPwd ? 'text' : 'password'" v-model="password" placeholder="登录密码"
+                  autocomplete="current-password" :disabled="isLoading" />
+                <button type="button" class="eye" @click="showPwd = !showPwd" :aria-label="showPwd ? '隐藏密码' : '显示密码'">
+                  <svg v-if="!showPwd" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg>
+                  <svg v-else viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3 3 21 21l-1.4 1.4L2 4.4 3.3 3ZM12 5c5 0 9 4.5 10 7a13 13 0 0 1-2.6 3.5l-2.2-2.2A5 5 0 0 0 9.8 7.9L7.5 5.6C8.8 5.2 10.3 5 12 5ZM4.6 8.5 6.8 10.7A5 5 0 0 0 13.3 17l1.9 1.9c-1 .3-2.1.4-3.2.4-5 0-9-4.5-10-7 .5-1.3 1.4-2.6 2.6-3.8Z"/></svg>
+                </button>
+              </div>
             </div>
 
             <div class="remember-row">
@@ -104,8 +100,6 @@
               <span class="arrow">→</span>
             </button>
           </form>
-
-          <div class="divider"><span>✦</span></div>
 
           <button type="button" class="admin-btn" @click="goPlayerLogin">
             <span class="chev left">‹</span>

@@ -1,121 +1,130 @@
 <template>
-  <div class="bb-eviction-admin">
-    <div class="page-header">
-      <h1>淘汰投票</h1>
-      <span class="round-tag">第{{ $route.params.round }}周</span>
-    </div>
+  <div class="bb-eviction-admin wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>淘汰投票</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ $route.params.round }}周</span>
+        </div>
+      </div>
+    </header>
 
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-value">{{ voteData.total }}</div>
-        <div class="stat-label">已投票数</div>
+    <header class="eviction-vote-phase wb-panel">
+      <div>
+        <h2>{{ campaignData.voteStarted ? '投票进行中' : '拉票准备' }}</h2>
+        <p>{{ campaignData.voteStarted ? '在代投名单查看每位房客的状态，右侧显示已统计票数。' : '核对拉票内容后开启投票。开启后，选手可查看拉票与提交选票。' }}</p>
       </div>
-      <div class="stat-card">
-        <div class="stat-value">{{ activeCount }}</div>
-        <div class="stat-label">可投票房客</div>
+      <div v-if="nomination && !campaignData.voteStarted" class="eviction-vote-launch">
+        <span>拉票已提交 {{ submittedCampaignCount }} / {{ campaignNominees.length }}</span>
+        <button class="bb-btn bb-btn-gold" @click="startVoting">开始投票</button>
       </div>
-      <div class="stat-card">
-        <div class="stat-value">{{ voteData.total > 0 && activeCount > 0 ? Math.round(voteData.total / activeCount * 100) : 0 }}%</div>
-        <div class="stat-label">投票率</div>
-      </div>
-    </div>
+    </header>
 
     <!-- 拉票环节 -->
-    <div v-if="nomination" class="campaign-section">
-      <div class="campaign-header">
-        <h3>📣 拉票环节</h3>
-        <span class="campaign-status" :class="campaignData.voteStarted ? 'open' : 'pending'">
-          {{ campaignData.voteStarted ? '投票已开始' : '等待开始投票' }}
-        </span>
-      </div>
-      <div class="campaign-grid">
-        <div v-for="n in campaignNominees" :key="n.id" class="campaign-card">
-          <div class="campaign-name-row">
-            <BBAvatar :name="n.name" :avatar="null" size="sm" />
-            <span class="campaign-name">{{ n.name }}</span>
-            <span v-if="campaignOf(n.id)" class="campaign-submitted-tag">已提交</span>
-            <span v-else class="campaign-pending-tag">未提交</span>
+    <div class="eviction-vote-workspace">
+      <div class="eviction-vote-main">
+        <div v-if="activeHouseguests.length > 0 && nomination" class="vote-manage-section wb-panel">
+          <h3>代投名单</h3>
+          <div v-if="!campaignData.voteStarted" class="vote-locked-hint">
+            投票尚未开始，请先在上方点击「开始投票」。开始后被提名人提交的拉票内容会展示给所有选手。
           </div>
-          <div v-if="campaignOf(n.id)" class="campaign-content">{{ campaignOf(n.id).content }}</div>
-          <div v-else class="campaign-empty">尚未提交拉票内容</div>
-          <div v-if="campaignOf(n.id)" class="campaign-time">
-            提交于 {{ formatTime(campaignOf(n.id).submittedAt) }}
+          <div class="vote-grid">
+            <div v-for="h in activeHouseguests" :key="h.id" class="vote-row"
+              :class="{ voted: getVote(h.id), isHoh: h.id === currentHohId, isNominee: isNominee(h.id) }">
+              <div class="voter-info">
+                <span class="voter-name">{{ h.name }}</span>
+                <span v-if="h.id === currentHohId" class="hoh-tag">HOH（仅平票可投）</span>
+                <span v-if="isNominee(h.id)" class="nominee-tag">被提名</span>
+              </div>
+              <div class="voter-vote">
+                <span v-if="getVote(h.id)" class="voted-target">→ {{ getVote(h.id) }}</span>
+                <span v-else-if="isNominee(h.id)" class="not-voted">被提名（不可投票）</span>
+                <span v-else class="not-voted">未投票</span>
+              </div>
+              <div class="voter-action">
+                <select v-model="voteSelections[h.id]" class="bb-select-sm" :aria-label="'为 ' + h.name + ' 选择投票对象'"
+                  :disabled="isNominee(h.id) || !campaignData.voteStarted"
+                  @change="castVoteFor(h.id, h.name, voteSelections[h.id])">
+                  <option value="">{{ isNominee(h.id) ? '被提名者不可投票' : '选择投票对象' }}</option>
+                  <option v-for="n in nomineeOptions" :key="n.id" :value="n.id"
+                    :disabled="h.id === n.id">
+                    {{ n.name }}
+                  </option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-if="nomination" class="campaign-section wb-panel">
+          <div class="campaign-header">
+            <h3>📣 拉票环节</h3>
+            <span class="campaign-status" :class="campaignData.voteStarted ? 'open' : 'pending'">
+              {{ campaignData.voteStarted ? '投票已开始' : '等待开始投票' }}
+            </span>
+          </div>
+          <div class="campaign-grid">
+            <div v-for="n in campaignNominees" :key="n.id" class="campaign-card">
+              <div class="campaign-name-row">
+                <BBAvatar :name="n.name" :avatar="null" size="sm" />
+                <span class="campaign-name">{{ n.name }}</span>
+                <span v-if="campaignOf(n.id)" class="campaign-submitted-tag">已提交</span>
+                <span v-else class="campaign-pending-tag">未提交</span>
+              </div>
+              <div v-if="campaignOf(n.id)" class="campaign-content">{{ campaignOf(n.id).content }}</div>
+              <div v-else class="campaign-empty">尚未提交拉票内容</div>
+              <div v-if="campaignOf(n.id)" class="campaign-time">
+                提交于 {{ formatTime(campaignOf(n.id).submittedAt) }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
-      <div class="campaign-actions">
-        <span class="campaign-progress">已提交 {{ submittedCampaignCount }} / {{ campaignNominees.length }}</span>
-        <button v-if="!campaignData.voteStarted" class="bb-btn bb-btn-gold" @click="startVoting">
-          ▶️ 开始投票
-        </button>
-        <span v-else class="campaign-open-hint">拉票内容已展示给所有选手，投票已开放</span>
-      </div>
-    </div>
-
-    <!-- 实时票数汇总 -->
-    <div v-if="nomineeOptions.length > 0" class="tally-section">
-      <div class="tally-header">
-        <h3>📊 实时票数</h3>
-        <span class="tally-hint">{{ voteData.total }} 票已投出</span>
-      </div>
-      <div class="tally-grid">
-        <div v-for="n in nomineeTally" :key="n.id" class="tally-card" :class="{ leading: n.isLeading && n.votes > 0 }">
-          <div class="tally-rank">{{ n.rank }}</div>
-          <div class="tally-avatar">
-            <BBAvatar :name="n.name" :avatar="null" size="md" />
+      <aside class="eviction-vote-aside" aria-label="投票进度与票数">
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">已投票数</div>
+            <div class="stat-value">{{ voteData.total }}</div>
           </div>
-          <div class="tally-info">
-            <div class="tally-name">{{ n.name }}</div>
-            <div class="tally-votes-text">{{ n.votes }} 票</div>
+          <div class="stat-card">
+            <div class="stat-label">可投票房客</div>
+            <div class="stat-value">{{ activeCount }}</div>
           </div>
-          <div class="tally-bar-wrap">
-            <div class="tally-bar" :style="{ width: n.pct + '%' }"></div>
-          </div>
-          <div class="tally-count">{{ n.votes }}</div>
-        </div>
-      </div>
-      <div v-if="voteData.votes?.length === 0" class="tally-empty">暂无投票</div>
-    </div>
-
-    <!-- 投票管理 -->
-    <div v-if="activeHouseguests.length > 0 && nomination" class="vote-manage-section">
-      <h3>🗳️ 为房客投票</h3>
-      <div v-if="!campaignData.voteStarted" class="vote-locked-hint">
-        投票尚未开始，请先在上方点击「开始投票」。开始后被提名人提交的拉票内容会展示给所有选手。
-      </div>
-      <div class="vote-grid">
-        <div v-for="h in activeHouseguests" :key="h.id" class="vote-row"
-          :class="{ voted: getVote(h.id), isHoh: h.id === currentHohId, isNominee: isNominee(h.id) }">
-          <div class="voter-info">
-            <span class="voter-name">{{ h.name }}</span>
-            <span v-if="h.id === currentHohId" class="hoh-tag">HOH（仅平票可投）</span>
-            <span v-if="isNominee(h.id)" class="nominee-tag">被提名</span>
-          </div>
-          <div class="voter-vote">
-            <span v-if="getVote(h.id)" class="voted-target">→ {{ getVote(h.id) }}</span>
-            <span v-else-if="isNominee(h.id)" class="not-voted">被提名（不可投票）</span>
-            <span v-else class="not-voted">未投票</span>
-          </div>
-          <div class="voter-action">
-            <select v-model="voteSelections[h.id]" class="bb-select-sm"
-              :disabled="isNominee(h.id) || !campaignData.voteStarted"
-              @change="castVoteFor(h.id, h.name, voteSelections[h.id])">
-              <option value="">{{ isNominee(h.id) ? '被提名者不可投票' : '选择投票对象' }}</option>
-              <option v-for="n in nomineeOptions" :key="n.id" :value="n.id"
-                :disabled="h.id === n.id">
-                {{ n.name }}
-              </option>
-            </select>
+          <div class="stat-card">
+            <div class="stat-label">投票率</div>
+            <div class="stat-value">{{ voteData.total > 0 && activeCount > 0 ? Math.round(voteData.total / activeCount * 100) : 0 }}%</div>
           </div>
         </div>
-      </div>
+        <div v-if="nomineeOptions.length > 0" class="tally-section wb-panel">
+          <div class="tally-header">
+            <h3>📊 实时票数</h3>
+            <span class="tally-hint">{{ voteData.total }} 票已投出</span>
+          </div>
+          <div class="tally-grid">
+            <div v-for="n in nomineeTally" :key="n.id" class="tally-card" :class="{ leading: n.isLeading && n.votes > 0 }">
+              <div class="tally-rank">{{ n.rank }}</div>
+              <div class="tally-avatar">
+                <BBAvatar :name="n.name" :avatar="null" size="md" />
+              </div>
+              <div class="tally-info">
+                <div class="tally-name">{{ n.name }}</div>
+                <div class="tally-votes-text">{{ n.votes }} 票</div>
+              </div>
+              <div class="tally-bar-wrap">
+                <div class="tally-bar" :style="{ width: n.pct + '%' }"></div>
+              </div>
+              <div class="tally-count">{{ n.votes }}</div>
+            </div>
+          </div>
+          <div v-if="voteData.votes?.length === 0" class="tally-empty">暂无投票</div>
+        </div>
+      </aside>
     </div>
 
     <div v-if="twistInfo?.isTripleEviction" class="twist-action-hint">
       🔱 三重献祭生效中：宣布结果后将淘汰得票最高的 2 名被提名人
     </div>
 
-    <div v-if="voteData.votes?.length > 0" class="votes-section">
+    <div v-if="voteData.votes?.length > 0" class="votes-section wb-panel">
       <h3>投票明细</h3>
       <div class="table-container">
         <table class="bb-table">
@@ -276,7 +285,9 @@ async function fetchData() {
 
 function formatTime(t: string) { return t ? new Date(t).toLocaleString('zh-CN') : '' }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/eviction', '/nomination', '/veto', '/round-twist', '/houseguests', '/season/set', '/season/next', '/season/reset'
+)
 onMounted(fetchData)
 </script>
 

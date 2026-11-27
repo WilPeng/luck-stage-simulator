@@ -434,67 +434,143 @@
   .bb-main .bb-eviction-admin .stat-card { padding: 8px; }
 }
 
-/* Nomination pages share the same result and voting layouts. */
-.bb-main :is(.bb-nomination-admin, .bb-nomination-player) > .nomination-card {
-  margin-block: 0 16px;
-  padding: clamp(14px, 2.5vw, 22px);
-  border-color: #e6c98866;
-}
-.bb-main :is(.bb-nomination-admin, .bb-nomination-player) .nomination-card h2,
-.bb-main .nomination-ballot h2 {
-  margin: 0 0 8px;
-  font-size: 18px;
-  color: #f3e8ff;
-}
-.bb-main :is(.bb-nomination-admin, .bb-nomination-player) .hoh-info {
-  margin: 0 0 12px;
-  color: var(--bb-text-secondary);
-}
-.bb-main :is(.bb-nomination-admin, .bb-nomination-player) .nominees,
-.bb-main .nomination-ballot .democracy-grid {
+/* Nomination workspace */
+.bb-main > :is(.bb-nomination-admin, .bb-nomination-player):has(> .nomination-masthead) {
+  --nom-panel: #1b1625;
+  --nom-row: #231c30;
+  --nom-line: #b39bff29;
+  --nom-gold: #f3d49b;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-  gap: 10px;
-}
-.bb-main .nominee-item .nominee-name { overflow-wrap: anywhere; }
-.bb-main .nomination-workflow { display: grid; gap: 12px; margin-bottom: 12px; }
-.bb-main :is(.nomination-ballot, .nomination-disclosure) {
-  min-width: 0;
-  padding: clamp(14px, 2vw, 20px);
-  background: var(--workspace-surface);
-  border: 1px solid var(--workspace-line);
-  border-radius: 12px;
-}
-.bb-main .nomination-disclosure summary { cursor: pointer; color: var(--bb-text-primary); font-weight: 600; }
-.bb-main .nomination-disclosure[open] > summary { margin-bottom: 12px; }
-.bb-main .nomination-disclosure .table-container { overflow-x: auto; }
-.bb-main .nomination-ballot :is(.democracy-banner, .twist-action-hint) {
+  gap: 14px;
+  max-width: 1120px;
   padding: 0;
-  margin: 0 0 14px;
-  border: 0;
-  background: transparent;
+}
+.nomination-masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: clamp(16px, 3vw, 28px);
+  border: 1px solid var(--nom-line);
+  border-radius: 18px;
+  background: linear-gradient(135deg, #32243a, #20192c 75%);
+}
+.bb-main .nomination-masthead h1 {
+  margin-top: 4px;
+  font-size: clamp(27px, 4vw, 42px);
+  line-height: 1.15;
+}
+.nomination-round { color: var(--nom-gold); font-size: 13px; }
+.nomination-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.nomination-badges span, .nomination-vote-progress {
+  padding: 5px 10px;
+  border: 1px solid var(--nom-line);
+  border-radius: 99px;
+  background: #0d081a55;
+  color: var(--bb-text-primary);
+  font-size: 13px;
+}
+.nomination-workflow { min-width: 0; }
+.nomination-masthead ~ :is(.nomination-card, .nomination-ballot, .empty-card),
+.nomination-workflow .nomination-ballot,
+.nomination-tools .nomination-disclosure {
+  min-width: 0;
+  padding: clamp(14px, 2.5vw, 22px);
+  background: var(--nom-panel);
+  border: 1px solid var(--nom-line);
+  border-radius: 16px;
+}
+.nomination-masthead ~ .nomination-card { border-color: #f3d49b55; }
+.nomination-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 14px;
+}
+.nomination-card-head h2 { margin: 0; color: #f3edf9; font-size: 20px; }
+.nomination-card-head .hoh-info, .nomination-ballot-copy {
   color: var(--bb-text-secondary);
-  text-align: start;
+  font-size: 14px;
   line-height: 1.55;
 }
-.bb-main .nomination-ballot .democracy-vote-section {
+.nomination-ballot-copy { margin-top: 4px; }
+.nomination-card .nominees {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 8px;
   padding: 0;
-  background: transparent;
-  border: 0;
+  list-style: none;
 }
-.bb-main .nomination-ballot .democracy-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(92px, 1fr);
-  padding: 8px 10px;
-}
-.bb-main .nomination-ballot .democracy-voter {
+.nomination-card .nominee-item {
+  position: relative;
   display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  min-width: 0;
+  border: 1px solid var(--nom-line);
+  border-radius: 10px;
+  background: var(--nom-row);
+  overflow-wrap: anywhere;
+}
+.nomination-card .nominee-item.warned { border-color: #eac18e99; background: #362837; }
+.nominee-label { display: grid; min-width: 0; gap: 3px; }
+.nominee-label .nominee-name { color: #f4eefc; font-size: 17px; font-weight: 700; }
+.nominee-label .nominee-order { color: var(--bb-text-secondary); font-size: 12px; }
+.nomination-card .me-badge { margin-inline-start: auto; color: var(--nom-gold); white-space: nowrap; font-size: 13px; }
+.nomination-card :is(.replacement, .veto-note) { margin-top: 10px; color: var(--bb-text-secondary); font-size: 14px; }
+
+.nomination-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.nomination-tools .nomination-disclosure summary { color: var(--bb-text-primary); cursor: pointer; font-weight: 650; }
+.nomination-tools .nomination-disclosure[open] > summary { margin-bottom: 12px; }
+.nomination-tools .table-container { overflow-x: auto; }
+.nomination-tools .action-buttons { flex-wrap: wrap; }
+
+.nomination-ballot .democracy-vote-section { display: grid; gap: 12px; }
+.nomination-ballot .democracy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 265px), 1fr));
+  gap: 8px;
+}
+.nomination-ballot .democracy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--nom-line);
+  border-radius: 8px;
+  background: var(--nom-row);
+}
+.nomination-ballot .democracy-voter {
+  display: flex;
+  min-width: 0;
   align-items: center;
   gap: 5px;
   overflow-wrap: anywhere;
 }
-.bb-main .nomination-ballot :is(.bb-select-sm, .bb-btn) { min-height: 40px; }
-.bb-main .nomination-ballot .bb-select-sm { width: 100%; min-width: 0; }
-.bb-main .nomination-ballot .bb-btn { width: auto; justify-self: end; }
+.bb-main .nomination-ballot .bb-select-sm { width: 100%; min-width: 0; min-height: 40px; font-size: 13px; }
+.nomination-ballot .empty-hint, .nomination-masthead ~ .empty-card { color: var(--bb-text-secondary); }
+.nomination-ballot-footer { display: flex; justify-content: end; padding-top: 10px; border-top: 1px solid var(--nom-line); }
+.bb-main .nomination-ballot .nomination-ballot-footer .bb-btn {
+  width: auto;
+  min-height: 42px;
+  padding: 8px 14px;
+  border: 1px solid var(--nom-gold);
+  border-radius: 8px;
+  background: var(--nom-gold);
+  color: #261b16;
+  font-size: 14px;
+  font-weight: 700;
+}
+@container workspace (min-width: 720px) {
+  .nomination-tools:has(> :nth-child(2)) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); }
+}

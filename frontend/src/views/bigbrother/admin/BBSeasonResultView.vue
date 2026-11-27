@@ -1,152 +1,160 @@
 <template>
-  <div class="bb-season-result" :class="themeClass">
-    <div class="page-header">
-      <h1>🏆 季终结算</h1>
-      <span class="round-tag">第{{ seasonInfo.currentRound }}周 · {{ seasonInfo.seasonStatus }}</span>
-      <div class="header-actions">
-        <button
-          v-if="settlement?.endgame?.champion"
-          class="bb-btn"
-          @click="toggleRevealChats"
-        >{{ settlement?.allChatsRevealed ? '🔒 取消公开聊天记录' : '📜 公开全部聊天记录' }}</button>
-        <button class="bb-btn" :class="{ active: theme === 'black' }" @click="theme = 'black'">🌙 黑色</button>
-        <button class="bb-btn" :class="{ active: theme === 'white' }" @click="theme = 'white'">☀️ 白色</button>
-        <button class="bb-btn" @click="exportImage" :disabled="exporting">📷 导出图片</button>
-        <button class="bb-btn bb-btn-primary" @click="exportCsv" :disabled="!settlement">📤 导出表格</button>
+  <div class="bb-season-result wb-page" :class="themeClass">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>🏆 季终结算</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ seasonInfo.currentRound }}周 · {{ seasonInfo.seasonStatus }}</span>
+        </div>
       </div>
-    </div>
+      <div class="wb-page-tools">
+        <div class="header-actions">
+          <button
+            v-if="settlement?.endgame?.champion"
+            class="bb-btn"
+            @click="toggleRevealChats"
+          >{{ settlement?.allChatsRevealed ? '🔒 取消公开聊天记录' : '📜 公开全部聊天记录' }}</button>
+          <button class="bb-btn" :class="{ active: theme === 'black' }" @click="theme = 'black'">🌙 黑色</button>
+          <button class="bb-btn" :class="{ active: theme === 'white' }" @click="theme = 'white'">☀️ 白色</button>
+          <button class="bb-btn" @click="exportImage" :disabled="exporting">📷 导出图片</button>
+          <button class="bb-btn bb-btn-primary" @click="exportCsv" :disabled="!settlement">📤 导出表格</button>
+        </div>
+      </div>
+    </header>
 
     <div v-if="loading" class="loading-hint">加载中...</div>
     <div v-else-if="!settlement" class="loading-hint">暂无数据</div>
 
     <template v-else>
-      <div class="summary-bar">
-        <span>参赛人数 {{ settlement.totalPlayers }} · 已完成轮次 {{ settlement.rounds.length }}</span>
-        <span class="edit-tip">✏️ 点击任意单元格可编辑（用于填补空档/修正）</span>
-        <span v-if="endgameInfo && endgameInfo.fhoh" class="eg-chip">🏁 F3 FHOH：{{ endgameInfo.fhoh.name }}</span>
-        <span v-if="endgameInfo && endgameInfo.finalTwo && endgameInfo.finalTwo.length" class="eg-chip gold">
-          🏆 决赛二人：{{ endgameInfo.finalTwo.map(f => f.playerName || f.name).join(' · ') }}
-        </span>
-        <span v-if="endgameInfo && endgameInfo.champion" class="eg-chip gold">
-          👑 冠军：{{ endgameInfo.champion.name }}
-        </span>
-        <span v-if="seasonInfo.seasonStatus === 'finished'" class="done-badge">✅ 赛季已结束</span>
-      </div>
+      <div class="wb-settlement-board">
+        <div class="summary-bar">
+          <span>参赛人数 {{ settlement.totalPlayers }} · 已完成轮次 {{ settlement.rounds.length }}</span>
+          <span class="edit-tip">✏️ 点击任意单元格可编辑（用于填补空档/修正）</span>
+          <span v-if="endgameInfo && endgameInfo.fhoh" class="eg-chip">🏁 F3 FHOH：{{ endgameInfo.fhoh.name }}</span>
+          <span v-if="endgameInfo && endgameInfo.finalTwo && endgameInfo.finalTwo.length" class="eg-chip gold">
+            🏆 决赛二人：{{ endgameInfo.finalTwo.map(f => f.playerName || f.name).join(' · ') }}
+          </span>
+          <span v-if="endgameInfo && endgameInfo.champion" class="eg-chip gold">
+            👑 冠军：{{ endgameInfo.champion.name }}
+          </span>
+          <span v-if="seasonInfo.seasonStatus === 'finished'" class="done-badge">✅ 赛季已结束</span>
+        </div>
 
-      <div class="table-wrap" ref="exportEl">
-        <table class="settle-table">
-          <thead>
-            <tr>
-              <th class="label-col">轮次/项目</th>
-              <th v-for="c in rounds" :key="c.round" class="round-col" :class="colTitleClass(c)">
-                {{ colTitle(c) }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- 轮次列块：普通轮=六小格；F3=三轮胜者+淘汰者；冠军=冠军/亚军 -->
-            <tr class="block-row">
-              <td class="label-col">赛况</td>
-              <td v-for="c in rounds" :key="'b'+c.round" class="block-cell" :class="'block-'+colKind(c)">
-                <!-- 普通轮六小格 -->
-                <template v-if="colKind(c)==='normal'">
-                  <div class="mini-cell cell-hoh" @click="startEdit(c.round, 'hohName')">{{ cellValue(c, 'hohName') }}</div>
-          <div class="mini-cell cell-init-nom" @click="startEdit(c.round, 'initial')">
-            <template v-if="edits['r' + c.round + ':initial'] === undefined && nomineeDisplay(c, 'initial').length">
-              <span v-for="(n, i) in nomineeDisplay(c, 'initial')" :key="i" :class="{ struck: n.struck }">{{ n.name }}<span v-if="i < nomineeDisplay(c, 'initial').length - 1">、</span></span>
-            </template>
-            <template v-else>{{ cellValue(c, 'initial') }}</template>
-          </div>
-          <div class="mini-cell cell-pov" @click="startEdit(c.round, 'pov')">{{ cellValue(c, 'pov') }}</div>
-          <div class="mini-cell cell-final-nom" @click="startEdit(c.round, 'final')">
-            <template v-if="edits['r' + c.round + ':final'] === undefined && nomineeDisplay(c, 'final').length">
-              <span v-for="(n, i) in nomineeDisplay(c, 'final')" :key="i" :class="{ struck: n.struck }">{{ n.name }}<span v-if="i < nomineeDisplay(c, 'final').length - 1">、</span></span>
-            </template>
-            <template v-else>{{ cellValue(c, 'final') }}</template>
-          </div>
-                  <div class="mini-cell cell-ticket" @click="startEdit(c.round, 'ticket')">{{ cellValue(c, 'ticket') }}</div>
-                  <div class="mini-cell cell-evicted" @click="startEdit(c.round, 'evicted')">{{ cellValue(c, 'evicted') }}</div>
-                </template>
-                <!-- F3 特殊列：三轮胜者 + 淘汰者 -->
-                <template v-else-if="colKind(c)==='final3'">
-                  <div class="mini-cell mini-f3-slot" v-for="w in f3WinnerList(c)" :key="w.round">
-                    <span class="f3-tag">第{{ w.round }}场</span>
-                    <span class="f3-name" @click="startEdit(c.round, 'f3w'+w.round)">{{ w.name || '-' }}</span>
-                  </div>
-                  <div class="mini-cell mini-f3-elim">
-                    <span class="f3-tag">🚫淘汰</span>
-                    <span class="f3-name" @click="startEdit(c.round, 'f3elim')">{{ (c.eliminated && c.eliminated.name) || '-' }}</span>
-                  </div>
-                </template>
-                <!-- 冠军特殊列：冠军/亚军 上下各占一半 -->
-                <template v-else-if="colKind(c)==='champion'">
-                  <div class="champ-stack">
-                    <div class="mini-cell mini-champ">
-                      <span class="champ-icon">🏆</span>
-                      <span class="champ-name" @click="startEdit(c.round, 'champion')">{{ c.champion?.name || '-' }}</span>
-                    </div>
-                    <div class="mini-cell mini-runner">
-                      <span class="champ-icon runner">🥈</span>
-                      <span class="champ-name" @click="startEdit(c.round, 'runner')">{{ c.runnerUp?.name || '-' }}</span>
-                    </div>
-                  </div>
-                </template>
-              </td>
-            </tr>
-
-            <!-- 玩家行 -->
-            <tr v-for="p in orderedPlayers" :key="p.playerId" class="player-row">
-              <td class="label-col player-cell">
-                <div class="player-label">
-                  <BBAvatar :name="p.name" :avatar="avatarMap[p.playerId] || (p as any).avatar || null" size="sm" />
-                  <span class="player-name">{{ p.name }}</span>
-                  <span v-if="p.status === 'f2'" class="mini-tag f2">F2</span>
-                  <span v-else-if="p.status === 'jury'" class="mini-tag jury">jury</span>
-                  <span v-else-if="p.status === 'evicted'" class="mini-tag evt">evicted</span>
-                  <span v-else-if="p.status === 'walked'" class="mini-tag walked">walked</span>
-                </div>
-              </td>
-              <template v-for="c in rounds" :key="'v'+p.playerId+'-'+c.round">
-                <!-- 退赛：从退出投票的那一轮起，到最后一列合并为一个单元格 -->
-                <template v-if="p.status === 'walked' && walkStartRound(p) != null && c.round === walkStartRound(p)">
-                  <td :colspan="walkedSpan(p, c)" class="cell-walked">walked</td>
-                </template>
-                <template v-else-if="p.status === 'walked' && walkStartRound(p) != null && c.round > walkStartRound(p)">
-                  <!-- 已被 walked 合并单元格覆盖，不输出 -->
-                </template>
-                <!-- 普通轮 -->
-                <template v-else-if="colKind(c)==='normal'">
-                  <!-- 淘汰后第一个后续普通轮：合并大格直到冠军列前（含后续普通轮与 F3 列） -->
-                  <template v-if="p.evictedRound && c.round === p.evictedRound + 1">
-                    <td :colspan="evictSpanNormal(p, c)" class="cell-evicted-round">{{ evictedText(p) }}</td>
-                  </template>
-                  <template v-else-if="!p.evictedRound || c.round <= p.evictedRound">
-                    <td class="vote-cell editable-cell" :class="voteClass(p, c)" @click="startPlayerEdit(p.playerId, c.round)">
-                      {{ playerCellValue(p, c) }}
-                    </td>
-                  </template>
-                </template>
-                <!-- F3 列 -->
-                <template v-else-if="colKind(c)==='final3'">
-                  <!-- 若玩家被淘汰且无后续普通轮可用（在最后一普通轮被淘汰），在此列输出合并格 -->
-                  <template v-if="!isInF3(p.playerId) && p.evictedRound && !hasNormalAfterEvict(p)">
-                    <td class="cell-evicted-round">{{ evictedText(p) }}</td>
-                  </template>
-                  <template v-else-if="isInF3(p.playerId)">
-                    <td class="vote-cell" :class="voteClass(p, c)">{{ playerCellValue(p, c) }}</td>
-                  </template>
-                  <template v-else>
-                    <!-- 已被普通轮大格 colspan 覆盖，不输出 -->
-                  </template>
-                </template>
-                <!-- 冠军列：jury 显示所投，其他人显示身份 -->
-                <template v-else-if="colKind(c)==='champion'">
-                  <td class="vote-cell" :class="champCellClass(p, c)">{{ champCellValue(p, c) }}</td>
-                </template>
+        <div class="table-wrap" ref="exportEl">
+          <table class="settle-table">
+            <thead>
+              <tr>
+                <th class="label-col">轮次/项目</th>
+                <th v-for="c in rounds" :key="c.round" class="round-col" :class="colTitleClass(c)">
+                  {{ colTitle(c) }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- 轮次列块：普通轮=六小格；F3=三轮胜者+淘汰者；冠军=冠军/亚军 -->
+              <tr class="block-row">
+                <td class="label-col">赛况</td>
+                <td v-for="c in rounds" :key="'b'+c.round" class="block-cell" :class="'block-'+colKind(c)">
+                  <!-- 普通轮六小格 -->
+                  <template v-if="colKind(c)==='normal'">
+                    <div class="mini-cell cell-hoh" @click="startEdit(c.round, 'hohName')">{{ cellValue(c, 'hohName') }}</div>
+            <div class="mini-cell cell-init-nom" @click="startEdit(c.round, 'initial')">
+              <template v-if="edits['r' + c.round + ':initial'] === undefined && nomineeDisplay(c, 'initial').length">
+                <span v-for="(n, i) in nomineeDisplay(c, 'initial')" :key="i" :class="{ struck: n.struck }">{{ n.name }}<span v-if="i < nomineeDisplay(c, 'initial').length - 1">、</span></span>
               </template>
-            </tr>
-          </tbody>
-        </table>
+              <template v-else>{{ cellValue(c, 'initial') }}</template>
+            </div>
+            <div class="mini-cell cell-pov" @click="startEdit(c.round, 'pov')">{{ cellValue(c, 'pov') }}</div>
+            <div class="mini-cell cell-final-nom" @click="startEdit(c.round, 'final')">
+              <template v-if="edits['r' + c.round + ':final'] === undefined && nomineeDisplay(c, 'final').length">
+                <span v-for="(n, i) in nomineeDisplay(c, 'final')" :key="i" :class="{ struck: n.struck }">{{ n.name }}<span v-if="i < nomineeDisplay(c, 'final').length - 1">、</span></span>
+              </template>
+              <template v-else>{{ cellValue(c, 'final') }}</template>
+            </div>
+                    <div class="mini-cell cell-ticket" @click="startEdit(c.round, 'ticket')">{{ cellValue(c, 'ticket') }}</div>
+                    <div class="mini-cell cell-evicted" @click="startEdit(c.round, 'evicted')">{{ cellValue(c, 'evicted') }}</div>
+                  </template>
+                  <!-- F3 特殊列：三轮胜者 + 淘汰者 -->
+                  <template v-else-if="colKind(c)==='final3'">
+                    <div class="mini-cell mini-f3-slot" v-for="w in f3WinnerList(c)" :key="w.round">
+                      <span class="f3-tag">第{{ w.round }}场</span>
+                      <span class="f3-name" @click="startEdit(c.round, 'f3w'+w.round)">{{ w.name || '-' }}</span>
+                    </div>
+                    <div class="mini-cell mini-f3-elim">
+                      <span class="f3-tag">🚫淘汰</span>
+                      <span class="f3-name" @click="startEdit(c.round, 'f3elim')">{{ (c.eliminated && c.eliminated.name) || '-' }}</span>
+                    </div>
+                  </template>
+                  <!-- 冠军特殊列：冠军/亚军 上下各占一半 -->
+                  <template v-else-if="colKind(c)==='champion'">
+                    <div class="champ-stack">
+                      <div class="mini-cell mini-champ">
+                        <span class="champ-icon">🏆</span>
+                        <span class="champ-name" @click="startEdit(c.round, 'champion')">{{ c.champion?.name || '-' }}</span>
+                      </div>
+                      <div class="mini-cell mini-runner">
+                        <span class="champ-icon runner">🥈</span>
+                        <span class="champ-name" @click="startEdit(c.round, 'runner')">{{ c.runnerUp?.name || '-' }}</span>
+                      </div>
+                    </div>
+                  </template>
+                </td>
+              </tr>
+
+              <!-- 玩家行 -->
+              <tr v-for="p in orderedPlayers" :key="p.playerId" class="player-row">
+                <td class="label-col player-cell">
+                  <div class="player-label">
+                    <BBAvatar :name="p.name" :avatar="avatarMap[p.playerId] || (p as any).avatar || null" size="sm" />
+                    <span class="player-name">{{ p.name }}</span>
+                    <span v-if="p.status === 'f2'" class="mini-tag f2">F2</span>
+                    <span v-else-if="p.status === 'jury'" class="mini-tag jury">jury</span>
+                    <span v-else-if="p.status === 'evicted'" class="mini-tag evt">evicted</span>
+                    <span v-else-if="p.status === 'walked'" class="mini-tag walked">walked</span>
+                  </div>
+                </td>
+                <template v-for="c in rounds" :key="'v'+p.playerId+'-'+c.round">
+                  <!-- 退赛：从退出投票的那一轮起，到最后一列合并为一个单元格 -->
+                  <template v-if="p.status === 'walked' && walkStartRound(p) != null && c.round === walkStartRound(p)">
+                    <td :colspan="walkedSpan(p, c)" class="cell-walked">walked</td>
+                  </template>
+                  <template v-else-if="p.status === 'walked' && walkStartRound(p) != null && c.round > walkStartRound(p)">
+                    <!-- 已被 walked 合并单元格覆盖，不输出 -->
+                  </template>
+                  <!-- 普通轮 -->
+                  <template v-else-if="colKind(c)==='normal'">
+                    <!-- 淘汰后第一个后续普通轮：合并大格直到冠军列前（含后续普通轮与 F3 列） -->
+                    <template v-if="p.evictedRound && c.round === p.evictedRound + 1">
+                      <td :colspan="evictSpanNormal(p, c)" class="cell-evicted-round">{{ evictedText(p) }}</td>
+                    </template>
+                    <template v-else-if="!p.evictedRound || c.round <= p.evictedRound">
+                      <td class="vote-cell editable-cell" :class="voteClass(p, c)" @click="startPlayerEdit(p.playerId, c.round)">
+                        {{ playerCellValue(p, c) }}
+                      </td>
+                    </template>
+                  </template>
+                  <!-- F3 列 -->
+                  <template v-else-if="colKind(c)==='final3'">
+                    <!-- 若玩家被淘汰且无后续普通轮可用（在最后一普通轮被淘汰），在此列输出合并格 -->
+                    <template v-if="!isInF3(p.playerId) && p.evictedRound && !hasNormalAfterEvict(p)">
+                      <td class="cell-evicted-round">{{ evictedText(p) }}</td>
+                    </template>
+                    <template v-else-if="isInF3(p.playerId)">
+                      <td class="vote-cell" :class="voteClass(p, c)">{{ playerCellValue(p, c) }}</td>
+                    </template>
+                    <template v-else>
+                      <!-- 已被普通轮大格 colspan 覆盖，不输出 -->
+                    </template>
+                  </template>
+                  <!-- 冠军列：jury 显示所投，其他人显示身份 -->
+                  <template v-else-if="colKind(c)==='champion'">
+                    <td class="vote-cell" :class="champCellClass(p, c)">{{ champCellValue(p, c) }}</td>
+                  </template>
+                </template>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- 单元格编辑输入框（浮动） -->
@@ -171,7 +179,7 @@ import type { BBSettlement, BBSettlementRound } from '../../../types/bigbrother'
 
 const settlement = ref<BBSettlement | null>(null)
 const avatarMap = ref<Record<string, string | null>>({})
-const loading = ref(false)
+const loading = ref(true)
 const theme = ref<'black' | 'white'>('black')
 const themeClass = computed(() => `theme-${theme.value}`)
 const exporting = ref(false)
@@ -517,10 +525,9 @@ async function toggleRevealChats() {
 }
 
 async function fetchData() {
-  loading.value = true
   try {
     settlement.value = await bbGetSeasonSettlement()
-  } catch { settlement.value = null }
+  } catch {}
   try {
     const res = await bbGetHouseguests({ pageSize: 200 })
     const m: Record<string, string | null> = {}
@@ -530,7 +537,11 @@ async function fetchData() {
   loading.value = false
 }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/season/endgame', '/season/set', '/season/next', '/season/reset', '/season/config',
+  '/hoh', '/nomination', '/veto', '/eviction/result', '/eviction/night/start', '/eviction/restore',
+  '/houseguests', '/round-twist'
+)
 onMounted(fetchData)
 </script>
 

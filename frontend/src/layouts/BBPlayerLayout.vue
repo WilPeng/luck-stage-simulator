@@ -118,7 +118,7 @@
               <span class="section-status" :class="grp.status">{{ grp.statusText }}</span>
             </button>
             <div v-show="!isRoundCollapsed(grp.round)" class="round-stages">
-              <router-link v-for="it in grp.items" :key="it.stage"
+              <router-link v-for="it in grp.items" :key="it.path"
                 :to="it.path"
                 class="nav-item sub-item"
                 :class="{ disabled: !it.clickable }"
@@ -133,9 +133,8 @@
       </aside>
 
       <main class="bb-main">
-        <RoundTwistPanel v-if="route.params.round == null || Number(route.params.round) === seasonStore.currentRoundNumber"
-          :current-round="seasonStore.currentRoundNumber" :current-stage="seasonStore.currentStage" @exclusive="exclusiveTwist = $event" />
-        <router-view v-if="!exclusiveTwist || !route.path.endsWith('/hoh') || Number(route.params.round) !== seasonStore.currentRoundNumber" :key="'bb-stage-' + realtime.stageTick" />
+        <router-link v-if="branchRedirect" :to="branchRedirect">前往本周专属赛制</router-link>
+        <router-view v-else :key="route.path" />
       </main>
     </div>
 
@@ -147,7 +146,6 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useBbAuthStore } from '../stores/bbAuthStore'
-import RoundTwistPanel from '../components/bigbrother/RoundTwistPanel.vue'
 import { useBbSeasonStore } from '../stores/bbSeasonStore'
 import { useBbRealtimeStore } from '../stores/bbRealtimeStore'
 import { useHouseSocket } from '../composables/useHouseSocket'
@@ -160,7 +158,6 @@ import { bindAudioUnlock, playNotificationSound, refreshNotificationPermission, 
 
 const router = useRouter()
 const route = useRoute()
-const exclusiveTwist = ref(false)
 const authStore = useBbAuthStore()
 const seasonStore = useBbSeasonStore()
 
@@ -297,7 +294,7 @@ async function refreshState() {
 function enforceRestrictedRoute() {
   if (!isRestrictedPlayer.value) return
   const path = route.path
-  if (['/games/bigbrother/player/house', '/games/bigbrother/player/twist-challenges'].includes(path)) return
+  if (path === '/games/bigbrother/player/house' || route.meta.revivalTwist) return
   if (seasonStore.season?.allChatsRevealed && path === '/games/bigbrother/player/replays') return
   if (canJuryEnterFinale.value && path === '/games/bigbrother/player/finale') return
   router.replace('/games/bigbrother/player/house')
@@ -319,14 +316,13 @@ const fixedItems = [
   { icon: '🏠', text: '首页', path: '/games/bigbrother/player/home' },
   { icon: '👤', text: '我的资料', path: '/games/bigbrother/player/profile' },
   { icon: '🏡', text: 'BB House', path: '/games/bigbrother/player/house' },
-  { icon: '🎮', text: '变数挑战', path: '/games/bigbrother/player/twist-challenges' },
   { icon: '📝', text: '历史记录', path: '/games/bigbrother/player/history' },
 ]
 
 // 已淘汰/陪审团：只保留 BB House（陪审团在 F2 问答/冠军投票阶段额外显示终局入口）
 const visibleFixedItems = computed(() => {
   if (!isRestrictedPlayer.value) return fixedItems
-  const items = fixedItems.filter(i => ['/games/bigbrother/player/house', '/games/bigbrother/player/twist-challenges'].includes(i.path))
+  const items = fixedItems.filter(i => i.path === '/games/bigbrother/player/house')
   if (canJuryEnterFinale.value) {
     items.push({
       icon: seasonStore.season?.currentStage === 'champion_vote' ? '🏆' : '🎤',
@@ -370,9 +366,17 @@ const stageMeta: Record<string, { icon: string; route: string }> = {
 const ENDGAME_STAGES = ['final3', 'champion_vote']
 
 // 依据赛季配置（菜单）生成左侧树：每周包含哪些环节、终局两轮
+const branchRedirect = computed(() => {
+  const week = Number(route.params.round)
+  if (week !== seasonStore.currentRoundNumber || seasonStore.currentStage !== 'hoh_competition' || !route.path.endsWith('/hoh')) return ''
+  const branch = seasonStore.menuItems.find(item => item.round === week && (item.twistId === 'split_house' || item.twistId === 'battle_of_block'))
+  return branch?.twistId ? `/games/bigbrother/player/round/${week}/${branch.twistId.replace(/_/g, '-')}` : ''
+})
+
 const roundGroups = computed(() => {
-  if (isRestrictedPlayer.value) return []
-  const items = seasonStore.menuItems || []
+  const items = isRestrictedPlayer.value
+    ? seasonStore.menuItems.filter(item => item.twistId === 'battle_back' || item.twistId === 'costly_return')
+    : seasonStore.menuItems
   const byRound = new Map<number, any[]>()
   for (const it of items) {
     if (!byRound.has(it.round)) byRound.set(it.round, [])
@@ -398,15 +402,17 @@ const roundGroups = computed(() => {
       items: list.map(i => {
         const meta = stageMeta[i.stage] || { icon: '•', route: i.stage }
         const isEnd = ENDGAME_STAGES.includes(i.stage)
+        const slug = i.twistId?.replace(/_/g, '-') || meta.route
         return {
           stage: i.stage,
           stageName: i.stageName,
           status: i.status,
           clickable: i.clickable,
-          icon: meta.icon,
+          icon: i.icon || meta.icon,
+          twistId: i.twistId,
           path: isEnd
             ? '/games/bigbrother/player/finale'
-            : `/games/bigbrother/player/round/${r}/${meta.route}`
+            : `/games/bigbrother/player/round/${r}/${slug}`
         }
       })
     }

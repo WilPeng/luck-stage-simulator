@@ -13,9 +13,16 @@ function getToken(): string | null {
   return localStorage.getItem(key) || sessionStorage.getItem(key)
 }
 
+// 只在赛程、赛制或菜单权限可能变化时同步导航数据。
+const seasonUpdatePaths = [
+  /^\/season\/(set|next|reset|round|twists|config|reveal-chats|endgame\/reset|endgame\/fhoh-pick)$/,
+  /^\/(hoh\/undo|nomination\/(undo|replace\/undo)|veto\/undo-(competition|decision))$/,
+  /^\/(round-twist|eviction\/(result|night\/start|restore\/[^/]+))$/,
+  /^\/houseguests(?:\/[^/]+(?:\/walk(?:\/undo)?)?)?$/
+]
+
 export const useBbRealtimeStore = defineStore('bbRealtime', () => {
-  const tick = ref(0)
-  const stageTick = ref(0)
+  const updatedPaths = ref<string[]>([])
   const connected = ref(false)
   const lastBroadcast = ref<{ type: string; roomId: string | null; roomName?: string; roomIcon?: string; message: string; from: string } | null>(null)
   const lastEvictionAnnounce = ref<{ round: number; segments: { type: string; text: string }[]; released: number } | null>(null)
@@ -26,12 +33,37 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
   const lastKeyCeremony = ref<{ roundId: string; keyCeremony: any; nomineeIds: string[]; nomineeNames: string[] } | null>(null)
 
   let socket: Socket | null = null
-  let bumpTimer: ReturnType<typeof setTimeout> | null = null
+  let updateTimer: ReturnType<typeof setTimeout> | null = null
+  let flushingUpdates = false
+  const pendingPaths = new Set<string>()
 
-  // 合并短时间内的大量更新为一次，避免同一批写操作触发多次重复请求
-  function bump() {
-    if (bumpTimer) return
-    bumpTimer = setTimeout(() => { bumpTimer = null; tick.value++ }, 80)
+  function queueUpdate(path: string) {
+    pendingPaths.add(path)
+    scheduleUpdates()
+  }
+
+  function scheduleUpdates() {
+    if (updateTimer || flushingUpdates || !pendingPaths.size) return
+    updateTimer = setTimeout(flushUpdates, 80)
+  }
+
+  async function flushUpdates() {
+    updateTimer = null
+    const paths = Array.from(pendingPaths)
+    pendingPaths.clear()
+    const connection = socket
+    flushingUpdates = true
+    try {
+      if (paths.some(path => seasonUpdatePaths.some(pattern => pattern.test(path)))) {
+        const season = useBbSeasonStore()
+        await season.fetchProgress()
+        if (socket === connection) await season.fetchMenu()
+      }
+      if (socket === connection) updatedPaths.value = paths
+    } finally {
+      flushingUpdates = false
+      scheduleUpdates()
+    }
   }
 
   function emitWithAck(event: string, payload: any = {}): Promise<any> {
@@ -61,58 +93,32 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
     })
     socket.on('connect', () => { connected.value = true })
     socket.on('disconnect', () => { connected.value = false })
-    socket.on('bb:update', async (data: any) => {
-      const p = data?.path || ''
-      // 投票等高频写操作不触发整页重载（否则选手端会不停刷新）
-      const isVoteWrite = /\/eviction\/(vote|my-vote)\b/.test(p)
-      // 逐句揭晓类写入（淘汰夜 / 宣布 / 冠军揭晓）：仅更新展示内容，选手端靠广播事件增量展示，
-      // 绝不能整页重载，否则每次「下一句」都会刷新整个页面
-      const isRevealWrite = /\/(night|announce)\/(start|next|confirm|reset|prepare)\b/.test(p)
-        || /\/champion-reveal\b/.test(p)
-      // 高频写操作（投票 / 逐句揭晓 / 小游戏 / House / 聊天 / 提名仪式）：不重新拉取赛季进度与菜单，
-      // 避免“每次有人投票，所有客户端都各发 2 个请求”的请求风暴导致卡顿
-      const isKeyWrite = /\/nomination\/key-/.test(p)
-      const isHighFreq = isVoteWrite || isRevealWrite || isKeyWrite
-        || /\/(minigame|house|chat)\b/.test(p) || /\/jury-qa\b/.test(p)
-
-      if (!isHighFreq) {
-        const season = useBbSeasonStore()
-        try { await season.fetchProgress(); await season.fetchMenu() } catch {}
-      }
-      bump()
-
-      // 提名仪式逐句环节：不整页重载，靠 bb:key-ceremony 广播增量更新
-      if (!isVoteWrite && !isRevealWrite && !isKeyWrite && /\/(season|hoh|nomination|veto|eviction|endgame)/.test(p)) {
-        stageTick.value++
-      }
+    socket.on('bb:update', (data: { path?: string } | null) => {
+      const prefix = '/api/bigbrother'
+      if (!data?.path?.startsWith(prefix + '/')) return
+      queueUpdate(data.path.slice(prefix.length).split('?')[0]!.replace(/\/+$/, ''))
     })
     socket.on('bb:broadcast', (data: any) => {
       lastBroadcast.value = data
-      bump()
     })
     socket.on('bb:eviction-announce', (data: any) => {
       lastEvictionAnnounce.value = data
-      bump()
     })
     socket.on('bb:veto-card', (data: any) => {
       lastVetoCard.value = data
-      bump()
+      queueUpdate('/veto/card-draw')
     })
     socket.on('bb:eviction-night', (data: any) => {
       lastEvictionNight.value = data
-      bump()
     })
     socket.on('bb:minigame-summon', (data: any) => {
       lastMinigameSummon.value = data
-      bump()
     })
     socket.on('bb:key-ceremony', (data: any) => {
       lastKeyCeremony.value = data
-      bump()
     })
     socket.on('bb:summon', (data: any) => {
       lastSummon.value = data
-      bump()
     })
   }
 
@@ -120,8 +126,11 @@ export const useBbRealtimeStore = defineStore('bbRealtime', () => {
 
   function disconnect() {
     if (socket) { socket.disconnect(); socket = null }
+    if (updateTimer) clearTimeout(updateTimer)
+    updateTimer = null
+    pendingPaths.clear()
     connected.value = false
   }
 
-  return { tick, stageTick, connected, lastBroadcast, lastEvictionAnnounce, lastVetoCard, lastEvictionNight, lastMinigameSummon, lastKeyCeremony, lastSummon, connect, disconnect, bump, clearBroadcast, vetoDeal, vetoDraw }
+  return { updatedPaths, connected, lastBroadcast, lastEvictionAnnounce, lastVetoCard, lastEvictionNight, lastMinigameSummon, lastKeyCeremony, lastSummon, connect, disconnect, clearBroadcast, vetoDeal, vetoDraw }
 })

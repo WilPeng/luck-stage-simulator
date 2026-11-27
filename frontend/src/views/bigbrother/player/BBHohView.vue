@@ -1,67 +1,73 @@
 <template>
-  <div class="bb-hoh-player">
-    <div class="page-header">
-      <h1>HOH 竞争</h1>
-      <span class="round-tag">第{{ roundNum }}周</span>
-      <span v-if="isHistory" class="history-tag">历史记录</span>
-      <span v-else-if="isFuture" class="future-tag">未开始</span>
-    </div>
+  <div class="bb-hoh-player wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>HOH 竞争</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ roundNum }}周</span>
+          <span v-if="isHistory" class="history-tag">历史记录</span>
+          <span v-else-if="isFuture" class="future-tag">未开始</span>
+        </div>
+      </div>
+    </header>
 
     <!-- 加载中 -->
-    <div v-if="loading" class="loading-state">
-      <div class="loading-spinner"></div>
-      <span>加载中...</span>
-    </div>
+    <div class="wb-game-stage">
+      <div v-if="loading" class="loading-state">
+        <div class="loading-spinner"></div>
+        <span>加载中...</span>
+      </div>
 
-    <!-- 准备环节：房间已创建、等待开始 -->
-    <div v-else-if="showLobby" class="minigame-section">
-      <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
-        :rules="activeRoom.options?.rules || ''"
-        :participants="activeRoom.participants" :myId="myId" />
-    </div>
+      <!-- 准备环节：房间已创建、等待开始 -->
+      <div v-else-if="showLobby" class="minigame-section">
+        <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
+          :rules="activeRoom.options?.rules || ''"
+          :participants="activeRoom.participants" :myId="myId" />
+      </div>
 
-    <!-- 小游戏模式：有活跃房间且玩家在参与者中 -->
-    <div v-else-if="showMinigame" class="minigame-section">
-      <component :is="gameComponent" :roomId="activeRoom.roomId"
-        :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
-    </div>
+      <!-- 小游戏模式：有活跃房间且玩家在参与者中 -->
+      <div v-else-if="showMinigame" class="minigame-section">
+        <component :is="gameComponent" :roomId="activeRoom.roomId"
+          :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
+      </div>
 
-    <MinigameSpectatorPanel v-else-if="activeRoom?.spectatorState && !currentHoh"
-      :title="activeRoom.minigameName" :game-id="activeRoom.minigameId"
-      :status="activeRoom.status" :players="activeRoom.spectatorState" />
+      <MinigameSpectatorPanel v-else-if="activeRoom?.spectatorState && !currentHoh"
+        :title="activeRoom.minigameName" :game-id="activeRoom.minigameId"
+        :status="activeRoom.status" :players="activeRoom.spectatorState" />
 
-    <!-- 已有结果 -->
-    <div v-else-if="currentHoh" class="hoh-announcement">
-      <div class="hoh-card" :class="{ 'is-me': isMe(currentHoh.winnerName) }">
-        <BBAvatar :name="currentHoh.winnerName" :avatar="(currentHoh as any).winnerAvatar || avatarOf(currentHoh.winnerName)" size="lg" />
-        <div class="hoh-body">
-          <div class="hoh-label">一家之主（HOH）</div>
-          <div class="hoh-name">
-            {{ currentHoh.winnerName }}
-            <span v-if="isMe(currentHoh.winnerName)" class="me-badge">我</span>
-          </div>
-          <div class="hoh-desc" v-if="!isHistory">
-            {{ isMe(currentHoh.winnerName) ? '恭喜！你是本周的 HOH，请前往提名页面选择两名被提名人。' : `${currentHoh.winnerName} 成为了本周的 HOH，将负责提名两名房客面临淘汰。` }}
+      <!-- 已有结果 -->
+      <div v-else-if="currentHoh" class="hoh-announcement">
+        <div class="hoh-card" :class="{ 'is-me': isMe(currentHoh.winnerName) }">
+          <BBAvatar :name="currentHoh.winnerName" :avatar="(currentHoh as any).winnerAvatar || avatarOf(currentHoh.winnerName)" size="lg" />
+          <div class="hoh-body">
+            <div class="hoh-label">一家之主（HOH）</div>
+            <div class="hoh-name">
+              {{ currentHoh.winnerName }}
+              <span v-if="isMe(currentHoh.winnerName)" class="me-badge">我</span>
+            </div>
+            <div class="hoh-desc" v-if="!isHistory">
+              {{ isMe(currentHoh.winnerName) ? '恭喜！你是本周的 HOH，请前往提名页面选择两名被提名人。' : `${currentHoh.winnerName} 成为了本周的 HOH，将负责提名两名房客面临淘汰。` }}
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 上一轮 HOH 不能连任 -->
-    <div v-else-if="isPrevHoh" class="hoh-card prev-hoh">
-      <div class="hoh-crown">👑</div>
-      <div class="hoh-body">
-        <div class="hoh-label">不能连任</div>
-        <div class="hoh-hint">你上一轮是 HOH，不能参加本轮 HOH 竞争，请等待 HOH 竞争结果。</div>
+      <!-- 上一轮 HOH 不能连任 -->
+      <div v-else-if="isPrevHoh" class="hoh-card prev-hoh">
+        <div class="hoh-crown">👑</div>
+        <div class="hoh-body">
+          <div class="hoh-label">不能连任</div>
+          <div class="hoh-hint">你上一轮是 HOH，不能参加本轮 HOH 竞争，请等待 HOH 竞争结果。</div>
+        </div>
       </div>
-    </div>
 
-    <!-- 等待中 -->
-    <div v-else class="hoh-card pending">
-      <div class="hoh-crown">👑</div>
-      <div class="hoh-body">
-        <div class="hoh-label">HOH 竞争尚未进行</div>
-        <div class="hoh-hint">等待管理员开启 HOH 竞争</div>
+      <!-- 等待中 -->
+      <div v-else class="hoh-card pending">
+        <div class="hoh-crown">👑</div>
+        <div class="hoh-body">
+          <div class="hoh-label">HOH 竞争尚未进行</div>
+          <div class="hoh-hint">等待管理员开启 HOH 竞争</div>
+        </div>
       </div>
     </div>
   </div>
@@ -242,7 +248,9 @@ async function initEligibility() {
 }
 
 // 任意实时广播（含管理员指定 HOH）→ 立即刷新
-useBbRefresh(checkRoom)
+useBbRefresh(checkRoom,
+  '/hoh', '/minigame/room', '/round-twist', '/season/set', '/season/next', '/season/reset'
+)
 
 onMounted(async () => {
   await loadCurrentHoh()

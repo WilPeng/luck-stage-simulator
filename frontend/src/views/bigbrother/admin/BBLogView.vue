@@ -1,27 +1,33 @@
 <template>
-  <div class="bb-logs">
-    <div class="page-header">
-      <h1>操作日志</h1>
-      <button class="bb-btn" @click="fetchData">刷新</button>
-    </div>
-    <div class="table-container">
-      <table class="bb-table">
-        <thead><tr><th>时间</th><th>操作人</th><th>类型</th><th>详情</th></tr></thead>
-        <tbody>
-          <tr v-for="log in logs" :key="log.id">
-            <td class="time">{{ formatTime(log.createdAt) }}</td>
-            <td>{{ log.userName }}</td>
-            <td><span class="log-type">{{ log.actionType }}</span></td>
-            <td class="detail">{{ log.detail }}</td>
-          </tr>
-          <tr v-if="logs.length === 0"><td colspan="4" class="empty-cell">暂无日志</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div v-if="totalPages > 1" class="pagination">
-      <button class="bb-btn bb-btn-xs" :disabled="page <= 1" @click="changePage(page - 1)">上一页</button>
-      <span class="page-info">{{ page }} / {{ totalPages }}</span>
-      <button class="bb-btn bb-btn-xs" :disabled="page >= totalPages" @click="changePage(page + 1)">下一页</button>
+  <div class="bb-logs wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>操作日志</h1>
+      </div>
+      <div class="wb-page-tools">
+        <button class="bb-btn" @click="fetchData">刷新</button>
+      </div>
+    </header>
+    <div class="wb-data-board">
+      <div class="table-container">
+        <table class="bb-table">
+          <thead><tr><th>时间</th><th>操作人</th><th>类型</th><th>详情</th></tr></thead>
+          <tbody>
+            <tr v-for="log in logs" :key="log.id">
+              <td class="time">{{ formatTime(log.createdAt) }}</td>
+              <td>{{ log.userName }}</td>
+              <td><span class="log-type">{{ log.actionType }}</span></td>
+              <td class="detail">{{ log.detail }}</td>
+            </tr>
+            <tr v-if="logs.length === 0"><td colspan="4" class="empty-cell">暂无日志</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-if="totalPages > 1" class="pagination">
+        <button class="bb-btn bb-btn-xs" :disabled="page <= 1" @click="changePage(page - 1)">上一页</button>
+        <span class="page-info">{{ page }} / {{ totalPages }}</span>
+        <button class="bb-btn bb-btn-xs" :disabled="page >= totalPages" @click="changePage(page + 1)">下一页</button>
+      </div>
     </div>
   </div>
 </template>
@@ -46,7 +52,9 @@ async function fetchData() {
 function changePage(p: number) { page.value = p; fetchData() }
 function formatTime(t: string) { return t ? new Date(t).toLocaleString('zh-CN') : '' }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/auth', '/season', '/house/admin/door', '/house/admin/evict-backyard', '/houseguests', '/round-twist', '/nomination/bbbb-winner'
+)
 onMounted(fetchData)
 </script>
 

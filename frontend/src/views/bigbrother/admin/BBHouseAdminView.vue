@@ -1,124 +1,130 @@
 <template>
-  <div class="bb-house-admin">
-    <div class="page-header">
-      <h1>🏠 House 管理</h1>
-    </div>
+  <div class="bb-house-admin wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>🏠 House 管理</h1>
+      </div>
+    </header>
 
     <!-- 后院门控制 -->
-    <div class="control-card">
-      <div class="control-header">
-        <h3>🚪 后院门</h3>
-        <div class="door-status" :class="{ open: backyardDoorOpen }">
-          {{ backyardDoorOpen ? '🟢 OPEN' : '🔴 CLOSED' }}
+    <div class="wb-lanes wb-house-controls">
+      <div class="control-card wb-panel">
+        <div class="control-header">
+          <h3>🚪 后院门</h3>
+          <div class="door-status" :class="{ open: backyardDoorOpen }">
+            {{ backyardDoorOpen ? '🟢 OPEN' : '🔴 CLOSED' }}
+          </div>
         </div>
-      </div>
-      <div class="control-actions">
-        <button class="bb-btn" :class="{ 'btn-active': backyardDoorOpen }" @click="toggleDoor(true)">
-          打开后院门
-        </button>
-        <button class="bb-btn bb-btn-danger" :class="{ 'btn-active': !backyardDoorOpen }" @click="toggleDoor(false)">
-          关闭后院门
-        </button>
-        <button class="bb-btn bb-btn-danger" @click="evictBackyard">
-          关闭并清空后院
-        </button>
-      </div>
-    </div>
-
-    <!-- 房间人数/床位/睡觉 & 作息规则 -->
-    <div class="control-card">
-      <div class="control-header control-toggle" @click="roomsConfigOpen = !roomsConfigOpen">
-        <h3>🛏️ 房间人数 / 床位 / 睡觉</h3>
-        <span class="collapse-arrow">{{ roomsConfigOpen ? '▲' : '▼' }}</span>
-      </div>
-
-      <div v-show="roomsConfigOpen">
-      <div class="house-rules">
-        <div class="rule-row">
-          <label>单次睡觉时长</label>
-          <input type="number" min="1" max="1440" v-model.number="sleepDurationMinutes" class="bb-input rule-input" />
-          <span>分钟（约 {{ sleepDurationHoursText }} 小时）</span>
-        </div>
-        <div class="rule-row">
-          <label>可开始睡觉时间</label>
-          <input type="time" v-model="sleepWindowStart" class="bb-input rule-time" />
-          <span>至</span>
-          <input type="time" v-model="sleepWindowEnd" class="bb-input rule-time" />
-          <span class="rule-hint">支持跨日期，例如 22:00 至 02:00；超时未睡将在结束时间被动入睡</span>
-        </div>
-        <div class="rule-row">
-          <label>洗澡后冷却</label>
-          <input type="number" min="0" max="1440" v-model.number="showerCooldownMinutes" class="bb-input rule-input" />
-          <span>分钟（单次洗澡限时 10 分钟，结束后自动回洗漱间）</span>
-        </div>
-        <div class="rule-row">
-          <button class="bb-btn bb-btn-primary" @click="saveSeason">保存规则</button>
+        <div class="control-actions">
+          <button class="bb-btn" :class="{ 'btn-active': backyardDoorOpen }" @click="toggleDoor(true)">
+            打开后院门
+          </button>
+          <button class="bb-btn bb-btn-danger" :class="{ 'btn-active': !backyardDoorOpen }" @click="toggleDoor(false)">
+            关闭后院门
+          </button>
+          <button class="bb-btn bb-btn-danger" @click="evictBackyard">
+            关闭并清空后院
+          </button>
         </div>
       </div>
 
-      <div class="move-rules">
-        <label>批量移动耗时</label>
-        <input type="number" min="0" max="3600" v-model.number="bulkMoveDuration" class="bb-input rule-input" />
-        <span>秒</span>
-        <button class="bb-btn bb-btn-xs" @click="applyBulkMoveDuration">应用到全部房间</button>
-        <span class="rule-hint">进入目标房间所需时间；0 秒表示立即到达（管理员强制移动不受此限制）</span>
-      </div>
-
-      <div class="room-editor">
-        <div v-for="r in allRooms" :key="r.id" class="room-edit-row">
-          <span class="re-name">{{ r.icon }} {{ r.name }}</span>
-          <label class="re-field">人数
-            <input type="number" min="0" v-model.number="ensureRoomEdit(r).capacity" class="bb-input re-input" />
-          </label>
-          <label class="re-field">床位
-            <input type="number" min="0" v-model.number="ensureRoomEdit(r).bedLimit" class="bb-input re-input" />
-          </label>
-          <label class="re-field">移动耗时
-            <input type="number" min="0" max="3600" v-model.number="ensureRoomEdit(r).moveDuration" class="bb-input re-input" /> 秒
-          </label>
-          <label class="re-field re-check">
-            <input type="checkbox" v-model="ensureRoomEdit(r).canSleep" /> 可睡觉
-          </label>
-          <button class="bb-btn bb-btn-xs" @click="saveRoom(r.id)">保存</button>
+      <!-- 房间人数/床位/睡觉 & 作息规则 -->
+      <div class="control-card wb-panel">
+        <div class="control-header control-toggle" @click="roomsConfigOpen = !roomsConfigOpen">
+          <h3>🛏️ 房间人数 / 床位 / 睡觉</h3>
+          <span class="collapse-arrow">{{ roomsConfigOpen ? '▲' : '▼' }}</span>
         </div>
-      </div>
+
+        <div v-show="roomsConfigOpen">
+        <div class="house-rules">
+          <div class="rule-row">
+            <label>单次睡觉时长</label>
+            <input type="number" min="1" max="1440" v-model.number="sleepDurationMinutes" class="bb-input rule-input" />
+            <span>分钟（约 {{ sleepDurationHoursText }} 小时）</span>
+          </div>
+          <div class="rule-row">
+            <label>可开始睡觉时间</label>
+            <input type="time" v-model="sleepWindowStart" class="bb-input rule-time" />
+            <span>至</span>
+            <input type="time" v-model="sleepWindowEnd" class="bb-input rule-time" />
+            <span class="rule-hint">支持跨日期，例如 22:00 至 02:00；超时未睡将在结束时间被动入睡</span>
+          </div>
+          <div class="rule-row">
+            <label>洗澡后冷却</label>
+            <input type="number" min="0" max="1440" v-model.number="showerCooldownMinutes" class="bb-input rule-input" />
+            <span>分钟（单次洗澡限时 10 分钟，结束后自动回洗漱间）</span>
+          </div>
+          <div class="rule-row">
+            <button class="bb-btn bb-btn-primary" @click="saveSeason">保存规则</button>
+          </div>
+        </div>
+
+        <div class="move-rules">
+          <label>批量移动耗时</label>
+          <input type="number" min="0" max="3600" v-model.number="bulkMoveDuration" class="bb-input rule-input" />
+          <span>秒</span>
+          <button class="bb-btn bb-btn-xs" @click="applyBulkMoveDuration">应用到全部房间</button>
+          <span class="rule-hint">进入目标房间所需时间；0 秒表示立即到达（管理员强制移动不受此限制）</span>
+        </div>
+
+        <div class="room-editor">
+          <div v-for="r in allRooms" :key="r.id" class="room-edit-row">
+            <span class="re-name">{{ r.icon }} {{ r.name }}</span>
+            <label class="re-field">人数
+              <input type="number" min="0" v-model.number="ensureRoomEdit(r).capacity" class="bb-input re-input" />
+            </label>
+            <label class="re-field">床位
+              <input type="number" min="0" v-model.number="ensureRoomEdit(r).bedLimit" class="bb-input re-input" />
+            </label>
+            <label class="re-field">移动耗时
+              <input type="number" min="0" max="3600" v-model.number="ensureRoomEdit(r).moveDuration" class="bb-input re-input" /> 秒
+            </label>
+            <label class="re-field re-check">
+              <input type="checkbox" v-model="ensureRoomEdit(r).canSleep" /> 可睡觉
+            </label>
+            <button class="bb-btn bb-btn-xs" @click="saveRoom(r.id)">保存</button>
+          </div>
+        </div>
+        </div>
       </div>
     </div>
 
     <!-- 餐厅照片墙（可调整顺序） -->
-    <div class="photo-wall-section">
-      <h3>🖼️ 餐厅照片墙（可调整展示顺序）</h3>
-      <p class="pw-hint">已淘汰 / 陪审团成员显示为黑白，其余为彩色。</p>
-      <PhotoWall :players="photoWall" editable show-names @move="movePhoto" />
-      <div class="pw-actions">
-        <button class="bb-btn bb-btn-primary" @click="savePhotoWallOrder">保存顺序</button>
+    <div class="wb-lanes wb-house-monitor">
+      <div class="photo-wall-section wb-panel">
+        <h3>🖼️ 餐厅照片墙（可调整展示顺序）</h3>
+        <p class="pw-hint">已淘汰 / 陪审团成员显示为黑白，其余为彩色。</p>
+        <PhotoWall :players="photoWall" editable show-names @move="movePhoto" />
+        <div class="pw-actions">
+          <button class="bb-btn bb-btn-primary" @click="savePhotoWallOrder">保存顺序</button>
+        </div>
       </div>
-    </div>
 
-    <!-- 玩家位置总览 -->
-    <div class="locations-section">
-      <h3>📍 玩家位置总览</h3>
-      <div class="locations-grid">
-        <div v-for="(data, roomId) in locations" :key="roomId" class="location-card">
-          <div class="location-header">
-            <span class="location-icon">{{ getRoomIcon(roomId as string) }}</span>
-            <span class="location-name">{{ getRoomName(roomId as string) }}</span>
-            <span class="location-count">{{ data.players?.length || 0 }} 人</span>
-            <button class="bb-btn bb-btn-xs room-chat-btn" @click="goRoomChat(roomId as string)">💬 聊天</button>
-          </div>
-          <div class="location-players">
-            <div v-for="p in (data.players || [])" :key="p.playerId" class="location-player">
-              <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
-              <span class="player-name">{{ p.playerName }}</span>
-              <span class="player-time">{{ formatTime(p.enteredAt) }}</span>
-              <select class="move-select" @change="handleForceMove(p.playerId, ($event.target as any).value); ($event.target as any).value = ''">
-                <option value="">移至...</option>
-                <option v-for="r in allRooms" :key="r.id" :value="r.id" :disabled="r.id === roomId">
-                  {{ r.icon }} {{ r.name }}
-                </option>
-              </select>
+      <!-- 玩家位置总览 -->
+      <div class="locations-section wb-panel">
+        <h3>📍 玩家位置总览</h3>
+        <div class="locations-grid">
+          <div v-for="(data, roomId) in locations" :key="roomId" class="location-card">
+            <div class="location-header">
+              <span class="location-icon">{{ getRoomIcon(roomId as string) }}</span>
+              <span class="location-name">{{ getRoomName(roomId as string) }}</span>
+              <span class="location-count">{{ data.players?.length || 0 }} 人</span>
+              <button class="bb-btn bb-btn-xs room-chat-btn" @click="goRoomChat(roomId as string)">💬 聊天</button>
             </div>
-            <div v-if="!data.players?.length" class="no-players">空</div>
+            <div class="location-players">
+              <div v-for="p in (data.players || [])" :key="p.playerId" class="location-player">
+                <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
+                <span class="player-name">{{ p.playerName }}</span>
+                <span class="player-time">{{ formatTime(p.enteredAt) }}</span>
+                <select class="move-select" @change="handleForceMove(p.playerId, ($event.target as any).value); ($event.target as any).value = ''">
+                  <option value="">移至...</option>
+                  <option v-for="r in allRooms" :key="r.id" :value="r.id" :disabled="r.id === roomId">
+                    {{ r.icon }} {{ r.name }}
+                  </option>
+                </select>
+              </div>
+              <div v-if="!data.players?.length" class="no-players">空</div>
+            </div>
           </div>
         </div>
       </div>

@@ -1,9 +1,13 @@
 <template>
-  <div class="bb-hoh-admin">
-    <div class="page-header">
-      <h1>HOH 竞争</h1>
-      <span class="round-tag">第{{ $route.params.round }}周</span>
-    </div>
+  <div class="bb-hoh-admin wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>HOH 竞争</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ $route.params.round }}周</span>
+        </div>
+      </div>
+    </header>
 
     <div v-if="currentHoh" class="current-hoh-card">
       <div class="hoh-icon">👑</div>
@@ -33,62 +37,64 @@
       🚫 规则：上一轮 HOH <strong>{{ excludedHoh.name }}</strong> 不能参加本轮 HOH 竞争（不能连任）。
     </div>
 
-    <div class="action-section">
-      <h3>操作</h3>
-      <div class="action-buttons">
-        <button class="bb-btn" @click="runCompetition">🎲 模拟 HOH 竞争</button>
-        <button class="bb-btn" @click="openMinigameModal">🎮 开启小游戏</button>
-        <button class="bb-btn" @click="showAssignModal = true">✏️ 手动指定 HOH</button>
-        <button v-if="currentHoh" class="bb-btn bb-btn-danger" @click="undoHoh">↩ 撤销 HOH</button>
-      </div>
-      <!-- 小游戏房间状态 -->
-      <div v-if="activeRoom" class="room-status" :class="activeRoom.status">
-        <span class="status-badge">{{ statusText }}</span>
-        <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人<template v-if="activeRoom.targetScore"> · 目标 {{ activeRoom.targetScore }}</template></span>
-        <div class="room-actions">
-          <MinigameStartButton v-if="activeRoom.status === 'waiting'" label="▶ 开始比赛" @start="startMinigame" />
-          <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-danger" @click="stopMinigame">✕ 取消房间</button>
-          <button v-if="activeRoom.status === 'playing'" class="bb-btn bb-btn-warn" @click="pauseMinigame">⏸ 暂停</button>
-          <button v-if="activeRoom.status === 'paused'" class="bb-btn bb-btn-primary" @click="resumeMinigame">▶ 恢复</button>
-          <button v-if="activeRoom.status === 'playing' || activeRoom.status === 'paused'" class="bb-btn bb-btn-danger" @click="stopMinigame">⏹ 停止</button>
+    <div class="wb-lanes wb-main-lane">
+      <div class="action-section wb-panel">
+        <h3>操作</h3>
+        <div class="action-buttons">
+          <button class="bb-btn" @click="runCompetition">🎲 模拟 HOH 竞争</button>
+          <button class="bb-btn" @click="openMinigameModal">🎮 开启小游戏</button>
+          <button class="bb-btn" @click="showAssignModal = true">✏️ 手动指定 HOH</button>
+          <button v-if="currentHoh" class="bb-btn bb-btn-danger" @click="undoHoh">↩ 撤销 HOH</button>
+        </div>
+        <!-- 小游戏房间状态 -->
+        <div v-if="activeRoom" class="room-status" :class="activeRoom.status">
+          <span class="status-badge">{{ statusText }}</span>
+          <span class="status-info">{{ activeRoom.minigameId }} · {{ activeRoom.participants.length }}人<template v-if="activeRoom.targetScore"> · 目标 {{ activeRoom.targetScore }}</template></span>
+          <div class="room-actions">
+            <MinigameStartButton v-if="activeRoom.status === 'waiting'" label="▶ 开始比赛" @start="startMinigame" />
+            <button v-if="activeRoom.status === 'waiting'" class="bb-btn bb-btn-danger" @click="stopMinigame">✕ 取消房间</button>
+            <button v-if="activeRoom.status === 'playing'" class="bb-btn bb-btn-warn" @click="pauseMinigame">⏸ 暂停</button>
+            <button v-if="activeRoom.status === 'paused'" class="bb-btn bb-btn-primary" @click="resumeMinigame">▶ 恢复</button>
+            <button v-if="activeRoom.status === 'playing' || activeRoom.status === 'paused'" class="bb-btn bb-btn-danger" @click="stopMinigame">⏹ 停止</button>
+          </div>
+        </div>
+
+        <!-- 准备环节 -->
+        <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
+          :gameTitle="activeRoom.minigameName" :rules="activeRoom.options?.rules || ''" :summoning="summoning" @summon="summonPlayers" />
+
+        <!-- 实时观战 -->
+        <div v-if="activeRoom" class="observer-wrap">
+          <MinigameObserver :roomId="activeRoom.roomId" :room="activeRoom" />
+        </div>
+
+        <!-- 目标设置确认创建 -->
+        <div v-if="selectedMinigameId" class="target-setup">
+          <div class="target-setup-title">🎮 已选择「{{ selectedMinigameId }}」，设置胜出目标（可选）</div>
+          <div class="target-setup-row">
+            <input v-model.number="targetScore" type="number" min="1" class="target-input" :placeholder="targetInputHint" />
+            <button class="bb-btn bb-btn-primary" :disabled="creating" @click="createRoomWithTarget">✓ 创建房间</button>
+            <button class="bb-btn" :disabled="creating" @click="cancelCreateRoom">取消</button>
+          </div>
         </div>
       </div>
 
-      <!-- 准备环节 -->
-      <MinigameReadyPanel v-if="activeRoom && activeRoom.status === 'waiting'" :roomId="activeRoom.roomId"
-        :gameTitle="activeRoom.minigameName" :rules="activeRoom.options?.rules || ''" :summoning="summoning" @summon="summonPlayers" />
-
-      <!-- 实时观战 -->
-      <div v-if="activeRoom" class="observer-wrap">
-        <MinigameObserver :roomId="activeRoom.roomId" :room="activeRoom" />
-      </div>
-
-      <!-- 目标设置确认创建 -->
-      <div v-if="selectedMinigameId" class="target-setup">
-        <div class="target-setup-title">🎮 已选择「{{ selectedMinigameId }}」，设置胜出目标（可选）</div>
-        <div class="target-setup-row">
-          <input v-model.number="targetScore" type="number" min="1" class="target-input" :placeholder="targetInputHint" />
-          <button class="bb-btn bb-btn-primary" :disabled="creating" @click="createRoomWithTarget">✓ 创建房间</button>
-          <button class="bb-btn" :disabled="creating" @click="cancelCreateRoom">取消</button>
+      <div class="history-section wb-panel">
+        <h3>HOH 历史记录</h3>
+        <div class="table-container">
+          <table class="bb-table">
+            <thead><tr><th>轮次</th><th>HOH</th><th>方式</th><th>时间</th></tr></thead>
+            <tbody>
+              <tr v-for="r in history" :key="r.id">
+                <td>{{ getRoundIndex(r.roundId) }}</td>
+                <td class="highlight">{{ r.winnerName }}</td>
+                <td>{{ r.competitionName }}</td>
+                <td class="time">{{ formatTime(r.createdAt) }}</td>
+              </tr>
+              <tr v-if="history.length === 0"><td colspan="4" class="empty-cell">暂无记录</td></tr>
+            </tbody>
+          </table>
         </div>
-      </div>
-    </div>
-
-    <div class="history-section">
-      <h3>HOH 历史记录</h3>
-      <div class="table-container">
-        <table class="bb-table">
-          <thead><tr><th>轮次</th><th>HOH</th><th>方式</th><th>时间</th></tr></thead>
-          <tbody>
-            <tr v-for="r in history" :key="r.id">
-              <td>{{ getRoundIndex(r.roundId) }}</td>
-              <td class="highlight">{{ r.winnerName }}</td>
-              <td>{{ r.competitionName }}</td>
-              <td class="time">{{ formatTime(r.createdAt) }}</td>
-            </tr>
-            <tr v-if="history.length === 0"><td colspan="4" class="empty-cell">暂无记录</td></tr>
-          </tbody>
-        </table>
       </div>
     </div>
 
@@ -358,7 +364,9 @@ function formatTime(t: string) {
   return t ? new Date(t).toLocaleString('zh-CN') : ''
 }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/hoh', '/houseguests', '/minigame/room', '/round-twist', '/eviction/result', '/eviction/night/start', '/eviction/restore', '/season/set', '/season/next', '/season/reset', '/season/config', '/season/twists'
+)
 onMounted(fetchData)
 </script>
 

@@ -388,7 +388,9 @@ async function nextTurn() {
   }
 }
 
-useBbRefresh(load)
+useBbRefresh(load,
+  '/jury-qa', '/season/endgame/reset', '/season/reset'
+)
 onMounted(async () => {
   await nextTick()
   updateHeight()

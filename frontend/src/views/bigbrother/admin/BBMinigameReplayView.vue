@@ -1,23 +1,28 @@
 <template>
-  <div class="mg-replay">
-    <div class="page-header">
-      <h1>小游戏复盘</h1>
-      <div class="filters">
-        <select v-model="filterGameType" class="bb-input" aria-label="筛选比赛场景" @change="loadList">
-          <option value="">全部场景</option>
-          <option value="hoh">HOH</option>
-          <option value="veto">否决权</option>
-          <option value="bbbb">BBBB</option>
-          <option value="twist">变数挑战</option>
-          <option value="finale">终局</option>
-        </select>
-        <button class="bb-btn" @click="loadList">🔄 刷新</button>
-        <button v-if="!readonly && selectedIds.length" class="bb-btn bb-btn-danger" @click="batchDelete">批量删除（{{ selectedIds.length }}）</button>
+  <div class="mg-replay wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>小游戏复盘</h1>
       </div>
-    </div>
+      <div class="wb-page-tools">
+        <div class="filters">
+          <select v-model="filterGameType" class="bb-input" aria-label="筛选比赛场景" @change="loadList">
+            <option value="">全部场景</option>
+            <option value="hoh">HOH</option>
+            <option value="veto">否决权</option>
+            <option value="bbbb">BBBB</option>
+            <option value="twist">变数挑战</option>
+            <option value="finale">终局</option>
+          </select>
+          <button class="bb-btn" @click="loadList">🔄 刷新</button>
+          <button v-if="!readonly && selectedIds.length" class="bb-btn bb-btn-danger" @click="batchDelete">批量删除（{{ selectedIds.length }}）</button>
+        </div>
+      </div>
+    </header>
 
     <div class="replay-layout" :class="{ opened: detail }">
-      <div class="list-panel">
+      <aside class="list-panel wb-index wb-panel" aria-label="对局列表">
+        <h2 class="wb-index-title">对局 · {{ list.length }}</h2>
         <div class="list-tools" v-if="list.length && !readonly">
           <label class="sel-all"><input type="checkbox" :checked="allSelected" @change="toggleAll" /> 全选</label>
         </div>
@@ -45,9 +50,9 @@
             <div class="ri-winner none" v-else-if="r.status !== 'playing'">无胜者</div>
           </div>
         </div>
-      </div>
+      </aside>
 
-      <div class="detail-panel">
+      <div class="detail-panel wb-panel">
         <div v-if="!detail" class="empty-hint">选择左侧对局查看复盘</div>
         <template v-else>
           <button class="bb-btn back-list" @click="detail = null">‹ 返回对局列表</button>

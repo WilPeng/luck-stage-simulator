@@ -1,24 +1,28 @@
 <template>
-  <div class="bb-house">
+  <div class="bb-house wb-page">
     <!-- 位置未确定前，全屏 loading，避免默认显示 living_room -->
     <div v-if="!locationLoaded" class="house-loading-overlay">
       <div class="loading-spinner"></div>
       <div class="loading-text">正在确定你的位置…</div>
     </div>
 
-    <div class="page-header">
-      <h1>🏠 BB House</h1>
-      <div class="header-meta">
-        <NotificationSettings />
-        <button v-if="canSleepHere && !isSleeping && !isShowering" class="bb-btn bb-btn-sm" :disabled="!canStartSleep" @click="doSleep">😴 睡觉</button>
-        <span class="location-tag">
-          📍 {{ currentRoomName }}
-        </span>
-        <span class="ws-status" :class="{ connected: house.connected.value }">
-          {{ house.connected.value ? '🟢 在线' : '🔴 离线' }}
-        </span>
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>🏠 BB House</h1>
       </div>
-    </div>
+      <div class="wb-page-tools">
+        <div class="header-meta">
+          <NotificationSettings />
+          <button v-if="canSleepHere && !isSleeping && !isShowering" class="bb-btn bb-btn-sm" :disabled="!canStartSleep" @click="doSleep">😴 睡觉</button>
+          <span class="location-tag">
+            📍 {{ currentRoomName }}
+          </span>
+          <span class="ws-status" :class="{ connected: house.connected.value }">
+            {{ house.connected.value ? '🟢 在线' : '🔴 离线' }}
+          </span>
+        </div>
+      </div>
+    </header>
 
     <!-- 浏览器通知权限申请 -->
     <div v-if="showNotifyBanner" class="notify-banner">
@@ -84,6 +88,7 @@
       <!-- 左侧：房屋地图 -->
       <div class="house-left" :class="{ 'mobile-active': mobileTab === 'move' }">
         <div class="map-wrap" :class="{ locked: isShowering || isSleeping || moving }">
+          <h2 class="wb-map-title">房屋地图</h2>
           <HouseMap
             :rooms="rooms"
             :currentRoomId="currentRoomId"
@@ -97,109 +102,111 @@
         </div>
 
         <!-- HOH 房门控制 / 门铃 -->
-        <div v-if="canControlHohDoor || atHohDoor" class="hoh-door-panel">
-          <div class="hoh-door-title">
-            🚪 HOH 房门：<span :class="hohDoorOpen ? 'open' : 'closed'">{{ hohDoorOpen ? '已打开' : '已关闭' }}</span>
-          </div>
-          <div v-if="canControlHohDoor" class="hoh-door-actions">
-            <button class="bb-btn bb-btn-sm" :class="{ 'btn-active': hohDoorOpen }" @click="toggleHohDoor(true)">打开门</button>
-            <button class="bb-btn bb-btn-sm" :class="{ 'btn-active': !hohDoorOpen }" @click="toggleHohDoor(false)">关闭门</button>
-          </div>
-          <div v-if="atHohDoor && !hohDoorOpen" class="doorbell-row">
-            <button class="bb-btn bb-btn-sm" @click="ringDoorbell">🔔 按门铃</button>
-            <span class="doorbell-hint">门已关闭，按门铃通知房内的人</span>
-          </div>
-          <div v-if="doorbellSentNotice" class="doorbell-sent">{{ doorbellSentNotice }}</div>
-        </div>
-
-        <!-- 睡觉 -->
-        <div v-if="canSleepHere" class="action-panel">
-          <button class="bb-btn bb-btn-sm" :disabled="!canStartSleep" @click="doSleep">😴 睡觉</button>
-          <span v-if="myState.sleepCompleted" class="action-hint">本睡眠周期已完成</span>
-          <span v-else-if="!myState.canSleepNow" class="action-hint">
-            可睡觉时间 {{ myState.sleepWindowStart }} - {{ myState.sleepWindowEnd }}
-          </span>
-          <span v-else class="action-hint">单次睡眠约 {{ sleepDurationText }}</span>
-        </div>
-
-        <!-- 洗漱间：查看浴室内有谁 -->
-        <div v-if="currentRoomId === 'washroom'" class="washroom-panel">
-          <div class="washroom-title">🧼 洗漱间 · 浴室内</div>
-          <div v-if="showerCooldownActive" class="washroom-cooldown">
-            🚿 洗澡冷却中，约 {{ showerCooldownText }} 后可再次洗澡
-          </div>
-          <div v-if="washroomBathroomPlayers.length" class="washroom-list">
-            <div v-for="p in washroomBathroomPlayers" :key="p.playerId" class="washroom-player">
-              <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
-              <span>{{ p.playerName }}</span>
+        <div class="wb-house-actions" role="region" aria-label="当前位置可用操作">
+          <div v-if="canControlHohDoor || atHohDoor" class="hoh-door-panel">
+            <div class="hoh-door-title">
+              🚪 HOH 房门：<span :class="hohDoorOpen ? 'open' : 'closed'">{{ hohDoorOpen ? '已打开' : '已关闭' }}</span>
             </div>
-          </div>
-          <div v-else class="washroom-empty">浴室目前无人</div>
-        </div>
-
-        <!-- 邀请同房间玩家一起移动 -->
-        <div v-if="!isSleeping && !isShowering && !moving && coMoveCandidates.length && coMoveRooms.length" class="comove-panel">
-          <div class="comove-title">👥 邀请同房间玩家一起移动</div>
-          <div class="comove-row">
-            <select v-model="coMoveTargetId" class="invite-select">
-              <option value="">选择玩家…</option>
-              <option v-for="p in coMoveCandidates" :key="p.playerId" :value="p.playerId">{{ p.playerName }}</option>
-            </select>
-            <select v-model="coMoveRoomId" class="invite-select">
-              <option value="">选择目标房间…</option>
-              <option v-for="r in coMoveRooms" :key="r.id" :value="r.id">
-                {{ r.icon }} {{ r.name }}（{{ r.moveDuration ?? 10 }}秒）
-              </option>
-            </select>
-            <button class="bb-btn bb-btn-sm" :disabled="!coMoveTargetId || !coMoveRoomId" @click="handleInviteCoMove">邀请</button>
-          </div>
-          <div v-if="coMovePendingName" class="action-hint co-move-pending">
-            <span>已邀请 {{ coMovePendingName }}，等待同意…</span>
-            <button class="bb-btn bb-btn-xs" @click="handleCancelCoMoveInvite">取消邀请</button>
-          </div>
-          <div v-if="coMoveNotice" class="invite-notice">{{ coMoveNotice }}</div>
-        </div>
-
-        <!-- HOH 房间：监控（房内所有人可见）+ 邀请/睡眠同意（仅 HOH） -->
-        <div v-if="showMonitor" class="hoh-panel">
-          <div class="hoh-panel-title">👑 House Monitor</div>
-          <div v-if="hohMonitor.length" class="monitor-grid">
-            <div v-for="r in hohMonitor" :key="r.roomId" class="monitor-item">
-              <span class="monitor-icon">{{ r.icon }}</span>
-              <span class="monitor-name">{{ r.roomName }}</span>
-              <span class="monitor-count">{{ r.count }}</span>
+            <div v-if="canControlHohDoor" class="hoh-door-actions">
+              <button class="bb-btn bb-btn-sm" :class="{ 'btn-active': hohDoorOpen }" @click="toggleHohDoor(true)">打开门</button>
+              <button class="bb-btn bb-btn-sm" :class="{ 'btn-active': !hohDoorOpen }" @click="toggleHohDoor(false)">关闭门</button>
             </div>
+            <div v-if="atHohDoor && !hohDoorOpen" class="doorbell-row">
+              <button class="bb-btn bb-btn-sm" @click="ringDoorbell">🔔 按门铃</button>
+              <span class="doorbell-hint">门已关闭，按门铃通知房内的人</span>
+            </div>
+            <div v-if="doorbellSentNotice" class="doorbell-sent">{{ doorbellSentNotice }}</div>
           </div>
 
-          <template v-if="isHoh">
-            <div class="hoh-divider"></div>
-            <div class="hoh-panel-title">📨 邀请进入 HOH Room</div>
-            <div v-if="declineNotice" class="invite-notice">{{ declineNotice }}</div>
-            <div class="invite-row">
-              <select v-model="inviteTargetId" class="invite-select">
-                <option value="">选择玩家…</option>
-                <option v-for="p in inviteCandidates" :key="p.id" :value="p.id">{{ p.name }}</option>
-              </select>
-              <button class="bb-btn bb-btn-sm" :disabled="!inviteTargetId" @click="handleInvite">邀请</button>
+          <!-- 睡觉 -->
+          <div v-if="canSleepHere" class="action-panel">
+            <button class="bb-btn bb-btn-sm" :disabled="!canStartSleep" @click="doSleep">😴 睡觉</button>
+            <span v-if="myState.sleepCompleted" class="action-hint">本睡眠周期已完成</span>
+            <span v-else-if="!myState.canSleepNow" class="action-hint">
+              可睡觉时间 {{ myState.sleepWindowStart }} - {{ myState.sleepWindowEnd }}
+            </span>
+            <span v-else class="action-hint">单次睡眠约 {{ sleepDurationText }}</span>
+          </div>
+
+          <!-- 洗漱间：查看浴室内有谁 -->
+          <div v-if="currentRoomId === 'washroom'" class="washroom-panel">
+            <div class="washroom-title">🧼 洗漱间 · 浴室内</div>
+            <div v-if="showerCooldownActive" class="washroom-cooldown">
+              🚿 洗澡冷却中，约 {{ showerCooldownText }} 后可再次洗澡
             </div>
-            <div v-if="pendingInvites.length" class="pending-list">
-              <div v-for="pid in pendingInvites" :key="pid" class="pending-item">
-                <span>⏳ {{ playerName(pid) }} 等待回应</span>
-                <button class="bb-btn bb-btn-xs" @click="handleCancelInvite(pid)">撤销</button>
+            <div v-if="washroomBathroomPlayers.length" class="washroom-list">
+              <div v-for="p in washroomBathroomPlayers" :key="p.playerId" class="washroom-player">
+                <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
+                <span>{{ p.playerName }}</span>
               </div>
             </div>
-            <div v-if="cancelNotice" class="invite-notice">{{ cancelNotice }}</div>
+            <div v-else class="washroom-empty">浴室目前无人</div>
+          </div>
 
-            <div class="hoh-divider"></div>
-            <div class="hoh-panel-title">😴 允许在 HOH 房睡觉</div>
-            <div class="hoh-sleep-row">
-              <select v-model="hohApprovedPlayerId" class="invite-select approve-select" @change="handleApprovalChange">
-                <option value="">不选择任何人</option>
-                <option v-for="p in approveCandidates" :key="p.id" :value="p.id">{{ p.name }}</option>
+          <!-- 邀请同房间玩家一起移动 -->
+          <div v-if="!isSleeping && !isShowering && !moving && coMoveCandidates.length && coMoveRooms.length" class="comove-panel">
+            <div class="comove-title">👥 邀请同房间玩家一起移动</div>
+            <div class="comove-row">
+              <select aria-label="邀请同行的房客" v-model="coMoveTargetId" class="invite-select">
+                <option value="">选择玩家…</option>
+                <option v-for="p in coMoveCandidates" :key="p.playerId" :value="p.playerId">{{ p.playerName }}</option>
               </select>
-              <span class="approve-hint">最多只能选择 1 人</span>
+              <select aria-label="同行的目标房间" v-model="coMoveRoomId" class="invite-select">
+                <option value="">选择目标房间…</option>
+                <option v-for="r in coMoveRooms" :key="r.id" :value="r.id">
+                  {{ r.icon }} {{ r.name }}（{{ r.moveDuration ?? 10 }}秒）
+                </option>
+              </select>
+              <button class="bb-btn bb-btn-sm" :disabled="!coMoveTargetId || !coMoveRoomId" @click="handleInviteCoMove">邀请</button>
             </div>
-          </template>
+            <div v-if="coMovePendingName" class="action-hint co-move-pending">
+              <span>已邀请 {{ coMovePendingName }}，等待同意…</span>
+              <button class="bb-btn bb-btn-xs" @click="handleCancelCoMoveInvite">取消邀请</button>
+            </div>
+            <div v-if="coMoveNotice" class="invite-notice">{{ coMoveNotice }}</div>
+          </div>
+
+          <!-- HOH 房间：监控（房内所有人可见）+ 邀请/睡眠同意（仅 HOH） -->
+          <div v-if="showMonitor" class="hoh-panel">
+            <div class="hoh-panel-title">👑 House Monitor</div>
+            <div v-if="hohMonitor.length" class="monitor-grid">
+              <div v-for="r in hohMonitor" :key="r.roomId" class="monitor-item">
+                <span class="monitor-icon">{{ r.icon }}</span>
+                <span class="monitor-name">{{ r.roomName }}</span>
+                <span class="monitor-count">{{ r.count }}</span>
+              </div>
+            </div>
+
+            <template v-if="isHoh">
+              <div class="hoh-divider"></div>
+              <div class="hoh-panel-title">📨 邀请进入 HOH Room</div>
+              <div v-if="declineNotice" class="invite-notice">{{ declineNotice }}</div>
+              <div class="invite-row">
+                <select v-model="inviteTargetId" class="invite-select">
+                  <option value="">选择玩家…</option>
+                  <option v-for="p in inviteCandidates" :key="p.id" :value="p.id">{{ p.name }}</option>
+                </select>
+                <button class="bb-btn bb-btn-sm" :disabled="!inviteTargetId" @click="handleInvite">邀请</button>
+              </div>
+              <div v-if="pendingInvites.length" class="pending-list">
+                <div v-for="pid in pendingInvites" :key="pid" class="pending-item">
+                  <span>⏳ {{ playerName(pid) }} 等待回应</span>
+                  <button class="bb-btn bb-btn-xs" @click="handleCancelInvite(pid)">撤销</button>
+                </div>
+              </div>
+              <div v-if="cancelNotice" class="invite-notice">{{ cancelNotice }}</div>
+
+              <div class="hoh-divider"></div>
+              <div class="hoh-panel-title">😴 允许在 HOH 房睡觉</div>
+              <div class="hoh-sleep-row">
+                <select v-model="hohApprovedPlayerId" class="invite-select approve-select" @change="handleApprovalChange">
+                  <option value="">不选择任何人</option>
+                  <option v-for="p in approveCandidates" :key="p.id" :value="p.id">{{ p.name }}</option>
+                </select>
+                <span class="approve-hint">最多只能选择 1 人</span>
+              </div>
+            </template>
+          </div>
         </div>
       </div>
 

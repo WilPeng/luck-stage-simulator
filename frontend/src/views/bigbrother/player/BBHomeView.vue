@@ -1,5 +1,5 @@
 <template>
-  <div class="bb-home">
+  <div class="bb-home wb-page">
     <div class="welcome-section">
       <div class="welcome-row">
         <BBAvatar :name="authStore.currentUser?.name || '?'" :avatar="authStore.currentUser?.avatar" size="lg" />
@@ -17,58 +17,60 @@
       </span>
     </div>
 
-    <div class="status-cards">
-      <div class="status-card">
-        <div class="card-icon">📅</div>
-        <div class="card-info">
-          <div class="card-label">当前轮次</div>
-          <div class="card-value">{{ seasonStore.currentRoundNumber }} / {{ seasonStore.totalRounds }}</div>
+    <div class="wb-home-board">
+      <div class="status-cards">
+        <div class="status-card">
+          <div class="card-icon">📅</div>
+          <div class="card-info">
+            <div class="card-label">当前轮次</div>
+            <div class="card-value">{{ seasonStore.currentRoundNumber }} / {{ seasonStore.totalRounds }}</div>
+          </div>
+        </div>
+        <div class="status-card">
+          <div class="card-icon">🎯</div>
+          <div class="card-info">
+            <div class="card-label">当前阶段</div>
+            <div class="card-value stage">{{ seasonStore.stageName }}</div>
+          </div>
+        </div>
+        <div class="status-card">
+          <div class="card-icon">👤</div>
+          <div class="card-info">
+            <div class="card-label">我的角色</div>
+            <div class="card-value">{{ authStore.currentUser?.role === 'admin' ? '管理员' : '房客' }}</div>
+          </div>
         </div>
       </div>
-      <div class="status-card">
-        <div class="card-icon">🎯</div>
-        <div class="card-info">
-          <div class="card-label">当前阶段</div>
-          <div class="card-value stage">{{ seasonStore.stageName }}</div>
-        </div>
-      </div>
-      <div class="status-card">
-        <div class="card-icon">👤</div>
-        <div class="card-info">
-          <div class="card-label">我的角色</div>
-          <div class="card-value">{{ authStore.currentUser?.role === 'admin' ? '管理员' : '房客' }}</div>
-        </div>
-      </div>
-    </div>
 
-    <!-- 当前阶段可操作 -->
-    <div class="action-section">
-      <h2>当前可操作</h2>
-      <div class="action-grid">
-        <button type="button" v-for="action in currentActions" :key="action.path"
-          class="action-card" @click="goTo(action.path)">
-          <span class="action-icon">{{ action.icon }}</span>
-          <span class="action-title">{{ action.title }}</span>
-          <span class="action-desc">{{ action.desc }}</span>
-        </button>
-        <div v-if="currentActions.length === 0" class="no-action">
-          当前阶段暂无可用操作
+      <!-- 当前阶段可操作 -->
+      <div class="action-section wb-panel">
+        <h2>当前可操作</h2>
+        <div class="action-grid">
+          <button type="button" v-for="action in currentActions" :key="action.path"
+            class="action-card" @click="goTo(action.path)">
+            <span class="action-icon">{{ action.icon }}</span>
+            <span class="action-title">{{ action.title }}</span>
+            <span class="action-desc">{{ action.desc }}</span>
+          </button>
+          <div v-if="currentActions.length === 0" class="no-action">
+            当前阶段暂无可用操作
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- 历史赛程导航 -->
-    <div class="history-section">
-      <h2>历史赛程</h2>
-      <div class="round-list">
-        <div v-for="r in historyRounds" :key="r.round" class="round-card">
-          <div class="round-header">第 {{ r.round }} 周</div>
-          <div class="stage-links">
-            <button type="button" v-for="stage in r.stages" :key="stage.key"
-              class="stage-link" :class="stage.class" @click="goTo(stage.path)">
-              <span class="stage-icon">{{ stage.icon }}</span>
-              <span class="stage-name">{{ stage.label }}</span>
-            </button>
+      <!-- 历史赛程导航 -->
+      <div class="history-section wb-panel">
+        <h2>历史赛程</h2>
+        <div class="round-list">
+          <div v-for="r in historyRounds" :key="r.round" class="round-card">
+            <div class="round-header">第 {{ r.round }} 周</div>
+            <div class="stage-links">
+              <button type="button" v-for="stage in r.stages" :key="stage.key"
+                class="stage-link" :class="stage.class" @click="goTo(stage.path)">
+                <span class="stage-icon">{{ stage.icon }}</span>
+                <span class="stage-name">{{ stage.label }}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -78,6 +80,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useRouter } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
@@ -149,9 +152,14 @@ function goTo(path: string) {
   router.push(path)
 }
 
+async function loadHoh() {
+  try { currentHoh.value = await bbGetCurrentHoh() } catch {}
+}
+
+useBbRefresh(loadHoh, '/hoh', '/round-twist', '/season/set', '/season/next', '/season/reset')
 onMounted(async () => {
   await seasonStore.fetchProgress()
-  try { currentHoh.value = await bbGetCurrentHoh() } catch {}
+  await loadHoh()
 })
 </script>
 

@@ -1,30 +1,34 @@
 <template>
-  <div class="bb-history">
-    <div class="page-header">
-      <h1>历史记录</h1>
-    </div>
-
-    <div class="section">
-      <h3>HOH 历史</h3>
-      <div class="list">
-        <div v-for="r in hohHistory" :key="r.id" class="list-item">
-          <span class="item-icon">👑</span>
-          <span class="item-text">{{ r.winnerName }} - {{ r.competitionName }}</span>
-          <span class="item-time">{{ formatTime(r.createdAt) }}</span>
-        </div>
-        <div v-if="hohHistory.length === 0" class="empty">暂无记录</div>
+  <div class="bb-history wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>历史记录</h1>
       </div>
-    </div>
+    </header>
 
-    <div class="section">
-      <h3>淘汰历史</h3>
-      <div class="list">
-        <div v-for="e in evictionHistory" :key="e.id" class="list-item evicted">
-          <span class="item-icon">🚪</span>
-          <span class="item-text">{{ e.evictedName }} 被淘汰 ({{ e.voteCount }}/{{ e.totalVotes }}票)</span>
-          <span class="item-time">{{ formatTime(e.createdAt) }}</span>
+    <div class="wb-lanes wb-history-board">
+      <div class="section">
+        <h3>HOH 历史</h3>
+        <div class="list">
+          <div v-for="r in hohHistory" :key="r.id" class="list-item">
+            <span class="item-icon">👑</span>
+            <span class="item-text">{{ r.winnerName }} - {{ r.competitionName }}</span>
+            <span class="item-time">{{ formatTime(r.createdAt) }}</span>
+          </div>
+          <div v-if="hohHistory.length === 0" class="empty">暂无记录</div>
         </div>
-        <div v-if="evictionHistory.length === 0" class="empty">暂无记录</div>
+      </div>
+
+      <div class="section">
+        <h3>淘汰历史</h3>
+        <div class="list">
+          <div v-for="e in evictionHistory" :key="e.id" class="list-item evicted">
+            <span class="item-icon">🚪</span>
+            <span class="item-text">{{ e.evictedName }} 被淘汰 ({{ e.voteCount }}/{{ e.totalVotes }}票)</span>
+            <span class="item-time">{{ formatTime(e.createdAt) }}</span>
+          </div>
+          <div v-if="evictionHistory.length === 0" class="empty">暂无记录</div>
+        </div>
       </div>
     </div>
   </div>
@@ -32,6 +36,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { bbGetHohHistory, bbGetEvictionHistory } from '../../../services/bbApi'
 import type { BBHohRecord, BBEviction } from '../../../types/bigbrother'
 
@@ -40,12 +45,15 @@ const evictionHistory = ref<BBEviction[]>([])
 
 function formatTime(t: string) { return t ? new Date(t).toLocaleDateString('zh-CN') : '' }
 
-onMounted(async () => {
+async function loadHistory() {
   try {
     hohHistory.value = await bbGetHohHistory()
     evictionHistory.value = await bbGetEvictionHistory()
   } catch {}
-})
+}
+
+useBbRefresh(loadHistory, '/hoh', '/eviction/result', '/eviction/night/start', '/eviction/restore', '/round-twist', '/season/reset')
+onMounted(loadHistory)
 </script>
 
 <style scoped>

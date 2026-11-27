@@ -1,39 +1,45 @@
 <template>
-  <div class="bb-power-challenge">
-    <div class="page-header">
-      <h1>💪 实力大挑战 - 题目池管理</h1>
-      <button class="bb-btn bb-btn-primary" @click="openCreate">新建题目池</button>
-    </div>
+  <div class="bb-power-challenge wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>💪 实力大挑战 - 题目池管理</h1>
+      </div>
+      <div class="wb-page-tools">
+        <button class="bb-btn bb-btn-primary" @click="openCreate">新建题目池</button>
+      </div>
+    </header>
 
-    <div v-if="loading" class="loading-state">
-      <div class="loading-spinner"></div>
-      <span>加载题目池...</span>
-    </div>
+    <div class="wb-library">
+      <div v-if="loading" class="loading-state">
+        <div class="loading-spinner"></div>
+        <span>加载题目池...</span>
+      </div>
 
-    <div v-else-if="pools.length === 0" class="empty-state">
-      <span class="empty-icon">💪</span>
-      <span>暂无题目池，点击上方按钮创建</span>
-    </div>
+      <div v-else-if="pools.length === 0" class="empty-state">
+        <span class="empty-icon">💪</span>
+        <span>暂无题目池，点击上方按钮创建</span>
+      </div>
 
-    <div v-else class="pool-list">
-      <div v-for="pool in pools" :key="pool.id" class="pool-card">
-        <div class="pool-info">
-          <div class="pool-name">{{ pool.name }}</div>
-          <div class="pool-theme">主题：{{ pool.theme }}</div>
-          <div class="pool-meta">
-            <span class="tag">{{ pool.questions.length }} 题</span>
-            <span class="tag" :class="pool.enabled ? 'tag-ok' : 'tag-off'">
-              {{ pool.enabled ? '启用' : '禁用' }}
-            </span>
-            <span class="meta-text">更新：{{ formatDate(pool.updatedAt) }}</span>
+      <div v-else class="pool-list">
+        <div v-for="pool in pools" :key="pool.id" class="pool-card">
+          <div class="pool-info">
+            <div class="pool-name">{{ pool.name }}</div>
+            <div class="pool-theme">主题：{{ pool.theme }}</div>
+            <div class="pool-meta">
+              <span class="tag">{{ pool.questions.length }} 题</span>
+              <span class="tag" :class="pool.enabled ? 'tag-ok' : 'tag-off'">
+                {{ pool.enabled ? '启用' : '禁用' }}
+              </span>
+              <span class="meta-text">更新：{{ formatDate(pool.updatedAt) }}</span>
+            </div>
           </div>
-        </div>
-        <div class="pool-actions">
-          <button class="bb-btn-xs" :class="pool.enabled ? 'btn-warn' : 'btn-success'" @click="toggle(pool)">
-            {{ pool.enabled ? '禁用' : '启用' }}
-          </button>
-          <button class="bb-btn-xs btn-edit" @click="openEdit(pool)">编辑</button>
-          <button class="bb-btn-xs btn-danger" @click="remove(pool)">删除</button>
+          <div class="pool-actions">
+            <button class="bb-btn-xs" :class="pool.enabled ? 'btn-warn' : 'btn-success'" @click="toggle(pool)">
+              {{ pool.enabled ? '禁用' : '启用' }}
+            </button>
+            <button class="bb-btn-xs btn-edit" @click="openEdit(pool)">编辑</button>
+            <button class="bb-btn-xs btn-danger" @click="remove(pool)">删除</button>
+          </div>
         </div>
       </div>
     </div>

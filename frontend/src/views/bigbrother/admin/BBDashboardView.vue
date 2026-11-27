@@ -1,77 +1,83 @@
 <template>
-  <div class="bb-dashboard">
-    <div class="page-header">
-      <h1>仪表盘总览</h1>
-      <div class="header-actions">
-        <button class="bb-btn" @click="refresh">刷新数据</button>
+  <div class="bb-dashboard wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>仪表盘总览</h1>
       </div>
-    </div>
+      <div class="wb-page-tools">
+        <div class="header-actions">
+          <button class="bb-btn" @click="refresh">刷新数据</button>
+        </div>
+      </div>
+    </header>
 
-    <div class="progress-section">
-      <h2>赛程进度</h2>
-      <div class="round-overview">
-        <div class="stat-card current-round">
-          <div class="stat-icon">📅</div>
-          <div class="stat-info">
-            <div class="stat-value">{{ seasonStore.currentRoundNumber }} / {{ seasonStore.totalRounds }}</div>
-            <div class="stat-label">当前轮次</div>
+    <div class="wb-lanes wb-dashboard-top">
+      <div class="progress-section wb-panel">
+        <h2>赛程进度</h2>
+        <div class="round-overview">
+          <div class="stat-card current-round">
+            <div class="stat-icon">📅</div>
+            <div class="stat-info">
+              <div class="stat-value">{{ seasonStore.currentRoundNumber }} / {{ seasonStore.totalRounds }}</div>
+              <div class="stat-label">当前轮次</div>
+            </div>
+          </div>
+          <div class="stat-card stage-info">
+            <div class="stat-icon">🎯</div>
+            <div class="stat-info">
+              <div class="stat-value stage-name">{{ seasonStore.stageName }}</div>
+              <div class="stat-label">当前阶段</div>
+            </div>
           </div>
         </div>
-        <div class="stat-card stage-info">
-          <div class="stat-icon">🎯</div>
+        <div class="progress-bar-container">
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
+          </div>
+          <div class="progress-label">{{ currentHohName }}</div>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">👥</div>
           <div class="stat-info">
-            <div class="stat-value stage-name">{{ seasonStore.stageName }}</div>
-            <div class="stat-label">当前阶段</div>
+            <div class="stat-value">{{ stats.total }}</div>
+            <div class="stat-label">总房客数</div>
+          </div>
+        </div>
+        <div class="stat-card active">
+          <div class="stat-icon">✅</div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.active }}</div>
+            <div class="stat-label">活跃房客</div>
+          </div>
+        </div>
+        <div class="stat-card evicted">
+          <div class="stat-icon">🚪</div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.evicted }}</div>
+            <div class="stat-label">已淘汰</div>
+          </div>
+        </div>
+        <div class="stat-card jury">
+          <div class="stat-icon">⚖️</div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.jury }}</div>
+            <div class="stat-label">陪审团</div>
+          </div>
+        </div>
+        <div class="stat-card walked">
+          <div class="stat-icon">🚶</div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.walked }}</div>
+            <div class="stat-label">退赛</div>
           </div>
         </div>
       </div>
-      <div class="progress-bar-container">
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
-        </div>
-        <div class="progress-label">{{ currentHohName }}</div>
-      </div>
     </div>
 
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-icon">👥</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.total }}</div>
-          <div class="stat-label">总房客数</div>
-        </div>
-      </div>
-      <div class="stat-card active">
-        <div class="stat-icon">✅</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.active }}</div>
-          <div class="stat-label">活跃房客</div>
-        </div>
-      </div>
-      <div class="stat-card evicted">
-        <div class="stat-icon">🚪</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.evicted }}</div>
-          <div class="stat-label">已淘汰</div>
-        </div>
-      </div>
-      <div class="stat-card jury">
-        <div class="stat-icon">⚖️</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.jury }}</div>
-          <div class="stat-label">陪审团</div>
-        </div>
-      </div>
-      <div class="stat-card walked">
-        <div class="stat-icon">🚶</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.walked }}</div>
-          <div class="stat-label">退赛</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="quick-actions">
+    <div class="quick-actions wb-panel">
       <h2>快捷操作</h2>
       <div class="action-grid">
         <button type="button" class="action-card" @click="goTo('/games/bigbrother/admin/houseguests')">

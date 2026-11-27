@@ -261,7 +261,9 @@ async function replaceNomination() {
 
 function getRoundLabel(t: string) { return t ? new Date(t).toLocaleDateString('zh-CN') : '?' }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/nomination', '/hoh', '/houseguests', '/round-twist', '/season/set', '/season/next', '/season/reset', '/season/config', '/season/twists'
+)
 onMounted(fetchData)
 </script>
 

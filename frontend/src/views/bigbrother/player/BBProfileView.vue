@@ -1,10 +1,12 @@
 <template>
-  <div class="bb-profile">
-    <div class="page-header">
-      <h1>我的资料</h1>
-    </div>
+  <div class="bb-profile wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>我的资料</h1>
+      </div>
+    </header>
 
-    <div class="profile-card">
+    <div class="profile-card wb-panel">
       <label class="profile-avatar-wrap" title="点击更换头像">
         <BBAvatar :name="user?.name || '?'" :avatar="user?.avatar" size="lg" />
         <div class="avatar-overlay">📷</div>
@@ -23,44 +25,46 @@
       </div>
     </div>
 
-    <div class="info-section">
-      <h3>基本信息</h3>
-      <div class="info-grid">
-        <div class="info-item">
-          <span class="info-label">角色</span>
-          <span class="info-value">{{ user?.role === 'admin' ? '管理员' : '房客' }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">状态</span>
-          <span class="info-value">{{ statusText }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">账号</span>
-          <span class="info-value"><code>{{ user?.username }}</code></span>
+    <div class="wb-lanes wb-account-board">
+      <div class="info-section wb-panel">
+        <h3>基本信息</h3>
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">角色</span>
+            <span class="info-value">{{ user?.role === 'admin' ? '管理员' : '房客' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">状态</span>
+            <span class="info-value">{{ statusText }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">账号</span>
+            <span class="info-value"><code>{{ user?.username }}</code></span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="info-section password-section">
-      <h3>账号安全</h3>
-      <div class="pwd-form">
-        <div class="pwd-row">
-          <label>账号</label>
-          <input class="bb-input" :value="user?.username" disabled />
+      <div class="info-section password-section wb-panel">
+        <h3>账号安全</h3>
+        <div class="pwd-form">
+          <div class="pwd-row">
+            <label>账号</label>
+            <input class="bb-input" :value="user?.username" disabled />
+          </div>
+          <div class="pwd-row">
+            <label>原密码</label>
+            <input v-model="oldPwd" type="password" class="bb-input" placeholder="请输入原密码" autocomplete="current-password" />
+          </div>
+          <div class="pwd-row">
+            <label>新密码</label>
+            <input v-model="newPwd" type="password" class="bb-input" placeholder="至少 4 位" autocomplete="new-password" />
+          </div>
+          <div class="pwd-row">
+            <label>确认新密码</label>
+            <input v-model="newPwd2" type="password" class="bb-input" placeholder="再次输入新密码" autocomplete="new-password" />
+          </div>
+          <button class="bb-btn-xs" :disabled="pwdSaving" @click="changePwd">{{ pwdSaving ? '提交中...' : '修改密码' }}</button>
         </div>
-        <div class="pwd-row">
-          <label>原密码</label>
-          <input v-model="oldPwd" type="password" class="bb-input" placeholder="请输入原密码" autocomplete="current-password" />
-        </div>
-        <div class="pwd-row">
-          <label>新密码</label>
-          <input v-model="newPwd" type="password" class="bb-input" placeholder="至少 4 位" autocomplete="new-password" />
-        </div>
-        <div class="pwd-row">
-          <label>确认新密码</label>
-          <input v-model="newPwd2" type="password" class="bb-input" placeholder="再次输入新密码" autocomplete="new-password" />
-        </div>
-        <button class="bb-btn-xs" :disabled="pwdSaving" @click="changePwd">{{ pwdSaving ? '提交中...' : '修改密码' }}</button>
       </div>
     </div>
   </div>

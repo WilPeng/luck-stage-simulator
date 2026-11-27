@@ -1,4 +1,4 @@
-const { enabled, loadRoundTwist, incompatibleTwists, replacementChoice } = require('../roundTwists')
+const { enabled, loadRoundTwist, incompatibleTwists, replacementChoice, twistStageStatus, isRevivalEligible } = require('../roundTwists')
 const express = require('express')
 const router = express.Router()
 const { auth, requireAdmin } = require('../../../middleware/auth')
@@ -145,8 +145,21 @@ router.get('/menu', auth, async (req, res) => {
     const season = await ensureSeason()
     const menu = []
     const lastNormalRound = season.final3Round ? (season.final3Round - 1) : season.totalRounds
+    const guest = req.user.role === 'houseguest' ? await BBHouseguest.findOne({ gameId: 'bigbrother', id: req.user.userId }) : null
+    const restricted = ['evicted', 'jury', 'walked'].includes(guest?.status)
     for (let r = 1; r <= lastNormalRound; r++) {
+      const definitions = getTwistsForRound(r, season.twistConfigs, season.roundConfigs)
+        .filter(id => id !== 'bbbb').map(id => TWIST_DEFINITIONS[id]).filter(Boolean)
       for (const st of BB_STAGE_ORDER) {
+        for (const definition of definitions) {
+          const firstStage = BB_STAGE_ORDER.find(stage => definition.affectsStages.includes(stage))
+          if (firstStage !== st || restricted && (r !== season.currentRound || !isRevivalEligible(definition.id, guest.status))) continue
+          const status = twistStageStatus(season, r, definition)
+          if (restricted && status !== 'current') continue
+          menu.push({ round: r, stage: st, twistId: definition.id, stageName: definition.name,
+            icon: definition.icon, status, clickable: status !== 'future', editable: status === 'current' })
+        }
+        if (st === 'hoh_competition' && definitions.some(t => ['split_house', 'battle_of_block'].includes(t.id))) continue
         // BBBB 仅在本轮启用该 twist 时出现
         if (enabled(season, 'split_house', r) && !['hoh_competition','eviction'].includes(st)) continue
         if (enabled(season, 'battle_of_block', r) && st === 'nomination') continue

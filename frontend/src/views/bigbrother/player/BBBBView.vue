@@ -1,46 +1,52 @@
 <template>
-  <div class="bbbb-player">
-    <div class="page-header">
-      <h1>🎯 BBBB</h1>
-      <span class="round-tag">第{{ roundNum }}周</span>
-    </div>
-
-    <div class="rule-bar">
-      3 名被提名人进行比赛：胜者安全，其余 2 人进入淘汰投票。
-    </div>
-
-    <!-- 准备环节 -->
-    <div v-if="showLobby && activeRoom" class="minigame-section">
-      <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
-        :rules="activeRoom.options?.rules || ''"
-        :participants="activeRoom.participants" :myId="myId" />
-    </div>
-
-    <!-- 比赛进行中：渲染小游戏 -->
-    <div v-else-if="gameComponent && activeRoom" class="minigame-section">
-      <component :is="gameComponent" :roomId="activeRoom.roomId" :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
-    </div>
-
-    <MinigameSpectatorPanel v-else-if="activeRoom?.spectatorState && !bbbbWinnerId"
-      :title="activeRoom.minigameName" :game-id="activeRoom.minigameId"
-      :status="activeRoom.status" :players="activeRoom.spectatorState" />
-
-    <div class="card">
-      <div class="card-title">被提名人（{{ nominees.length }}）</div>
-      <div class="nominee-list">
-        <div v-for="n in nominees" :key="n.id" class="nominee" :class="{ safe: bbbbWinnerId === n.id, me: n.id === myId }">
-          <BBAvatar :name="n.name" :avatar="n.avatar" size="sm" />
-          <span class="nominee-name">{{ n.name }}<span v-if="n.id === myId" class="me-badge">我</span></span>
-          <span v-if="bbbbWinnerId === n.id" class="safe-badge">安全</span>
+  <div class="bbbb-player wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>🎯 BBBB</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ roundNum }}周</span>
         </div>
-        <div v-if="!nominees.length" class="muted">暂无提名</div>
       </div>
-      <div v-if="bbbbWinnerId" class="result-note">
-        本轮 BBBB 已结束，安全者：{{ winnerName }}
-      </div>
-    </div>
+    </header>
 
-    <div v-if="!gameComponent && !activeRoom?.spectatorState && !bbbbWinnerId" class="waiting">等待管理员开启 BBBB 比赛…</div>
+    <div class="wb-game-stage">
+      <div class="rule-bar">
+        3 名被提名人进行比赛：胜者安全，其余 2 人进入淘汰投票。
+      </div>
+
+      <!-- 准备环节 -->
+      <div v-if="showLobby && activeRoom" class="minigame-section">
+        <MinigameLobby :roomId="activeRoom.roomId" :gameTitle="activeRoom.minigameName"
+          :rules="activeRoom.options?.rules || ''"
+          :participants="activeRoom.participants" :myId="myId" />
+      </div>
+
+      <!-- 比赛进行中：渲染小游戏 -->
+      <div v-else-if="gameComponent && activeRoom" class="minigame-section">
+        <component :is="gameComponent" :roomId="activeRoom.roomId" :participants="activeRoom.participants" :gameTitle="activeRoom.minigameName" @finished="onMinigameFinished" />
+      </div>
+
+      <MinigameSpectatorPanel v-else-if="activeRoom?.spectatorState && !bbbbWinnerId"
+        :title="activeRoom.minigameName" :game-id="activeRoom.minigameId"
+        :status="activeRoom.status" :players="activeRoom.spectatorState" />
+
+      <div class="card">
+        <div class="card-title">被提名人（{{ nominees.length }}）</div>
+        <div class="nominee-list">
+          <div v-for="n in nominees" :key="n.id" class="nominee" :class="{ safe: bbbbWinnerId === n.id, me: n.id === myId }">
+            <BBAvatar :name="n.name" :avatar="n.avatar" size="sm" />
+            <span class="nominee-name">{{ n.name }}<span v-if="n.id === myId" class="me-badge">我</span></span>
+            <span v-if="bbbbWinnerId === n.id" class="safe-badge">安全</span>
+          </div>
+          <div v-if="!nominees.length" class="muted">暂无提名</div>
+        </div>
+        <div v-if="bbbbWinnerId" class="result-note">
+          本轮 BBBB 已结束，安全者：{{ winnerName }}
+        </div>
+      </div>
+
+      <div v-if="!gameComponent && !activeRoom?.spectatorState && !bbbbWinnerId" class="waiting">等待管理员开启 BBBB 比赛…</div>
+    </div>
   </div>
 </template>
 

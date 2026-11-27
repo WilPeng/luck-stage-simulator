@@ -201,7 +201,9 @@ async function announceResult() {
 
 function formatTime(t: string) { return t ? new Date(t).toLocaleString('zh-CN') : '' }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/eviction', '/nomination', '/round-twist', '/season/set', '/season/next', '/season/reset'
+)
 onMounted(fetchData)
 </script>
 

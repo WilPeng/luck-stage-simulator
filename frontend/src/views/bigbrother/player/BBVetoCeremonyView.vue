@@ -1,117 +1,127 @@
 <template>
-  <div class="bb-veto-player">
-    <div class="page-header">
-      <h1>否决权会议</h1>
-      <span class="round-tag">第{{ roundNum }}周</span>
-      <span v-if="isHistory" class="history-tag">历史记录</span>
-      <span v-else-if="isFuture" class="future-tag">未开始</span>
-    </div>
-
-    <!-- 否决权状态卡片 -->
-    <div v-if="veto" class="veto-card" :class="{ 'no-winner': !veto.winnerId }">
-      <div class="veto-icon">🛡️</div>
-      <div class="veto-info">
-        <div class="veto-label">否决权持有者</div>
-        <div class="veto-winner">{{ veto.winnerName || '暂无' }}</div>
-        <div class="veto-status">{{ vetoStatusText }}</div>
-        <div v-if="veto.used && veto.usedOnPlayerName" class="veto-saved">
-          拯救: <strong class="highlight">{{ veto.usedOnPlayerName }}</strong>
-          <span class="veto-removed">已从提名名单中移除</span>
+  <div class="bb-veto-player wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>否决权会议</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ roundNum }}周</span>
+          <span v-if="isHistory" class="history-tag">历史记录</span>
+          <span v-else-if="isFuture" class="future-tag">未开始</span>
         </div>
       </div>
-    </div>
-    <div v-else class="veto-card empty">
-      <p>暂无否决权记录</p>
-    </div>
+    </header>
 
-    <!-- POV 发言稿：仪式开始前可提前编辑模拟，仪式开始后仍可继续修改 -->
-    <div v-if="veto && isVetoHolder && !isFuture" class="draft-panel">
-      <div class="cer-title">🎤 POV 发言稿（可提前编辑，开始后也可修改）</div>
-      <div class="draft-field">
-        <label>开场发言</label>
-        <textarea v-model="draftOpening" class="draft-textarea" rows="2"
-          placeholder="现在是POV仪式，我作为否决权获得者，将决定是否使用否决权。"></textarea>
-      </div>
-      <div class="draft-field">
-        <label>使用否决权发言 <span class="draft-hint">可用 {name} 代表被拯救者</span></label>
-        <textarea v-model="draftUse" class="draft-textarea" rows="3"
-          placeholder="我决定对{name}使用POV。因为我对{name}使用了POV，所以HOH需要选择1名其他房客进行替补。"></textarea>
-      </div>
-      <div class="draft-field">
-        <label>不使用否决权发言</label>
-        <textarea v-model="draftSkip" class="draft-textarea" rows="2"
-          placeholder="我决定不使用POV"></textarea>
-      </div>
-      <div class="draft-field">
-        <label>结束发言</label>
-        <textarea v-model="draftClosing" class="draft-textarea" rows="2"
-          placeholder="POV仪式结束。"></textarea>
-      </div>
-      <div class="draft-actions">
-        <button class="bb-btn bb-btn-primary" :disabled="savingDrafts" @click="saveDrafts()">
-          {{ savingDrafts ? '保存中…' : '保存发言稿' }}
-        </button>
-        <span v-if="draftSavedTip" class="draft-saved-tip">已保存</span>
-      </div>
-    </div>
-
-    <!-- POV 仪式发言区：管理员点击「仪式开始」后，POV 获得者才能开始流程 -->
-    <div v-if="veto && isVetoHolder && !isFuture" class="ceremony-panel">
-      <div class="cer-title">🎤 POV 仪式发言（客厅）</div>
-      <div v-if="!veto.ceremony?.started" class="cer-waiting">
-        等待管理员在管理员端点击「仪式开始」…
-      </div>
-      <template v-else>
-        <CeremonyChat room-id="living_room" title="💬 POV 仪式记录（客厅）" empty-text="暂无发言" />
-        <div v-if="!veto.ceremony?.openingSpoken" class="cer-actions">
-          <button class="bb-btn bb-btn-primary" :disabled="speaking" @click="speak('opening')">发表开场发言</button>
+    <div class="veto-workspace">
+      <div class="veto-workspace-main">
+        <div v-if="veto?.status === 'used'" class="result-banner used">
+          <span class="result-icon">✅</span>
+          <span>否决权已使用，{{ veto.usedOnPlayerName }} 已从提名名单中移除</span>
         </div>
-        <div v-else-if="veto.status === 'skipped' && !veto.ceremony?.closingSpoken" class="cer-actions">
-          <button class="bb-btn bb-btn-primary" :disabled="speaking" @click="speak('closing')">发表结束发言</button>
+        <div v-if="veto?.status === 'skipped'" class="result-banner skipped">
+          <span class="result-icon">⏭️</span>
+          <span>否决权未被使用，最终提名名单已确认</span>
         </div>
-        <div v-else-if="veto.ceremony?.closingSpoken" class="cer-done">POV 仪式已结束</div>
-      </template>
-    </div>
-
-    <!-- 提名信息 -->
-    <div v-if="nomination" class="nomination-panel">
-      <div class="nom-title">🎯 当前提名</div>
-      <div class="nom-names">
-        <span v-for="(name, i) in nomination.nomineeNames" :key="i" class="nom-tag">{{ name }}</span>
-        <span v-if="!nomination.nomineeNames?.length" class="nom-empty">暂无提名</span>
-      </div>
-    </div>
-
-    <!-- 我是否决权持有者：操作区 -->
-    <div v-if="isVetoHolder && canOperate" class="action-section">
-      <div class="action-header">
-        <span class="action-icon">⚡</span>
-        <div class="action-header-text">
-          <div class="action-title">你是否决权持有者！</div>
-          <div class="action-subtitle">你可以选择使用否决权拯救一名被提名者，或跳过不使用</div>
+        <section class="veto-task wb-panel" aria-label="当前仪式环节">
+          <header class="veto-task-head">
+            <h2>仪式现场</h2>
+            <span class="veto-phase" role="status">{{ isFuture ? '未开始' : isHistory ? '历史记录' : veto?.ceremony?.closingSpoken ? '仪式结束' : veto?.status === 'used' ? '已使用' : veto?.status === 'skipped' ? '未使用 · 等待结束发言' : !veto?.ceremony?.started ? '等待开始' : !veto.ceremony.openingSpoken ? '开场发言' : '等待决定' }}</span>
+          </header>
+          <p v-if="!veto" class="veto-task-note">暂无否决权记录。</p>
+          <p v-else-if="!isVetoHolder && !isHistory && !isFuture && veto.status === 'pending'" class="veto-task-note">由否决权持有者决定是否使用。当前名单可在旁边查看。</p>
+          <div v-if="veto && isVetoHolder && !isFuture" class="veto-speech">
+          <div v-if="!veto.ceremony?.started" class="cer-waiting">
+            等待管理员在管理员端点击「仪式开始」…
+          </div>
+          <template v-else>
+            <div v-if="!veto.ceremony?.openingSpoken" class="cer-actions">
+              <button class="bb-btn bb-btn-primary" :disabled="speaking" @click="speak('opening')">发表开场发言</button>
+            </div>
+            <div v-else-if="veto.status === 'skipped' && !veto.ceremony?.closingSpoken" class="cer-actions">
+              <button class="bb-btn bb-btn-primary" :disabled="speaking" @click="speak('closing')">发表结束发言</button>
+            </div>
+            <div v-else-if="veto.ceremony?.closingSpoken" class="cer-done">POV 仪式已结束</div>
+          </template>
+          </div>
+        <div v-if="isVetoHolder && canOperate" class="action-section wb-panel">
+          <div class="action-header">
+            <span class="action-icon">⚡</span>
+            <div class="action-header-text">
+              <div class="action-title">是否使用否决权</div>
+              <div class="action-subtitle">你可以选择使用否决权拯救一名被提名者，或跳过不使用</div>
+            </div>
+          </div>
+          <div class="action-buttons">
+            <button class="bb-btn bb-btn-use" @click="showUseModal = true">
+              ✅ 使用否决权
+            </button>
+            <button class="bb-btn bb-btn-skip" @click="showSkipModal = true">
+              ⏭️ 不使用否决权
+            </button>
+          </div>
         </div>
+        </section>
+        <details v-if="veto && isVetoHolder && !isFuture" class="draft-panel wb-panel wb-draft" :open="!veto.ceremony?.started">
+          <summary>编辑发言稿</summary>
+          <div class="wb-draft-fields">
+            <div class="draft-field">
+              <label>开场发言</label>
+              <textarea v-model="draftOpening" class="draft-textarea" rows="2"
+                placeholder="现在是POV仪式，我作为否决权获得者，将决定是否使用否决权。"></textarea>
+            </div>
+            <div class="draft-field">
+              <label>使用否决权发言 <span class="draft-hint">可用 {name} 代表被拯救者</span></label>
+              <textarea v-model="draftUse" class="draft-textarea" rows="3"
+                placeholder="我决定对{name}使用POV。因为我对{name}使用了POV，所以HOH需要选择1名其他房客进行替补。"></textarea>
+            </div>
+            <div class="draft-field">
+              <label>不使用否决权发言</label>
+              <textarea v-model="draftSkip" class="draft-textarea" rows="2"
+                placeholder="我决定不使用POV"></textarea>
+            </div>
+            <div class="draft-field">
+              <label>结束发言</label>
+              <textarea v-model="draftClosing" class="draft-textarea" rows="2"
+                placeholder="POV仪式结束。"></textarea>
+            </div>
+            <div class="draft-actions">
+              <button class="bb-btn bb-btn-primary" :disabled="savingDrafts" @click="saveDrafts()">
+                {{ savingDrafts ? '保存中…' : '保存发言稿' }}
+              </button>
+              <span v-if="draftSavedTip" class="draft-saved-tip">已保存</span>
+            </div>
+          </div>
+        </details>
       </div>
-      <div class="action-buttons">
-        <button class="bb-btn bb-btn-use" @click="showUseModal = true">
-          ✅ 使用否决权
-        </button>
-        <button class="bb-btn bb-btn-skip" @click="showSkipModal = true">
-          ⏭️ 不使用否决权
-        </button>
-      </div>
+      <aside class="veto-workspace-aside" aria-label="房客名单与仪式记录">
+        <div v-if="veto" class="veto-card" :class="{ 'no-winner': !veto.winnerId }">
+          <div class="veto-icon">🛡️</div>
+          <div class="veto-info">
+            <div class="veto-label">否决权持有者</div>
+            <div class="veto-winner">{{ veto.winnerName || '暂无' }}</div>
+            <div class="veto-status">{{ vetoStatusText }}</div>
+            <div v-if="veto.used && veto.usedOnPlayerName" class="veto-saved">
+              拯救: <strong class="highlight">{{ veto.usedOnPlayerName }}</strong>
+              <span class="veto-removed">已从提名名单中移除</span>
+            </div>
+          </div>
+        </div>
+        <div v-else class="veto-card empty">
+          <p>暂无否决权记录</p>
+        </div>
+        <div v-if="nomination" class="nomination-panel wb-panel">
+          <div class="nom-title">🎯 当前提名</div>
+          <div class="nom-names">
+            <span v-for="(name, i) in nomination.nomineeNames" :key="i" class="nom-tag">{{ name }}</span>
+            <span v-if="!nomination.nomineeNames?.length" class="nom-empty">暂无提名</span>
+          </div>
+        </div>
+        <details v-if="veto && isVetoHolder && !isFuture && veto.ceremony?.started" class="veto-archive wb-panel" :open="!veto.ceremony?.closingSpoken">
+          <summary>客厅发言记录</summary>
+          <CeremonyChat room-id="living_room" title="💬 POV 仪式记录（客厅）" empty-text="暂无发言" />
+        </details>
+      </aside>
     </div>
 
-    <!-- 操作结果提示 -->
-    <div v-if="veto?.status === 'used'" class="result-banner used">
-      <span class="result-icon">✅</span>
-      <span>否决权已使用，{{ veto.usedOnPlayerName }} 已从提名名单中移除</span>
-    </div>
-    <div v-if="veto?.status === 'skipped'" class="result-banner skipped">
-      <span class="result-icon">⏭️</span>
-      <span>否决权未被使用，最终提名名单已确认</span>
-    </div>
-
-    <!-- 使用否决权弹窗 -->
     <Teleport to="body">
       <div v-if="showUseModal" class="bb-modal-overlay" @click.self="showUseModal = false">
         <div class="bb-modal">

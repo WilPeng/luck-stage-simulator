@@ -89,7 +89,9 @@ async function runCompetition() {
 
 function formatTime(t: string) { return t ? new Date(t).toLocaleDateString('zh-CN') : '?' }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/veto', '/round-twist', '/season/set', '/season/next', '/season/reset'
+)
 onMounted(fetchData)
 </script>
 

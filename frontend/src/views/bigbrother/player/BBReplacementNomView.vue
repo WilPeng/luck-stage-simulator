@@ -1,11 +1,15 @@
 <template>
-  <div class="bb-replacement-player">
-    <div class="page-header">
-      <h1>替换提名</h1>
-      <span class="round-tag">第{{ roundNum }}周</span>
-      <span v-if="isHistory" class="history-tag">历史记录</span>
-      <span v-else-if="isFuture" class="future-tag">未开始</span>
-    </div>
+  <div class="bb-replacement-player wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>替换提名</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ roundNum }}周</span>
+          <span v-if="isHistory" class="history-tag">历史记录</span>
+          <span v-else-if="isFuture" class="future-tag">未开始</span>
+        </div>
+      </div>
+    </header>
 
     <!-- 加载中 -->
     <div v-if="loading" class="loading-state">
@@ -15,81 +19,83 @@
 
     <template v-else>
       <!-- 否决权信息 -->
-      <div v-if="veto" class="info-card veto-card">
-        <div class="card-icon">🛡️</div>
-        <div class="card-body">
-          <div class="card-label">否决权信息</div>
-          <div class="card-main">POV 赢家：{{ veto.winnerName }}</div>
-          <div v-if="veto.used" class="card-sub">
-            已使用 — 拯救: <strong class="saved-name">{{ veto.usedOnPlayerName }}</strong>
+      <div class="wb-replacement-controls">
+        <div v-if="veto" class="info-card veto-card">
+          <div class="card-icon">🛡️</div>
+          <div class="card-body">
+            <div class="card-label">否决权信息</div>
+            <div class="card-main">POV 赢家：{{ veto.winnerName }}</div>
+            <div v-if="veto.used" class="card-sub">
+              已使用 — 拯救: <strong class="saved-name">{{ veto.usedOnPlayerName }}</strong>
+            </div>
+            <div v-else class="card-sub not-used">否决权未被使用</div>
           </div>
-          <div v-else class="card-sub not-used">否决权未被使用</div>
         </div>
-      </div>
 
-      <!-- 否决权被使用：展示 POV 仪式发言（客厅） -->
-      <CeremonyChat v-if="veto && veto.used" room-id="living_room" title="🎤 POV 仪式发言（客厅）" empty-text="暂无发言" />
 
-      <!-- 当前提名信息 -->
-      <div v-if="nomination" class="info-card nomination-card">
-        <div class="card-icon">📋</div>
-        <div class="card-body">
-          <div class="card-label">当前提名</div>
-          <div class="nominee-list">
-            <div v-for="(name, i) in (nomination.nomineeNames || [])" :key="i" class="nominee-chip"
-              :class="{ saved: nomination.replacementNomineeName && veto?.usedOnPlayerName === name }">
-              {{ name }}
-              <span v-if="nomination.replacementNomineeName && veto?.usedOnPlayerName === name" class="chip-badge saved-badge">已拯救</span>
-              <span v-if="isMe(name)" class="chip-badge me-badge">我</span>
+        <!-- 当前提名信息 -->
+        <div v-if="nomination" class="info-card nomination-card">
+          <div class="card-icon">📋</div>
+          <div class="card-body">
+            <div class="card-label">当前提名</div>
+            <div class="nominee-list">
+              <div v-for="(name, i) in (nomination.nomineeNames || [])" :key="i" class="nominee-chip"
+                :class="{ saved: nomination.replacementNomineeName && veto?.usedOnPlayerName === name }">
+                {{ name }}
+                <span v-if="nomination.replacementNomineeName && veto?.usedOnPlayerName === name" class="chip-badge saved-badge">已拯救</span>
+                <span v-if="isMe(name)" class="chip-badge me-badge">我</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- 替换提名结果 -->
-      <div v-if="nomination?.replacementNomineeName" class="info-card replacement-result">
-        <div class="card-icon">✅</div>
-        <div class="card-body">
-          <div class="card-label">替换提名已完成</div>
-          <div class="card-main replacement-name">{{ nomination.replacementNomineeName }}</div>
-          <div class="card-sub">已加入最终提名名单，将进入驱逐投票阶段</div>
-        </div>
-      </div>
-
-      <!-- HOH 操作区：需要选择替补 -->
-      <div v-if="isHoh && needReplacement" class="action-card">
-        <div class="action-header">
-          <span class="action-icon">👑</span>
-          <div>
-            <div class="action-title">你是 HOH，否决权已被使用</div>
-            <div class="action-desc">请选择一名新的房客替换被拯救的提名者</div>
+        <!-- 替换提名结果 -->
+        <div v-if="nomination?.replacementNomineeName" class="info-card replacement-result">
+          <div class="card-icon">✅</div>
+          <div class="card-body">
+            <div class="card-label">替换提名已完成</div>
+            <div class="card-main replacement-name">{{ nomination.replacementNomineeName }}</div>
+            <div class="card-sub">已加入最终提名名单，将进入驱逐投票阶段</div>
           </div>
         </div>
-        <div v-if="replaceSuccess" class="action-success">
-          ✅ 替换提名完成：<strong>{{ nomination?.replacementNomineeName }}</strong>
-        </div>
-        <div v-else class="action-form">
-          <select v-model="replaceId" class="bb-select">
-            <option value="">-- 请选择替补人选 --</option>
-            <option v-for="h in availablePlayers" :key="h.id" :value="h.id">{{ h.name }}</option>
-          </select>
-          <button class="bb-btn bb-btn-primary" :disabled="!replaceId || replacing" @click="confirmReplace">
-            {{ replacing ? '确认中...' : '确认替换提名' }}
-          </button>
-        </div>
-      </div>
 
-      <!-- 非 HOH 提示 -->
-      <div v-else-if="isHoh && veto && !veto.used" class="info-card hint-card">
-        <div class="card-icon">💡</div>
-        <div class="card-body">
-          <div class="card-main">否决权未被使用，无需替换提名</div>
+        <!-- HOH 操作区：需要选择替补 -->
+        <div v-if="isHoh && needReplacement" class="action-card">
+          <div class="action-header">
+            <span class="action-icon">👑</span>
+            <div>
+              <div class="action-title">你是 HOH，否决权已被使用</div>
+              <div class="action-desc">请选择一名新的房客替换被拯救的提名者</div>
+            </div>
+          </div>
+          <div v-if="replaceSuccess" class="action-success">
+            ✅ 替换提名完成：<strong>{{ nomination?.replacementNomineeName }}</strong>
+          </div>
+          <div v-else class="action-form">
+            <select v-model="replaceId" class="bb-select">
+              <option value="">-- 请选择替补人选 --</option>
+              <option v-for="h in availablePlayers" :key="h.id" :value="h.id">{{ h.name }}</option>
+            </select>
+            <button class="bb-btn bb-btn-primary" :disabled="!replaceId || replacing" @click="confirmReplace">
+              {{ replacing ? '确认中...' : '确认替换提名' }}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <!-- 等待中 -->
-      <div v-if="!nomination" class="empty-card">
-        <p>暂无替换提名信息</p>
+        <!-- 非 HOH 提示 -->
+        <div v-else-if="isHoh && veto && !veto.used" class="info-card hint-card">
+          <div class="card-icon">💡</div>
+          <div class="card-body">
+            <div class="card-main">否决权未被使用，无需替换提名</div>
+          </div>
+        </div>
+
+        <!-- 等待中 -->
+        <div v-if="!nomination" class="empty-card">
+          <p>暂无替换提名信息</p>
+        </div>
+
+        <CeremonyChat v-if="veto && veto.used" room-id="living_room" title="🎤 POV 仪式发言（客厅）" empty-text="暂无发言" />
       </div>
     </template>
   </div>
@@ -97,6 +103,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useBbRefresh } from '../../../composables/useBbRefresh'
 import { useRoute } from 'vue-router'
 import { useBbAuthStore } from '../../../stores/bbAuthStore'
 import { useBbSeasonStore } from '../../../stores/bbSeasonStore'
@@ -167,7 +174,7 @@ async function confirmReplace() {
   }
 }
 
-onMounted(async () => {
+async function loadData() {
   try {
     const roundKey = `round-${roundNum.value}`
     const [history, hohData, vetoData] = await Promise.all([
@@ -192,7 +199,10 @@ onMounted(async () => {
   } catch {} finally {
     loading.value = false
   }
-})
+}
+
+useBbRefresh(loadData, '/hoh', '/nomination', '/veto', '/round-twist', '/season/set', '/season/next', '/season/reset')
+onMounted(loadData)
 </script>
 
 <style scoped>

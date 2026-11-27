@@ -1,10 +1,16 @@
 <template>
-  <div class="bb-veto-draw">
-    <div class="page-header">
-      <h1>否决权参与者抽选</h1>
-      <span class="round-tag">第{{ $route.params.round }}周</span>
-      <button v-if="veto?.winnerId" class="bb-btn bb-btn-danger header-undo" @click="undoVetoCompetition">↩ 撤销 POV 产生</button>
-    </div>
+  <div class="bb-veto-draw wb-page">
+    <header class="page-header wb-header">
+      <div class="wb-heading">
+        <h1>否决权参与者抽选</h1>
+        <div class="wb-meta">
+          <span class="round-tag">第{{ $route.params.round }}周</span>
+        </div>
+      </div>
+      <div class="wb-page-tools">
+        <button v-if="veto?.winnerId" class="bb-btn bb-btn-danger header-undo" @click="undoVetoCompetition">↩ 撤销 POV 产生</button>
+      </div>
+    </header>
 
     <div v-if="twistInfo?.isNoPendantChallenge" class="twist-info-bar">
       <span class="twist-item no-pendant">🚫 无护符挑战：本轮跳过否决权，无人持有否决权</span>
@@ -12,7 +18,7 @@
 
     <div v-else>
       <!-- 步骤说明 -->
-      <div class="step-card">
+      <div class="step-card wb-panel">
         <div class="step-title">📋 抽取规则</div>
         <ul class="step-list">
           <li><strong>HOH</strong> 和 <strong>被提名者</strong> 必定参加 POV</li>
@@ -23,53 +29,55 @@
       </div>
 
       <!-- 获胜者横幅 -->
-      <div v-if="veto?.winnerId" class="veto-winner-banner">
-        <span class="banner-icon">🛡️</span>
-        <div class="banner-text">
-          <div class="banner-title">{{ veto.winnerName }} 赢得否决权！</div>
-          <div class="banner-sub">{{ veto.used ? '✅ 已使用否决权' : '⏳ 尚未使用（进入否决权会议阶段后可救人或跳过）' }}</div>
-        </div>
-      </div>
-
-      <!-- 当前状态 -->
-      <div v-if="veto" class="veto-card" :class="{ drawn: veto.participants?.length > 0 }">
-        <div class="veto-icon">🎲</div>
-        <div class="veto-info">
-          <div class="veto-label">否决权抽选状态</div>
-          <div v-if="veto.participants && veto.participants.length > 0" class="veto-participants">
-            <div class="veto-subtitle">
-              已抽取 {{ veto.participants.length }} 名参与者
-              <span v-if="veto.winnerId" class="has-winner">（已有获胜者）</span>
-            </div>
-            <div class="participant-list">
-              <span v-for="p in veto.participants" :key="p.playerId" class="participant-tag"
-                :class="{
-                  winner: p.playerId === veto.winnerId,
-                  hoh: p.playerId === hohId,
-                  nominee: nomineeIds.includes(p.playerId),
-                  picked: p.source === 'picked'
-                }">
-                <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
-                {{ p.playerName }}
-                <span v-if="p.playerId === hohId" class="role-badge hoh-badge">HOH</span>
-                <span v-if="nomineeIds.includes(p.playerId)" class="role-badge nominee-badge">提名</span>
-                <span v-if="p.playerId === veto.winnerId" class="role-badge winner-badge">🏆</span>
-                <span v-if="p.source === 'drawn'" class="role-badge random-badge">抽中</span>
-                <span v-if="p.source === 'default' && p.playerId !== hohId && !nomineeIds.includes(p.playerId)" class="role-badge default-badge">必定</span>
-                <span v-if="p.source === 'picked'" class="role-badge picked-badge">
-                  自选 <small>({{ getPickerName(p.pickedBy) }})</small>
-                </span>
-              </span>
-            </div>
+      <div class="wb-lanes wb-draw-state">
+        <div v-if="veto?.winnerId" class="veto-winner-banner">
+          <span class="banner-icon">🛡️</span>
+          <div class="banner-text">
+            <div class="banner-title">{{ veto.winnerName }} 赢得否决权！</div>
+            <div class="banner-sub">{{ veto.used ? '✅ 已使用否决权' : '⏳ 尚未使用（进入否决权会议阶段后可救人或跳过）' }}</div>
           </div>
-          <div v-else class="no-draw">
-            <p>尚未抽取参与者，请点击下方按钮抽取</p>
+        </div>
+
+        <!-- 当前状态 -->
+        <div v-if="veto" class="veto-card" :class="{ drawn: veto.participants?.length > 0 }">
+          <div class="veto-icon">🎲</div>
+          <div class="veto-info">
+            <div class="veto-label">否决权抽选状态</div>
+            <div v-if="veto.participants && veto.participants.length > 0" class="veto-participants">
+              <div class="veto-subtitle">
+                已抽取 {{ veto.participants.length }} 名参与者
+                <span v-if="veto.winnerId" class="has-winner">（已有获胜者）</span>
+              </div>
+              <div class="participant-list">
+                <span v-for="p in veto.participants" :key="p.playerId" class="participant-tag"
+                  :class="{
+                    winner: p.playerId === veto.winnerId,
+                    hoh: p.playerId === hohId,
+                    nominee: nomineeIds.includes(p.playerId),
+                    picked: p.source === 'picked'
+                  }">
+                  <BBAvatar :name="p.playerName" :avatar="p.avatar" size="sm" />
+                  {{ p.playerName }}
+                  <span v-if="p.playerId === hohId" class="role-badge hoh-badge">HOH</span>
+                  <span v-if="nomineeIds.includes(p.playerId)" class="role-badge nominee-badge">提名</span>
+                  <span v-if="p.playerId === veto.winnerId" class="role-badge winner-badge">🏆</span>
+                  <span v-if="p.source === 'drawn'" class="role-badge random-badge">抽中</span>
+                  <span v-if="p.source === 'default' && p.playerId !== hohId && !nomineeIds.includes(p.playerId)" class="role-badge default-badge">必定</span>
+                  <span v-if="p.source === 'picked'" class="role-badge picked-badge">
+                    自选 <small>({{ getPickerName(p.pickedBy) }})</small>
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div v-else class="no-draw">
+              <p>尚未抽取参与者，请点击下方按钮抽取</p>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- 自选区域 -->
-      <div v-if="canPick.length > 0" class="pick-section">
+      <div v-if="canPick.length > 0" class="pick-section wb-panel">
         <h3>🎯 房客自选</h3>
         <p class="pick-hint">以下被抽中的HOH/提名者可从其他房客中各选1人加入POV：</p>
         <div v-for="picker in canPick" :key="picker.playerId" class="pick-row">
@@ -101,7 +109,7 @@
       </div>
 
       <!-- 操作按钮 -->
-      <div class="action-section">
+      <div class="action-section wb-panel">
         <h3>操作</h3>
         <div class="action-buttons">
           <button class="bb-btn bb-btn-draw" @click="drawParticipants" :disabled="drawing">
@@ -212,7 +220,7 @@
     <MinigameSelectModal v-model:open="showMinigameModal" title="选择否决权小游戏" @select="onSelectMinigame" />
 
     <!-- POV 抽卡（存活 > 6） -->
-    <div class="card-draw-section">
+    <div class="card-draw-section wb-panel">
       <h3>🃏 POV 抽卡（存活 &gt; 6 时使用）</h3>
       <VetoCardDraw :state="cardState" :isAdmin="true" :canDeal="true" @deal="dealCards" @draw="drawCard" />
     </div>
@@ -686,7 +694,9 @@ async function stopMinigame() {
   }
 }
 
-useBbRefresh(fetchData)
+useBbRefresh(fetchData,
+  '/veto', '/hoh', '/nomination', '/minigame/room', '/round-twist', '/season/set', '/season/next', '/season/reset'
+)
 onMounted(fetchData)
 onUnmounted(stopProgressPolling)
 </script>
